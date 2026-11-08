@@ -1,4 +1,7 @@
 import { localizedPath, splitLocalePath } from '@minhaj/contracts';
+import type { StepUpPurpose } from '@minhaj/contracts/identity';
+
+import { stepUpAnchor } from '@/components/ui/step-up-event';
 
 /**
  * Destination validation for post-authentication redirects.
@@ -168,4 +171,73 @@ export function safeReturnTo(candidate: string | null, locale: string): string {
   if (!isKnownDestination(parts.rest)) return fallback;
 
   return localizedPath(parts.locale, parts.rest + decoded.slice(pathname.length));
+}
+
+/** An opaque record id, as every administrative address names one. */
+const RECORD = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+
+/**
+ * R2 (audit F35). Where each step-up purpose may RESUME: the administrative
+ * pages whose changes that purpose authorises, and nothing else. A grant for
+ * one purpose never sends anyone to another purpose's page, and no purpose
+ * leaves the administration.
+ */
+const STEP_UP_RESUME: Readonly<Record<StepUpPurpose, readonly RegExp[]>> = {
+  'account-administration': [/^\/admin\/identity\/users$/],
+  'privilege-administration': [/^\/admin\/identity\/(roles|assignments)$/],
+  'second-factor': [],
+  'quran-canonical-edit': [
+    /^\/admin\/quran\/surahs$/,
+    /^\/admin\/quran\/ayat\/[1-9][0-9]{0,2}\/[1-9][0-9]{0,2}$/,
+  ],
+  'hadith-canonical-edit': [
+    new RegExp(`^/admin/hadith/(collections|books|chapters|records)(/${RECORD})?$`),
+  ],
+  'fatwa-publication': [new RegExp(`^/admin/fatwa/(review|published)/${RECORD}$`)],
+  'donation-refund': [new RegExp(`^/admin/donations/${RECORD}$`)],
+  'migration-publication': [new RegExp(`^/admin/migration/manifests(/${RECORD})?$`)],
+  'migration-personal-data': [new RegExp(`^/admin/migration/staging/${RECORD}$`)],
+};
+
+/**
+ * Validates where a step-up confirmation returns to — the page the person was
+ * working on (R2, audit F35).
+ *
+ * PURPOSE-BOUND AND ALLOWLISTED. The candidate must be a same-origin path,
+ * pass every check `safeReturnTo` makes of a path (no scheme, no network
+ * reference, no traversal, no backslash, no control character — in raw and
+ * decoded form), and name one of the pages `purpose` authorises changes on.
+ * The page's own query string is kept as sent (its filters; it can only
+ * address that same page). Any fragment sent is dropped: the destination's
+ * fragment is always the prompt's own anchor (`stepUpAnchor`), so the page
+ * opens at the confirmed prompt, just above the actions it unlocks. Anything
+ * else answers `null`, and the caller stays where it is — a refusal never
+ * becomes a redirect elsewhere.
+ */
+export function safeStepUpReturnTo(
+  candidate: string | null,
+  purpose: StepUpPurpose,
+): string | null {
+  if (candidate === null || candidate === '' || candidate.length > 512) return null;
+  if (!candidate.startsWith('/')) return null;
+  if (candidate.startsWith('//') || candidate.startsWith('/\\')) return null;
+
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(candidate);
+  } catch {
+    return null;
+  }
+  if (candidate.includes('..') || decoded.includes('..')) return null;
+  if (decoded.includes('\\') || decoded.includes('//')) return null;
+  if (hasControlCharacters(decoded)) return null;
+
+  const pathname = decoded.split(/[?#]/, 1)[0] ?? '';
+  const parts = splitLocalePath(pathname);
+  const rest = parts.rest.replace(/\/$/, '');
+  if (!STEP_UP_RESUME[purpose].some((pattern) => pattern.test(rest))) return null;
+
+  const rawQuery = candidate.split('#', 1)[0]?.split('?')[1];
+  const query = rawQuery === undefined || rawQuery === '' ? '' : `?${rawQuery}`;
+  return `${localizedPath(parts.locale, rest)}${query}#${stepUpAnchor(purpose)}`;
 }

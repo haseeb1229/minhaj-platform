@@ -11,9 +11,12 @@ import {
   MANIFEST_STATES,
   MIGRATION_LIMITS,
   REVIEW_STATES,
+  runRightsSchema,
   TOPIC_MAPPING_STATES,
   migrationIdSchema,
   migrationOffsetSchema,
+  type AssetProvenanceRow,
+  type CandidateKey,
   type ManifestEntryRecord,
   type ManifestRecord,
   type MigrationActor,
@@ -21,6 +24,7 @@ import {
   type MigrationPromotionPort,
   type MigrationPublicationPort,
   type MigrationReadPort,
+  type MigrationSourcePort,
   type PromotionRecord,
   type RunRecord,
   type SnapshotMeta,
@@ -28,7 +32,8 @@ import {
   type StagedDetail,
 } from '@minhaj/contracts/migration';
 
-import { READ, createGate, guarded } from './shared.ts';
+import { MigrationRefusal } from '../domain/refusal.ts';
+import { READ, candidateFingerprint, createGate, guarded } from './shared.ts';
 
 const offset = migrationOffsetSchema.default(0);
 const id = migrationIdSchema;
@@ -79,6 +84,15 @@ const filters = {
     })
     .strict(),
   page: z.object({ offset }).strict(),
+  runApproval: z.object({ runId: id, offset }).strict(),
+  runRights: z
+    .object({
+      runId: id,
+      host: runRightsSchema.shape.host.nullable().default(null),
+      offset,
+    })
+    .strict(),
+  runManifest: z.object({ runId: id }).strict(),
 };
 
 /**
@@ -91,12 +105,14 @@ const filters = {
  *  - `read`        — `MigrationReadPort`;
  *  - `publication` — `MigrationPublicationPort` (`manifest` only: one manifest with its entries);
  *  - `promotions`  — `MigrationPromotionPort` (`promotion` only);
+ *  - `sources`     — `MigrationSourcePort` (`source` only: a run's registered hosts, R2);
  *  - `authority`   — `MigrationAuthorityPort`.
  */
 export function createMigrationReadService(deps: {
   readonly read: MigrationReadPort;
   readonly publication: Pick<MigrationPublicationPort, 'manifest'>;
   readonly promotions: Pick<MigrationPromotionPort, 'promotion'>;
+  readonly sources: Pick<MigrationSourcePort, 'source'>;
   readonly authority: MigrationAuthorityPort;
 }) {
   const gate = createGate(deps.authority);
@@ -225,7 +241,92 @@ export function createMigrationReadService(deps: {
       const value = await query(actor, filters.page, input);
       return guarded(read.reconciliations({ ...value, limit }));
     },
+    /** R2. One acquisition — for its administrative preview — or null. */
+    async asset(
+      actor: MigrationActor,
+      provenanceId: unknown,
+    ): Promise<AssetProvenanceRow | null> {
+      return one(actor, provenanceId, (value) => read.asset(value));
+    },
+
+    /**
+     * R2. A run's approval candidates as a person reviews them before a
+     * run-wide approval: one page of them, the counts of what the act leaves
+     * and why, and the size and fingerprint of the WHOLE candidate set the
+     * confirmation names. Null when the run does not exist.
+     */
+    async runApproval(actor: MigrationActor, input: unknown) {
+      const { runId, offset: at } = await query(actor, filters.runApproval, input);
+      const run = await guarded(read.run(runId));
+      if (run === null) return null;
+      const [counts, page, keys] = await Promise.all([
+        guarded(read.runApprovalCounts(runId)),
+        guarded(read.approvalCandidates({ runId, offset: at, limit })),
+        guarded(read.approvalCandidateKeys(runId, MIGRATION_LIMITS.runCandidates)),
+      ]);
+      return { run, counts, page, confirmation: confirmationOf(keys) };
+    },
+
+    /**
+     * R2. A run's pictures by registered host: each of its source's page and
+     * asset hosts with how many rights candidates it serves; for the host
+     * asked, one page of them and the confirmation over all of them. A host
+     * the source does not register is refused `invalid`, never queried.
+     */
+    async runRights(actor: MigrationActor, input: unknown) {
+      const { runId, host, offset: at } = await query(actor, filters.runRights, input);
+      const run = await guarded(read.run(runId));
+      if (run === null) return null;
+      const source = await guarded(deps.sources.source(run.sourceId));
+      if (source === null) return null;
+      const registered = [
+        ...source.hosts.map((name) => ({ host: name, role: 'page' as const })),
+        ...source.assetHosts.map((name) => ({ host: name, role: 'asset' as const })),
+      ];
+      if (host !== null && !registered.some((entry) => entry.host === host))
+        throw new MigrationRefusal('invalid');
+      const hosts = await Promise.all(
+        registered.map(async (entry) => ({
+          ...entry,
+          candidates: (
+            await guarded(
+              read.rightsCandidates({ runId, host: entry.host, offset: 0, limit: 1 }),
+            )
+          ).total,
+        })),
+      );
+      if (host === null) return { run, hosts, host, page: null, confirmation: null };
+      const [page, keys] = await Promise.all([
+        guarded(read.rightsCandidates({ runId, host, offset: at, limit })),
+        guarded(read.rightsCandidateKeys(runId, host, MIGRATION_LIMITS.runCandidates)),
+      ]);
+      return { run, hosts, host, page, confirmation: confirmationOf(keys) };
+    },
+
+    /**
+     * R2. The confirmation over a run's manifest candidates — approved, valid,
+     * publishable and held by no live manifest — and how many the next
+     * run-wide manifest takes.
+     */
+    async runManifest(actor: MigrationActor, input: unknown) {
+      const { runId } = await query(actor, filters.runManifest, input);
+      const keys = await guarded(
+        read.manifestCandidateKeys(runId, MIGRATION_LIMITS.runCandidates),
+      );
+      return {
+        confirmation: confirmationOf(keys),
+        next: Math.min(keys.length, MIGRATION_LIMITS.runManifestEntries),
+      };
+    },
   };
+}
+
+/** R2. What a person confirms a run-wide act over: the set's size and fingerprint. */
+function confirmationOf(keys: readonly CandidateKey[]): {
+  readonly count: number;
+  readonly fingerprint: string;
+} {
+  return { count: keys.length, fingerprint: candidateFingerprint(keys) };
 }
 
 export type MigrationReadService = ReturnType<typeof createMigrationReadService>;

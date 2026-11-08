@@ -14,6 +14,7 @@ import {
 } from '@minhaj/database';
 import { createSearchService, type SearchService } from '@minhaj/search';
 
+import { religiousReferencePreviewAdmitted } from '../config/religious-reference';
 import { failureLabel, isTransientDatabaseFailure } from './failure-label';
 import { searchWiring } from './search-wiring';
 
@@ -49,7 +50,9 @@ export function buildSearchService(report: SearchReport): SearchService {
     editorial: createEditorialPublicReader(),
     library: createLibraryPublicReader(),
     media: createMediaPublicReader(),
-    quran: createQuranPublicReader(),
+    quran: createQuranPublicReader({
+      admitReference: religiousReferencePreviewAdmitted(),
+    }),
     hadith: createHadithPublicReader(),
     fatwa: createFatwaPublicReader(),
     learning: createLearningPublicReader(),

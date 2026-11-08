@@ -200,7 +200,9 @@ live('Phase 18 Quran in Search (real SQL Server FTS)', () => {
     quran = await buildQuranService();
     const { createQuranReadService } =
       await import('../../apps/web/src/contexts/quran/index.ts');
-    reader = createQuranReadService(database.createQuranPublicReader());
+    reader = createQuranReadService(
+      database.createQuranPublicReader({ admitReference: false }),
+    );
 
     // What only the operator registers: the sources.
     primary = await registerSource(db.admin, {

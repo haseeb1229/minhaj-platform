@@ -18,6 +18,8 @@ declare module 'mssql' {
     database?: string;
     user?: string;
     password?: string;
+    /** Milliseconds one request may run; the driver's default is 15000. */
+    requestTimeout?: number;
     options?: {
       encrypt?: boolean;
       trustServerCertificate?: boolean;

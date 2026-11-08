@@ -1,6 +1,6 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import {
   readerDocumentSchema,
   type LibraryPersistencePort,
@@ -658,6 +658,84 @@ function publicWhere(q: LibraryQuery): Prisma.WorkWhereInput {
     ...(q.contributor ? { contributors: { some: { personId: q.contributor } } } : {}),
   };
 }
+
+/**
+ * One page of public Works in a READER'S order (R2): A–Z by the title shown, or
+ * the newest publication first.
+ *
+ * TWO READS, THE SECOND AUTHORITATIVE. The order needs a label chosen per Work
+ * and an aggregate over its Editions, which the ORM cannot order by, so the
+ * first read is one bounded SQL page of identifiers. The second loads those
+ * Works through `publicWhere` — the ONE public predicate — so even an error in
+ * the ordering query could only drop a Work from the page, never admit one.
+ *
+ * The title is the one `labelFor` renders: the reader's locale, else the
+ * primary locale, else the first label by locale. The identifier ends every
+ * order, so the order is total.
+ */
+async function orderedWorks(
+  q: LibraryQuery,
+  sort: 'title' | 'newest',
+): Promise<{ items: WorkRecord[]; hasMore: boolean }> {
+  const db = getDatabaseClient();
+  const edition = [Prisma.sql`e.[workId] = w.[id]`, Prisma.sql`e.[state] = N'published'`];
+  if (q.language) edition.push(Prisma.sql`e.[languageCode] = ${q.language}`);
+  if (q.from !== null) edition.push(Prisma.sql`e.[publicationYear] >= ${q.from}`);
+  if (q.to !== null) edition.push(Prisma.sql`e.[publicationYear] <= ${q.to}`);
+  if (q.downloads)
+    edition.push(
+      Prisma.sql`e.[download] = N'allowed'`,
+      Prisma.sql`e.[downloadAssetId] IS NOT NULL`,
+    );
+  const conditions = [
+    Prisma.sql`w.[state] = N'published'`,
+    Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[Edition] e WHERE ${Prisma.join(edition, ' AND ')})`,
+  ];
+  if (q.topic)
+    conditions.push(
+      Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[WorkTopic] c WHERE c.[workId] = w.[id] AND c.[topicId] = ${q.topic})`,
+    );
+  if (q.contributor)
+    conditions.push(
+      Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[WorkContributor] c WHERE c.[workId] = w.[id] AND c.[personId] = ${q.contributor})`,
+    );
+  const order =
+    sort === 'newest'
+      ? Prisma.sql`CASE WHEN y.[year] IS NULL THEN 1 ELSE 0 END, y.[year] DESC, t.[title] ASC, w.[id] ASC`
+      : Prisma.sql`t.[title] ASC, w.[id] ASC`;
+
+  const page = await db.$queryRaw<{ id: string }[]>`
+    SELECT w.[id]
+    FROM [dbo].[Work] w
+    OUTER APPLY (
+      SELECT TOP (1) l.[title] FROM [dbo].[WorkLabel] l
+      WHERE l.[workId] = w.[id]
+      ORDER BY CASE WHEN l.[locale] = ${q.titleLocale} THEN 0
+                    WHEN l.[locale] = w.[primaryLocale] THEN 1 ELSE 2 END, l.[locale]
+    ) t
+    OUTER APPLY (
+      SELECT MAX(p.[publicationYear]) AS [year] FROM [dbo].[Edition] p
+      WHERE p.[workId] = w.[id] AND p.[state] = N'published'
+    ) y
+    WHERE ${Prisma.join(conditions, ' AND ')}
+    ORDER BY ${order}
+    OFFSET ${boundedOffset(q.offset)} ROWS FETCH NEXT 26 ROWS ONLY`;
+
+  const ids = page.slice(0, 25).map((row) => row.id);
+  if (ids.length === 0) return { items: [], hasMore: page.length > 25 };
+  const rows = await db.work.findMany({
+    where: { ...publicWhere(q), id: { in: ids } },
+    include: workInclude,
+  });
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return {
+    items: ids.flatMap((id) => {
+      const row = byId.get(id);
+      return row === undefined ? [] : [work(row)];
+    }),
+    hasMore: page.length > 25,
+  };
+}
 /**
  * One page of a facet, ordered by weight and broken by identifier.
  *
@@ -747,6 +825,7 @@ export function createLibraryPublicReader(): LibraryPublicReaderPort {
     },
 
     async works(query) {
+      if (query.sort !== null) return orderedWorks(query, query.sort);
       const rows = await db.work.findMany({
         where: publicWhere(query),
         orderBy: { slug: 'asc' },

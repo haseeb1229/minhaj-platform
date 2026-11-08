@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 
 import {
+  COLLECTION_COVER_MEMBERS,
   COLLECTION_LIMITS,
   COLLECTION_MEMBER_CHOICES,
   COLLECTION_PAGE,
@@ -38,6 +39,7 @@ import {
   revisionReset,
   transitionUpdate,
 } from './workflow.ts';
+import { publicLeadOf } from './lead.ts';
 
 /**
  * Editorial's Phase-15 persistence: Collection (DOMAIN_MODEL.md §7.1, §7.3).
@@ -142,7 +144,11 @@ const detailInclude = {
   current: { include: revisionInclude },
 } satisfies Prisma.CollectionInclude;
 
-/** What a card needs: never the body, the authoring document or the members. */
+/**
+ * What a card needs: never the body or the authoring document, and of the
+ * members only the first few typed identifiers (R2), so the page can ask their
+ * owners for a cover picture.
+ */
 const summarySelect = {
   slug: true,
   current: {
@@ -153,6 +159,7 @@ const summarySelect = {
         orderBy: { languageCode: 'asc' as const },
       },
       topics: { select: { topicId: true }, orderBy: { topicId: 'asc' as const } },
+      items: { ...ITEMS, take: COLLECTION_COVER_MEMBERS },
     },
   },
 } satisfies Prisma.CollectionSelect;
@@ -303,6 +310,7 @@ interface SummaryRow {
       readonly excerpt: string;
     }[];
     readonly topics: readonly { readonly topicId: string }[];
+    readonly items: readonly ItemRow[];
   } | null;
 }
 
@@ -317,6 +325,7 @@ function summaryOf(row: SummaryRow): CollectionSummary {
       excerpt: t.excerpt,
     })),
     topicIds: row.current.topics.map((t) => t.topicId),
+    leadMembers: row.current.items.map(memberOf),
   };
 }
 
@@ -753,6 +762,67 @@ function targetOf(row: TargetRow): CollectionMemberTarget {
   };
 }
 
+/**
+ * R2 — the member types that carry a first-party lead image and a source
+ * chronology (Phase 30-R). A Statement and a MediaCoverage carry neither: their
+ * reader-facing date is their publication instant.
+ */
+const PICTURED_MEMBERS: ReadonlySet<EditorialMemberKind> = new Set([
+  'article',
+  'news-article',
+  'press-release',
+]);
+
+/**
+ * What a public Collection page shows of a member beyond its titles: its
+ * picture, where its type has one, and its reader-facing date.
+ */
+function displaySelect(kind: EditorialMemberKind) {
+  const pictured = PICTURED_MEMBERS.has(kind);
+  return {
+    id: true,
+    slug: true,
+    publishedAt: true,
+    ...(pictured ? { chronologyAt: true } : {}),
+    current: {
+      select: {
+        ...(pictured
+          ? { leadAssetId: true, leadWidth: true, leadHeight: true, leadCredit: true }
+          : {}),
+        translations: {
+          select: { languageCode: true, title: true },
+          orderBy: { languageCode: 'asc' as const },
+        },
+      },
+    },
+  };
+}
+
+interface DisplayRow extends TargetRow {
+  readonly publishedAt: Date | null;
+  readonly chronologyAt?: Date | null;
+  readonly current:
+    | (TargetRow['current'] & {
+        readonly leadAssetId?: string | null;
+        readonly leadWidth?: number | null;
+        readonly leadHeight?: number | null;
+        readonly leadCredit?: string | null;
+      })
+    | null;
+}
+
+function displayOf(kind: EditorialMemberKind, row: DisplayRow): CollectionMemberTarget {
+  const family = kind === 'statement' || kind === 'media-coverage' ? null : kind;
+  return {
+    ...targetOf(row),
+    leadImage:
+      family === null || row.current === null
+        ? null
+        : publicLeadOf(family, row.id, row.current),
+    chronologyAt: row.chronologyAt ?? row.publishedAt,
+  };
+}
+
 /** No more identifiers than one Collection can hold travel in one read. */
 function memberBatchOf(ids: readonly string[]): string[] {
   const unique = [...new Set(ids)];
@@ -854,10 +924,10 @@ export function collectionReads(): Pick<
       if (ids.length === 0) return [];
       const rows = (await recordsOf(kind).findMany({
         where: { id: { in: memberBatchOf(ids) }, state: 'published' },
-        select: TARGET_SELECT,
+        select: displaySelect(kind),
         orderBy: { id: 'asc' },
-      })) as TargetRow[];
-      return rows.map(targetOf);
+      })) as DisplayRow[];
+      return rows.map((row) => displayOf(kind, row));
     },
 
     async memberChoices(kind, text, limit) {

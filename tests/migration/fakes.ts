@@ -257,7 +257,7 @@ export class FakeStore {
   /** Acquisitions; `visibility` is what a PERSON decided (restricted until then). */
   readonly acquisitions = new Map<
     string,
-    AssetAcquisitionInput & { id: string; visibility: AssetVisibility }
+    AssetAcquisitionInput & { id: string; visibility: AssetVisibility; version?: number }
   >();
   readonly topicMappings = new Map<
     string,
@@ -1124,7 +1124,10 @@ export class FakeStore {
         (acquisition) => acquisition.id === input.provenanceId,
       );
       if (row === undefined) throw refusal('not-found');
+      if ((row.version ?? 1) !== input.expectedVersion) throw refusal('conflict');
       row.visibility = input.visibility;
+      row.version = (row.version ?? 1) + 1;
+      this.audit.push('migration.asset.rights-decided');
     },
     decideLegacyMapping: async (input) => {
       const row = this.legacyMappings.get(input.mappingId);
@@ -1627,7 +1630,179 @@ export class FakeStore {
     promotionEntries: async (query) => page([], query.offset, query.limit),
     assets: async (query) => page([], query.offset, query.limit),
     reconciliations: async (query) => page([], query.offset, query.limit),
+    asset: async (provenanceId) => {
+      const row = [...this.acquisitions.values()].find((a) => a.id === provenanceId);
+      return row === undefined ? null : this.assetRow(row);
+    },
+    runApprovalCounts: async (runId) => {
+      const pending = [...this.staged.values()].filter(
+        (row) => row.runId === runId && row.review === 'pending',
+      );
+      const valid = pending.filter((row) => row.validation === 'valid');
+      const clean = valid.filter((row) => row.personalData === 'none');
+      const candidates = this.approvalCandidateRows(runId).length;
+      const approvable = this.approvableRows(runId).length;
+      return {
+        pending: pending.length,
+        candidates,
+        invalid: pending.length - valid.length,
+        flagged: valid.filter((row) => row.personalData === 'flagged').length,
+        cleared: valid.filter((row) => row.personalData === 'cleared').length,
+        reviewOnly: clean.length - approvable,
+        awaitingDuplicate: approvable - candidates,
+      };
+    },
+    approvalCandidates: async (query) =>
+      page(
+        this.approvalCandidateRows(query.runId).map((row) => ({
+          id: row.id,
+          recordId: row.recordId,
+          runId: row.runId,
+          revision: row.revision,
+          contentKind: row.contentKind,
+          title: row.title,
+          languageCode: row.languageCode,
+          validation: row.validation,
+          personalData: row.personalData,
+          review: row.review,
+          producedAt: row.producedAt,
+          version: row.version,
+        })),
+        query.offset,
+        query.limit,
+      ),
+    hasOpenDuplicate: async (recordId) =>
+      [...this.duplicates.values()].some(
+        (pair) =>
+          pair.state === 'open' &&
+          (pair.recordId === recordId || pair.otherRecordId === recordId),
+      ),
+    approvalCandidateKeys: async (runId, ceiling) =>
+      this.approvalCandidateRows(runId)
+        .slice(0, ceiling)
+        .map((row) => ({ id: row.id, version: row.version })),
+    rightsCandidates: async (query) =>
+      page(
+        this.rightsCandidateRows(query.runId, query.host).map((row) =>
+          this.assetRow(row),
+        ),
+        query.offset,
+        query.limit,
+      ),
+    rightsCandidateKeys: async (runId, host, ceiling) =>
+      this.rightsCandidateRows(runId, host)
+        .slice(0, ceiling)
+        .map((row) => ({ id: row.id, version: row.version ?? 1 })),
+    manifestCandidateKeys: async (runId, ceiling) => {
+      const held = new Set(
+        [...this.entries.values()]
+          .filter(
+            (entry) =>
+              ['pending', 'publishing', 'published'].includes(entry.state) &&
+              ['draft', 'publishing', 'published', 'rolling-back'].includes(
+                this.manifests.get(entry.manifestId)?.state ?? '',
+              ),
+          )
+          .map((entry) => entry.stagedRecordId),
+      );
+      return [...this.staged.values()]
+        .filter(
+          (row) =>
+            row.runId === runId &&
+            row.review === 'approved' &&
+            row.validation === 'valid' &&
+            isPublishableKind(row.contentKind) &&
+            !held.has(row.id),
+        )
+        .sort(candidateOrder)
+        .slice(0, ceiling)
+        .map((row) => ({ id: row.id, version: row.version }));
+    },
   };
+
+  /** R2: what a run-wide approval may take, oldest first, the id last. */
+  approvalCandidateRows(runId: string): StagedRow[] {
+    return this.approvableRows(runId).filter(
+      (row) =>
+        ![...this.duplicates.values()].some(
+          (pair) =>
+            pair.state === 'open' &&
+            (pair.recordId === row.recordId || pair.otherRecordId === row.recordId),
+        ),
+    );
+  }
+
+  /** R2: pending, valid, `none`, publishable — before the duplicate rule. */
+  approvableRows(runId: string): StagedRow[] {
+    return [...this.staged.values()]
+      .filter(
+        (row) =>
+          row.runId === runId &&
+          row.review === 'pending' &&
+          row.validation === 'valid' &&
+          row.personalData === 'none' &&
+          isPublishableKind(row.contentKind),
+      )
+      .sort(candidateOrder);
+  }
+
+  /** R2: a run's restricted, source-vouched pictures with a public copy on one host. */
+  rightsCandidateRows(runId: string, host: string) {
+    return [...this.acquisitions.values()]
+      .filter(
+        (row) =>
+          row.runId === runId &&
+          row.visibility === 'restricted' &&
+          row.licence === 'organisation-owned' &&
+          row.licenceEvidence !== null &&
+          row.licenceEvidence !== '' &&
+          row.publicCopy !== null &&
+          row.originalUrl.startsWith(`https://${host}/`),
+      )
+      .sort(
+        (a, b) =>
+          a.acquiredAt.getTime() - b.acquiredAt.getTime() || a.id.localeCompare(b.id),
+      );
+  }
+
+  assetRow(
+    row: AssetAcquisitionInput & {
+      id: string;
+      visibility: AssetVisibility;
+      version?: number;
+    },
+  ) {
+    return {
+      id: row.id,
+      recordId: row.recordId,
+      runId: row.runId,
+      originalUrl: row.originalUrl,
+      assetId: row.assetId,
+      checksum: row.checksum,
+      byteSize: row.byteSize,
+      mediaType: row.mediaType,
+      licence: row.licence,
+      licenceEvidence: row.licenceEvidence,
+      visibility: row.visibility,
+      rightsHolder: row.rightsHolder,
+      publicCopy:
+        row.publicCopy === null
+          ? null
+          : {
+              assetId: row.publicCopy.assetId,
+              width: row.publicCopy.width,
+              height: row.publicCopy.height,
+            },
+      version: row.version ?? 1,
+    };
+  }
+}
+
+function candidateOrder(
+  a: { readonly producedAt: Date; readonly id: string },
+  b: { readonly producedAt: Date; readonly id: string },
+): number {
+  return a.producedAt.getTime() - b.producedAt.getTime() || a.id.localeCompare(b.id);
 }
 
 function page<T>(rows: readonly T[], offset: number, limit: number) {

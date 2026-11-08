@@ -1094,6 +1094,7 @@ async function stagedWorld() {
   const topics = new FakeTopics(new Set(['11111111-1111-4111-8111-111111111111']));
   const decisions = createMigrationDecisionService({
     decisions: world.store.decisionPort,
+    sources: world.store.sourcePort,
     read: world.store.readPort,
     topics,
     authority: world.authority,
@@ -1233,6 +1234,7 @@ describe('decisions', () => {
     await world.run();
     const decisions = createMigrationDecisionService({
       decisions: world.store.decisionPort,
+      sources: world.store.sourcePort,
       read: world.store.readPort,
       topics: new FakeTopics(),
       authority: world.authority,
@@ -1514,6 +1516,7 @@ describe('authority', () => {
     });
     const decisions = createMigrationDecisionService({
       decisions: store.decisionPort,
+      sources: store.sourcePort,
       read: store.readPort,
       topics: new FakeTopics(),
       authority,
@@ -1530,6 +1533,7 @@ describe('authority', () => {
       authority,
     });
     const read = createMigrationReadService({
+      sources: store.sourcePort,
       read: store.readPort,
       publication: store.publicationPort,
       promotions: store.promotionPort,

@@ -89,12 +89,14 @@ function privacyWorld() {
   });
   const decisions = createMigrationDecisionService({
     decisions: store.decisionPort,
+    sources: store.sourcePort,
     read: store.readPort,
     topics: new FakeTopics(),
     authority,
     clock: now,
   });
   const read = createMigrationReadService({
+    sources: store.sourcePort,
     read: store.readPort,
     publication: store.publicationPort,
     promotions: store.promotionPort,

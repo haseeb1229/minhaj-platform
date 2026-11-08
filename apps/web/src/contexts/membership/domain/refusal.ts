@@ -36,9 +36,15 @@ export type MembershipRefusalReason = (typeof MEMBERSHIP_REFUSAL_REASONS)[number
 
 const REASONS: ReadonlySet<string> = new Set(MEMBERSHIP_REFUSAL_REASONS);
 
+// A declared field rather than a parameter property, so the context also loads
+// under plain Node's type stripping — the operations-image tooling composes it
+// (R2, `composition/staging-demo-runner.ts`).
 export class MembershipRefusal extends Error {
-  constructor(readonly reason: MembershipRefusalReason) {
+  readonly reason: MembershipRefusalReason;
+
+  constructor(reason: MembershipRefusalReason) {
     super(reason);
+    this.reason = reason;
     this.name = 'MembershipRefusal';
   }
 }

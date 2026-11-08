@@ -434,9 +434,17 @@ export interface AuthorizationPersistencePort {
 
   /* ---- Audit ------------------------------------------------------------ */
 
+  /**
+   * Newest first. `action` matches as a PREFIX (`role.` finds every role
+   * action; a full action name finds that action), and `from`/`to` bound
+   * `occurredAt` (inclusive start, exclusive end). Every filter is served by
+   * an index: `(action, occurredAt)`, `actorId`, `occurredAt` (R2).
+   */
   listAuditRecords(input: {
     readonly action: string | null;
     readonly actorId: string | null;
+    readonly from: Date | null;
+    readonly to: Date | null;
     readonly limit: number;
     readonly offset: number;
   }): Promise<AuditPage>;

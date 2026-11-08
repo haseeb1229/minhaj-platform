@@ -170,6 +170,64 @@ export interface ImageDimensions {
 }
 
 /* ===========================================================================
+ * Image derivatives (Rebaseline R2)
+ * ========================================================================= */
+
+/**
+ * The widths, in pixels, Storage renders a public still image at — narrowest
+ * first. A width wider than the image itself is never rendered: a derivative
+ * is never an enlargement.
+ */
+export const IMAGE_DERIVATIVE_WIDTHS = Object.freeze([320, 640, 960, 1440] as const);
+
+export type ImageDerivativeWidth = (typeof IMAGE_DERIVATIVE_WIDTHS)[number];
+
+export function isImageDerivativeWidth(value: number): value is ImageDerivativeWidth {
+  return (IMAGE_DERIVATIVE_WIDTHS as readonly number[]).includes(value);
+}
+
+/**
+ * The bounds a SOURCE image must fit before a single pixel is decoded to
+ * derive from it — the strictest still-image admission bounds the platform
+ * has (40 megapixels, 16,384 pixels a side), so no decompression bomb is ever
+ * handed to the decoder, whatever path stored the bytes.
+ */
+export const DERIVATIVE_SOURCE_LIMITS: ImageLimits = Object.freeze({
+  maxPixels: 40_000_000,
+  maxEdge: 16_384,
+});
+
+/**
+ * One record's picture as its OWNING context names it — what the derivative
+ * backfill enumerates. Never a decision: each is still put to that context's
+ * own public serving policy, exactly as its byte route would.
+ */
+export interface PictureReference {
+  readonly recordId: string;
+  readonly assetId: string;
+}
+
+/**
+ * What one derivation reported. `refused` is every reason the source may not be
+ * derived from — no such asset, not a clean still image, its bytes missing, or
+ * the caller's policy not allowing it — and, like `open`'s `null`, it does not
+ * say which. `failed` means the image could not be decoded within its bounds,
+ * or a rendered derivative was refused by Storage's own admission.
+ */
+export type DerivationOutcome =
+  | {
+      readonly status: 'derived';
+      /** Derivatives written and cleared by this call. */
+      readonly created: number;
+      /** Derivatives that already existed. */
+      readonly existing: number;
+      /** Written but not yet cleared by the scanner; served once reconciled. */
+      readonly withheld: number;
+    }
+  | { readonly status: 'refused' }
+  | { readonly status: 'failed' };
+
+/* ===========================================================================
  * Malware scanning (SECURITY_BASELINE.md §10.1 rule 4)
  * ========================================================================= */
 
@@ -279,6 +337,33 @@ export interface AssetPersistencePort {
    * still names it: the record then stays `released` and is never served.
    */
   removeReleased(id: string): Promise<boolean>;
+  /**
+   * R2. The derivatives recorded for a source asset — each a width and the
+   * Asset that holds its bytes — in no particular order.
+   */
+  derivatives(
+    sourceAssetId: string,
+  ): Promise<readonly { readonly width: number; readonly assetId: string }[]>;
+  /** R2. The record of the Asset holding one width of a source, or `null`. */
+  derivative(sourceAssetId: string, width: number): Promise<AssetRecord | null>;
+  /**
+   * R2. Links a stored derivative to its source at one width. `false` when
+   * that width is already linked — a concurrent derivation got there first.
+   */
+  recordDerivative(input: {
+    readonly sourceAssetId: string;
+    readonly width: number;
+    readonly assetId: string;
+  }): Promise<boolean>;
+  /**
+   * R2. Withdraws every derivative of a source from service (`rejected` /
+   * `released`) and returns what is needed to remove their bytes. Repeatable.
+   */
+  beginReleaseDerivatives(
+    sourceAssetId: string,
+  ): Promise<readonly { readonly id: string; readonly storageKey: string }[]>;
+  /** R2. Deletes a source's derivative links and their released records. */
+  removeDerivatives(sourceAssetId: string): Promise<void>;
 }
 
 /** What a successful `store` reports back. */
@@ -350,6 +435,32 @@ export interface StorageServicePort {
    * served again, and which the caller must stop referencing first.
    */
   release(releaseToken: string): Promise<'released' | 'absent' | 'referenced'>;
+  /**
+   * R2. Renders the missing WebP derivatives of one still image — the widths of
+   * `IMAGE_DERIVATIVE_WIDTHS` no wider than the image — and stores each through
+   * the same custody as an upload (sniffed, scanned, cleared by checksum),
+   * linked to its source.
+   *
+   * THE SAME TWO DECISIONS AS `open`. Only a CLEAN still image whose bytes are
+   * present is derived from, and only when the caller's policy — the owning
+   * context's PUBLIC serving policy — allows it now, so an image no published
+   * record shows is never decoded. Idempotent: a width already derived is kept.
+   */
+  derive(
+    assetId: string,
+    authorization: AssetAuthorizationPort,
+  ): Promise<DerivationOutcome>;
+  /**
+   * R2. Resolves one derivative of `assetId` — after the SOURCE passed exactly
+   * `open`'s two decisions. `null` for every refusal (one answer, as `open`);
+   * `not-derived` when the source is servable but that width is not stored and
+   * cleared yet, so the caller may fall back to the source itself.
+   */
+  openDerivative(
+    assetId: string,
+    width: number,
+    authorization: AssetAuthorizationPort,
+  ): Promise<AssetStream | 'not-derived' | null>;
 }
 
 /** A resolved, authorised asset ready to be served. */

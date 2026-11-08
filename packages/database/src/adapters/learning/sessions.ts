@@ -316,6 +316,10 @@ export async function closeSession(
   }
   if (input.expectedVersion !== null && current.version !== input.expectedVersion)
     throw new LearningDataError('conflict');
+  // A class is HELD only once it has begun: completing one that has not started
+  // would record a lesson nobody attended (cancelling it ahead of time is fine).
+  if (input.state === 'completed' && current.startsAt.getTime() > input.now.getTime())
+    throw new LearningDataError('not-started');
 
   // The participants as they stand BEFORE the Booking moves: the learner whose
   // trial is being cancelled is exactly who must be told.
@@ -446,6 +450,10 @@ export async function markParticipant(
 ): Promise<readonly SessionParticipant[]> {
   const session = await requireSession(tx, input.sessionId, input.where);
   if (session.state === 'cancelled') throw new LearningDataError('terminal');
+  // Attendance is a record of what happened: nobody attends a class that has
+  // not started yet.
+  if (session.startsAt.getTime() > input.now.getTime())
+    throw new LearningDataError('not-started');
   const participants = await participantsOf(tx, input.sessionId);
   if (!participants.some((p) => p.accountId === input.accountId))
     throw new LearningDataError('not-participant');

@@ -59,6 +59,7 @@ function world(count: number) {
   });
   const decisions = createMigrationDecisionService({
     decisions: store.decisionPort,
+    sources: store.sourcePort,
     read: store.readPort,
     topics: new FakeTopics(),
     authority: new FakeAuthority(),
@@ -240,6 +241,7 @@ describe('reviewMany', () => {
     // A read outage stops it the same way.
     const read = createMigrationDecisionService({
       decisions: w.store.decisionPort,
+      sources: w.store.sourcePort,
       read: {
         ...w.store.readPort,
         stagedDetail: async () => {

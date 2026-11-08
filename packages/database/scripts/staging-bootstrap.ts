@@ -107,12 +107,13 @@ export async function openAdminSession(
   command: StagingCommand,
   database: string,
   policy: StagingDatabasePolicy,
+  options: { readonly requestTimeoutMs?: number } = {},
 ): Promise<SqlSession> {
   const connection = assertApprovedStagingConnection(
     { ...command.connection, database },
     stagingTargetPolicy(command.values, policy, 'migration'),
   );
-  return openSession(connection);
+  return openSession(connection, options);
 }
 
 /** The runtime principal's connection to `database`, proven by the same guard. */

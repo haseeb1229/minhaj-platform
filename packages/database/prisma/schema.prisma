@@ -2263,6 +2263,10 @@ model Asset {
   editionCovers Edition[] @relation("EditionCoverAsset")
   magazineIssueCovers MagazineIssue[] @relation("MagazineIssueCoverAsset")
   videoPosters Video[] @relation("VideoPosterAsset")
+  /// R2. The WebP derivatives rendered from this still image, and — for a
+  /// derivative — the one link naming its source.
+  derivatives AssetDerivative[] @relation("AssetDerivativeSource")
+  derivativeOf AssetDerivative? @relation("AssetDerivativeAsset")
   id String @id @db.NVarChar(36)
 
   /// Server-generated and opaque. Never derived from caller input.
@@ -2301,6 +2305,26 @@ model Asset {
   /// Serving reads by id and state; reconciliation sweeps by state and age.
   @@index([state, updatedAt, id])
   @@map("Asset")
+}
+
+/// Rebaseline R2. Storage owns this link: one width of one source image, held
+/// as its own Asset with its own custody (sniffed, scanned, cleared by
+/// checksum). Layer 0, like Asset — no owner, no consumer key; a derivative is
+/// served only while the owning context's policy would serve its source.
+model AssetDerivative {
+  sourceAssetId String @db.NVarChar(36)
+  /// One of 320, 640, 960, 1440 (a CHECK in the migration).
+  width Int
+  assetId String @db.NVarChar(36)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  source Asset @relation("AssetDerivativeSource", fields: [sourceAssetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  asset Asset @relation("AssetDerivativeAsset", fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([sourceAssetId, width])
+  /// A derivative Asset is the derivative of exactly one source at one width.
+  @@unique([assetId])
+  @@map("AssetDerivative")
 }
 
 // Phase 8. Library owns these relations; referenced owners retain their data.
@@ -3839,15 +3863,17 @@ model CollectionSlugHistory {
 model QuranSource {
   id        String   @id @db.NVarChar(36)
   code      String   @unique @db.NVarChar(64)
-  /// fixture | approved
+  /// fixture | approved | reference (R2: a licensed, verbatim external text,
+  /// not reviewed by Minhaj-ul-Quran's religious authority for this platform)
   authority String   @db.NVarChar(16)
   title     String   @db.NVarChar(200)
   version   String   @db.NVarChar(64)
   /// utf-8: the one transport encoding the verifier implements.
   encoding  String   @db.NVarChar(32)
   script    String?  @db.NVarChar(64)
-  /// The external authority's evidence reference; required when approved.
-  reference String?  @db.NVarChar(400)
+  /// The evidence reference — required when approved or reference. A reference
+  /// source keeps its own licence notice here verbatim, hence the width (R2).
+  reference String?  @db.NVarChar(2000)
   createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
 
   surahs           QuranSourceSurah[]

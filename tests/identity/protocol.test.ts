@@ -530,6 +530,15 @@ describe('the mutation surface', () => {
         'apps/web/src/app/assets/library/covers/editions/[editionId]/[assetId]/route.ts',
         'apps/web/src/app/assets/library/covers/issues/[issueId]/[assetId]/route.ts',
         'apps/web/src/app/assets/media/posters/[videoId]/[assetId]/route.ts',
+        // Rebaseline R2: each public picture route's WebP derivatives, beside
+        // it — a GET of bytes the SAME owner's policy releases for the same
+        // source asset; none authenticates or writes anything a visitor sends.
+        'apps/web/src/app/assets/editorial/[family]/[recordId]/[assetId]/[derivative]/route.ts',
+        'apps/web/src/app/assets/people/portraits/[personId]/[assetId]/[derivative]/route.ts',
+        'apps/web/src/app/assets/library/covers/editions/[editionId]/[assetId]/[derivative]/route.ts',
+        'apps/web/src/app/assets/library/covers/issues/[issueId]/[assetId]/[derivative]/route.ts',
+        'apps/web/src/app/assets/media/photos/[photoId]/[assetId]/[derivative]/route.ts',
+        'apps/web/src/app/assets/media/posters/[videoId]/[assetId]/[derivative]/route.ts',
         // Phase 27: the payment provider's webhook — a second PROTOCOL CLASS B
         // callback beside Resend's, POST only, verified over its raw bytes in
         // the ledger; Donations' own export beside the other owners', through
@@ -549,12 +558,16 @@ describe('the mutation surface', () => {
         // authenticates anybody.
         'apps/web/src/app/api/admin/migration/runs/[id]/route.ts',
         'apps/web/src/app/api/admin/migration/snapshots/[id]/route.ts',
+        // R2: the administrative preview of an acquisition's metadata-stripped
+        // PUBLIC copy, for the person deciding a run's pictures — a GET under
+        // a live `migration.administer` that authenticates nobody.
+        'apps/web/src/app/api/admin/migration/assets/[id]/route.ts',
       ].sort(),
     );
 
-    // And the twenty-four others (Phase 23 added the Learn teacher alias, Phase 24
-    // the three attachment byte routes, Phase 30-R the six picture routes)
-    // genuinely are read-only: a mutating
+    // And the thirty others (Phase 23 added the Learn teacher alias, Phase 24
+    // the three attachment byte routes, Phase 30-R the six picture routes,
+    // Rebaseline R2 their six derivative routes) genuinely are read-only: a mutating
     // verb on any of them would be a state-changing endpoint outside the
     // Class-A controls.
     const { readFile } = await import('node:fs/promises');
@@ -566,7 +579,7 @@ describe('the mutation surface', () => {
         !entry.includes('/api/my/') &&
         !entry.includes('/api/messaging/'),
     );
-    expect(readOnly).toHaveLength(24);
+    expect(readOnly).toHaveLength(30);
 
     for (const route of readOnly) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');
@@ -950,13 +963,25 @@ describe('the mutation surface', () => {
 
     expect(pages.length).toBeGreaterThan(0);
 
+    // R2: My Minhaj pages name themselves through one helper, which must
+    // itself declare noindex — so a page calling it is as noindex as one that
+    // writes the literal.
+    const myHelper = await sourceOf('apps/web/src/components/my/metadata.ts');
+    expect(myHelper).toContain(
+      'return { title: t(`titles.${key}`), robots: { index: false, follow: false } };',
+    );
+
     for (const page of pages) {
       const source = await sourceOf(page);
 
       // An indexed sign-in or account page is a page a search engine will
       // fetch, cache and show — with whatever a crawler's request rendered
       // (ROUTE_MAP.md §4).
-      expect(source, `${page} must be noindex`).toContain('robots: { index: false');
+      const viaHelper =
+        page.includes('/my/') &&
+        /return myPageMetadata\(params, '[a-zA-Z]+'\);/u.test(source);
+      if (!viaHelper)
+        expect(source, `${page} must be noindex`).toContain('robots: { index: false');
     }
   });
 });

@@ -657,6 +657,68 @@ live('Phase 13 real SQL News workflow', () => {
     expect(after.items.map((item) => item.slug)).not.toContain(april.slug);
   });
 
+  it('narrows by content language and family, and orders a preferred language first (R2)', async () => {
+    // Placed in a month no other proof uses, so the archive read is exact.
+    now = new Date('2044-06-10T09:00:00Z');
+    const english = await published('statement');
+    now = new Date('2044-06-20T09:00:00Z');
+    const urdu = await published('statement', {
+      ...content('statement'),
+      primaryLanguage: 'ur',
+      translations: [
+        {
+          languageCode: 'ur',
+          title: 'مصنوعی بیان',
+          excerpt: '',
+          seoTitle: '',
+          seoDescription: '',
+          document,
+          issuer: 'مصنوعی دفتر',
+        },
+      ],
+    });
+    const press = await published('press-release');
+    now = new Date('2045-01-01T00:00:00Z');
+
+    const only = await reads.newsList('statement', 0, { only: 'ur' });
+    expect(only.items.map((item) => item.slug)).toContain(urdu.slug);
+    expect(only.items.map((item) => item.slug)).not.toContain(english.slug);
+
+    // Preferring Urdu puts the Urdu statement before the newer-or-older English
+    // one; preferring English puts it after, and both stay listed.
+    const position = async (prefer: 'en' | 'ur') => {
+      const slugs = (await reads.newsList('statement', 0, { prefer })).items.map(
+        (item) => item.slug,
+      );
+      return { urdu: slugs.indexOf(urdu.slug), english: slugs.indexOf(english.slug) };
+    };
+    const ur = await position('ur');
+    expect(ur.urdu).toBeGreaterThanOrEqual(0);
+    expect(ur.urdu).toBeLessThan(ur.english);
+    const en = await position('en');
+    expect(en.english).toBeGreaterThanOrEqual(0);
+    expect(en.english).toBeLessThan(en.urdu);
+
+    const month = { year: 2044, month: 6, offset: 0 } as const;
+    expect(
+      (await reads.newsArchive({ ...month, kind: 'statement' })).items.map((i) => i.slug),
+    ).toEqual([urdu.slug, english.slug]);
+    expect(
+      (await reads.newsArchive({ ...month, language: 'ur' })).items.map((i) => i.slug),
+    ).toEqual([urdu.slug]);
+    expect((await reads.newsArchive(month)).items.map((i) => i.slug)).toEqual(
+      expect.arrayContaining([press.slug, urdu.slug, english.slug]),
+    );
+    expect(await reads.newsArchivePeriods({ kind: 'statement', language: 'ur' })).toEqual(
+      expect.arrayContaining([{ year: 2044, month: 6, count: 1 }]),
+    );
+    expect(
+      (await reads.newsArchivePeriods({ kind: 'press-release' })).find(
+        (period) => period.year === 2044 && period.month === 6,
+      )?.count,
+    ).toBe(1);
+  });
+
   it('bounds a scheduler sweep for each family and catches up the remainder next time', async () => {
     const at = new Date(now.getTime() + 60000);
     for (let index = 0; index < 26; index++)

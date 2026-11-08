@@ -153,6 +153,16 @@ export { createCorrespondencePersistence } from './adapters/editorial/index.ts';
 
 export { createAssetPersistence } from './adapters/storage/index.ts';
 
+/*
+ * Rebaseline R2 — each context's own enumeration of the published records that
+ * name a picture, for Storage's derivative backfill. Each lives with, and is
+ * owned by, its context's adapter; none decides anything.
+ */
+export { publishedLeadImageReferences } from './adapters/editorial/index.ts';
+export { publishedCoverReferences } from './adapters/library/index.ts';
+export { publishedMediaPictureReferences } from './adapters/media/index.ts';
+export { publishedPortraitReferences } from './adapters/people-contributors/index.ts';
+
 export {
   createLibraryPersistence,
   createLibraryPublicReader,

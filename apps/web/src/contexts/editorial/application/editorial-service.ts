@@ -10,6 +10,7 @@ import {
   hasLeadImage,
   hasSourceDate,
   isNewsKind,
+  workflowBatchSchema,
   workflowCommandSchema,
   validPageBinding,
   type ArticleDetail,
@@ -398,6 +399,58 @@ export function createEditorialService(dependencies: {
         now: now(),
         scheduledExecution,
       });
+    },
+    /**
+     * R2. APPROVE AND PUBLISH a selection the second administrator named — one
+     * kind, at most one queue page, each record at the version they saw. The
+     * actor must hold BOTH `content.review` and `content.publish`, checked live
+     * before anything is done. Each record then goes through `transition`
+     * exactly as two single acts would: approve (self-approval refused by the
+     * workflow), then publish at the version the approval produced (which
+     * still needs the approver's live `content.review`). Every transition is
+     * audited on its own by the adapter. A refusal stops that record only and
+     * is reported with its reason word — an approval already made stands, as
+     * it would after a single approve. An outage is no per-record verdict: it
+     * stops the batch and is thrown, after what was done before it.
+     */
+    async approveAndPublishMany(
+      actor: EditorialActor,
+      value: unknown,
+    ): Promise<{
+      readonly decided: number;
+      readonly refused: readonly { readonly id: string; readonly reason: string }[];
+    }> {
+      await requirePermission(actor, 'content.review');
+      await requirePermission(actor, 'content.publish');
+      const parsed = workflowBatchSchema.safeParse(value);
+      if (!parsed.success) throw new EditorialRefusal('invalid');
+      const { kind, items } = parsed.data;
+      let decided = 0;
+      const refused: { id: string; reason: string }[] = [];
+      for (const item of items) {
+        try {
+          const approved = await service.transition(actor, kind, {
+            id: item.id,
+            expectedVersion: item.expectedVersion,
+            action: 'approve',
+            scheduledAt: null,
+            timezone: null,
+          });
+          await service.transition(actor, kind, {
+            id: item.id,
+            expectedVersion: approved.version,
+            action: 'publish',
+            scheduledAt: null,
+            timezone: null,
+          });
+          decided += 1;
+        } catch (error) {
+          const reason = editorialFailure(error);
+          if (reason === 'unavailable') throw error;
+          refused.push({ id: item.id, reason });
+        }
+      }
+      return { decided, refused };
     },
     async runDue() {
       const at = now();

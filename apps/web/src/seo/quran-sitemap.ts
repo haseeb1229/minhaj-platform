@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
+import { QURAN_MODE_POSTURE } from '@minhaj/contracts/quran';
 
 import { quranReadRuntime } from '@/composition/quran-read';
 import { ayahPathOf } from '@/components/quran/presentation';
@@ -13,8 +14,9 @@ import type { SitemapEntry, SitemapPartition } from './sitemap';
  * (ROUTE_MAP.md §9.4 names the segment).
  *
  * ONLY WHILE AN APPROVED CORPUS IS ACTIVE. An inactive corpus has nothing to
- * advertise, and a FIXTURE corpus is engineering proof text that must never be
- * offered to a search engine — so the segment is empty in both, decided here
+ * advertise, a FIXTURE corpus is engineering proof text and a REFERENCE corpus
+ * a staging preview, neither ever offered to a search engine — so the segment
+ * is empty in all three (`QURAN_MODE_POSTURE`), decided here
  * before anything is enumerated as well as by the reader, which returns rows
  * for an approved corpus only.
  *
@@ -40,7 +42,7 @@ export async function quranSitemapPartitions(): Promise<readonly SitemapPartitio
 
   const reader = quranReadRuntime().reader;
   const availability = await reader.availability();
-  if (!availability.active || availability.mode !== 'approved') return [];
+  if (!availability.active || !QURAN_MODE_POSTURE[availability.mode].sitemap) return [];
 
   const buckets = new Map<Locale, SitemapEntry[]>(
     localeSchema.options.map((locale) => [locale, []]),

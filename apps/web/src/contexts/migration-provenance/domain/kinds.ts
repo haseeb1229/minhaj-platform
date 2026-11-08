@@ -523,9 +523,26 @@ function editorial(input: Ready, record: ParsedEditorial): Normalisation {
   return finish(record.kind, payload, words, {
     title,
     fallbackTitle: legacyIdentifier ?? input.externalKey,
-    identity: null,
+    identity: postIdentity(legacyIdentifier),
     languageCode: lang.code,
   });
+}
+
+/**
+ * R2. The SAME POST REACHED BY TWO SOURCES. The organisation's sites share one
+ * CMS whose post number (`tid`) is one number space across its languages,
+ * sections and hosts, so one post can be listed by two registrations — a
+ * press release also under "All News", an archive member also in a section
+ * listing. A news item, article or press release whose legacy identifier is
+ * `tid-{n}` carries `tid:{n}` as an IDENTIFIER: a second record with it is a
+ * duplicate candidate a person decides (merge or distinct) — never collapsed
+ * automatically, and never a title guess.
+ */
+function postIdentity(legacyIdentifier: string | null): Normalisation['identity'] {
+  const tid = /^tid-([1-9][0-9]{0,8})$/.exec(legacyIdentifier ?? '')?.[1];
+  return tid === undefined
+    ? null
+    : { key: `tid:${tid}`, signal: 'identifier', hard: false };
 }
 
 /* ===========================================================================

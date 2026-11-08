@@ -1071,17 +1071,26 @@ export function createAuthorizationPersistence(): AuthorizationPersistencePort {
 
     /* ---- Audit ------------------------------------------------------------ */
 
-    async listAuditRecords({ action, actorId, limit, offset }) {
+    async listAuditRecords({ action, actorId, from, to, limit, offset }) {
       const take = boundedLimit(limit);
 
       const rows = await prisma.auditLog.findMany({
-        // INDEXED FILTERS ONLY (§28). `action` is covered by
-        // `AuditLog_action_occurredAt_idx` and `actorId` by its own index;
+        // INDEXED FILTERS ONLY (§28). `action` — a prefix, which SQL Server
+        // serves as a range seek — is covered by `AuditLog_action_occurredAt_idx`,
+        // `actorId` by its own index and the date range by `occurredAt`'s;
         // nothing else is offered, because an unindexed predicate over a table
         // that only grows is a scan on every page.
         where: {
-          ...(action === null ? {} : { action }),
+          ...(action === null ? {} : { action: { startsWith: action } }),
           ...(actorId === null ? {} : { actorId }),
+          ...(from === null && to === null
+            ? {}
+            : {
+                occurredAt: {
+                  ...(from === null ? {} : { gte: from }),
+                  ...(to === null ? {} : { lt: to }),
+                },
+              }),
         },
         select: {
           id: true,

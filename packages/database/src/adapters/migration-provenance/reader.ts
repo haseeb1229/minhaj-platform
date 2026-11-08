@@ -2,9 +2,13 @@ import 'server-only';
 
 import { Prisma } from '@prisma/client';
 
-import { MIGRATION_LIMITS } from '@minhaj/contracts/migration';
+import {
+  MIGRATION_LIMITS,
+  MIGRATION_PUBLISHABLE_KINDS,
+} from '@minhaj/contracts/migration';
 import type {
   AssetLicence,
+  AssetProvenanceRow,
   AssetVisibility,
   DisappearanceClass,
   DuplicateSignal,
@@ -112,6 +116,130 @@ function toStagedRow(row: {
     validation: row.validation as ValidationState,
     personalData: row.personalData as PersonalDataState,
     review: row.review as ReviewState,
+  };
+}
+
+const ASSET_ROW_SELECT = {
+  id: true,
+  recordId: true,
+  runId: true,
+  originalUrl: true,
+  assetId: true,
+  checksum: true,
+  byteSize: true,
+  mediaType: true,
+  licence: true,
+  licenceEvidence: true,
+  visibility: true,
+  rightsHolder: true,
+  publicAssetId: true,
+  width: true,
+  height: true,
+  version: true,
+} as const satisfies Prisma.MigrationAssetProvenanceSelect;
+
+function toAssetRow({
+  publicAssetId,
+  width,
+  height,
+  ...row
+}: {
+  readonly id: string;
+  readonly recordId: string | null;
+  readonly runId: string;
+  readonly originalUrl: string;
+  readonly assetId: string;
+  readonly checksum: string;
+  readonly byteSize: bigint | number;
+  readonly mediaType: string;
+  readonly licence: string;
+  readonly licenceEvidence: string | null;
+  readonly visibility: string;
+  readonly rightsHolder: string | null;
+  readonly publicAssetId: string | null;
+  readonly width: number | null;
+  readonly height: number | null;
+  readonly version: number;
+}): AssetProvenanceRow {
+  return {
+    ...row,
+    byteSize: Number(row.byteSize),
+    licence: row.licence as AssetLicence,
+    visibility: row.visibility as AssetVisibility,
+    publicCopy:
+      publicAssetId === null || width === null || height === null
+        ? null
+        : { assetId: publicAssetId, width, height },
+  };
+}
+
+/** R2. Every run-wide candidate list: oldest first, the id last, so a set has one order. */
+function candidateOrder(): { producedAt?: 'asc'; id?: 'asc' }[] {
+  return [{ producedAt: 'asc' }, { id: 'asc' }];
+}
+
+/**
+ * R2. A pending, valid revision free of personal data, of a kind migration may
+ * publish — before the duplicate rule.
+ */
+function approvableWhere(runId: string): {
+  runId: string;
+  review: string;
+  validation: string;
+  personalData: string;
+  contentKind: { in: string[] };
+} {
+  return {
+    runId,
+    review: 'pending',
+    validation: 'valid',
+    personalData: 'none',
+    contentKind: { in: [...MIGRATION_PUBLISHABLE_KINDS] },
+  };
+}
+
+/** No OPEN duplicate candidate names the record, on either side of the pair. */
+const NO_OPEN_DUPLICATE = {
+  duplicates: { none: { state: 'open' } },
+  duplicateOf: { none: { state: 'open' } },
+} as const;
+
+/**
+ * R2. What a run-wide approval may take: pending, valid, free of personal data
+ * (a flagged revision cannot be approved; a cleared one stays a single
+ * decision), of a kind migration may publish, and of a record no undecided
+ * duplicate candidate names — a person decides the pair first.
+ */
+function approvalCandidateWhere(runId: string): ReturnType<typeof approvableWhere> & {
+  record: typeof NO_OPEN_DUPLICATE;
+} {
+  return { ...approvableWhere(runId), record: NO_OPEN_DUPLICATE };
+}
+
+/**
+ * R2. What a run-wide rights decision may take on one host: restricted, the
+ * source's own `organisation-owned` claim WITH its evidence, a public copy, and
+ * an original address on exactly that host (the `/` closes the host, so a
+ * longer name that begins the same never matches).
+ */
+function rightsCandidateWhere(
+  runId: string,
+  host: string,
+): {
+  runId: string;
+  visibility: string;
+  licence: string;
+  publicAssetId: { not: null };
+  originalUrl: { startsWith: string };
+  AND: ({ licenceEvidence: { not: null } } | { NOT: { licenceEvidence: string } })[];
+} {
+  return {
+    runId,
+    visibility: 'restricted',
+    licence: 'organisation-owned',
+    publicAssetId: { not: null },
+    originalUrl: { startsWith: `https://${host}/` },
+    AND: [{ licenceEvidence: { not: null } }, { NOT: { licenceEvidence: '' } }],
   };
 }
 
@@ -666,40 +794,126 @@ export function createMigrationReader(): MigrationReadPort {
               ? [{ acquiredAt: 'desc' }, { id: 'desc' }]
               : [{ acquiredAt: 'asc' }, { id: 'asc' }],
           ...page,
-          select: {
-            id: true,
-            recordId: true,
-            runId: true,
-            originalUrl: true,
-            assetId: true,
-            checksum: true,
-            byteSize: true,
-            mediaType: true,
-            licence: true,
-            licenceEvidence: true,
-            visibility: true,
-            rightsHolder: true,
-            publicAssetId: true,
-            width: true,
-            height: true,
-            version: true,
-          },
+          select: ASSET_ROW_SELECT,
         }),
       ]);
+      return { rows: rows.map(toAssetRow), total, offset: page.skip };
+    },
+
+    async asset(provenanceId) {
+      const row = await db.migrationAssetProvenance.findFirst({
+        where: { id: provenanceId },
+        select: ASSET_ROW_SELECT,
+      });
+      return row === null ? null : toAssetRow(row);
+    },
+
+    async runApprovalCounts(runId) {
+      const pending = { runId, review: 'pending' };
+      const valid = { ...pending, validation: 'valid' };
+      const [all, invalid, flagged, cleared, clean, approvable, candidates] =
+        await Promise.all([
+          db.migrationStagedRecord.count({ where: pending }),
+          db.migrationStagedRecord.count({
+            where: { ...pending, NOT: { validation: 'valid' } },
+          }),
+          db.migrationStagedRecord.count({
+            where: { ...valid, personalData: 'flagged' },
+          }),
+          db.migrationStagedRecord.count({
+            where: { ...valid, personalData: 'cleared' },
+          }),
+          db.migrationStagedRecord.count({ where: { ...valid, personalData: 'none' } }),
+          db.migrationStagedRecord.count({ where: approvableWhere(runId) }),
+          db.migrationStagedRecord.count({ where: approvalCandidateWhere(runId) }),
+        ]);
       return {
-        rows: rows.map(({ publicAssetId, width, height, ...row }) => ({
-          ...row,
-          byteSize: Number(row.byteSize),
-          licence: row.licence as AssetLicence,
-          visibility: row.visibility as AssetVisibility,
-          publicCopy:
-            publicAssetId === null || width === null || height === null
-              ? null
-              : { width, height },
-        })),
-        total,
-        offset: page.skip,
+        pending: all,
+        candidates,
+        invalid,
+        flagged,
+        cleared,
+        reviewOnly: clean - approvable,
+        awaitingDuplicate: approvable - candidates,
       };
+    },
+
+    async hasOpenDuplicate(recordId) {
+      const open = await db.migrationDuplicateCandidate.count({
+        where: {
+          state: 'open',
+          OR: [{ recordId }, { otherRecordId: recordId }],
+        },
+      });
+      return open > 0;
+    },
+
+    async approvalCandidates(query) {
+      const page = paging(query);
+      const where = approvalCandidateWhere(query.runId);
+      const [total, rows] = await Promise.all([
+        db.migrationStagedRecord.count({ where }),
+        db.migrationStagedRecord.findMany({
+          where,
+          orderBy: candidateOrder(),
+          ...page,
+          select: STAGED_ROW_SELECT,
+        }),
+      ]);
+      return { rows: rows.map(toStagedRow), total, offset: page.skip };
+    },
+
+    async approvalCandidateKeys(runId, ceiling) {
+      return db.migrationStagedRecord.findMany({
+        where: approvalCandidateWhere(runId),
+        orderBy: candidateOrder(),
+        take: bounded(ceiling, MIGRATION_LIMITS.runCandidates),
+        select: { id: true, version: true },
+      });
+    },
+
+    async rightsCandidates(query) {
+      const page = paging(query);
+      const where = rightsCandidateWhere(query.runId, query.host);
+      const [total, rows] = await Promise.all([
+        db.migrationAssetProvenance.count({ where }),
+        db.migrationAssetProvenance.findMany({
+          where,
+          orderBy: [{ acquiredAt: 'asc' }, { id: 'asc' }],
+          ...page,
+          select: ASSET_ROW_SELECT,
+        }),
+      ]);
+      return { rows: rows.map(toAssetRow), total, offset: page.skip };
+    },
+
+    async rightsCandidateKeys(runId, host, ceiling) {
+      return db.migrationAssetProvenance.findMany({
+        where: rightsCandidateWhere(runId, host),
+        orderBy: [{ acquiredAt: 'asc' }, { id: 'asc' }],
+        take: bounded(ceiling, MIGRATION_LIMITS.runCandidates),
+        select: { id: true, version: true },
+      });
+    },
+
+    async manifestCandidateKeys(runId, ceiling) {
+      return db.migrationStagedRecord.findMany({
+        where: {
+          runId,
+          review: 'approved',
+          validation: 'valid',
+          contentKind: { in: [...MIGRATION_PUBLISHABLE_KINDS] },
+          entries: {
+            none: {
+              state: { in: LIVE_ENTRY_STATES },
+              manifest: { state: { in: LIVE_MANIFEST_STATES } },
+            },
+          },
+        },
+        orderBy: candidateOrder(),
+        take: bounded(ceiling, MIGRATION_LIMITS.runCandidates),
+        select: { id: true, version: true },
+      });
     },
 
     async reconciliations(query) {

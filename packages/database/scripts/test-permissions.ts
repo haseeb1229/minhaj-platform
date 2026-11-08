@@ -1073,6 +1073,42 @@ try {
     'ALTER TABLE [dbo].[Asset] DROP CONSTRAINT [Asset_clean_measured_ck];',
   );
 
+  // ---- Rebaseline R2: Storage's derivative links -----------------------------
+  //
+  // A link is written once, when a width is stored, and deleted only with its
+  // released source. It is never re-pointed (no UPDATE), and the width CHECK is
+  // beyond the runtime's reach (no ALTER).
+  const derivedSource = randomUUID();
+  const derivedCopy = randomUUID();
+  await expectAllowed(
+    app,
+    'AssetDerivative source and copy',
+    `INSERT INTO [dbo].[Asset] ([id],[storageKey],[state],[updatedAt]) VALUES (N'${derivedSource}',N'ab/cd/${derivedSource.replaceAll('-', '')}',N'uploading',SYSUTCDATETIME()),(N'${derivedCopy}',N'ab/cd/${derivedCopy.replaceAll('-', '')}',N'uploading',SYSUTCDATETIME());`,
+    'two custody rows to link',
+  );
+  await expectAllowed(
+    app,
+    'AssetDerivative INSERT',
+    `INSERT INTO [dbo].[AssetDerivative] ([sourceAssetId],[width],[assetId]) VALUES (N'${derivedSource}',640,N'${derivedCopy}');`,
+    'a stored width is linked to its source',
+  );
+  await expectDenied(
+    app,
+    'AssetDerivative UPDATE denied',
+    `UPDATE [dbo].[AssetDerivative] SET [width]=320 WHERE [assetId]=N'${derivedCopy}';`,
+  );
+  await expectAllowed(
+    app,
+    'AssetDerivative DELETE',
+    `DELETE FROM [dbo].[AssetDerivative] WHERE [sourceAssetId]=N'${derivedSource}'; DELETE FROM [dbo].[Asset] WHERE [id] IN (N'${derivedSource}',N'${derivedCopy}');`,
+    'a released source takes its links with it',
+  );
+  await expectDenied(
+    app,
+    'AssetDerivative ALTER denied',
+    'ALTER TABLE [dbo].[AssetDerivative] DROP CONSTRAINT [AssetDerivative_width_ck];',
+  );
+
   // ---- Phase 8: Library aggregates and the permanent slug namespace ---------
   //
   // THREE DISTINCT POSTURES here, and the differences are the rule rather than

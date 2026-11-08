@@ -182,4 +182,41 @@ describe('query semantics', () => {
     );
     expect(newsArchivePath('en', { year: null, month: 2 })).toBe('/news/archive');
   });
+
+  it('reads the R2 language and family narrowing tolerantly, and writes it back', async () => {
+    const { readNewsFilters, newsListingPath, newsArchivePath } =
+      await withIndexing(false);
+    expect(readNewsFilters({ lang: 'ur', type: 'statement' })).toEqual({
+      language: 'ur',
+      kind: 'statement',
+    });
+    // Anything else is simply absent: another language, a repeated value, a
+    // family that is not one, an overlong value.
+    for (const query of [
+      { lang: 'fr' },
+      { lang: ['en', 'ur'] },
+      { type: 'event' },
+      { type: 'statement'.repeat(4) },
+      { lang: 'EN' },
+    ])
+      expect(readNewsFilters(query), JSON.stringify(query)).toEqual({
+        language: null,
+        kind: null,
+      });
+    expect(newsListingPath('en', '/news', { language: null })).toBe('/news');
+    expect(newsListingPath('ar', '/news/statements', { language: 'ur' }, 40)).toBe(
+      '/ar/news/statements?lang=ur&offset=40',
+    );
+    expect(
+      newsArchivePath('ur', {
+        year: 2034,
+        month: 2,
+        kind: 'press-release',
+        language: 'en',
+      }),
+    ).toBe('/ur/news/archive?type=press-release&lang=en&year=2034&month=2');
+    expect(
+      newsArchivePath('en', { year: null, month: null, kind: null, language: null }),
+    ).toBe('/news/archive');
+  });
 });

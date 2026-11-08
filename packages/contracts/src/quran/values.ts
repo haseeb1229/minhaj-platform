@@ -123,12 +123,71 @@ export const quranLayerStateSchema = z.enum(QURAN_LAYER_STATES);
  * `fixture` — controlled, unmistakably non-authoritative engineering text that
  * proves mechanisms. `approved` — a source an external religious authority has
  * approved (OPEN_DECISIONS.md §1.1, §1.2), recorded with its evidence reference.
+ * `reference` — a real, licensed external text reproduced VERBATIM (Rebaseline
+ * R2: the staging reference preview), recorded with its licence, version and
+ * digest, and NOT reviewed by Minhaj-ul-Quran's religious authority for this
+ * platform. It is never presented as approved, never indexable, and shown only
+ * on a deployment that explicitly admits it (`RELIGIOUS_REFERENCE_PREVIEW`).
  *
- * NEITHER IS CHOSEN AT RUNTIME. Sources are registered by the owner/operator
+ * NONE IS CHOSEN AT RUNTIME. Sources are registered by the owner/operator
  * principal only; the application principal can read them and nothing more, so
- * no permission, label or checkbox can turn a fixture into an authority.
+ * no permission, label or checkbox can turn a fixture or a reference text into
+ * an authority.
  */
-export type QuranSourceAuthority = 'fixture' | 'approved';
+export type QuranSourceAuthority = 'fixture' | 'approved' | 'reference';
+
+export const QURAN_SOURCE_AUTHORITIES = Object.freeze([
+  'fixture',
+  'approved',
+  'reference',
+] as const) satisfies readonly QuranSourceAuthority[];
+
+/**
+ * What each public mode PERMITS, in one exhaustive table — so no page, sitemap,
+ * navigation probe or search projection decides it with its own comparison,
+ * and a new mode cannot be added without deciding every row (a missing key is
+ * a type error).
+ *
+ *   indexable   may a search engine be told anything (still also requires the
+ *               deployment to be indexable at all)? Approved text only.
+ *   sitemap     may the corpus be listed in a sitemap? Approved text only.
+ *   navigation  is the Quran a destination the shell promotes? Approved, and a
+ *               reference preview on the deployment that admits it.
+ *   notice      what every Quran page must say first: the fixture warning,
+ *               the reference-preview attribution, or nothing.
+ */
+export interface QuranModePosture {
+  readonly indexable: boolean;
+  readonly sitemap: boolean;
+  readonly navigation: boolean;
+  readonly notice: 'fixture' | 'reference' | null;
+}
+
+export const QURAN_MODE_POSTURE: Readonly<
+  Record<QuranSourceAuthority, QuranModePosture>
+> = Object.freeze({
+  approved: { indexable: true, sitemap: true, navigation: true, notice: null },
+  reference: { indexable: false, sitemap: false, navigation: true, notice: 'reference' },
+  fixture: { indexable: false, sitemap: false, navigation: false, notice: 'fixture' },
+});
+
+/**
+ * A stored authority string as the vocabulary, or `null` for anything else —
+ * an unknown value is never guessed into a mode (fail closed).
+ */
+export function quranSourceAuthorityOf(value: string): QuranSourceAuthority | null {
+  return (QURAN_SOURCE_AUTHORITIES as readonly string[]).includes(value)
+    ? (value as QuranSourceAuthority)
+    : null;
+}
+
+/**
+ * `RELIGIOUS_REFERENCE_PREVIEW` — the deployment's explicit admission of a
+ * `reference` corpus: exactly `enabled`, or absent. Anything else is invalid
+ * configuration, never a quiet "off". Server configuration refuses `enabled`
+ * beside public indexing (`@minhaj/contracts/env/server`).
+ */
+export const religiousReferencePreviewSchema = z.literal('enabled').optional();
 
 /** `meccan` / `medinan`, only where a source supplies it. */
 export type QuranRevelation = 'meccan' | 'medinan';
@@ -691,7 +750,11 @@ export interface TopicAyahPage {
  *
  * `fixture` mode exists for disposable proof environments: every page then
  * says it shows non-authoritative engineering fixture text, is `noindex`, and
- * no sitemap lists it. The application principal cannot create either mode.
+ * no sitemap lists it. `reference` mode is the staging reference preview: every
+ * page names the source and says the text has not been reviewed for this
+ * platform, is `noindex`, and no sitemap lists it — and the reader reports it
+ * only where the deployment admits it, inactive everywhere else
+ * (`QURAN_MODE_POSTURE`). The application principal cannot create any mode.
  */
 export type QuranAvailability =
   | { readonly active: false }

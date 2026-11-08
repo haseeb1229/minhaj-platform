@@ -22,7 +22,13 @@ import type {
   PublicCollection,
 } from './values.ts';
 import type { EditorialLeadFamily } from './lead.ts';
-import type { NewsArchivePeriod, NewsKind, NewsPage, NewsTimelineQuery } from './news.ts';
+import type {
+  NewsArchivePeriod,
+  NewsKind,
+  NewsPage,
+  NewsPeriodFilter,
+  NewsTimelineQuery,
+} from './news.ts';
 import type { EventListQuery, EventPage } from './event.ts';
 import type {
   CollectionMember,
@@ -122,8 +128,8 @@ export interface EditorialPublicReaderPort {
   publishedNews(kind: NewsKind, offset: number, limit: number): Promise<NewsPage>;
   /** All four families as one timeline, newest first; see `NewsTimelineQuery`. */
   newsTimeline(query: NewsTimelineQuery): Promise<NewsPage>;
-  /** The UTC year and month of every published News record, counted. */
-  newsArchivePeriods(): Promise<readonly NewsArchivePeriod[]>;
+  /** The UTC year and month of every published News record, counted (optionally narrowed). */
+  newsArchivePeriods(filter?: NewsPeriodFilter): Promise<readonly NewsArchivePeriod[]>;
   newsSitemap(
     kind: NewsKind,
     offset: number,

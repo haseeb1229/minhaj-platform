@@ -33,6 +33,12 @@ const openTelemetrySemanticConventions =
  * installed in the phase that first genuinely needs them (TECH_STACK.md §1.3).
  */
 export default defineConfig({
+  // R2. The shared UI primitives' behaviour tests render server components by
+  // calling them (they hold no hooks), so `.tsx` must be transformed. The web
+  // app's tsconfig says `jsx: preserve` — Next compiles JSX itself — and Vite
+  // would otherwise inherit that and leave the JSX in place.
+  oxc: { jsx: { runtime: 'automatic', importSource: 'react' } },
+
   // Tests exercise SERVER code, so resolve the server export conditions.
   //
   // `react-server` is what makes `server-only` resolve to its empty module

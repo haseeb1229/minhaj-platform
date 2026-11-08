@@ -1,10 +1,15 @@
 import 'server-only';
 
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 import {
+  DERIVATIVE_SOURCE_LIMITS,
+  IMAGE_DERIVATIVE_WIDTHS,
+  isImageDerivativeWidth,
   RELEASE_TOKEN_PATTERN,
+  type AssetAuthorizationPort,
   type AssetPersistencePort,
+  type AssetRecord,
   type AssetRejection,
   type AssetStream,
   type MalwareScannerPort,
@@ -12,6 +17,7 @@ import {
   type StoredAsset,
 } from '@minhaj/contracts/platform';
 
+import { renderDerivatives } from './derivative.ts';
 import { ByteLimitExceeded, type FilesystemStore } from './filesystem.ts';
 import { ImageRefused, sanitiseImage, SANITISABLE_IMAGE_TYPES } from './image.ts';
 import { displayNameFrom, generateStorageKey } from './keys.ts';
@@ -55,6 +61,11 @@ function releaseDigestOf(token: string): string {
  * measured, hashed, sniffed, scanned and later served — are the image with its
  * hidden metadata removed (`./image.ts`). The validation runs as the upload
  * streams to disk, so it adds no buffering and no second pass.
+ *
+ * DERIVATIVES (Rebaseline R2). A clean still image a policy allows may be
+ * rendered at a few narrower WebP widths (`./derivative.ts`); each is stored
+ * through `store` itself and linked to its source, and is served only while
+ * the source would be (`openDerivative`). Releasing the source releases them.
  */
 
 export interface StorageDependencies {
@@ -96,7 +107,62 @@ export function createStorageService(
     };
   }
 
-  return {
+  /**
+   * `open`'s two decisions, for any caller that needs them: the record when the
+   * asset is clean, its bytes present and the policy's answer is exactly
+   * `allow` — and `null` for every other case, a throwing policy included.
+   */
+  async function released(
+    assetId: string,
+    authorization: AssetAuthorizationPort,
+  ): Promise<AssetRecord | null> {
+    const record = await assets.find(assetId);
+    if (record === null || record.state !== 'clean') return null;
+    let decision: unknown;
+    try {
+      decision = await authorization.decide({
+        assetId: record.id,
+        mediaType: record.mediaType,
+        byteSize: record.byteSize,
+        checksum: record.checksum,
+      });
+    } catch {
+      return null;
+    }
+    if (decision !== 'allow') return null;
+    if (!(await files.exists(record.storageKey))) return null;
+    return record;
+  }
+
+  /** A clean asset's whole bytes, bounded by its recorded size. */
+  async function readWhole(record: AssetRecord): Promise<Uint8Array | null> {
+    const whole = new Uint8Array(record.byteSize);
+    let offset = 0;
+    for await (const chunk of files.read(record.storageKey)) {
+      if (offset + chunk.byteLength > whole.byteLength) return null;
+      whole.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return offset === whole.byteLength ? whole : null;
+  }
+
+  function streamOf(record: AssetRecord): AssetStream {
+    return {
+      mediaType: record.mediaType,
+      byteSize: record.byteSize,
+      checksum: record.checksum,
+      displayName: record.displayName,
+      body: files.read(record.storageKey),
+      range: (start, end) => {
+        if (end >= record.byteSize) {
+          throw new RangeError('A byte range must end within the asset.');
+        }
+        return files.read(record.storageKey, { start, end });
+      },
+    };
+  }
+
+  const service: StorageServicePort = {
     async store(bytes, policy) {
       // An image policy is a promise to validate every type it admits; a type
       // this foundation cannot structurally validate would be admitted blind.
@@ -283,60 +349,109 @@ export function createStorageService(
      * enumerate assets or to watch one move through its lifecycle.
      */
     async open(assetId, authorization) {
-      const record = await assets.find(assetId);
-
-      if (record === null || record.state !== 'clean') return null;
+      /**
+       * DEFAULT DENY (`released`).
+       *
+       * Only a `clean` record is considered. Anything the policy answers that
+       * is not the exact string `allow` is a denial — including a throw, a
+       * rejected promise and a malformed answer: a consumer's policy is
+       * ordinary code that can return anything at runtime, and a policy that
+       * breaks fails closed rather than open. Metadata saying clean is half the
+       * truth; a file that has gone missing is not served as an empty body.
+       */
+      const record = await released(assetId, authorization);
+      if (record === null) return null;
 
       /**
-       * DEFAULT DENY.
-       *
-       * Anything that is not the exact string `allow` is a denial — including
-       * a throw, a rejected promise and a malformed answer from a consumer's
-       * policy. A policy that breaks fails closed rather than open.
+       * The stream's `range` reads the bytes this SAME decision released — so a
+       * range request is authorised exactly as a whole-file one, and there is
+       * no way to ask for a slice without first passing `open`. The bounds are
+       * checked against the recorded size: a range past the end is the
+       * caller's error, reported rather than silently shortened.
        */
-      // Typed `unknown` on purpose: a consumer's policy is ordinary code that
-      // can return anything at runtime, and the comparison below is what makes
-      // every one of those answers a denial.
-      let decision: unknown;
-      try {
-        decision = await authorization.decide({
-          assetId: record.id,
-          mediaType: record.mediaType,
-          byteSize: record.byteSize,
-          checksum: record.checksum,
+      return streamOf(record);
+    },
+
+    /**
+     * R2. A derivative is served only after its SOURCE passed `open`'s two
+     * decisions — the owning context's policy is asked about the source, the
+     * asset its record names — so a derivative can never be reachable where its
+     * source is not. The derivative's own custody is then required too: a
+     * width not stored, not yet cleared, or whose file is gone is
+     * `not-derived`, never an empty body.
+     */
+    async openDerivative(assetId, width, authorization) {
+      if (!isImageDerivativeWidth(width)) return null;
+      const source = await released(assetId, authorization);
+      if (source === null) return null;
+      const derivative = await assets.derivative(source.id, width);
+      if (
+        derivative === null ||
+        derivative.state !== 'clean' ||
+        !(await files.exists(derivative.storageKey))
+      )
+        return 'not-derived';
+      return streamOf(derivative);
+    },
+
+    /**
+     * R2. Renders the missing widths of a still image the policy allows.
+     *
+     * Each derivative is STORED, not written beside its source: it passes the
+     * whole upload pipeline — WebP structure validation, sniffing, the
+     * scanner, clearance by checksum — and so has the same custody as anything
+     * else Storage serves. It is stored under a one-time release token, so a
+     * derivation that loses a race to link the same width releases its own
+     * copy instead of leaving bytes nobody names.
+     */
+    async derive(assetId, authorization) {
+      const source = await released(assetId, authorization);
+      if (source === null || !SANITISABLE_IMAGE_TYPES.includes(source.mediaType))
+        return { status: 'refused' };
+
+      const have = new Set(
+        (await assets.derivatives(source.id)).map((derivative) => derivative.width),
+      );
+      const missing = IMAGE_DERIVATIVE_WIDTHS.filter((width) => !have.has(width));
+      if (missing.length === 0)
+        return { status: 'derived', created: 0, existing: have.size, withheld: 0 };
+
+      if (source.byteSize > dependencies.maxBytes) return { status: 'failed' };
+      const bytes = await readWhole(source);
+      if (bytes === null) return { status: 'failed' };
+      const rendered = await renderDerivatives(bytes, DERIVATIVE_SOURCE_LIMITS, missing);
+      if (rendered === null) return { status: 'failed' };
+
+      let created = 0;
+      let existing = have.size;
+      let withheld = 0;
+      for (const derivative of rendered) {
+        const releaseToken = randomBytes(32).toString('hex');
+        const stored = await service.store(
+          (async function* () {
+            yield derivative.bytes;
+          })(),
+          {
+            allowedMediaTypes: ['image/webp'],
+            maxBytes: derivative.bytes.byteLength,
+            image: DERIVATIVE_SOURCE_LIMITS,
+            displayName: null,
+            releaseToken,
+          },
+        );
+        if (stored.state === 'rejected') return { status: 'failed' };
+        const linked = await assets.recordDerivative({
+          sourceAssetId: source.id,
+          width: derivative.width,
+          assetId: stored.id,
         });
-      } catch {
-        return null;
+        if (!linked) {
+          await service.release(releaseToken);
+          existing += 1;
+        } else if (stored.state === 'clean') created += 1;
+        else withheld += 1;
       }
-
-      if (decision !== 'allow') return null;
-
-      // Metadata says clean; the filesystem is the other half of the truth. A
-      // file that has gone missing must not be served as a healthy empty body.
-      if (!(await files.exists(record.storageKey))) return null;
-
-      const stream: AssetStream = {
-        mediaType: record.mediaType,
-        byteSize: record.byteSize,
-        checksum: record.checksum,
-        displayName: record.displayName,
-        body: files.read(record.storageKey),
-        /**
-         * A range of the bytes this SAME decision released — so a range
-         * request is authorised exactly as a whole-file one, and there is no
-         * way to ask for a slice without first passing `open`. The bounds are
-         * checked against the recorded size: a range past the end is the
-         * caller's error, reported rather than silently shortened.
-         */
-        range: (start, end) => {
-          if (end >= record.byteSize) {
-            throw new RangeError('A byte range must end within the asset.');
-          }
-          return files.read(record.storageKey, { start, end });
-        },
-      };
-
-      return stream;
+      return { status: 'derived', created, existing, withheld };
     },
 
     /**
@@ -450,10 +565,19 @@ export function createStorageService(
       const record = await assets.beginRelease(releaseDigestOf(releaseToken));
       if (record === null) return 'absent';
 
+      // R2. Its derivatives follow it, in the same order: withheld, bytes,
+      // records. They were already unreachable — a derivative is served only
+      // while its source is clean — and now nothing of them is left behind.
+      for (const derivative of await assets.beginReleaseDerivatives(record.id))
+        await files.remove(derivative.storageKey);
+      await assets.removeDerivatives(record.id);
+
       await files.remove(record.storageKey);
       return (await assets.removeReleased(record.id)) ? 'released' : 'referenced';
     },
   };
+
+  return service;
 
   /**
    * Scan, retrying ONLY a transient unavailability.

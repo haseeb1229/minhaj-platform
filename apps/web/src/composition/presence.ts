@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NEWS_KINDS } from '@minhaj/contracts/editorial';
+import { QURAN_MODE_POSTURE } from '@minhaj/contracts/quran';
 import { connection } from 'next/server';
 import { cache } from 'react';
 
@@ -9,11 +10,14 @@ import { editorialReadRuntime } from '@/composition/editorial-read';
 import { fatwaReadRuntime } from '@/composition/fatwa-read';
 import { globalReadRuntime } from '@/composition/global-read';
 import { hadithReadRuntime } from '@/composition/hadith-read';
-import { learningReadRuntime } from '@/composition/learning-read';
+import { learningReadRuntime, liveClassesReadRuntime } from '@/composition/learning-read';
+import { teacherDirectory } from '@/composition/learning-teachers';
 import { libraryReadRuntime } from '@/composition/library-read';
 import { mediaReadRuntime } from '@/composition/media-read';
+import { membershipReadRuntime } from '@/composition/membership-read';
 import { peopleReadRuntime } from '@/composition/people-read';
 import { quranReadRuntime } from '@/composition/quran-read';
+import { taxonomyRuntime } from '@/composition/taxonomy';
 import {
   UNKNOWN_PRESENCE,
   type PresenceSignal,
@@ -48,14 +52,45 @@ let memo: { readonly at: number; readonly value: PresenceSnapshot } | null = nul
 
 type Probe = () => Promise<boolean>;
 
+/**
+ * Taxonomy's foundation slug for the Hadith subject — the Topic the Library's
+ * hadith works are classified under (the key `/hadith/books` filters by too).
+ */
+const HADITH_TOPIC_SLUG = 'hadith';
+
+/** One published row of a Library scholarly kind. */
+const scholarly =
+  (kind: 'magazine' | 'research' | 'encyclopedia'): Probe =>
+  async () =>
+    (await libraryReadRuntime().scholarlySitemap(kind, 0, 1)).length > 0;
+
 const PROBES: Readonly<Record<PresenceSignal, Probe>> = {
+  // The posture table decides, never a comparison here: an approved corpus, or
+  // a reference preview — which only a deployment admitting it ever reports.
+  // The adapter turns an unknown stored mode into no activation (fail closed).
   quran: async () => {
     const availability = await quranReadRuntime().reader.availability();
-    return availability.active && availability.mode === 'approved';
+    return availability.active && QURAN_MODE_POSTURE[availability.mode].navigation;
+  },
+  quranReference: async () => {
+    const availability = await quranReadRuntime().reader.availability();
+    const mode: string | null = availability.active ? availability.mode : null;
+    return mode === 'reference';
   },
   hadith: async () => {
     const availability = await hadithReadRuntime().reader.availability();
     return availability.active && availability.mode === 'approved';
+  },
+  // MQI's own hadith WORKS (owner decision, R2): at least one public Library
+  // work under the active `hadith` Topic — independent of any Hadith corpus.
+  hadithWorks: async () => {
+    const topic = await taxonomyRuntime().taxonomy.findTopicBySlug({
+      slug: HADITH_TOPIC_SLUG,
+      locale: 'en',
+    });
+    if (topic === null || topic.status !== 'active') return false;
+    const page = await libraryReadRuntime().works({ topic: topic.id, offset: 0 });
+    return page.items.length > 0;
   },
   library: async () => {
     const [works, magazines, articles] = await Promise.all([
@@ -65,9 +100,31 @@ const PROBES: Readonly<Record<PresenceSignal, Probe>> = {
     ]);
     return works.length + magazines.length + articles.length > 0;
   },
+  books: async () => (await libraryReadRuntime().sitemap(0, 1)).length > 0,
+  magazines: scholarly('magazine'),
+  research: scholarly('research'),
+  encyclopedias: scholarly('encyclopedia'),
+  articles: async () => (await editorialReadRuntime().articleSitemap(0, 1)).length > 0,
   watch: async () => (await mediaReadRuntime().sitemap('video', 0, 1)).length > 0,
+  series: async () => (await mediaReadRuntime().seriesList('series')).items.length > 0,
+  playlists: async () => (await mediaReadRuntime().sitemap('playlist', 0, 1)).length > 0,
   listen: async () => (await mediaReadRuntime().audioSitemap('track', 0, 1)).length > 0,
   learn: async () => (await learningReadRuntime().sitemap('course', 0, 1)).length > 0,
+  paths: async () => (await learningReadRuntime().sitemap('path', 0, 1)).length > 0,
+  // Live learning is promoted only on an APPROVED activation: a fixture
+  // schedule is test data, never a destination.
+  live: async () => {
+    const schedule = await liveClassesReadRuntime().liveSchedule();
+    return schedule.mode === 'approved' && schedule.page.items.length > 0;
+  },
+  teachers: async () => {
+    const directory = await teacherDirectory('en', {
+      subject: null,
+      language: null,
+      availability: null,
+    });
+    return directory.mode === 'approved' && directory.teachers.length > 0;
+  },
   fatwa: async () => {
     const reader = fatwaReadRuntime().reader;
     const availability = await reader.availability();
@@ -81,6 +138,8 @@ const PROBES: Readonly<Record<PresenceSignal, Probe>> = {
     );
     return found.some((rows) => rows.length > 0);
   },
+  press: async () =>
+    (await editorialReadRuntime().newsSitemap('press-release', 0, 1)).length > 0,
   events: () => editorialReadRuntime().hasPublishedEvents(),
   collections: async () =>
     (await editorialReadRuntime().collectionSitemap(0, 1)).length > 0,
@@ -88,6 +147,8 @@ const PROBES: Readonly<Record<PresenceSignal, Probe>> = {
   presence: async () => (await globalReadRuntime().countries(0)).items.length > 0,
   centres: async () => (await globalReadRuntime().centreSitemap(0, 1)).length > 0,
   help: async () => (await editorialReadRuntime().helpPages(0)).length > 0,
+  membership: async () =>
+    (await membershipReadRuntime().catalogue.publishedTypes()).length > 0,
   giving: async () => {
     const page = await donationsReadRuntime().page.page();
     return page.availability.available && page.campaigns.length > 0;

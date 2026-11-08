@@ -46,9 +46,15 @@ export type DonationsRefusalReason = (typeof DONATIONS_REFUSAL_REASONS)[number];
 
 const REASONS: ReadonlySet<string> = new Set(DONATIONS_REFUSAL_REASONS);
 
+// A declared field rather than a parameter property, so the context also loads
+// under plain Node's type stripping — the operations-image tooling composes it
+// (R2, `composition/staging-demo-runner.ts`).
 export class DonationsRefusal extends Error {
-  constructor(readonly reason: DonationsRefusalReason) {
+  readonly reason: DonationsRefusalReason;
+
+  constructor(reason: DonationsRefusalReason) {
     super(reason);
+    this.reason = reason;
     this.name = 'DonationsRefusal';
   }
 }

@@ -15,6 +15,7 @@ import {
   type Phase5Fixture,
 } from '../../packages/database/src/lifecycle/phase5-fixture.ts';
 import {
+  COLLECTION_COVER_MEMBERS,
   collectionPathOf,
   memberToken,
   type ArticleDetail,
@@ -1277,6 +1278,23 @@ live('Phase 15 Collections against real SQL Server', () => {
         [a1, n1, a2].map((entry) => memberToken(entry)).sort(),
       );
       expect(JSON.stringify([...editorial.values()])).not.toContain(DRAFT_TITLE);
+      // R2: each Editorial member also states its reader-facing date and its
+      // own lead image — none here, so none is invented.
+      for (const target of editorial.values()) {
+        expect(target.chronologyAt).toBeInstanceOf(Date);
+        expect(target.leadImage).toBeNull();
+      }
+      // R2: a listing card names its leading members by identifier only, in
+      // the curated order, for its cover.
+      const listed: string[][] = [];
+      for (let offset = 0; ; offset += 20) {
+        const page = await reads.collections(offset);
+        for (const item of page.items)
+          if (item.slug === row.slug)
+            listed.push((item.leadMembers ?? []).map((member) => memberToken(member)));
+        if (!page.more) break;
+      }
+      expect(listed).toEqual([order.slice(0, 4).map((entry) => memberToken(entry))]);
 
       // An Article member is withdrawn by its owner.
       await archiveArticle(a1.id);
@@ -1410,15 +1428,24 @@ live('Phase 15 Collections against real SQL Server', () => {
         expect(offset).toBeLessThan(1000);
       }
       expect(pages).toEqual(expected);
-      // A card is a summary: never a body, an authoring document or the members.
+      // A card is a summary: never a body, an authoring document or what a
+      // member is called. R2 (a deliberate change from Phase 15): it names its
+      // first few members by typed identifier only, so the page can ask their
+      // owners for a cover picture.
       expect(JSON.stringify(firstPage)).not.toContain(BODY_SENTINEL);
-      expect(JSON.stringify(firstPage)).not.toContain(anyPublic.id);
+      expect(JSON.stringify(firstPage)).not.toContain(TARGET_TITLE);
       expect(Object.keys(firstPage.items[0] ?? {}).sort()).toEqual([
+        'leadMembers',
         'primaryLanguage',
         'slug',
         'topicIds',
         'translations',
       ]);
+      for (const item of firstPage.items) {
+        expect(item.leadMembers?.length).toBeLessThanOrEqual(COLLECTION_COVER_MEMBERS);
+        for (const member of item.leadMembers ?? [])
+          expect(Object.keys(member).sort()).toEqual(['id', 'kind']);
+      }
     });
 
     it('previews a topic’s most recent published Collections only', async () => {

@@ -40,6 +40,34 @@ function ownData(record: object, key: string): unknown {
  * cost unbounded work to classify.
  */
 function isForeignKeyRefusal(error: unknown): boolean {
+  return carriesFact(error, {
+    prisma: 'P2003',
+    numbers: [547],
+    kind: 'ForeignKeyConstraintViolation',
+  });
+}
+
+/**
+ * R2. Whether an insert met a unique key — Prisma's `P2002`, the driver
+ * adapter's `UniqueConstraintViolation`, or SQL Server's 2627 / 2601 — read
+ * the same way, from structured fields only.
+ */
+function isUniqueRefusal(error: unknown): boolean {
+  return carriesFact(error, {
+    prisma: 'P2002',
+    numbers: [2627, 2601],
+    kind: 'UniqueConstraintViolation',
+  });
+}
+
+function carriesFact(
+  error: unknown,
+  fact: {
+    readonly prisma: string;
+    readonly numbers: readonly number[];
+    readonly kind: string;
+  },
+): boolean {
   const seen = new Set<object>();
   const pending: unknown[] = [error];
   while (pending.length > 0 && seen.size < 32) {
@@ -47,9 +75,14 @@ function isForeignKeyRefusal(error: unknown): boolean {
     if (current === null || typeof current !== 'object' || seen.has(current)) continue;
     seen.add(current);
     const code = ownData(current, 'code');
-    if (code === 'P2003' || code === 547 || ownData(current, 'number') === 547)
+    const number = ownData(current, 'number');
+    if (
+      code === fact.prisma ||
+      (typeof code === 'number' && fact.numbers.includes(code)) ||
+      (typeof number === 'number' && fact.numbers.includes(number))
+    )
       return true;
-    if (ownData(current, 'kind') === 'ForeignKeyConstraintViolation') return true;
+    if (ownData(current, 'kind') === fact.kind) return true;
     for (const key of NESTED_KEYS) {
       const value = ownData(current, key);
       if (value !== undefined) pending.push(value);
@@ -249,6 +282,77 @@ export function createAssetPersistence(): AssetPersistencePort {
         if (isForeignKeyRefusal(error)) return false;
         throw error;
       }
+    },
+
+    /** R2. A source's derivative links: one small indexed read (≤ 4 rows). */
+    async derivatives(sourceAssetId) {
+      return database.assetDerivative.findMany({
+        where: { sourceAssetId },
+        select: { width: true, assetId: true },
+      });
+    },
+
+    async derivative(sourceAssetId, width) {
+      const row = await database.assetDerivative.findUnique({
+        where: { sourceAssetId_width: { sourceAssetId, width } },
+        select: { asset: true },
+      });
+      return row === null ? null : toRecord(row.asset);
+    },
+
+    /**
+     * R2. The link is the primary key `(source, width)`: a concurrent
+     * derivation of the same width meets it, and that is an answer — `false` —
+     * not a failure. Anything else is rethrown.
+     */
+    async recordDerivative(input) {
+      try {
+        await database.assetDerivative.create({
+          data: {
+            sourceAssetId: input.sourceAssetId,
+            width: input.width,
+            assetId: input.assetId,
+          },
+        });
+        return true;
+      } catch (error) {
+        if (isUniqueRefusal(error)) return false;
+        throw error;
+      }
+    },
+
+    /**
+     * R2. Withdraws every derivative of a source in ONE statement — the same
+     * `rejected` / `released` Phase 24 gives the source — before any byte is
+     * touched. Repeatable: an interrupted release finds them again.
+     */
+    async beginReleaseDerivatives(sourceAssetId) {
+      return database.$queryRaw<{ id: string; storageKey: string }[]>`
+        UPDATE a
+        SET a.[state] = N'rejected', a.[rejection] = N'released', a.[updatedAt] = SYSUTCDATETIME()
+        OUTPUT INSERTED.[id] AS [id], INSERTED.[storageKey] AS [storageKey]
+        FROM [dbo].[Asset] a
+        JOIN [dbo].[AssetDerivative] d ON d.[assetId] = a.[id]
+        WHERE d.[sourceAssetId] = ${sourceAssetId}
+      `;
+    },
+
+    /**
+     * R2. The links go first, then the derivative records they named — and only
+     * released ones, so a live asset can never be deleted from here.
+     */
+    async removeDerivatives(sourceAssetId) {
+      const links = await database.assetDerivative.findMany({
+        where: { sourceAssetId },
+        select: { assetId: true },
+      });
+      if (links.length === 0) return;
+      await database.$transaction([
+        database.assetDerivative.deleteMany({ where: { sourceAssetId } }),
+        database.asset.deleteMany({
+          where: { id: { in: links.map((link) => link.assetId) }, rejection: 'released' },
+        }),
+      ]);
     },
   };
 }

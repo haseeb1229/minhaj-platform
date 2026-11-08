@@ -77,6 +77,11 @@ services:
       # release whose public host differs from the host's staging identity.
       AUTH_BASE_URL: https://${MINHAJ_PUBLIC_HOST}
       PUBLIC_INDEXING_ENABLED: 'false'
+      # Rebaseline R2 (owner decision 2026-11-06): THIS deployment admits the
+      # Quran reference preview — a licensed text, labelled as not reviewed for
+      # the platform. Startup refuses it beside indexing; production never sets
+      # it, and without it a reference corpus is inactive everywhere.
+      RELIGIOUS_REFERENCE_PREVIEW: enabled
       # NGINX overwrites every forwarding header (see the staging template), so
       # the first X-Forwarded-For entry is the address NGINX saw.
       TRUST_PROXY_HEADERS: 'true'

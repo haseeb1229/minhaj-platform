@@ -150,3 +150,58 @@ describe('canonical and hreflang', () => {
     expect(metadata.alternates).toBeUndefined();
   });
 });
+
+describe('the order a Collection is read in (R2)', () => {
+  const at = (iso: string | null, id: string) => ({
+    id,
+    target: {
+      id,
+      slug: id,
+      titles: [],
+      ...(iso === null ? {} : { chronologyAt: new Date(iso) }),
+    },
+  });
+  // Curated: a 2019 report, a book (no date), 2003, 2019 again, 2011.
+  const members = [
+    at('2019-03-01T00:00:00Z', 'a'),
+    at(null, 'book'),
+    at('2003-05-01T00:00:00Z', 'b'),
+    at('2019-03-01T00:00:00Z', 'c'),
+    at('2011-01-01T00:00:00Z', 'd'),
+  ];
+
+  it('is the curated order unless a date order is asked for exactly', async () => {
+    const { readCollectionOrder, collectionOrderPath } = await withIndexing(false);
+    expect(readCollectionOrder({})).toBe('curated');
+    expect(readCollectionOrder({ order: 'newest' })).toBe('newest');
+    expect(readCollectionOrder({ order: 'oldest' })).toBe('oldest');
+    for (const order of ['Newest', 'random', '', ['newest', 'oldest']])
+      expect(readCollectionOrder({ order }), String(order)).toBe('curated');
+    expect(collectionOrderPath('en', 'mawlid', 'curated')).toBe('/collections/mawlid');
+    expect(collectionOrderPath('ur', 'mawlid', 'oldest')).toBe(
+      '/ur/collections/mawlid?order=oldest',
+    );
+  });
+
+  it('keeps the curated order as given', async () => {
+    const { orderMembers } = await withIndexing(false);
+    expect(orderMembers(members, 'curated')).toBe(members);
+  });
+
+  it('orders by date stably, with undated members last in their curated place', async () => {
+    const { orderMembers } = await withIndexing(false);
+    const ids = (order: 'newest' | 'oldest') =>
+      orderMembers(members, order).map((member) => member.id);
+    expect(ids('newest')).toEqual(['a', 'c', 'd', 'b', 'book']);
+    expect(ids('oldest')).toEqual(['b', 'd', 'a', 'c', 'book']);
+    // The input is never reordered in place.
+    expect(members.map((member) => member.id)).toEqual(['a', 'book', 'b', 'c', 'd']);
+  });
+
+  it('groups by the UTC year a member states, and by none when it states none', async () => {
+    const { memberYear } = await withIndexing(false);
+    expect(memberYear(at('2019-12-31T23:30:00Z', 'x').target)).toBe(2019);
+    expect(memberYear(at(null, 'y').target)).toBeNull();
+    expect(memberYear({ id: 'z', slug: 'z', titles: [], chronologyAt: null })).toBeNull();
+  });
+});

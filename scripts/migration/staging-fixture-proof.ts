@@ -15,7 +15,7 @@ import {
   type MigrationRunner,
 } from '../../apps/web/src/composition/migration-runner.ts';
 import { createFixtureVideoAdapter } from './adapters/fixture-video.ts';
-import { CommandError, required, runCommand } from './cli.ts';
+import { approvedTarget, CommandError, required, runCommand } from './cli.ts';
 import {
   FIXTURE_BASE_URL,
   FIXTURE_BASE_VIDEO_COUNT,
@@ -93,35 +93,7 @@ const POLICY: SourcePolicy = Object.freeze({
   maxRedirects: 2,
 });
 
-const DISPOSABLE = /^MinhajPhase1Test_[0-9a-f]{32}$/;
 const ACCOUNT = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-
-/**
- * The database `DATABASE_URL` names, positively: `MinhajStaging` on the
- * internal staging SQL service, or a disposable database on loopback. The
- * owner-side command proved the same target with the real staging or local
- * guard before starting this process; this is an independent second check.
- */
-function approvedTarget(url: string | undefined): 'staging' | 'disposable' {
-  if (url === undefined || !url.startsWith('sqlserver://'))
-    throw new CommandError('DATABASE_URL is not a SQL Server URL; refusing.');
-  const [authority = '', ...tokens] = url.slice('sqlserver://'.length).split(';');
-  const [host = '', port = '1433'] = authority.split(':');
-  const databases = tokens
-    .map((token) => /^\s*database\s*=(.*)$/i.exec(token)?.[1]?.trim())
-    .filter((value): value is string => value !== undefined);
-  if (databases.length !== 1)
-    throw new CommandError('DATABASE_URL names no single database; refusing.');
-  const database = databases[0] ?? '';
-  if (database === 'MinhajStaging' && host === 'sqlserver' && port === '1433')
-    return 'staging';
-  if (DISPOSABLE.test(database) && (host === 'localhost' || host === '127.0.0.1'))
-    return 'disposable';
-  throw new CommandError(
-    'DATABASE_URL is neither MinhajStaging on the staging SQL host nor a disposable ' +
-      'database on loopback; refusing.',
-  );
-}
 
 function check(condition: boolean, what: string): asserts condition {
   if (!condition) throw new CommandError(`proof failed: ${what}`);

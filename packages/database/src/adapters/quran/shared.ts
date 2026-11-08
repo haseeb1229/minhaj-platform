@@ -9,6 +9,7 @@ import {
   citationOf,
   QURAN_AYAH_NUMBER_MAX,
   type QuranLayerState,
+  quranSourceAuthorityOf,
   type QuranRef,
   type QuranSourceAuthority,
 } from '@minhaj/contracts/quran';
@@ -264,32 +265,80 @@ export function citationsBetween(first: QuranRef, last: QuranRef): object {
  * ========================================================================= */
 
 /**
+ * What the deployment admits beyond an approved or fixture corpus — decided by
+ * the composition root from server configuration, never by a request.
+ */
+export interface QuranAdmission {
+  /**
+   * May a `reference` corpus (Rebaseline R2's staging reference preview) be
+   * public HERE? `false` everywhere but a deployment that explicitly enables
+   * the preview, and configuration refuses that beside public indexing.
+   */
+  readonly admitReference: boolean;
+}
+
+/**
  * The corpus's public mode: `null` while no activation row exists, otherwise
  * the activating source's authority. Every public read asks this FIRST, so an
  * inactive corpus answers nothing at all.
+ *
+ * FAIL CLOSED AT THE ONE CHOKEPOINT. A `reference` activation is reported only
+ * where the deployment admits it, and is `null` — inactive, exactly as though
+ * no corpus existed — everywhere else: every page, sitemap, search projection,
+ * navigation probe and audio route reads through here. An authority the
+ * vocabulary does not know is `null` too, never guessed into a mode.
  */
-export async function activeMode(db: Client): Promise<QuranSourceAuthority | null> {
+export async function activeMode(
+  db: Client,
+  admission: QuranAdmission,
+): Promise<QuranSourceAuthority | null> {
   const row = await db.quranActivation.findUnique({
     where: { id: 1 },
     select: { source: { select: { authority: true } } },
   });
-  return row === null ? null : (row.source.authority as QuranSourceAuthority);
+  if (row === null) return null;
+  const authority = quranSourceAuthorityOf(row.source.authority);
+  switch (authority) {
+    case 'approved':
+    case 'fixture':
+      return authority;
+    case 'reference':
+      return admission.admitReference ? 'reference' : null;
+    case null:
+      return null;
+  }
 }
 
 /**
+ * The source authorities whose works may be shown beside a corpus of each
+ * mode. A work never borrows a status its corpus lacks, and the two
+ * non-approved kinds never meet: beside APPROVED text only approved works;
+ * beside a REFERENCE corpus reference or approved works, never fixture text;
+ * beside a FIXTURE corpus fixture or approved works, never reference text
+ * (Phase 18 §3; R2).
+ */
+const WORK_AUTHORITIES: Readonly<
+  Record<QuranSourceAuthority, readonly QuranSourceAuthority[]>
+> = Object.freeze({
+  approved: ['approved'],
+  reference: ['reference', 'approved'],
+  fixture: ['fixture', 'approved'],
+});
+
+/**
  * A layered work is public when it is published AND names a registered source
- * — and, beside an APPROVED corpus, only when that source is approved too. A
- * fixture-sourced work is never shown with approved text (Phase 18 §3).
+ * whose authority the corpus's mode admits (`WORK_AUTHORITIES`).
  *
  * The same shape serves every layered model — Translation, Transliteration,
  * Tafsir, Recitation and Tajweed rule — so they cannot disagree.
  */
 export function publicWork(mode: QuranSourceAuthority) {
+  const admitted: string[] = [...WORK_AUTHORITIES[mode]];
   return {
-    state: 'published',
+    state: 'published' as const,
     sourceId: { not: null },
-    ...(mode === 'approved' ? { source: { is: { authority: 'approved' } } } : {}),
-  } as const;
+    source: { is: { authority: { in: admitted } } },
+  };
 }
 
 /** The same predicate, decided over a row already read. */
@@ -297,12 +346,9 @@ export function isPublicWork(
   mode: QuranSourceAuthority | null,
   row: { readonly state: string; readonly source: { readonly authority: string } | null },
 ): boolean {
-  return (
-    mode !== null &&
-    row.state === 'published' &&
-    row.source !== null &&
-    (mode === 'fixture' || row.source.authority === 'approved')
-  );
+  if (mode === null || row.state !== 'published' || row.source === null) return false;
+  const authority = quranSourceAuthorityOf(row.source.authority);
+  return authority !== null && WORK_AUTHORITIES[mode].includes(authority);
 }
 
 /* ===========================================================================
@@ -474,7 +520,7 @@ export async function audit(tx: Client, entry: AuditEntry): Promise<void> {
 export function authorityOf(
   source: { readonly authority: string } | null,
 ): QuranSourceAuthority | null {
-  return source === null ? null : (source.authority as QuranSourceAuthority);
+  return source === null ? null : quranSourceAuthorityOf(source.authority);
 }
 
 export function stateOf(value: string): QuranLayerState {

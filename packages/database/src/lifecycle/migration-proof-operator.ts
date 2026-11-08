@@ -300,8 +300,38 @@ export const MIGRATION_TOOL_ENTRIES = Object.freeze({
 });
 
 /**
- * Runs one migration tool — the fixture proof, or an authorised-source
- * registration or run — as the RUNTIME principal against `runtime`'s database,
+ * The Quran reference-preview tool (Rebaseline R2): its corpus acceptance and
+ * its translation import, run as the RUNTIME principal by the owner-side
+ * command in `./quran-reference.ts`.
+ */
+export const QURAN_REFERENCE_TOOL_ENTRY = path.join(
+  'scripts',
+  'quran',
+  'reference-runtime.ts',
+);
+
+/**
+ * Storage's derivative backfill (Rebaseline R2), run as the RUNTIME principal
+ * by `staging-storage-derivatives`: it reads published picture relations and
+ * writes Storage's own rows and files, exactly as the application does.
+ */
+export const STORAGE_DERIVATIVES_TOOL_ENTRY = path.join(
+  'scripts',
+  'storage',
+  'derivatives-backfill.ts',
+);
+
+/**
+ * The staging demonstration's runtime half (Rebaseline R2): seeding and
+ * retiring the demo through the services, run as the RUNTIME principal by the
+ * owner-side command `scripts/staging-demo.ts`.
+ */
+export const DEMO_TOOL_ENTRY = path.join('scripts', 'demo', 'demo-runtime.ts');
+
+/**
+ * Runs one migration tool — the fixture proof, an authorised-source
+ * registration or run, the Quran reference-preview tool or the staging demo
+ * tool — as the RUNTIME principal against `runtime`'s database,
  * and returns its final JSON line. The child's environment is the allowlist
  * above plus the runtime URL: it never holds schema authority, the migration
  * URL or another principal's password. Its stderr passes through; its stdout
@@ -309,7 +339,7 @@ export const MIGRATION_TOOL_ENTRIES = Object.freeze({
  */
 export async function runMigrationTool(input: {
   readonly runtime: SqlServerConnection;
-  /** Repository-relative entry: the proof or one of `MIGRATION_TOOL_ENTRIES`. */
+  /** Repository-relative entry: the proof, one of `MIGRATION_TOOL_ENTRIES`, or the Quran reference tool. */
   readonly entry: string;
   readonly args: readonly string[];
   readonly environment: Record<string, string | undefined>;
@@ -318,6 +348,9 @@ export async function runMigrationTool(input: {
   assertMigrationProofDatabase(input.runtime.database);
   if (
     input.entry !== MIGRATION_PROOF_ENTRY &&
+    input.entry !== QURAN_REFERENCE_TOOL_ENTRY &&
+    input.entry !== STORAGE_DERIVATIVES_TOOL_ENTRY &&
+    input.entry !== DEMO_TOOL_ENTRY &&
     !Object.values(MIGRATION_TOOL_ENTRIES).includes(input.entry)
   )
     throw new Error('Not a migration tool this runner starts.');

@@ -55,6 +55,11 @@ export const MIGRATION_REFUSAL_REASONS = Object.freeze([
    * only: migration never publishes it, and a manifest refuses it.
    */
   'review-only-kind',
+  /**
+   * R2. An open duplicate candidate names the record: a run-wide approval
+   * never decides past a pair a person has not decided.
+   */
+  'duplicate-open',
   /** The store did not answer; nothing was assumed. */
   'unavailable',
 ] as const);

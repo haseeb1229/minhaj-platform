@@ -46,7 +46,14 @@
     "staging:db:reset": "node --conditions=react-server packages/database/scripts/staging-reset.ts",
     "staging:migration:proof": "node --conditions=react-server packages/database/scripts/staging-migration-proof.ts",
     "staging:migration:run": "node --conditions=react-server packages/database/scripts/staging-migration-run.ts",
+    "staging:demo:seed": "node --conditions=react-server packages/database/scripts/staging-demo.ts seed",
+    "staging:demo:status": "node --conditions=react-server packages/database/scripts/staging-demo.ts status",
+    "staging:demo:reset": "node --conditions=react-server packages/database/scripts/staging-demo.ts reset",
     "staging:identity:bootstrap": "node --conditions=react-server packages/database/scripts/staging-identity-bootstrap.ts",
+    "quran:reference:import": "node --conditions=react-server packages/database/scripts/staging-quran-reference.ts import",
+    "staging:storage:derivatives": "node --conditions=react-server packages/database/scripts/staging-storage-derivatives.ts",
+    "storage:derivatives:backfill": "node --conditions=react-server scripts/storage/derivatives-backfill.ts",
+    "quran:reference:translations": "node --conditions=react-server packages/database/scripts/staging-quran-reference.ts translations",
     "typecheck": "npm run typecheck --workspaces --if-present && tsc -p tsconfig.tooling.json",
     "lint": "eslint .",
     "check:architecture": "node scripts/check-architecture.mjs",
@@ -73,9 +80,11 @@
     "format:check": "prettier --check .",
     "verify": "npm run check:versions && npm run check:docker-context && npm run format:check && npm run typecheck && npm run lint && npm run check:architecture && npm run check:rtl && npm run test && npm run check:server-only && npm run build",
     "test:browser": "node --conditions=react-server node_modules/@playwright/test/cli.js test",
-    "test:browser:install": "playwright install --with-deps chromium"
+    "test:browser:install": "playwright install --with-deps chromium",
+    "perf:budget": "node scripts/perf-budget.mjs"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "1.55.1",
     "@types/node": "^24.10.1",

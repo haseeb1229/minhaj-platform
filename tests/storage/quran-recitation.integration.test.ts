@@ -297,7 +297,7 @@ live('Phase 18 recitation audio against real SQL Server, Storage and ClamAV', ()
       verifyCanonical: async () => false,
     };
     persistence = database.createQuranPersistence();
-    reader = database.createQuranPublicReader();
+    reader = database.createQuranPublicReader({ admitReference: false });
     service = createQuranService({ persistence, authority });
     const uploads = (target: StorageServicePort) => {
       const { uploadSegmentAudio } = createRecitationUpload({

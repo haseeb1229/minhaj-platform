@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  createMinhajBooksAuthorAdapter,
   createMinhajBooksWorkAdapter,
   MINHAJ_BOOKS_ADAPTER_KEY,
+  MINHAJ_BOOKS_AUTHOR_ADAPTER_KEY,
 } from '../../../../scripts/migration/adapters/minhajbooks.ts';
 
 import { evidenceOf, fakeSite, htmlPage, pendingItem, textFile } from './fake-site.ts';
@@ -589,5 +591,178 @@ describe('several listings (Phase 30-R)', () => {
       bookKey(101, 'Synthetic-Book-One'),
     ]);
     await expect(discovery.discover('2~', source.fetcher)).rejects.toThrow('cursor');
+  });
+});
+
+/* ===========================================================================
+ * R2: author profiles
+ * ========================================================================= */
+
+const AUTHORS = ['Synthetic-Author-One', 'Synthetic-Author-Two'];
+const authorKey = (slug: string) => `${SITE}/english/author/${slug}/`;
+
+function authorPage(
+  options: {
+    readonly name?: string;
+    readonly shortBio?: string | null;
+    readonly fullBio?: string | null;
+    readonly photo?: string;
+    readonly boxes?: number;
+  } = {},
+): string {
+  const short =
+    options.shortBio === null
+      ? ''
+      : `<p class="mib-author-bio" id="mibAuthorBioShort">${options.shortBio ?? 'A synthetic teaser cut ...'}</p>`;
+  const full =
+    options.fullBio === null
+      ? ''
+      : `<p class="mib-author-bio" id="mibAuthorBioFull" style="display:none;">${options.fullBio ?? 'A synthetic <em>whole</em> biography.'}</p>`;
+  const box = `<div class="mib-author-box">
+  <div class="mib-author-photo"><img src="${options.photo ?? `${SITE}/images/Authors/Synthetic-Author-One_1.jpg`}" alt="Synthetic portrait"></div>
+  <div class="mib-author-body">
+    <h2 class="mib-author-name">${options.name ?? 'Synthetic Author One'}</h2>
+    ${short}
+    ${full}
+    <div class="mib-author-footer"><div class="mib-author-social"><a href="https://social.example/synthetic">x</a></div>
+    <div class="mib-author-books-badge">Books: 3</div></div>
+  </div></div>`;
+  return `<!DOCTYPE html><html lang="en"><body>
+  ${Array.from({ length: options.boxes ?? 1 }, () => box).join('')}
+  <div class="lib-related-products postList"><div class="row">${card('/english/book/Synthetic-Slug/')}</div></div>
+  <footer>Copyrights © 2026 Minhaj-ul-Quran International</footer></body></html>`;
+}
+
+const authors = (items: string[] = [], limit = 25) =>
+  createMinhajBooksAuthorAdapter({
+    authors: AUTHORS,
+    items,
+    selection: { pages: 1, limit },
+  });
+
+function biographyOf(html: string): string | null {
+  const result = authors().parse(evidenceOf(html, authorKey('Synthetic-Author-One')));
+  return result.kind === 'parsed' && result.record.kind === 'people.person'
+    ? result.record.biographyHtml
+    : null;
+}
+
+describe('author profiles (R2)', () => {
+  it('declares a people.person adapter and refuses a malformed or foreign list', () => {
+    expect(authors()).toMatchObject({
+      adapterKey: MINHAJ_BOOKS_AUTHOR_ADAPTER_KEY,
+      contentKind: 'people.person',
+      accessMethod: 'http',
+    });
+    for (const list of [[], ['a/b'], ['Dup-Name', 'Dup-Name'], ['lower-case']])
+      expect(() =>
+        createMinhajBooksAuthorAdapter({
+          authors: list,
+          items: [],
+          selection: { pages: 1, limit: 5 },
+        }),
+      ).toThrow();
+    expect(() => authors(['Not-Catalogued'])).toThrow('catalogue');
+  });
+
+  it('discovers exactly the catalogued pages, narrowed by --items and the limit', async () => {
+    const robots = { [`${SITE}/robots.txt`]: textFile('User-agent: *\nAllow: /\n') };
+    const all = await authors().discover(null, fakeSite(robots).fetcher);
+    expect(all.kind === 'page' && all.items).toEqual(
+      AUTHORS.map((slug) => ({
+        externalKey: authorKey(slug),
+        originalUrl: authorKey(slug),
+        legacyIdentifier: `author-${slug}`,
+      })),
+    );
+    const one = await authors(['Synthetic-Author-Two']).discover(
+      null,
+      fakeSite(robots).fetcher,
+    );
+    expect(one.kind === 'page' && one.items.map((item) => item.legacyIdentifier)).toEqual(
+      ['author-Synthetic-Author-Two'],
+    );
+    const source = fakeSite(robots);
+    const limited = await authors([], 1).discover(null, source.fetcher);
+    expect(limited.kind === 'page' && limited.items).toHaveLength(1);
+    // Only robots.txt is fetched: the catalogue IS the scope.
+    expect(source.requested).toEqual([`${SITE}/robots.txt`]);
+  });
+
+  it('refuses every author robots.txt disallows', async () => {
+    const source = fakeSite({
+      [`${SITE}/robots.txt`]: textFile('User-agent: *\nDisallow: /english/author/\n'),
+    });
+    expect(await authors().discover(null, source.fetcher)).toMatchObject({
+      kind: 'outcome',
+      outcome: { detail: 'robots-disallowed' },
+    });
+  });
+
+  it('reads the author box: name, the FULL biography and the first-party photo', () => {
+    expect(
+      authors().parse(evidenceOf(authorPage(), authorKey('Synthetic-Author-One'))),
+    ).toEqual({
+      kind: 'parsed',
+      record: {
+        kind: 'people.person',
+        name: 'Synthetic Author One',
+        title: 'Synthetic Author One',
+        primaryLocale: 'en',
+        languageCode: 'en',
+        publishedOn: null,
+        legacyIdentifier: 'author-Synthetic-Author-One',
+        categories: [],
+        links: [],
+        assets: [
+          {
+            url: `${SITE}/images/Authors/Synthetic-Author-One_1.jpg`,
+            licence: 'organisation-owned',
+            licenceEvidence: expect.stringContaining('Minhaj-ul-Quran International'),
+            rightsHolder: 'Minhaj-ul-Quran International',
+          },
+        ],
+        biographyHtml: 'A synthetic <em>whole</em> biography.',
+        portrait: {
+          url: `${SITE}/images/Authors/Synthetic-Author-One_1.jpg`,
+          alt: 'Synthetic portrait',
+          credit: null,
+        },
+      },
+    });
+  });
+
+  it('never takes the cut teaser beside a full biography', () => {
+    expect(biographyOf(authorPage({ shortBio: null, fullBio: 'Only biography.' }))).toBe(
+      'Only biography.',
+    );
+    // An empty full biography is no biography — the teaser beside it is not used.
+    expect(biographyOf(authorPage({ fullBio: '' }))).toBe('');
+  });
+
+  it('offers no photo from another host, and refuses what is not one author box', () => {
+    const at = authorKey('Synthetic-Author-One');
+    const offHost = authors().parse(
+      evidenceOf(authorPage({ photo: 'https://cdn.example/synthetic.jpg' }), at),
+    );
+    expect(offHost.kind === 'parsed' && offHost.record.assets).toEqual([]);
+    expect(authors().parse(evidenceOf(authorPage({ boxes: 2 }), at))).toEqual({
+      kind: 'failed',
+      detail: 'record-structure-missing',
+    });
+    expect(authors().parse(evidenceOf(authorPage({ name: '' }), at))).toEqual({
+      kind: 'failed',
+      detail: 'title-missing',
+    });
+    expect(authors().parse(evidenceOf(authorPage({ name: 'مصنف' }), at))).toEqual({
+      kind: 'failed',
+      detail: 'primary-locale-undetermined',
+    });
+    expect(
+      authors().parse(evidenceOf(authorPage(), `${SITE}/english/author/Other-Author/`)),
+    ).toEqual({ kind: 'excluded', reason: 'not-catalogued' });
+    expect(
+      authors().parse(evidenceOf(authorPage(), `${SITE}/english/index.html`)),
+    ).toEqual({ kind: 'excluded', reason: 'not-an-author-page' });
   });
 });

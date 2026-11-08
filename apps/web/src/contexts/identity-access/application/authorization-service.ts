@@ -462,6 +462,8 @@ export function createAuthorizationService({
     async listAuditRecords(input: {
       readonly action: string | null;
       readonly actorId: string | null;
+      readonly from: Date | null;
+      readonly to: Date | null;
       readonly limit: number;
       readonly offset: number;
     }): Promise<AuditPage> {

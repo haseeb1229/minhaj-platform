@@ -1,5 +1,6 @@
 import { PAYMENT_ENVIRONMENTS, PAYMENT_PROVIDERS } from '../donations/values.ts';
 import { correspondenceRetentionDaysSchema } from '../editorial/values.ts';
+import { religiousReferencePreviewSchema } from '../quran/values.ts';
 /**
  * Server environment SCHEMA and PARSER — implementation, not public API.
  *
@@ -204,6 +205,24 @@ export const serverEnvSchema = z.object({
     .transform((value) => value === 'true'),
 
   // -------------------------------------------------------------------------
+  // Rebaseline R2 — the staging religious reference preview
+  // -------------------------------------------------------------------------
+
+  /**
+   * `enabled` admits a `reference` Quran corpus on THIS deployment: a real,
+   * licensed text reproduced verbatim and labelled as not reviewed by
+   * Minhaj-ul-Quran's religious authority (owner decision 2026-11-06;
+   * OPEN_DECISIONS.md §1.1). Absent everywhere else, and a reference corpus is
+   * then inactive on every public surface.
+   *
+   * STAGING ONLY, AND NEVER INDEXABLE. `parseServerEnv` refuses it beside
+   * `PUBLIC_INDEXING_ENABLED=true`, and the public reader independently
+   * requires a non-indexable build. Non-secret; the public Quran roots read it
+   * through `apps/web/src/config/religious-reference.ts`.
+   */
+  RELIGIOUS_REFERENCE_PREVIEW: religiousReferencePreviewSchema,
+
+  // -------------------------------------------------------------------------
   // Phase 27 — Donations payment provider
   // -------------------------------------------------------------------------
   //
@@ -260,6 +279,23 @@ export function parseServerEnv(
   source: Record<string, string | undefined> = process.env,
 ): ServerEnv {
   const parsed = parseEnvironment(serverEnvSchema, source, 'server');
+
+  // A reference preview is never indexable. The two settings together are a
+  // misconfiguration, refused at startup rather than resolved by guessing
+  // which one was meant (Rebaseline R2).
+  if (
+    parsed.RELIGIOUS_REFERENCE_PREVIEW === 'enabled' &&
+    parsed.PUBLIC_INDEXING_ENABLED
+  ) {
+    throw new Error(
+      [
+        'Invalid server environment configuration.',
+        '  - RELIGIOUS_REFERENCE_PREVIEW: must not be enabled while PUBLIC_INDEXING_ENABLED is true',
+        '',
+        'Values are never printed, only variable names.',
+      ].join('\n'),
+    );
+  }
 
   // A development default is a convenience in development and a vulnerability
   // anywhere else. Every secret-bearing value with a default is rejected in

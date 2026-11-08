@@ -121,6 +121,12 @@ export interface MembershipApplicantPort {
 export interface MembershipStaffPort {
   /** One bounded page, oldest submission first. The listing is an audited access. */
   applications(actorId: string, query: ApplicationQuery): Promise<StaffApplicationPage>;
+  /**
+   * R2. How many applications are OPEN (submitted or under review) — the
+   * administration dashboard's queue count. A number that names nobody, so it
+   * is not an audited access.
+   */
+  openApplicationCount(): Promise<number>;
   /** One application, or `null`. Opening it is an audited access. */
   application(actorId: string, id: string): Promise<StaffApplication | null>;
   /**

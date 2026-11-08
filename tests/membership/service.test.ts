@@ -178,6 +178,8 @@ const reads = (service: ReturnType<typeof adminHarness>['service']) => ({
   applications: () => service.applications(actor, QUERY),
   application: () => service.application(actor, ID(2)),
   memberships: () => service.memberships(actor, MEMBER_QUERY),
+  // R2: the dashboard's count is under the same key as the queue it counts.
+  openApplicationCount: () => service.openApplicationCount(actor),
 });
 
 const change = (

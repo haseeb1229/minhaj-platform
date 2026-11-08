@@ -449,6 +449,16 @@ export function createDonationsAdminService(deps: {
 
     /* ---- Records ------------------------------------------------------- */
 
+    /**
+     * R2. The number of donations an attention flag holds, for the
+     * administration dashboard. Under the read key; not audited, because a
+     * count names no donor.
+     */
+    async attentionCount(actor: DonationsActor): Promise<number> {
+      await holds(actor, READ);
+      return run(deps.staff.attentionCount());
+    },
+
     /** One bounded, filtered page of donations. An audited access. */
     async donations(actor: DonationsActor, query: unknown): Promise<StaffDonationPage> {
       const { actorId, value } = await authorised(

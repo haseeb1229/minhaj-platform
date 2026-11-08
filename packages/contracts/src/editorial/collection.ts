@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import type { PublicLeadImage } from './lead.ts';
 import { NEWS_KINDS, newsPathOf, type NewsKind } from './news.ts';
 
 /**
@@ -88,6 +89,11 @@ export const COLLECTION_PAGE = 20;
 export const COLLECTION_MAX_OFFSET = 25_000;
 /** A topic hub's Collection section previews at most this many. */
 export const COLLECTION_PREVIEW = 6;
+/**
+ * R2 — how many leading members a listing card names for its cover. A full
+ * page of cards (`COLLECTION_PAGE` × this) stays inside one bounded owner read.
+ */
+export const COLLECTION_COVER_MEMBERS = 4;
 /** How many choices of ONE member type an editor's selector offers at once. */
 export const COLLECTION_MEMBER_CHOICES = 10;
 
@@ -159,6 +165,11 @@ export function memberOfToken(token: string): CollectionMember | null {
  * What an owner says about ONE public member: its current address and its
  * titles. Only currently public records are ever described; a withdrawn one is
  * simply absent from the answer.
+ *
+ * R2: an owner that HAS them may also say what the member looks like and when
+ * it dates from — Editorial's own members carry their first-party lead image
+ * (Article, NewsArticle, PressRelease) and their reader-facing chronology.
+ * Absent means the owner says nothing; nothing is ever inferred for it.
  */
 export interface CollectionMemberTarget {
   readonly id: string;
@@ -167,6 +178,8 @@ export interface CollectionMemberTarget {
     readonly languageCode: string;
     readonly title: string;
   }[];
+  readonly leadImage?: PublicLeadImage | null;
+  readonly chronologyAt?: Date | null;
 }
 
 /** One card: what the listing and the topic hub show of a Collection. */
@@ -179,6 +192,12 @@ export interface CollectionSummary {
     readonly excerpt: string;
   }[];
   readonly topicIds: readonly string[];
+  /**
+   * R2 — the first few members in the curated order, by typed identifier only,
+   * so a card can ask their owners for a cover picture. Never a title, and
+   * never a member the owner has not been asked about.
+   */
+  readonly leadMembers?: readonly CollectionMember[];
 }
 
 export interface CollectionPage {

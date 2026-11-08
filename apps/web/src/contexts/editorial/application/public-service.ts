@@ -44,8 +44,14 @@ const archiveFilterSchema = z
     year: z.number().int().min(NEWS_EARLIEST_YEAR).max(9998).nullable(),
     month: z.number().int().min(1).max(12).nullable(),
     offset: newsOffsetSchema,
+    kind: newsKindSchema.nullable().optional(),
+    language: z.enum(['en', 'ur', 'ar']).nullable().optional(),
   })
   .refine((value) => value.month === null || value.year !== null);
+
+/** R2 — a content language a News listing may be narrowed to or ordered by. */
+const newsLanguageSchema = z.enum(['en', 'ur', 'ar']).nullable();
+type NewsLanguage = z.infer<typeof newsLanguageSchema>;
 
 const eventOffsetSchema = z.number().int().min(0).max(EVENT_MAX_OFFSET);
 
@@ -132,23 +138,59 @@ export function createEditorialReadService(
       if (!newsSlug(newsKindSchema.parse(kind), slug)) return null;
       return reader.publicNews(kind, slug);
     },
-    async newsList(kind: NewsKind, offset = 0): Promise<NewsPage> {
-      return reader.publishedNews(
-        newsKindSchema.parse(kind),
-        newsOffsetSchema.parse(offset),
-        NEWS_PAGE,
-      );
+    /**
+     * One page of a family, newest first. R2: `language.only` narrows it to
+     * records published in that content language; `language.prefer` puts
+     * those first and keeps every other record after them. Without either it
+     * is the family's plain chronology.
+     */
+    async newsList(
+      kind: NewsKind,
+      offset = 0,
+      language: { readonly only?: NewsLanguage; readonly prefer?: NewsLanguage } = {},
+    ): Promise<NewsPage> {
+      const family = newsKindSchema.parse(kind);
+      const at = newsOffsetSchema.parse(offset);
+      const only = newsLanguageSchema.parse(language.only ?? null);
+      const prefer = newsLanguageSchema.parse(language.prefer ?? null);
+      if (only === null && prefer === null)
+        return reader.publishedNews(family, at, NEWS_PAGE);
+      return reader.newsTimeline({
+        offset: at,
+        limit: NEWS_PAGE,
+        year: null,
+        month: null,
+        topicId: null,
+        kind: family,
+        language: only,
+        preferLanguage: only === null ? prefer : null,
+      });
     },
     async newsArchive(filter: {
       readonly year: number | null;
       readonly month: number | null;
       readonly offset: number;
+      readonly kind?: NewsKind | null;
+      readonly language?: NewsLanguage;
     }): Promise<NewsPage> {
       const parsed = archiveFilterSchema.parse(filter);
-      return reader.newsTimeline({ ...parsed, limit: NEWS_PAGE, topicId: null });
+      return reader.newsTimeline({
+        year: parsed.year,
+        month: parsed.month,
+        offset: parsed.offset,
+        limit: NEWS_PAGE,
+        topicId: null,
+        kind: parsed.kind ?? null,
+        language: parsed.language ?? null,
+      });
     },
-    newsArchivePeriods() {
-      return reader.newsArchivePeriods();
+    async newsArchivePeriods(
+      filter: { readonly kind?: NewsKind | null; readonly language?: NewsLanguage } = {},
+    ) {
+      return reader.newsArchivePeriods({
+        kind: newsKindSchema.nullable().parse(filter.kind ?? null),
+        language: newsLanguageSchema.parse(filter.language ?? null),
+      });
     },
     /** The most recent published News on a topic, for the topic hub. */
     async newsOnTopic(topicId: string): Promise<NewsPage> {

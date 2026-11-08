@@ -157,6 +157,22 @@ export function providerEmbedUrl(provider: VideoProvider, id: string): string {
     : `${PROVIDER_EMBED_ORIGINS.vimeo}/video/${safe}?dnt=1`;
 }
 
+/**
+ * The address the player frames IN ANSWER TO THE VISITOR'S OWN PLAY PRESS
+ * (Rebaseline R2, audit F08): the same privacy-enhanced embed with `autoplay=1`
+ * added, so the one press that loads the provider also starts the video —
+ * rather than a second press inside the provider's own frame.
+ *
+ * Never an address a page renders before that press: structured data keeps
+ * `providerEmbedUrl`, and the player creates its frame only in the state its
+ * button's click sets. The browser honours the parameter only because the
+ * player's routes delegate `autoplay` to exactly the two embed origins
+ * (`next.config.ts`), and playback starts with the visitor's own activation.
+ */
+export function providerPlaybackUrl(provider: VideoProvider, id: string): string {
+  return `${providerEmbedUrl(provider, id)}&autoplay=1`;
+}
+
 /** The provider's own page for the video — the described fallback link. */
 export function providerWatchUrl(provider: VideoProvider, id: string): string {
   const safe = encodeURIComponent(id);

@@ -33,8 +33,11 @@ import { taxonomyRuntime } from './taxonomy';
  *     routed fail-closed (`./migration-target-router.ts`), under each
  *     domain's OWN live authority and the owner references their compositions
  *     use, so a migrated record meets every rule a hand-made one does.
- *   - STORAGE is the foundation's service, narrowed to acquisition. No route
- *     serves a migrated asset.
+ *   - STORAGE is the foundation's service, narrowed to acquisition. No public
+ *     route serves a migrated asset; the one administrative preview (R2,
+ *     `/api/admin/migration/assets/{id}`) shows a rights reviewer an
+ *     acquisition's metadata-stripped PUBLIC copy, under a live
+ *     `migration.administer`, and never the evidence bytes.
  *
  * Lazy, like every runtime here: nothing connects until something is asked.
  */

@@ -99,6 +99,16 @@ export function createMembershipStaff(): MembershipStaffPort {
       }
     },
 
+    async openApplicationCount() {
+      try {
+        return await db.membershipApplication.count({
+          where: { status: { in: [...OPEN_APPLICATION_STATUSES] } },
+        });
+      } catch (error) {
+        refuse(error);
+      }
+    },
+
     async application(actorId, id) {
       try {
         return await db.$transaction(async (tx) => {

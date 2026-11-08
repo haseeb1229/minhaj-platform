@@ -6,6 +6,7 @@ import type {
   PublicLeadImage,
   SafeEditorialContent,
 } from '@minhaj/contracts/editorial';
+import type { PictureReference } from '@minhaj/contracts/platform';
 
 import { getDatabaseClient } from '../../client.ts';
 import { EditorialDataError } from './workflow.ts';
@@ -181,4 +182,40 @@ export async function leadImageNamed(
     select: { current: { select: { leadAssetId: true } } },
   });
   return row?.current?.leadAssetId === assetId;
+}
+
+/**
+ * Rebaseline R2. One page of the PUBLISHED records of a family whose revision
+ * names a lead image, by id after `after` — what Storage's derivative backfill
+ * enumerates. It decides nothing: each is put to Editorial's own public policy
+ * before a pixel is read.
+ */
+export async function publishedLeadImageReferences(
+  family: EditorialLeadFamily,
+  after: string | null,
+  limit: number,
+): Promise<readonly PictureReference[]> {
+  const owner = OWNERS[family](getDatabaseClient()) as {
+    findMany(args: object): Promise<
+      readonly {
+        readonly id: string;
+        readonly current: { readonly leadAssetId: string | null } | null;
+      }[]
+    >;
+  };
+  const rows = await owner.findMany({
+    where: {
+      state: 'published',
+      current: { leadAssetId: { not: null } },
+      ...(after === null ? {} : { id: { gt: after } }),
+    },
+    select: { id: true, current: { select: { leadAssetId: true } } },
+    orderBy: { id: 'asc' },
+    take: Math.min(Math.max(limit, 1), 200),
+  });
+  return rows.flatMap((row) =>
+    row.current?.leadAssetId == null
+      ? []
+      : [{ recordId: row.id, assetId: row.current.leadAssetId }],
+  );
 }

@@ -161,7 +161,7 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
 
     const database = await import('../../packages/database/src/index.ts');
     persistence = database.createQuranPersistence();
-    reader = database.createQuranPublicReader();
+    reader = database.createQuranPublicReader({ admitReference: false });
     canonical = database.createQuranCanonical();
 
     primary = await registerSource(db.admin, {

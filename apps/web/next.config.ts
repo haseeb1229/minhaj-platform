@@ -121,6 +121,30 @@ const PLAYER_CONTENT_SECURITY_POLICY = contentSecurityPolicy(
 );
 
 /**
+ * Browser capability policy. The platform asks for none of these, so it
+ * declines all of them; `browsing-topics` additionally opts the site out of
+ * interest-based advertising inference it never wanted.
+ *
+ * `autoplay` is refused for every page — with ONE scoped exception (Rebaseline
+ * R2, audit F08). On the two player routes the visitor's own press of Play is
+ * what loads the provider's frame, and that same press starts the video: the
+ * frame is created only by the click and asks for `autoplay=1`
+ * (`providerPlaybackUrl`). A browser delegates `autoplay` to a frame only when
+ * the page's policy allows it for the page AND the frame's origin, so those
+ * routes allow it for themselves and for exactly the two privacy-enhanced embed
+ * origins, taken from the same contract as `frame-src` — never another origin,
+ * never another route. The page itself renders no autoplaying media.
+ */
+const DECLINED_CAPABILITIES =
+  'camera=(), microphone=(), geolocation=(), payment=(), browsing-topics=()';
+
+const PERMISSIONS_POLICY = `${DECLINED_CAPABILITIES}, autoplay=()`;
+
+const PLAYER_PERMISSIONS_POLICY = `${DECLINED_CAPABILITIES}, autoplay=(self ${VIDEO_PROVIDERS.map(
+  (provider) => `"${PROVIDER_EMBED_ORIGINS[provider]}"`,
+).join(' ')})`;
+
+/**
  * The payment provider's hosted checkout origin — the SANDBOX ENGINEERING
  * ADAPTER's (Stripe), NOT a production provider selection. The Donations
  * service independently refuses any checkout address not on exactly the
@@ -135,11 +159,16 @@ const DONATION_CONTENT_SECURITY_POLICY = contentSecurityPolicy(
 
 /**
  * A route-scoped header source in every interface locale: the unprefixed
- * English address and its `/ur` and `/ar` forms (ROUTE_MAP.md §1.1, R1). A
- * `/en/…` request never renders — the proxy redirects it — so it needs none.
+ * English address and its `/ur` and `/ar` forms (ROUTE_MAP.md §1.1, R1) —
+ * AND the internal `/en/…` form the proxy rewrites English to (R2). A visitor's
+ * own `/en/…` request is answered with a 301 before anything renders, but when
+ * Next serves the rewrite as a second, proxied request (a bound hostname that
+ * differs from the request's origin), that request's headers are matched
+ * against `/en/…`; without this form a player or giving page would fall back to
+ * the base policy (`frame-src 'none'`, the default referrer policy).
  */
 function inEveryLocale(path: string): readonly string[] {
-  return [path, `/:locale(ur|ar)${path}`];
+  return [path, `/:locale(en|ur|ar)${path}`];
 }
 
 /** The only routes that render a giving form. Exact shapes, nothing beneath them. */
@@ -202,16 +231,9 @@ const SECURITY_HEADERS: readonly { key: string; value: string }[] = [
   // Clickjacking, for browsers predating `frame-ancestors`.
   { key: 'X-Frame-Options', value: 'DENY' },
 
-  // Browser capability policy. The platform asks for none of these, so it
-  // declines all of them; `browsing-topics` additionally opts the site out of
-  // interest-based advertising inference it never wanted. `autoplay` is refused
-  // for every frame the platform ever renders (Phase 10): a provider player
-  // plays only when the visitor presses play inside it, never on its own.
-  {
-    key: 'Permissions-Policy',
-    value:
-      'camera=(), microphone=(), geolocation=(), payment=(), browsing-topics=(), autoplay=()',
-  },
+  // Browser capability policy: everything declined, `autoplay` included, on
+  // every page but the player routes (see `PERMISSIONS_POLICY` above).
+  { key: 'Permissions-Policy', value: PERMISSIONS_POLICY },
 
   { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
 ];
@@ -249,11 +271,14 @@ const nextConfig: NextConfig = {
       { source: '/:path*', headers: [...SECURITY_HEADERS] },
       // LATER ENTRIES OVERRIDE EARLIER ONES for the same header key, so a player
       // route receives exactly ONE policy — the base policy with its one frame
-      // directive widened — never two policies intersecting.
+      // directive widened — never two policies intersecting; and exactly one
+      // capability policy, the base one with `autoplay` delegated to the two
+      // embed origins.
       ...PLAYER_ROUTES.map((source) => ({
         source,
         headers: [
           { key: 'Content-Security-Policy', value: PLAYER_CONTENT_SECURITY_POLICY },
+          { key: 'Permissions-Policy', value: PLAYER_PERMISSIONS_POLICY },
         ],
       })),
       ...DONATION_FORM_ROUTES.map((source) => ({

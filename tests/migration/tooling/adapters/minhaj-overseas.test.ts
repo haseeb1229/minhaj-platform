@@ -30,6 +30,7 @@ function listing(): string {
 <a href="/english/UK/">Synthetic United Kingdom</a>
 <a href="https://other.example/english/Spain/">Spain</a>
 <!-- <a href="/english/Belgium/">Belgium</a> -->
+<a href="/english/Korea/">Republic of Korea</a>
 <a href="/english/Australia/">Australia</a>
 </div></body></html>`;
 }
@@ -59,11 +60,13 @@ describe('identity', () => {
     ).toThrow();
   });
 
-  it('keeps a fixed, unambiguous table: ISO codes, and no "Korea"', () => {
+  it('keeps a fixed, unambiguous table of the 39 listed countries (R2)', () => {
     const codes = Object.values(MINHAJ_OVERSEAS_COUNTRIES).map((entry) => entry.code);
     expect(new Set(codes).size).toBe(codes.length);
     for (const code of codes) expect(code).toMatch(/^[A-Z]{2}$/);
-    expect(MINHAJ_OVERSEAS_COUNTRIES['Korea']).toBeUndefined();
+    expect(codes).toHaveLength(39);
+    // Korea only on its own page's evidence (the Republic of Korea).
+    expect(MINHAJ_OVERSEAS_COUNTRIES['Korea']).toEqual({ name: 'Korea', code: 'KR' });
   });
 });
 
@@ -88,6 +91,11 @@ describe('discovery', () => {
           externalKey: `${SITE}/english/Denmark/`,
           originalUrl: `${SITE}/english/Denmark/`,
           legacyIdentifier: 'country-Denmark',
+        },
+        {
+          externalKey: `${SITE}/english/Korea/`,
+          originalUrl: `${SITE}/english/Korea/`,
+          legacyIdentifier: 'country-Korea',
         },
       ],
     });
@@ -136,7 +144,7 @@ describe('parse', () => {
   });
 
   it('excludes a path the table does not name — never guessing a country', () => {
-    for (const path of ['/english/Korea/', '/english/Atlantis/', '/english/tid/1/', '/'])
+    for (const path of ['/english/Atlantis/', '/english/tid/1/', '/'])
       expect(
         adapter().parse(evidenceOf('<html><body>x</body></html>', `${SITE}${path}`)),
       ).toEqual({ kind: 'excluded', reason: 'not-a-listed-country' });

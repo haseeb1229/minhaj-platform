@@ -45,9 +45,15 @@ export type QuranRefusalReason = (typeof QURAN_REFUSAL_REASONS)[number];
 
 const REASONS: ReadonlySet<string> = new Set(QURAN_REFUSAL_REASONS);
 
+// A declared field rather than a parameter property, so the context also loads
+// under plain Node's type stripping — the operations-image tooling composes it
+// (R2, `composition/quran-reference-runner.ts`).
 export class QuranRefusal extends Error {
-  constructor(readonly reason: QuranRefusalReason) {
+  readonly reason: QuranRefusalReason;
+
+  constructor(reason: QuranRefusalReason) {
     super(reason);
+    this.reason = reason;
     this.name = 'QuranRefusal';
   }
 }

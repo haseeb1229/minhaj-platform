@@ -1158,8 +1158,16 @@ export interface AssetProvenanceRow {
   readonly licenceEvidence: string | null;
   readonly visibility: AssetVisibility;
   readonly rightsHolder: string | null;
-  /** Phase 30-R: the measured box of the metadata-stripped public copy, if one was made. */
-  readonly publicCopy: { readonly width: number; readonly height: number } | null;
+  /**
+   * Phase 30-R: the measured box of the metadata-stripped public copy, if one
+   * was made — and (R2) its Storage asset, which only the administrative
+   * preview reads.
+   */
+  readonly publicCopy: {
+    readonly assetId: string;
+    readonly width: number;
+    readonly height: number;
+  } | null;
   readonly version: number;
 }
 
@@ -1354,6 +1362,72 @@ export interface MigrationReadPort {
     readonly offset: number;
     readonly limit: number;
   }): Promise<ReconciliationPage>;
+  /** R2. One acquisition, or null. */
+  asset(provenanceId: string): Promise<AssetProvenanceRow | null>;
+  /** R2. A run's PENDING revisions, counted by what a run-wide approval takes or leaves. */
+  runApprovalCounts(runId: string): Promise<RunApprovalCounts>;
+  /**
+   * R2. A run's APPROVAL CANDIDATES — pending, valid, free of personal data
+   * (`none`: flagged and cleared revisions stay single decisions), of a
+   * publishable kind, and of a record no OPEN duplicate candidate names on
+   * either side — oldest first, id last: one bounded page.
+   */
+  approvalCandidates(query: {
+    readonly runId: string;
+    readonly offset: number;
+    readonly limit: number;
+  }): Promise<StagedPage>;
+  /** R2. The same candidates' keys, in the same order, at most `ceiling`. */
+  approvalCandidateKeys(runId: string, ceiling: number): Promise<readonly CandidateKey[]>;
+  /** R2. Whether an OPEN duplicate candidate names the record, on either side of the pair. */
+  hasOpenDuplicate(recordId: string): Promise<boolean>;
+  /**
+   * R2. A run's RIGHTS CANDIDATES on one host — restricted, claimed
+   * `organisation-owned` with stated evidence, with a public copy, and whose
+   * original address is `https://{host}/…` — in acquisition order.
+   */
+  rightsCandidates(query: {
+    readonly runId: string;
+    readonly host: string;
+    readonly offset: number;
+    readonly limit: number;
+  }): Promise<AssetPage>;
+  /** R2. The same candidates' keys, in the same order, at most `ceiling`. */
+  rightsCandidateKeys(
+    runId: string,
+    host: string,
+    ceiling: number,
+  ): Promise<readonly CandidateKey[]>;
+  /**
+   * R2. A run's MANIFEST CANDIDATES — approved, valid revisions of a
+   * publishable kind that no live manifest entry holds — oldest first, at most
+   * `ceiling`.
+   */
+  manifestCandidateKeys(runId: string, ceiling: number): Promise<readonly CandidateKey[]>;
+}
+
+/** R2. One candidate of a run-wide act: what it is, at the version shown. */
+export interface CandidateKey {
+  readonly id: string;
+  readonly version: number;
+}
+
+/** R2. A run's pending revisions by what a run-wide approval does with them. */
+export interface RunApprovalCounts {
+  /** Pending revisions in all. */
+  readonly pending: number;
+  /** Pending, valid, `none`, publishable: what a run-wide approval may take. */
+  readonly candidates: number;
+  /** Pending and not valid. */
+  readonly invalid: number;
+  /** Pending, valid and flagged for personal data. */
+  readonly flagged: number;
+  /** Pending, valid and cleared: approved one at a time by someone who cleared nothing. */
+  readonly cleared: number;
+  /** Pending, valid, `none`, of a review-only kind (Fatwa, Quran). */
+  readonly reviewOnly: number;
+  /** Pending, valid, `none`, publishable, but its record has an OPEN duplicate candidate. */
+  readonly awaitingDuplicate: number;
 }
 
 /* ===========================================================================

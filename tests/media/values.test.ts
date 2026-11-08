@@ -11,6 +11,7 @@ import {
   playlistChangeSchema,
   PROVIDER_EMBED_ORIGINS,
   providerEmbedUrl,
+  providerPlaybackUrl,
   providerWatchUrl,
   seriesInputSchema,
   videoInputSchema,
@@ -111,6 +112,30 @@ describe('provider references', () => {
       expect(embed.origin).toBe(PROVIDER_EMBED_ORIGINS[provider]);
       expect(embed.searchParams.has('autoplay')).toBe(false);
     }
+  });
+
+  it('derives the address played after a press: the same embed, with autoplay alone added', () => {
+    expect(providerPlaybackUrl('youtube', YT)).toBe(
+      `https://www.youtube-nocookie.com/embed/${YT}?rel=0&autoplay=1`,
+    );
+    expect(providerPlaybackUrl('vimeo', '76979871')).toBe(
+      'https://player.vimeo.com/video/76979871?dnt=1&autoplay=1',
+    );
+    for (const provider of ['youtube', 'vimeo'] as const) {
+      const id = provider === 'youtube' ? YT : '1';
+      const played = new URL(providerPlaybackUrl(provider, id));
+      const embed = new URL(providerEmbedUrl(provider, id));
+      // Still the privacy-enhanced host and path, nothing else changed.
+      expect(played.origin).toBe(PROVIDER_EMBED_ORIGINS[provider]);
+      expect(played.pathname).toBe(embed.pathname);
+      expect(played.searchParams.get('autoplay')).toBe('1');
+      played.searchParams.delete('autoplay');
+      expect(played.search).toBe(embed.search);
+    }
+    // An identifier cannot smuggle parameters past the derivation.
+    const hostile = new URL(providerPlaybackUrl('youtube', 'x?autoplay=0&mute=1#y'));
+    expect(hostile.searchParams.get('mute')).toBeNull();
+    expect(hostile.hash).toBe('');
   });
 
   it('holds a thumbnail to the provider’s own image host, and to THIS video', () => {

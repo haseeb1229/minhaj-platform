@@ -203,11 +203,11 @@ export function createGlobalPublicReader(): GlobalPublicReaderPort {
     async countryChoices() {
       const rows = await db.country.findMany({
         where: PUBLIC_COUNTRY,
-        select: PLACE,
+        select: { ...PLACE, code: true },
         orderBy: [...BY_SLUG],
         take: GLOBAL_CHOICES,
       });
-      return rows.map(place);
+      return rows.map((row) => ({ ...place(row), code: row.code }));
     },
 
     async cityChoices(countryId) {

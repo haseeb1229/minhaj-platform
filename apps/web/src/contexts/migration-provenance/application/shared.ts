@@ -27,6 +27,18 @@ export function sha256Hex(value: string | Uint8Array): string {
   return hash.digest('hex');
 }
 
+/**
+ * R2. The fingerprint of a run-wide candidate set: the SHA-256 of every
+ * candidate's `id:version`, in the set's order, one per line. A person confirms
+ * an act over exactly the set this names; any item added, removed, reordered
+ * or moved since gives another fingerprint.
+ */
+export function candidateFingerprint(
+  keys: readonly { readonly id: string; readonly version: number }[],
+): string {
+  return sha256Hex(keys.map((key) => `${key.id}:${String(key.version)}`).join('\n'));
+}
+
 /** A port call whose data error is re-thrown as the refusal it names. */
 export const guarded = <T>(work: Promise<T>): Promise<T> =>
   work.catch(asMigrationRefusal);

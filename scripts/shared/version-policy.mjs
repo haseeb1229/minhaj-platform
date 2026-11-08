@@ -151,6 +151,29 @@ export const lockedStack = Object.freeze([
     expected: '1.2.0',
     introduced: 'Phase 29 — Migration & Provenance',
   },
+  {
+    // The browser suite's accessibility smoke (Rebaseline R2, TECH_STACK.md
+    // §18.11): Deque's Playwright binding for the axe-core rules engine.
+    // Development only — nothing in the application imports it. Pinned
+    // EXACTLY: a rules engine that moves across a release changes what the
+    // gate fails on, and that change should arrive as a reviewed edit here.
+    name: '@axe-core/playwright',
+    kind: 'exact',
+    expected: '4.14.0',
+    introduced: 'Rebaseline R2 — quality gates',
+  },
+  {
+    // Storage's public image derivatives (Rebaseline R2, TECH_STACK.md §18):
+    // the libvips binding that decodes an already-cleared still image and
+    // writes its WebP widths. It was already in the tree as Next.js's optional
+    // image dependency; `@minhaj/storage` now declares it directly, pinned to
+    // the exact resolved patch, because a decoder that reads stored bytes is
+    // not something to let float across a release.
+    name: 'sharp',
+    kind: 'exact',
+    expected: '0.35.5',
+    introduced: 'Rebaseline R2 — Storage image derivatives',
+  },
   { name: 'typescript', kind: 'range', expected: '5.9', introduced: 'Phase 0B' },
   {
     // Moved from the 4.5 line by owner decision in the pre-Phase-30 security

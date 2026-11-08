@@ -295,6 +295,17 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // `assertOwnerDecisionsRemoved`, and proved as behaviour inside
   // `assertMigrationRules`.
   '20261031000000_phase30rd_owner_decisions': ['MigrationPersonalDataFinding'],
+  // REBASELINE R2 CREATES NO TABLE. It admits the Quran `reference` authority
+  // in place: the authority and evidence CHECKs, a wider evidence column, and
+  // the fixture/reference separation in the activation and canonical-change
+  // triggers. Asserted by `assertQuranFoundation(…, 'reference')`, its rollback
+  // by `assertQuranFoundation(…, 'before-reference')`, and proved as behaviour
+  // inside `assertQuranCanonicalRules`.
+  '20261106000001_r2_quran_reference_preview': [],
+  // REBASELINE R2 CREATES ONE STORAGE TABLE: the link from a still image to the
+  // Asset holding one of its WebP widths (320, 640, 960, 1440 — a CHECK), NO
+  // ACTION both ways, written once by the runtime and never re-pointed.
+  '20261107000000_r2_storage_derivatives': ['AssetDerivative'],
   // THE DONATIONS CONTEXT: a campaign with its words per locale and its
   // per-currency policy, the owner's fail-closed provider activation (one
   // immutable row the runtime can only read), the donation — one payment
@@ -1231,6 +1242,8 @@ const EXPECTED_COLUMN_SIZES: readonly {
     'QuranTajweedRuleText',
   ].map((table) => ({ table, column: 'languageCode', characters: 16 })),
   { table: 'QuranSource', column: 'code', characters: 64 },
+  // R2: a reference source keeps its licence notice verbatim as evidence.
+  { table: 'QuranSource', column: 'reference', characters: 2000 },
   { table: 'SurahName', column: 'locale', characters: 8 },
   ...['QuranSourceAyah', 'Ayah', 'QuranAyahRevision'].map((table) => ({
     table,
@@ -4746,7 +4759,15 @@ function raisedNumbers(definition: string | null): string {
  * The rules themselves are proved as BEHAVIOUR by `assertQuranCanonicalRules`,
  * and through the runtime login by `db:test:permissions`.
  */
-async function assertQuranFoundation(session: SqlSession): Promise<void> {
+/**
+ * `stage`: `reference` once Rebaseline R2 has admitted the Quran `reference`
+ * authority (the default — every migration applied), `before-reference` after
+ * its rollback, when the Phase-18 definitions are back exactly.
+ */
+async function assertQuranFoundation(
+  session: SqlSession,
+  stage: 'reference' | 'before-reference' = 'reference',
+): Promise<void> {
   const tables = QURAN_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',');
   const names = QURAN_TABLES.map((table) => `N'${table}'`).join(',');
 
@@ -4921,13 +4942,39 @@ async function assertQuranFoundation(session: SqlSession): Promise<void> {
     .map((row) => `${row.name}@${row.tableName}:${raisedNumbers(row.definition)}`)
     .sort()
     .join(',');
-  const expectedTriggers = Object.entries(QURAN_TRIGGER_NUMBERS)
+  // R2 widens the canonical-change trigger with the authority-mixing refusal.
+  const triggerNumbers: Readonly<Record<string, readonly [string, string]>> =
+    stage === 'reference'
+      ? { ...QURAN_TRIGGER_NUMBERS, AyahCanonicalChange: ['Ayah', '51181+51182+51198'] }
+      : QURAN_TRIGGER_NUMBERS;
+  const expectedTriggers = Object.entries(triggerNumbers)
     .map(([name, [table, numbers]]) => `${name}@${table}:${numbers}`)
     .sort()
     .join(',');
   if (describedTriggers !== expectedTriggers)
     fail(
       `Quran triggers must raise exactly their own 5118x numbers; found ${describedTriggers}.`,
+    );
+
+  // R2: the authority vocabulary and its evidence rule, and the evidence width.
+  const [authority] = await session.query<{
+    authority: string | null;
+    evidence: string | null;
+    width: number;
+  }>(`
+    SELECT
+      (SELECT [definition] FROM sys.check_constraints WHERE [name] = N'QuranSource_authority_ck') AS [authority],
+      (SELECT [definition] FROM sys.check_constraints WHERE [name] = N'QuranSource_evidence_ck') AS [evidence],
+      (SELECT [max_length] FROM sys.columns WHERE [object_id] = OBJECT_ID(N'[dbo].[QuranSource]') AND [name] = N'reference') AS [width];
+  `);
+  const admitsReference =
+    (authority?.authority ?? '').includes("N'reference'") &&
+    (authority?.evidence ?? '').includes("N'reference'") &&
+    Number(authority?.width) === 4000;
+  if (admitsReference !== (stage === 'reference'))
+    fail(
+      `The Quran source authority must ${stage === 'reference' ? '' : 'not '}admit ` +
+        `\`reference\` here (${stage}); found ${JSON.stringify(authority)}.`,
     );
 
   const procedures = await session.query<{ name: string; definition: string | null }>(`
@@ -5176,11 +5223,11 @@ async function assertQuranCanonicalRules(session: SqlSession): Promise<void> {
   const register = (
     id: string,
     code: string,
-    authority: 'fixture' | 'approved',
+    authority: 'fixture' | 'approved' | 'reference',
     surahs: readonly (readonly [number, number])[],
     ayat: readonly ProofAyah[],
   ): string =>
-    `INSERT INTO [dbo].[QuranSource] ([id],[code],[authority],[title],[version],[encoding],[reference]) VALUES (N'${id}',N'${code}',N'${authority}',N'NON_QURAN_FIXTURE source ${code}',N'proof-1',N'utf-8',${authority === 'approved' ? "N'urn:example:non-quran-fixture-evidence'" : 'NULL'});
+    `INSERT INTO [dbo].[QuranSource] ([id],[code],[authority],[title],[version],[encoding],[reference]) VALUES (N'${id}',N'${code}',N'${authority}',N'NON_QURAN_FIXTURE source ${code}',N'proof-1',N'utf-8',${authority !== 'fixture' ? "N'urn:example:non-quran-fixture-evidence'" : 'NULL'});
      INSERT INTO [dbo].[QuranSourceSurah] ([sourceId],[number],[ayahCount]) VALUES ${surahs.map(([number, ayat]) => `(N'${id}',${String(number)},${String(ayat)})`).join(',')};
      ${ayat.length === 0 ? '' : `INSERT INTO [dbo].[QuranSourceAyah] ([sourceId],[surahNumber],[ayahNumber],[juzNumber],[text]) VALUES ${ayat.map((a) => `(N'${id}',${String(a.surah)},${String(a.ayah)},${String(a.juz)},N'${literal(a.text)}')`).join(',')};`}`;
 
@@ -5617,7 +5664,7 @@ async function assertQuranCanonicalRules(session: SqlSession): Promise<void> {
     'An approved activation carries no fixture text',
     activate(approved),
     [51185],
-    'An approved corpus cannot carry fixture text.',
+    'An approved corpus cannot carry text that is not approved.',
   );
   await expectAccepted(session, 'Fixture-mode activation', activate(fixture));
   for (const [label, statement, numbers, rule] of [
@@ -5775,6 +5822,90 @@ async function assertQuranCanonicalRules(session: SqlSession): Promise<void> {
     [51198],
     'A fixture source cannot change approved canonical text.',
   );
+
+  // ---- R2: the `reference` authority stays apart from fixture and approved ------
+  //
+  // A reference source carries its evidence like an approved one; its text never
+  // enters an active fixture corpus, a reference activation refuses fixture text
+  // and a fixture activation refuses reference text. Ayah 2:2 — untouched above
+  // — carries the proof and is returned to fixture text, so the corpus ends as
+  // the fixture activation the rest of this proof expects.
+  const referenceSource = randomUUID();
+  const referenceAyat = fixtureAyat.map((a) => ({
+    ...a,
+    text: proofText('REFERENCE_PROBE', a.surah, a.ayah),
+  }));
+  for (const [label, statement, numbers, rule] of [
+    [
+      'A reference source carries its evidence',
+      `INSERT INTO [dbo].[QuranSource] ([id],[code],[authority],[title],[version],[encoding]) VALUES (N'${randomUUID()}',N'NON_QURAN_FIXTURE_REFERENCE_BARE_${run}',N'reference',N'NON_QURAN_FIXTURE',N'proof-1',N'utf-8');`,
+      [547],
+      'QuranSource_evidence_ck',
+    ],
+    [
+      'A source authority is one of three',
+      `INSERT INTO [dbo].[QuranSource] ([id],[code],[authority],[title],[version],[encoding],[reference]) VALUES (N'${randomUUID()}',N'NON_QURAN_FIXTURE_UNKNOWN_${run}',N'preview',N'NON_QURAN_FIXTURE',N'proof-1',N'utf-8',N'urn:example:evidence');`,
+      [547],
+      'QuranSource_authority_ck',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, rule);
+  await expectAccepted(
+    session,
+    'A reference source registered by the owner, with its evidence',
+    register(
+      referenceSource,
+      `NON_QURAN_FIXTURE_REFERENCE_${run}`,
+      'reference',
+      structure,
+      referenceAyat,
+    ),
+  );
+  const referenceTwoTwo = referenceAyat[4]?.text ?? '';
+  const fixtureTwoTwo = fixtureAyat[4]?.text ?? '';
+  const MIXED = 'A correction cannot mix fixture and reference text.';
+  await refuse(
+    'Reference text never enters an active fixture corpus',
+    correct(authorised, [2, 2], 1, referenceSource, referenceTwoTwo, reason),
+    [51198],
+    MIXED,
+  );
+  await expectAccepted(
+    session,
+    'The operator withdraws the fixture corpus for the reference proof',
+    'DELETE FROM [dbo].[QuranActivation];',
+  );
+  await refuse(
+    'A reference activation carries no fixture text',
+    activate(referenceSource),
+    [51185],
+    'A reference corpus cannot carry fixture text.',
+  );
+  await expectAccepted(
+    session,
+    'Reference text corrects an Ayah of an inactive corpus',
+    correct(authorised, [2, 2], 1, referenceSource, referenceTwoTwo, reason),
+  );
+  for (const [label, statement, rule] of [
+    [
+      'A fixture activation carries no reference text',
+      activate(fixture),
+      'A fixture corpus cannot carry reference text.',
+    ],
+    [
+      'An approved activation carries no reference text',
+      activate(approved),
+      'An approved corpus cannot carry text that is not approved.',
+    ],
+  ] as const)
+    await refuse(label, statement, [51185], rule);
+  await expectAccepted(
+    session,
+    'The Ayah returns to fixture text, and the fixture corpus is active again',
+    `${correct(authorised, [2, 2], 2, fixture, fixtureTwoTwo, reason)}
+     ${activate(fixture)}`,
+  );
+
   const leaked = await count(`
     SELECT COUNT_BIG(*) AS [total] FROM [dbo].[AuditLog]
     WHERE [action] LIKE N'quran.%'
@@ -18133,6 +18264,7 @@ const MIGRATION_PUBLISH_PERMISSION = 'migration.publish';
  * kind with its typed `collectionId` target, and one gated key.
  */
 const OWNER_DECISIONS_MIGRATION = '20261031000000_phase30rd_owner_decisions';
+const QURAN_REFERENCE_MIGRATION = '20261106000001_r2_quran_reference_preview';
 
 /** The one table Phase 30-RD creates. */
 const PERSONAL_DATA_FINDING_TABLE = 'MigrationPersonalDataFinding';
@@ -24227,6 +24359,10 @@ try {
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
     }
+    if (migration.id === QURAN_REFERENCE_MIGRATION)
+      // R2 created nothing and widened no vocabulary: its rollback leaves the
+      // Quran schema exactly as Phase 18 made it.
+      await assertQuranFoundation(session, 'before-reference');
     if (migration.id === OWNER_DECISIONS_MIGRATION) {
       // Phase 30-RD widened no search vocabulary or bundle: its rollback leaves
       // Migration & Provenance exactly as Phase 30-R made it, and Collection
@@ -24328,7 +24464,7 @@ try {
       await assertPeopleFoundation(session);
       await assertAudioFoundation(session);
       await assertPhotoFoundation(session);
-      await assertQuranFoundation(session);
+      await assertQuranFoundation(session, 'before-reference');
     }
     if (migration.id === CLASSES_MIGRATION) {
       // Phase 23 widened no search vocabulary, so none narrows here — and the
@@ -24374,7 +24510,7 @@ try {
       await assertPersonalisationRemoved(session);
       await assertFatwaFoundation(session, 'before-personalisation');
       await assertHadithFoundation(session);
-      await assertQuranFoundation(session);
+      await assertQuranFoundation(session, 'before-reference');
       await assertCollectionFoundation(session);
       await assertEventFoundation(session);
       await assertMediaFoundation(session);
@@ -24390,7 +24526,7 @@ try {
       await assertTaxonomyFoundation(session);
       await assertPeopleFoundation(session, 'before-classes');
       await assertHadithFoundation(session);
-      await assertQuranFoundation(session);
+      await assertQuranFoundation(session, 'before-reference');
     }
     if (migration.id === '20261003000000_phase19_hadith') {
       // Phase 19 widened the vocabulary by `hadith` alone, so it narrows back
@@ -24401,7 +24537,7 @@ try {
       await assertHadithRemoved(session);
       await assertTaxonomyFoundation(session);
       await assertPeopleFoundation(session, 'before-classes');
-      await assertQuranFoundation(session);
+      await assertQuranFoundation(session, 'before-reference');
       await assertCollectionFoundation(session);
     }
     if (migration.id === '20261002000000_phase18_quran') {

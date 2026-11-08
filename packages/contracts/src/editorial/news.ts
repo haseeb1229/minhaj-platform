@@ -205,6 +205,12 @@ export interface NewsPage {
  * publication date where a NewsArticle or PressRelease states one, else the
  * genuine publication instant. Year and month are UTC calendar values of that
  * date, never a record's creation or migration time.
+ *
+ * R2 narrows it further, each optional and absent meaning "no narrowing":
+ * `kind` to one family; `language` to records that HAVE a published
+ * translation in that content language; and `preferLanguage` ORDERS records
+ * with a translation in that language first (each group still newest first),
+ * so an interface opens on what its reader can read without hiding the rest.
  */
 export interface NewsTimelineQuery {
   readonly offset: number;
@@ -212,6 +218,15 @@ export interface NewsTimelineQuery {
   readonly year: number | null;
   readonly month: number | null;
   readonly topicId: string | null;
+  readonly kind?: NewsKind | null;
+  readonly language?: 'en' | 'ur' | 'ar' | null;
+  readonly preferLanguage?: 'en' | 'ur' | 'ar' | null;
+}
+
+/** R2 — what the archive's periods are counted over: one family, one language. */
+export interface NewsPeriodFilter {
+  readonly kind?: NewsKind | null;
+  readonly language?: 'en' | 'ur' | 'ar' | null;
 }
 
 export interface NewsArchivePeriod {

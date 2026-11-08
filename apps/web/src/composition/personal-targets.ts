@@ -5,6 +5,7 @@ import type { Locale } from '@minhaj/contracts';
 import {
   collectionMemberPathOf,
   type CollectionMemberTarget,
+  type PublicLeadImage,
 } from '@minhaj/contracts/editorial';
 import {
   PERSONAL_LIMITS,
@@ -42,6 +43,11 @@ export type ResolvedTarget =
       /** The language the title is written in, for `lang` on the page. */
       readonly titleLanguage: string;
       readonly href: string;
+      /**
+       * The owner's own first-party lead image, where the owner publishes one
+       * with the record (Editorial's articles). Presentation only.
+       */
+      readonly image: PublicLeadImage | null;
     }
   | { readonly status: 'unavailable' }
   /** Its owner could not be asked just now — not a statement about the target. */
@@ -77,6 +83,7 @@ function byTitles(
         title: chosen.title,
         titleLanguage: chosen.language,
         href: localizedPath(locale, `${path}`),
+        image: target.leadImage ?? null,
       };
 }
 
@@ -198,6 +205,7 @@ export async function resolvePersonalTargets(
             title: `${name} ${ref.surah}:${ref.ayah}`,
             titleLanguage: localName !== undefined ? locale : 'ar',
             href: localizedPath(locale, `/quran/surah/${ref.surah}/${ref.ayah}`),
+            image: null,
           });
         }
       },
@@ -230,6 +238,7 @@ export async function resolvePersonalTargets(
               locale,
               `/hadith/${encodeURIComponent(citation.collectionSlug)}/${citation.number}`,
             ),
+            image: null,
           });
         }
       },

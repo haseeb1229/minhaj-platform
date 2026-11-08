@@ -52,6 +52,37 @@ export class UsageError extends CommandError {
   }
 }
 
+const DISPOSABLE = /^MinhajPhase1Test_[0-9a-f]{32}$/;
+
+/**
+ * The database `DATABASE_URL` names, positively: `MinhajStaging` on the
+ * internal staging SQL service, or a disposable database on loopback. A tool
+ * started as a child of an owner-side command (the migration proof, the Quran
+ * reference tool) calls this first: the owner-side command proved the same
+ * target with the real staging or local guard before starting it, and this is
+ * an independent second check.
+ */
+export function approvedTarget(url: string | undefined): 'staging' | 'disposable' {
+  if (url === undefined || !url.startsWith('sqlserver://'))
+    throw new CommandError('DATABASE_URL is not a SQL Server URL; refusing.');
+  const [authority = '', ...tokens] = url.slice('sqlserver://'.length).split(';');
+  const [host = '', port = '1433'] = authority.split(':');
+  const databases = tokens
+    .map((token) => /^\s*database\s*=(.*)$/i.exec(token)?.[1]?.trim())
+    .filter((value): value is string => value !== undefined);
+  if (databases.length !== 1)
+    throw new CommandError('DATABASE_URL names no single database; refusing.');
+  const database = databases[0] ?? '';
+  if (database === 'MinhajStaging' && host === 'sqlserver' && port === '1433')
+    return 'staging';
+  if (DISPOSABLE.test(database) && (host === 'localhost' || host === '127.0.0.1'))
+    return 'disposable';
+  throw new CommandError(
+    'DATABASE_URL is neither MinhajStaging on the staging SQL host nor a disposable ' +
+      'database on loopback; refusing.',
+  );
+}
+
 /** A Migration refusal's code, recognised by shape — the CLIs import no context. */
 function refusalOf(error: unknown): string | null {
   const candidate = error as { name?: unknown; reason?: unknown } | null;

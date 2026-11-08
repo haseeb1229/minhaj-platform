@@ -336,8 +336,8 @@ describeLive('Phase 3B — taxonomy administration is permission-checked', () =>
       // SECURITY_BASELINE.md §8.1 names the operations that cost a step-up
       // grant; §8.2 says the requirement is "deliberately not universal". The
       // vocabulary names exactly the operations §8.1 lists — Phase 2's three
-      // and the canonical-edit, Fatwa-publication, donation-refund and
-      // migration-publication purposes
+      // and the canonical-edit, Fatwa-publication, donation-refund,
+      // migration-publication and migration-personal-data purposes
       // later owners added — and none of them is "editing the
       // subject taxonomy", so requiring one here would mean stretching a scope
       // past what it names.
@@ -353,6 +353,7 @@ describeLive('Phase 3B — taxonomy administration is permission-checked', () =>
         'fatwa-publication',
         'donation-refund',
         'migration-publication',
+        'migration-personal-data',
       ]);
     });
 

@@ -57,11 +57,19 @@ export type {
   ImageLimits,
   MalwareScannerPort,
   ScanOutcome,
+  DerivationOutcome,
+  ImageDerivativeWidth,
+  PictureReference,
   StorageServicePort,
   StoredAsset,
   UploadPolicy,
 } from './storage.ts';
-export { RELEASE_TOKEN_PATTERN } from './storage.ts';
+export {
+  DERIVATIVE_SOURCE_LIMITS,
+  IMAGE_DERIVATIVE_WIDTHS,
+  isImageDerivativeWidth,
+  RELEASE_TOKEN_PATTERN,
+} from './storage.ts';
 
 /* ---- Time (Phase 23 moved the Event helpers here; both owners import them) ---- */
 export {

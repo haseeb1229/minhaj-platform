@@ -7,15 +7,19 @@ import {
   duplicateDecisionSchema,
   errorDecisionSchema,
   legacyMappingDecisionSchema,
+  MIGRATION_LIMITS,
   reviewBatchSchema,
   reviewDecisionSchema,
   rightsBatchSchema,
   rightsDecisionSchema,
+  runApprovalSchema,
+  runRightsSchema,
   topicMappingDecisionSchema,
   type MigrationActor,
   type MigrationAuthorityPort,
   type MigrationDecisionPort,
   type MigrationReadPort,
+  type MigrationSourcePort,
   type MigrationTopicPort,
 } from '@minhaj/contracts/migration';
 
@@ -24,7 +28,7 @@ import {
   migrationFailure,
   type MigrationRefusalReason,
 } from '../domain/refusal.ts';
-import { ADMINISTER, createGate, guarded } from './shared.ts';
+import { ADMINISTER, candidateFingerprint, createGate, guarded } from './shared.ts';
 
 /**
  * A person's decisions over what the pipeline produced: review, duplicates,
@@ -40,14 +44,25 @@ import { ADMINISTER, createGate, guarded } from './shared.ts';
  * Dependencies (ports only):
  *  - `decisions` — `MigrationDecisionPort`;
  *  - `read`      — `MigrationReadPort` (`stagedDetail` and, for a cleared
- *                  revision, `personalDataFindings`, to answer an approval helpfully);
+ *                  revision, `personalDataFindings`, to answer an approval helpfully;
+ *                  R2: `run` and the run-wide candidate keys a confirmation names);
+ *  - `sources`   — `MigrationSourcePort` (`source`: a run's registered hosts, R2);
  *  - `topics`    — `MigrationTopicPort`, Taxonomy's answer;
  *  - `authority` — `MigrationAuthorityPort`;
  *  - `clock`     — injectable for tests.
  */
 export function createMigrationDecisionService(deps: {
   readonly decisions: MigrationDecisionPort;
-  readonly read: Pick<MigrationReadPort, 'stagedDetail' | 'personalDataFindings'>;
+  readonly read: Pick<
+    MigrationReadPort,
+    | 'stagedDetail'
+    | 'personalDataFindings'
+    | 'run'
+    | 'approvalCandidateKeys'
+    | 'hasOpenDuplicate'
+    | 'rightsCandidateKeys'
+  >;
+  readonly sources: Pick<MigrationSourcePort, 'source'>;
   readonly topics: MigrationTopicPort;
   readonly authority: MigrationAuthorityPort;
   readonly clock?: () => Date;
@@ -64,6 +79,8 @@ export function createMigrationDecisionService(deps: {
       readonly decision: 'approve' | 'reject' | 'withdraw-approval';
       readonly note: string;
     },
+    /** R2: what a run-wide approval checks of each revision on top of a single review's rules. */
+    alsoBeforeApproval?: (recordId: string) => Promise<void>,
   ): Promise<void> {
     const staged = await guarded(deps.read.stagedDetail(value.stagedRecordId));
     if (staged === null) throw new MigrationRefusal('not-found');
@@ -89,6 +106,7 @@ export function createMigrationDecisionService(deps: {
         if (clearance.some((finding) => finding.decidedByUserId === actorId))
           throw new MigrationRefusal('same-person');
       }
+      if (alsoBeforeApproval !== undefined) await alsoBeforeApproval(staged.recordId);
     } else if (value.decision === 'reject') {
       // Review moves forward only: an approval is withdrawn first, then rejected.
       if (staged.review !== 'pending') throw new MigrationRefusal('invalid-state');
@@ -110,6 +128,33 @@ export function createMigrationDecisionService(deps: {
         now: now(),
       }),
     );
+  }
+
+  /**
+   * R2. A run whose candidate set a person confirmed: it exists, it COMPLETED
+   * and it BALANCED (an unreconciled run's revisions are not acted on in
+   * bulk), and its current set is exactly the one shown — same size, same
+   * fingerprint — or the act is refused `conflict` before anything is decided.
+   */
+  async function confirmed(
+    value: {
+      readonly runId: string;
+      readonly expectedCount: number;
+      readonly fingerprint: string;
+    },
+    keysOf: () => Promise<readonly { readonly id: string; readonly version: number }[]>,
+  ) {
+    const run = await guarded(deps.read.run(value.runId));
+    if (run === null) throw new MigrationRefusal('not-found');
+    if (run.state !== 'completed' || run.reconciliation !== 'balanced')
+      throw new MigrationRefusal('run-unreconciled');
+    const keys = await guarded(keysOf());
+    if (
+      keys.length !== value.expectedCount ||
+      candidateFingerprint(keys) !== value.fingerprint
+    )
+      throw new MigrationRefusal('conflict');
+    return { run, keys };
   }
 
   return {
@@ -362,6 +407,135 @@ export function createMigrationDecisionService(deps: {
         }
       }
       return { decided, refused };
+    },
+
+    /**
+     * R2. APPROVES A RUN'S CONFIRMED CANDIDATE SET, one slice per act: the
+     * person was shown the whole set (pending, valid, free of personal data,
+     * of a publishable kind) and confirms its size and fingerprint; the first
+     * `runChunk` of it is then decided item by item through the single
+     * review's own path — its checks, the database's, and one audited approval
+     * per revision attributed to the person — and, just before each, the
+     * question whether an OPEN duplicate candidate now names its record
+     * (`duplicate-open`: a pair opened after the set was read). Nothing is
+     * decided in bulk, and a refused item is reported, never forced. The page then shows what
+     * remains, under a new fingerprint, for the next confirmation.
+     */
+    async approveRun(
+      actor: MigrationActor,
+      input: unknown,
+    ): Promise<{
+      readonly decided: number;
+      readonly refused: readonly {
+        readonly stagedRecordId: string;
+        readonly reason: MigrationRefusalReason;
+      }[];
+      readonly remaining: number;
+    }> {
+      const { actorId, value } = await gate.authorised(
+        actor,
+        ADMINISTER,
+        runApprovalSchema,
+        input,
+      );
+      const { keys } = await confirmed(value, () =>
+        deps.read.approvalCandidateKeys(value.runId, MIGRATION_LIMITS.runCandidates),
+      );
+      let decided = 0;
+      const refused: { stagedRecordId: string; reason: MigrationRefusalReason }[] = [];
+      for (const key of keys.slice(0, MIGRATION_LIMITS.runChunk)) {
+        try {
+          // A duplicate opened since the set was read: the fingerprint names
+          // versions, not pairs, so each record is asked again just before.
+          await decide(
+            actorId,
+            {
+              stagedRecordId: key.id,
+              expectedVersion: key.version,
+              decision: 'approve',
+              note: value.note,
+            },
+            async (recordId) => {
+              if (await guarded(deps.read.hasOpenDuplicate(recordId)))
+                throw new MigrationRefusal('duplicate-open');
+            },
+          );
+          decided += 1;
+        } catch (error) {
+          const reason = migrationFailure(error);
+          // An outage is not a per-item verdict: stop, report what was done.
+          if (reason === 'unavailable') throw error;
+          refused.push({ stagedRecordId: key.id, reason });
+        }
+      }
+      return { decided, refused, remaining: keys.length - decided };
+    },
+
+    /**
+     * R2. CLEARS FOR RELEASE A RUN'S CONFIRMED PICTURES ON ONE REGISTERED
+     * HOST, one slice per act: only restricted acquisitions on a page or asset
+     * host the run's source registers, whose source itself stated
+     * organisational ownership with evidence, and which have a public copy the
+     * person was shown. Unknown rights are never in the set. Each acquisition
+     * is decided — and audited — on its own, under the licence, evidence and
+     * holder the person states.
+     */
+    async rightsRun(
+      actor: MigrationActor,
+      input: unknown,
+    ): Promise<{
+      readonly decided: number;
+      readonly refused: readonly {
+        readonly provenanceId: string;
+        readonly reason: MigrationRefusalReason;
+      }[];
+      readonly remaining: number;
+    }> {
+      const { actorId, value } = await gate.authorised(
+        actor,
+        ADMINISTER,
+        runRightsSchema,
+        input,
+      );
+      const run = await guarded(deps.read.run(value.runId));
+      if (run === null) throw new MigrationRefusal('not-found');
+      const source = await guarded(deps.sources.source(run.sourceId));
+      if (
+        source === null ||
+        (!source.hosts.includes(value.host) && !source.assetHosts.includes(value.host))
+      )
+        throw new MigrationRefusal('invalid');
+      const { keys } = await confirmed(value, () =>
+        deps.read.rightsCandidateKeys(
+          value.runId,
+          value.host,
+          MIGRATION_LIMITS.runCandidates,
+        ),
+      );
+      let decided = 0;
+      const refused: { provenanceId: string; reason: MigrationRefusalReason }[] = [];
+      for (const key of keys.slice(0, MIGRATION_LIMITS.runChunk)) {
+        try {
+          await guarded(
+            deps.decisions.decideRights({
+              provenanceId: key.id,
+              expectedVersion: key.version,
+              licence: value.licence,
+              visibility: 'public-eligible',
+              licenceEvidence: value.licenceEvidence,
+              rightsHolder: value.rightsHolder,
+              actorId,
+              now: now(),
+            }),
+          );
+          decided += 1;
+        } catch (error) {
+          const reason = migrationFailure(error);
+          if (reason === 'unavailable') throw error;
+          refused.push({ provenanceId: key.id, reason });
+        }
+      }
+      return { decided, refused, remaining: keys.length - decided };
     },
 
     /** Disables or re-enables one legacy mapping (and so its 301). */

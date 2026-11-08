@@ -161,6 +161,22 @@ function memoryAssets(): AssetPersistencePort & {
       }
       return true;
     },
+    // R2. No derivative is ever made here; `derivatives.test.ts` proves them.
+    async derivatives() {
+      return [];
+    },
+    async derivative() {
+      return null;
+    },
+    async recordDerivative() {
+      return false;
+    },
+    async beginReleaseDerivatives() {
+      return [];
+    },
+    async removeDerivatives() {
+      return undefined;
+    },
   };
 }
 

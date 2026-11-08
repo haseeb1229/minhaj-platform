@@ -3,5 +3,11 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["scripts/migration/**/*.ts"]
+  "include": [
+    "scripts/migration/**/*.ts",
+    "scripts/quran/**/*.ts",
+    "scripts/storage/**/*.ts",
+    "packages/database/src/lifecycle/mssql.d.ts",
+    "scripts/demo/**/*.ts"
+  ]
 }

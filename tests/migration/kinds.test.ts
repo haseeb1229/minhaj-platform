@@ -483,6 +483,21 @@ describe('editorial.news and editorial.article', () => {
       'date-implausible',
     ]);
   });
+
+  it('names one CMS post by its tid for every source and kind — a candidate, never a collapse (R2)', () => {
+    const identity = { key: 'tid:63630', signal: 'identifier', hard: false };
+    for (const kind of [
+      'editorial.news',
+      'editorial.article',
+      'editorial.press-release',
+    ] as const)
+      expect(run({ ...NEWS, kind }, { legacyIdentifier: 'tid-63630' }).identity).toEqual(
+        identity,
+      );
+    // Any other legacy identifier — or none — names no post.
+    for (const legacyIdentifier of [null, 'news-501', 'tid-0', 'tid-12a', 'xtid-5'])
+      expect(run(NEWS, { legacyIdentifier }).identity).toBeNull();
+  });
 });
 
 /* ===========================================================================

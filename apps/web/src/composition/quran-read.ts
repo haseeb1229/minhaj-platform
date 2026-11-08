@@ -3,6 +3,7 @@ import 'server-only';
 import type { QuranPublicReaderPort } from '@minhaj/contracts/quran';
 import { createQuranPublicReader } from '@minhaj/database';
 
+import { religiousReferencePreviewAdmitted } from '@/config/religious-reference';
 import { createQuranReadService } from '@/contexts/quran';
 
 /**
@@ -31,5 +32,9 @@ interface QuranReadRuntime {
 let runtime: QuranReadRuntime | null = null;
 
 export function quranReadRuntime(): QuranReadRuntime {
-  return (runtime ??= { reader: createQuranReadService(createQuranPublicReader()) });
+  return (runtime ??= {
+    reader: createQuranReadService(
+      createQuranPublicReader({ admitReference: religiousReferencePreviewAdmitted() }),
+    ),
+  });
 }

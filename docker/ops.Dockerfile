@@ -82,6 +82,18 @@ COPY packages/storage/src ./packages/storage/src
 # eight bounded contexts that graph composes through their public interfaces,
 # and the server-core authorisation service that answers it. No page, route,
 # component or other web source.
+#
+# Rebaseline R2 — the Quran reference-preview tool (`scripts/quran`) the owner
+# command `staging-quran-reference` starts as the runtime principal, with its own
+# node-runnable root and the Quran context it composes. And Storage's image
+# derivative backfill (`scripts/storage`, `staging-storage-derivatives`) with
+# its own root, which composes the four picture-owning contexts already here;
+# `sharp` arrives with `npm ci` as `@minhaj/storage`'s dependency, its
+# linux-x64 prebuilt binary included. And the staging demo-data tool
+# (`scripts/demo`, owner command `staging-demo`) with its own node-runnable
+# root, the four further contexts it seeds through (Identity, Learning,
+# Membership, Donations), and the Stripe-protocol simulator it starts on
+# loopback inside its own process — no money moves.
 COPY packages/server-core/src ./packages/server-core/src
 COPY apps/web/src/composition/migration-runner.ts \
      apps/web/src/composition/migration-wiring.ts \
@@ -95,6 +107,9 @@ COPY apps/web/src/composition/migration-runner.ts \
      apps/web/src/composition/migration-collection-targets.ts \
      apps/web/src/composition/collection-member-owners.ts \
      apps/web/src/composition/storage.ts \
+     apps/web/src/composition/quran-reference-runner.ts \
+     apps/web/src/composition/storage-derivatives-backfill.ts \
+     apps/web/src/composition/staging-demo-runner.ts \
      ./apps/web/src/composition/
 COPY apps/web/src/contexts/migration-provenance ./apps/web/src/contexts/migration-provenance
 COPY apps/web/src/contexts/media ./apps/web/src/contexts/media
@@ -104,7 +119,16 @@ COPY apps/web/src/contexts/global-network ./apps/web/src/contexts/global-network
 COPY apps/web/src/contexts/people-contributors ./apps/web/src/contexts/people-contributors
 COPY apps/web/src/contexts/personalisation-notifications ./apps/web/src/contexts/personalisation-notifications
 COPY apps/web/src/contexts/taxonomy ./apps/web/src/contexts/taxonomy
+COPY apps/web/src/contexts/quran ./apps/web/src/contexts/quran
+COPY apps/web/src/contexts/identity-access ./apps/web/src/contexts/identity-access
+COPY apps/web/src/contexts/learning ./apps/web/src/contexts/learning
+COPY apps/web/src/contexts/membership ./apps/web/src/contexts/membership
+COPY apps/web/src/contexts/donations ./apps/web/src/contexts/donations
 COPY scripts/migration ./scripts/migration
+COPY scripts/quran ./scripts/quran
+COPY scripts/storage ./scripts/storage
+COPY scripts/demo ./scripts/demo
+COPY scripts/shared/stripe-simulator.mjs ./scripts/shared/stripe-simulator.mjs
 
 # Generated from the schema alone; no database URL is read.
 RUN npx prisma generate --schema packages/database/prisma/schema.prisma

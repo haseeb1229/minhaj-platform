@@ -172,13 +172,24 @@ export interface SqlSession {
   close: () => Promise<void>;
 }
 
-export async function openSession(connection: SqlServerConnection): Promise<SqlSession> {
+export async function openSession(
+  connection: SqlServerConnection,
+  /**
+   * How long one batch may run, in milliseconds — the driver's 15-second
+   * default unless a command names a longer bound for a known-large batch
+   * (R2: registering a whole Quran source in ONE transaction).
+   */
+  options: { readonly requestTimeoutMs?: number } = {},
+): Promise<SqlSession> {
   const pool = await new sql.ConnectionPool({
     server: connection.server,
     port: connection.port,
     database: connection.database,
     user: connection.user,
     password: connection.password,
+    ...(options.requestTimeoutMs === undefined
+      ? {}
+      : { requestTimeout: options.requestTimeoutMs }),
     options: {
       encrypt: connection.encrypt,
       trustServerCertificate: connection.trustServerCertificate,

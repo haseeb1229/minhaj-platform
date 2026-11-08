@@ -24,6 +24,7 @@ import type {
   PublicCentreSummary,
   PublicCity,
   PublicCityChoice,
+  PublicCountryChoice,
   PublicCountry,
   PublicPlace,
   PublicRegion,
@@ -74,8 +75,11 @@ export interface GlobalPublicReaderPort {
   countryByCode(code: string): Promise<PublicCountry | null>;
   /** The current slug a current or FORMER slug of a public Country resolves to. */
   countryCanonicalSlug(slug: string): Promise<string | null>;
-  /** Every public Country, bounded, in slug order — a finder's selector. */
-  countryChoices(): Promise<readonly PublicPlace[]>;
+  /**
+   * Every public Country, bounded, in slug order, with its ISO code — a
+   * finder's selector and the directory's world-region grid.
+   */
+  countryChoices(): Promise<readonly PublicCountryChoice[]>;
   /**
    * A public Country's public Cities, bounded, in slug order, each with its
    * Region where it has one — a finder's selector and the Pakistan structure.

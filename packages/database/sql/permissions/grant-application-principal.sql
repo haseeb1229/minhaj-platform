@@ -476,6 +476,9 @@ IF OBJECT_ID(N'[dbo].[MediaCoverageSlugHistory]',N'U') IS NOT NULL BEGIN GRANT S
 -- crash left mid-upload. It never needs ALTER, and the state CHECK constraints
 -- are therefore beyond its reach: it cannot widen the lifecycle it is bound by.
 IF OBJECT_ID(N'[dbo].[Asset]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[Asset] TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[Asset] TO [$(app_login)]; END;
+-- Rebaseline R2: a DERIVATIVE LINK is written once, when its width is stored,
+-- and removed only with its released source; it is never re-pointed.
+IF OBJECT_ID(N'[dbo].[AssetDerivative]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[AssetDerivative] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[AssetDerivative] TO [$(app_login)]; END;
 
 -- Phase 8: Library aggregates, replaceable relation sets, permanent slug reservations.
 IF OBJECT_ID(N'[dbo].[Work]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Work] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Work] TO [$(app_login)]; END;

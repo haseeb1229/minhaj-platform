@@ -181,6 +181,15 @@ export function createMembershipAdminService(deps: {
 
     /* ---- Applications -------------------------------------------------- */
 
+    /**
+     * R2. The number of OPEN applications, for the administration dashboard.
+     * Under the read key; not audited, because a count names nobody.
+     */
+    async openApplicationCount(actor: MembershipActor): Promise<number> {
+      await holds(actor, READ);
+      return run(deps.staff.openApplicationCount());
+    },
+
     /** One bounded page of the queue, oldest first. An audited access. */
     async applications(
       actor: MembershipActor,

@@ -364,6 +364,10 @@ const ISSUE_ORDER = [
 ] as const;
 
 function publicOrder(family: Family): readonly object[] {
+  // Issues across every Magazine read newest first by the periodical order
+  // itself (R2), so "the latest issues" are the latest — not the latest year
+  // in slug order.
+  if (family.kind === 'magazine-issue') return ISSUE_ORDER;
   return family.dated
     ? [{ publicationYear: 'desc' }, { slug: 'asc' }, { id: 'asc' }]
     : [{ slug: 'asc' }, { id: 'asc' }];

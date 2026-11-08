@@ -258,7 +258,15 @@ describe('a URL is not a form: the listing query is tolerant, never trusting', (
       from: null,
       to: null,
       downloads: false,
+      sort: 'title',
     });
+  });
+
+  it('reads a known order and treats anything else as the default A–Z (R2)', () => {
+    expect(readLibraryQuery({ sort: 'newest' }).sort).toBe('newest');
+    expect(readLibraryQuery({ sort: 'title' }).sort).toBe('title');
+    expect(readLibraryQuery({ sort: 'slug' }).sort).toBe('title');
+    expect(readLibraryQuery({ sort: ['newest', 'title'] }).sort).toBe('title');
   });
 
   it('discards a repeated parameter rather than choosing one', () => {
@@ -277,6 +285,10 @@ describe('a URL is not a form: the listing query is tolerant, never trusting', (
     expect(booksPath('en', base)).toBe('/library/books');
     expect(booksPath('en', base, { language: 'ur', offset: 25 })).toBe(
       '/library/books?offset=25&language=ur',
+    );
+    // The default order is the bare address; only another order is written.
+    expect(booksPath('ur', base, { sort: 'newest' })).toBe(
+      '/ur/library/books?sort=newest',
     );
   });
 });

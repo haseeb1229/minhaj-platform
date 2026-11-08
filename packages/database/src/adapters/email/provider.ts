@@ -66,6 +66,22 @@ export function providerFailureCode(status: number | null, name: string): string
   return name === 'AbortError' ? 'timeout' : 'network_error';
 }
 
+/**
+ * Whether an address sits on the reserved `.invalid` top-level domain
+ * (RFC 2606 §2), which no mail system can ever deliver to. Compared on the
+ * domain after the LAST `@`, case-insensitively and ignoring a trailing dot.
+ */
+export function isUndeliverableRecipient(address: string): boolean {
+  const at = address.lastIndexOf('@');
+  if (at === -1) return false;
+  const domain = address
+    .slice(at + 1)
+    .trim()
+    .toLowerCase()
+    .replace(/\.$/u, '');
+  return domain === 'invalid' || domain.endsWith('.invalid');
+}
+
 export function createResendProvider(
   configuration: ResendConfiguration,
 ): EmailProviderPort {
@@ -86,6 +102,18 @@ export function createResendProvider(
           outcome: 'rejected',
           failureClass: 'permanent',
           failureCode: 'provider_not_configured',
+        };
+      }
+
+      if (isUndeliverableRecipient(message.to)) {
+        // RFC 2606 reserves `.invalid` so that it can never resolve: a closed
+        // account's tombstone address and every synthetic account sit there.
+        // Handing one to the provider could only bounce, at the cost of the
+        // sending domain's reputation, so it never leaves this process.
+        return {
+          outcome: 'rejected',
+          failureClass: 'permanent',
+          failureCode: 'reserved_domain',
         };
       }
 

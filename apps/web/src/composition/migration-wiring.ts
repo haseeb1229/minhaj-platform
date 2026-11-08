@@ -102,6 +102,7 @@ export function migrationDependencies(input: {
     decisions: createMigrationDecisionService({
       decisions: createMigrationDecisions(),
       read,
+      sources,
       topics,
       authority,
     }),
@@ -113,7 +114,13 @@ export function migrationDependencies(input: {
       authority,
     }),
     promotion: createMigrationPromotionService({ promotions, authority }),
-    read: createMigrationReadService({ read, publication, promotions, authority }),
+    read: createMigrationReadService({
+      read,
+      publication,
+      promotions,
+      sources,
+      authority,
+    }),
   };
 }
 
@@ -250,8 +257,10 @@ async function* once(bytes: Uint8Array): AsyncGenerator<Uint8Array> {
  * only against the checksum scanned. The bytes are stored EXACTLY as fetched —
  * no image re-encoding — because they are provenance evidence and Migration
  * compares their checksum with what it fetched. Nothing serves them: no route
- * and no serving policy names a migrated asset, so a stored file is never
- * public whatever its scan verdict.
+ * and no serving policy names the acquired bytes, so a stored file is never
+ * public whatever its scan verdict. (R2: a public COPY is shown to a rights
+ * reviewer only through the administrative preview, and to the public only
+ * through the owning domain's route once a person cleared it.)
  */
 export function migrationAssetStorage(
   storage: () => Promise<StorageServicePort>,

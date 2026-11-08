@@ -778,6 +778,7 @@ describe('pipeline: every content kind end to end', () => {
     else expect(row.payload).not.toContain('person@example.com');
     const decisions = createMigrationDecisionService({
       decisions: world.store.decisionPort,
+      sources: world.store.sourcePort,
       read: world.store.readPort,
       topics: new FakeTopics(),
       authority: world.authority,

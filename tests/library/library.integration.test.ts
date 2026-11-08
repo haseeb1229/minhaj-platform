@@ -653,6 +653,58 @@ live('Phase 8 Library against real SQL Server and real Storage', () => {
         );
       }
     });
+
+    it('orders a page A–Z by the title shown, or newest publication first (R2)', async () => {
+      // An isolating year range: nothing else in this database was published
+      // in it, so the page holds exactly these Works.
+      const make = async (name: string, year: number, state: 'published' | 'draft') => {
+        const work = await service.saveWork(
+          administrator,
+          null,
+          null,
+          workInput({
+            state,
+            labels: [
+              { locale: 'ar', title: `ترتيب ${name}`, description: '' },
+              { locale: 'en', title: `Order proof ${name}`, description: '' },
+            ],
+          }),
+        );
+        await service.saveEdition(
+          administrator,
+          null,
+          null,
+          editionInput(work.id, { publicationYear: year }),
+        );
+        return work.id;
+      };
+      const zeta = await make('Zeta', 1702, 'published');
+      const alpha = await make('Alpha', 1701, 'published');
+      const mu = await make('Mu', 1703, 'published');
+      const hidden = await make('Beta', 1702, 'draft');
+      const range = { from: 1701, to: 1703 };
+
+      const byTitle = await publicReads.works({
+        ...range,
+        sort: 'title',
+        titleLocale: 'en',
+      });
+      expect(byTitle.items.map((work) => work.id)).toEqual([alpha, mu, zeta]);
+
+      const newest = await publicReads.works({
+        ...range,
+        sort: 'newest',
+        titleLocale: 'en',
+      });
+      expect(newest.items.map((work) => work.id)).toEqual([mu, zeta, alpha]);
+
+      // The reader order never widens the public predicate.
+      expect(byTitle.items.map((work) => work.id)).not.toContain(hidden);
+      expect(byTitle.hasMore).toBe(false);
+      // Paging continues the same order: the second page of three is empty.
+      const next = await publicReads.works({ ...range, sort: 'title', offset: 25 });
+      expect(next.items).toEqual([]);
+    });
   });
 
   /* ---------------------------------------------------------------------- */

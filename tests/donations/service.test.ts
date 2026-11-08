@@ -1526,6 +1526,7 @@ function admin(
       if (method === 'exportRows') return options.rows ?? [];
       if (method === 'requestReconcile') return w.store.get(DONATION_ID)?.record ?? null;
       if (method === 'campaigns') return [];
+      if (method === 'attentionCount') return 4;
       return { id: CAMPAIGN_ID };
     },
     w.log,
@@ -1581,6 +1582,14 @@ describe('Donations administration', () => {
     });
     expect(await failure(service.donation(operator, DONATION_ID))).toBe('denied');
     expect(await failure(service.campaign(operator, CAMPAIGN_ID))).toBe('denied');
+  });
+
+  it('counts the attention queue only for a holder of donations.read (R2)', async () => {
+    const denied = admin({ permissions: ['donations.administer', 'donations.refund'] });
+    expect(await failure(denied.service.attentionCount(operator))).toBe('denied');
+    expect(denied.calls).toEqual([]);
+    const allowed = admin({ permissions: ['donations.read'] });
+    expect(await allowed.service.attentionCount(operator)).toBe(4);
   });
 
   it('with the key, a malformed input is invalid and reaches no port', async () => {

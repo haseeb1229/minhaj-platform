@@ -352,6 +352,7 @@ live('Phase 29 Migration & Provenance persistence against real SQL Server', () =
       readonly categories?: readonly { readonly key: string; readonly label: string }[];
       readonly duplicates?: Parameters<MigrationPipelinePort['stage']>[0]['duplicates'];
       readonly body?: string;
+      readonly invalid?: boolean;
     } = {},
   ): Promise<{ readonly stagedRecordId: string; readonly revision: number }> {
     const fetched = await fetchItem(source, runId, item, options.body);
@@ -373,8 +374,8 @@ live('Phase 29 Migration & Provenance persistence against real SQL Server', () =
       provenance: PROVENANCE,
       inputChecksum: fetched.checksum,
       producedAt: new Date(),
-      validation: 'valid',
-      issues: [],
+      validation: options.invalid === true ? 'invalid' : 'valid',
+      issues: options.invalid === true ? ['provider-missing'] : [],
       personalData: 'none',
       clearanceOfStagedRecordId: null,
       findings: [],
@@ -1323,6 +1324,87 @@ live('Phase 29 Migration & Provenance persistence against real SQL Server', () =
   /* ===========================================================================
    * Publication, rollback and promotion
    * ========================================================================= */
+
+  it('reads a run’s run-wide candidates exactly: approval and manifest sets, oldest first, with their versions (R2)', async () => {
+    const source = await fixtureSource();
+    const run = await openRun(source);
+    await discover(source, run, ['r2-a', 'r2-b', 'r2-c', 'r2-d', 'r2-e']);
+    const items = await pending(run.run.id);
+    expect(items).toHaveLength(5);
+    const staged: string[] = [];
+    for (const [index, item] of items.entries())
+      staged.push(
+        (await stage(source, run.run.id, item, { invalid: index === 1 })).stagedRecordId,
+      );
+    const [kept, , other, approved, last] = staged as [
+      string,
+      string,
+      string,
+      string,
+      string,
+    ];
+    await approve(approved);
+    await completeRun(run);
+
+    expect(await world.reader.runApprovalCounts(run.run.id)).toEqual({
+      pending: 4,
+      candidates: 3,
+      invalid: 1,
+      flagged: 0,
+      cleared: 0,
+      reviewOnly: 0,
+      awaitingDuplicate: 0,
+    });
+    const keys = await world.reader.approvalCandidateKeys(run.run.id, 10_000);
+    const versions = await Promise.all(
+      [kept, other, last].map(
+        async (id) => (await world.reader.stagedDetail(id))!.version,
+      ),
+    );
+    expect(keys).toEqual([
+      { id: kept, version: versions[0] },
+      { id: other, version: versions[1] },
+      { id: last, version: versions[2] },
+    ]);
+    expect(await world.reader.approvalCandidateKeys(run.run.id, 1)).toEqual([keys[0]]);
+    // No duplicate candidate names any of the run's records.
+    for (const item of items)
+      expect(await world.reader.hasOpenDuplicate(item.recordId)).toBe(false);
+    const page = await world.reader.approvalCandidates({
+      runId: run.run.id,
+      offset: 0,
+      limit: 25,
+    });
+    expect(page.total).toBe(3);
+    expect(page.rows.map((row) => row.id)).toEqual([kept, other, last]);
+
+    const manifestKeys = await world.reader.manifestCandidateKeys(run.run.id, 10_000);
+    expect(manifestKeys.map((key) => key.id)).toEqual([approved]);
+    // Once a live manifest holds it, it is no longer a candidate.
+    await world.publication.createManifest({
+      id: randomUUID(),
+      runId: run.run.id,
+      stagedRecordIds: [approved],
+      actorId: operator,
+      now: new Date(),
+    });
+    expect(await world.reader.manifestCandidateKeys(run.run.id, 10_000)).toEqual([]);
+
+    // No acquisition: no rights candidate on any host, and no row by id.
+    const host = source.hosts[0]!;
+    expect(
+      (
+        await world.reader.rightsCandidates({
+          runId: run.run.id,
+          host,
+          offset: 0,
+          limit: 25,
+        })
+      ).total,
+    ).toBe(0);
+    expect(await world.reader.rightsCandidateKeys(run.run.id, host, 10_000)).toEqual([]);
+    expect(await world.reader.asset(randomUUID())).toBeNull();
+  });
 
   it('refuses a manifest over a run that did not complete balanced', async () => {
     const source = await fixtureSource();

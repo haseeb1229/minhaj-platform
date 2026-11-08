@@ -320,6 +320,22 @@ export const salePointInputSchema = z
     state: libraryStateSchema,
   })
   .strict();
+/**
+ * How a public listing of Works is ordered (R2).
+ *
+ *   `null`     the stable catalogue order (by slug) — what every caller that
+ *              does not ask for an order receives, unchanged;
+ *   `title`    A–Z by the title a reader of `titleLocale` is shown: the label
+ *              in that locale, else the Work's primary-locale label;
+ *   `newest`   the latest publication year among the Work's published
+ *              Editions first, Works with no recorded year last, then A–Z.
+ *
+ * Every order ends on the identifier, so it is total and a page never repeats
+ * or skips a Work.
+ */
+export const librarySortSchema = z.enum(['title', 'newest']);
+export type LibrarySort = z.infer<typeof librarySortSchema>;
+
 export const libraryQuerySchema = z
   .object({
     offset: z.number().int().min(0).max(25_000).default(0),
@@ -329,6 +345,9 @@ export const libraryQuerySchema = z
     from: z.number().int().min(1).max(9999).nullable().default(null),
     to: z.number().int().min(1).max(9999).nullable().default(null),
     downloads: z.boolean().default(false),
+    sort: librarySortSchema.nullable().default(null),
+    /** The interface locale a `title` order reads titles in; null reads primary titles. */
+    titleLocale: localeSchema.nullable().default(null),
   })
   .strict()
   .refine((v) => v.from === null || v.to === null || v.from <= v.to);

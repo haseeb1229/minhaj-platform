@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyProviderStatus,
   createResendProvider,
+  isUndeliverableRecipient,
   providerFailureCode,
 } from '../../packages/database/src/adapters/email/provider.ts';
 
@@ -89,6 +90,58 @@ describe('an unconfigured provider', () => {
   });
 });
 
+describe('a reserved `.invalid` recipient', () => {
+  it('recognises the reserved top-level domain, and nothing else', () => {
+    for (const address of [
+      'amina.student@demo.minhaj.invalid',
+      'closed-1@closed.invalid',
+      'x@INVALID',
+      'x@Proof.Invalid.',
+      'a@b@demo.invalid',
+    ])
+      expect(isUndeliverableRecipient(address), address).toBe(true);
+    for (const address of [
+      'someone@example.org',
+      'someone@invalid.example.org',
+      'someone@notinvalid',
+      'no-at-sign.invalid',
+    ])
+      expect(isUndeliverableRecipient(address), address).toBe(false);
+  });
+
+  it('is refused permanently WITHOUT contacting the provider', async () => {
+    // The endpoint would hang (TEST-NET-3), so an immediate, permanent
+    // `reserved_domain` proves no request was made.
+    const previous = process.env['RESEND_BASE_URL'];
+    process.env['RESEND_BASE_URL'] = 'http://203.0.113.1:9';
+    try {
+      const provider = createResendProvider({
+        apiKey: 're_synthetic_sentinel_not_a_real_key',
+        senderAddress: 'no-reply@proof.invalid',
+        senderName: 'Minhaj',
+        timeoutMs: 5_000,
+      });
+      const started = Date.now();
+      const outcome = await provider.send({
+        to: 'amina.student@demo.minhaj.invalid',
+        subject: 'Proof',
+        html: '<p>Proof</p>',
+        text: 'Proof',
+        idempotencyKey: 'reserved-proof-0001',
+      });
+      expect(Date.now() - started).toBeLessThan(1_000);
+      expect(outcome).toEqual({
+        outcome: 'rejected',
+        failureClass: 'permanent',
+        failureCode: 'reserved_domain',
+      });
+    } finally {
+      if (previous === undefined) delete process.env['RESEND_BASE_URL'];
+      else process.env['RESEND_BASE_URL'] = previous;
+    }
+  });
+});
+
 describe('the send is BOUNDED', () => {
   it('imposes a ceiling rather than waiting on the provider indefinitely', async () => {
     // The SDK's send options carry no `AbortSignal`, so the ceiling is a race
@@ -115,7 +168,8 @@ describe('the send is BOUNDED', () => {
 
       const started = Date.now();
       const outcome = await provider.send({
-        to: 'someone@proof.invalid',
+        // An RFC 2606 example domain: a `.invalid` one never reaches the wire.
+        to: 'someone@example.org',
         subject: 'Proof',
         html: '<p>Proof</p>',
         text: 'Proof',

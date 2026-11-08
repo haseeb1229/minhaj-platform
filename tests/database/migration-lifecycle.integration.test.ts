@@ -288,6 +288,8 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'ContactInquiry',
         'Feedback',
         'Asset',
+        // Rebaseline R2 — Storage's WebP derivatives of public pictures.
+        'AssetDerivative',
         // Phase 8 — Library.
         'Work',
         'WorkLabel',

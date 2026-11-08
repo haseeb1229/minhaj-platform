@@ -9,6 +9,7 @@ import {
   isPublishableKind,
   parseStagedPayload,
   rollbackCommandSchema,
+  runManifestSchema,
   type ManifestEntryRecord,
   type ManifestRecord,
   type ManifestState,
@@ -25,7 +26,7 @@ import {
 
 import { legacyUrlDigest } from '../domain/links.ts';
 import { MigrationRefusal } from '../domain/refusal.ts';
-import { ADMINISTER, createGate, guarded } from './shared.ts';
+import { ADMINISTER, candidateFingerprint, createGate, guarded } from './shared.ts';
 
 export interface PublicationSummary {
   readonly manifestId: string;
@@ -74,7 +75,8 @@ function usablePath(path: string): boolean {
  *
  * Dependencies (ports only):
  *  - `publication` — `MigrationPublicationPort`;
- *  - `read`        — `MigrationReadPort` (`run`, to refuse an unreconciled run helpfully);
+ *  - `read`        — `MigrationReadPort` (`run`, to refuse an unreconciled run helpfully;
+ *                    R2: `manifestCandidateKeys`, the set a run-wide manifest is confirmed over);
  *  - `target`      — `MigrationPublicationTargetPort` (Layer 4: one publisher per
  *                    publishable kind, each over its owning domain's public service);
  *  - `authority`   — `MigrationAuthorityPort`;
@@ -82,7 +84,7 @@ function usablePath(path: string): boolean {
  */
 export function createMigrationPublicationService(deps: {
   readonly publication: MigrationPublicationPort;
-  readonly read: Pick<MigrationReadPort, 'run'>;
+  readonly read: Pick<MigrationReadPort, 'run' | 'manifestCandidateKeys'>;
   readonly target: MigrationPublicationTargetPort;
   readonly authority: MigrationAuthorityPort;
   readonly ids?: () => string;
@@ -287,6 +289,49 @@ export function createMigrationPublicationService(deps: {
           id: ids(),
           runId: value.runId,
           stagedRecordIds: value.stagedRecordIds,
+          actorId,
+          now: now(),
+        }),
+      );
+    },
+
+    /**
+     * R2. A draft manifest over the NEXT `runManifestEntries` of a balanced
+     * run's approved, publishable revisions no live manifest holds — the set
+     * the person was shown, confirmed by its size and fingerprint, or
+     * `conflict`. The manifest is then exactly an ordinary one: the same port
+     * act and audit, the same database checks, published only by a verified
+     * publisher.
+     */
+    async createRunManifest(
+      actor: MigrationActor,
+      input: unknown,
+    ): Promise<ManifestRecord> {
+      const { actorId, value } = await gate.authorised(
+        actor,
+        ADMINISTER,
+        runManifestSchema,
+        input,
+      );
+      const run = await guarded(deps.read.run(value.runId));
+      if (run === null) throw new MigrationRefusal('not-found');
+      if (run.state !== 'completed' || run.reconciliation !== 'balanced')
+        throw new MigrationRefusal('run-unreconciled');
+      const keys = await guarded(
+        deps.read.manifestCandidateKeys(value.runId, MIGRATION_LIMITS.runCandidates),
+      );
+      if (
+        keys.length !== value.expectedCount ||
+        candidateFingerprint(keys) !== value.fingerprint
+      )
+        throw new MigrationRefusal('conflict');
+      return guarded(
+        publication.createManifest({
+          id: ids(),
+          runId: value.runId,
+          stagedRecordIds: keys
+            .slice(0, MIGRATION_LIMITS.runManifestEntries)
+            .map((key) => key.id),
           actorId,
           now: now(),
         }),

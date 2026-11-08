@@ -49,6 +49,8 @@ export const LEARNING_REFUSAL_REASONS = Object.freeze([
   'invalid-meeting',
   /** The account is not a participant of that session. */
   'not-participant',
+  /** The class has not started: it cannot be marked held, nor attendance recorded. */
+  'not-started',
   /** A Course cannot leave publication while future classes or confirmed bookings depend on it. */
   'has-classes',
 ] as const);
@@ -61,9 +63,15 @@ export function isLearningRefusalReason(value: unknown): value is LearningRefusa
   return typeof value === 'string' && REASONS.has(value);
 }
 
+// A declared field rather than a parameter property, so the context also loads
+// under plain Node's type stripping — the operations-image tooling composes it
+// (R2, `composition/staging-demo-runner.ts`).
 export class LearningRefusal extends Error {
-  constructor(readonly reason: LearningRefusalReason) {
+  readonly reason: LearningRefusalReason;
+
+  constructor(reason: LearningRefusalReason) {
     super(reason);
+    this.reason = reason;
     this.name = 'LearningRefusal';
   }
 }

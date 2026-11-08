@@ -593,6 +593,14 @@ export interface PublicCity extends PublicPlace {
   readonly updatedAt: Date;
 }
 
+/**
+ * A public Country as a selector or a directory grid offers it (R2): its ISO
+ * code too, so a page can place it in a world region without a second read.
+ */
+export interface PublicCountryChoice extends PublicPlace {
+  readonly code: string;
+}
+
 /** A public City as a selector offers it, with its Region where it has one. */
 export interface PublicCityChoice extends PublicPlace {
   readonly regionId: string | null;

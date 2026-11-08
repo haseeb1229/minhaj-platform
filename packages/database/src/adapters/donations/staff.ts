@@ -69,10 +69,27 @@ function filtersOf(query: Omit<DonationQuery, 'offset'>): Record<string, string>
   };
 }
 
+/** Every donation an attention flag holds, whatever else it is. */
+const ATTENTION_ONLY: Omit<DonationQuery, 'offset'> = {
+  state: null,
+  campaignId: null,
+  environment: null,
+  donor: null,
+  attention: true,
+};
+
 export function createDonationStaff(): DonationStaffPort {
   const db = getDatabaseClient();
 
   return {
+    async attentionCount() {
+      try {
+        return await db.donation.count({ where: whereOf(ATTENTION_ONLY) });
+      } catch (error) {
+        refuse(error);
+      }
+    },
+
     async donations(actorId, query) {
       const where = whereOf(query);
       try {

@@ -6,6 +6,7 @@ import {
   QURAN_AYAH_NUMBER_MAX,
   QURAN_JUZ_PAGE,
   QURAN_LIMITS,
+  QURAN_MODE_POSTURE,
   QURAN_PAGE,
   QURAN_SEARCH_RECORDS_MAX,
   type AyahSearchRecord,
@@ -43,6 +44,7 @@ import {
   stateOf,
   TARGET_BATCH,
   WORK_LIST,
+  type QuranAdmission,
   type StampLayer,
 } from './shared.ts';
 
@@ -55,9 +57,13 @@ import {
  * projection can show canonical text the operator has not activated.
  *
  * ONE PUBLIC PREDICATE FOR EVERY LAYERED WORK, IN THE QUERY (`publicWork`):
- * published, a registered source, and — beside an APPROVED corpus — an approved
- * source. A fixture-sourced work is never shown with approved text, and the
- * sitemap lists ayat only for an approved corpus.
+ * published, and a registered source whose authority the corpus's mode admits.
+ * A fixture-sourced work is never shown with approved or reference text, and
+ * the sitemap lists ayat only for an approved corpus.
+ *
+ * A REFERENCE CORPUS IS INACTIVE UNLESS THE DEPLOYMENT ADMITS IT (Rebaseline
+ * R2). The admission is the composition root's, from server configuration; the
+ * reader never decides it from anything a request carries.
  *
  * NO N+1. A Surah page, a Juz page or a range of one work's texts is ONE
  * bounded query; a batch of search stamps is four, whatever its size.
@@ -245,8 +251,22 @@ function refOf(key: number): QuranRef {
  * The factory
  * ========================================================================= */
 
-export function createQuranPublicReader(): QuranPublicReaderPort {
+/**
+ * `admission` is the DEPLOYMENT's answer, handed in by the composition root:
+ * whether a `reference` corpus may be public here. Required, so no caller can
+ * build a reader without deciding it; anything but an explicit `true` keeps a
+ * reference corpus inactive on every method below.
+ */
+export function createQuranPublicReader(
+  admission: QuranAdmission,
+): QuranPublicReaderPort {
   const db = getDatabaseClient();
+
+  /** May the active corpus be listed in a sitemap? Only where its mode permits. */
+  async function sitemapMode(): Promise<boolean> {
+    const mode = await activeMode(db, admission);
+    return mode !== null && QURAN_MODE_POSTURE[mode].sitemap;
+  }
 
   /** Each Juz's derived range: ONE grouped read over the canonical ayat. */
   async function juzRanges(only: number | null): Promise<PublicJuz[]> {
@@ -402,9 +422,11 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
   return {
     /** Answered with literal domain values, one per mode — nothing else is handed back. */
     async availability() {
-      switch (await activeMode(db)) {
+      switch (await activeMode(db, admission)) {
         case 'approved':
           return { active: true, mode: 'approved' };
+        case 'reference':
+          return { active: true, mode: 'reference' };
         case 'fixture':
           return { active: true, mode: 'fixture' };
         case null:
@@ -415,7 +437,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     /* ---- Canonical structure and text ------------------------------------ */
 
     async surahs() {
-      if ((await activeMode(db)) === null) return [];
+      if ((await activeMode(db, admission)) === null) return [];
       const rows = await db.surah.findMany({
         select: PUBLIC_SURAH,
         orderBy: { number: 'asc' },
@@ -424,13 +446,13 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     },
 
     async surah(number) {
-      if ((await activeMode(db)) === null) return null;
+      if ((await activeMode(db, admission)) === null) return null;
       const row = await db.surah.findUnique({ where: { number }, select: PUBLIC_SURAH });
       return row === null ? null : toSurah(row);
     },
 
     async ayat(surah, from, to) {
-      if ((await activeMode(db)) === null) return [];
+      if ((await activeMode(db, admission)) === null) return [];
       const rows = await db.ayah.findMany({
         where: { surahNumber: surah, ayahNumber: ayahRange(from, to) },
         select: PUBLIC_AYAH,
@@ -441,7 +463,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     },
 
     async ayah(ref) {
-      if ((await activeMode(db)) === null) return null;
+      if ((await activeMode(db, admission)) === null) return null;
       const row = await db.ayah.findUnique({
         where: {
           surahNumber_ayahNumber: { surahNumber: ref.surah, ayahNumber: ref.ayah },
@@ -452,18 +474,19 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     },
 
     async juzList() {
-      if ((await activeMode(db)) === null) return [];
+      if ((await activeMode(db, admission)) === null) return [];
       return juzRanges(null);
     },
 
     async juz(number) {
-      if ((await activeMode(db)) === null) return null;
+      if ((await activeMode(db, admission)) === null) return null;
       return (await juzRanges(Math.trunc(number)))[0] ?? null;
     },
 
     async juzAyat(number, offset) {
       const skip = boundedOffset(offset);
-      if ((await activeMode(db)) === null) return { items: [], total: 0, offset: skip };
+      if ((await activeMode(db, admission)) === null)
+        return { items: [], total: 0, offset: skip };
       const where = { juzNumber: number };
       const [total, rows] = await Promise.all([
         db.ayah.count({ where }),
@@ -481,7 +504,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     /* ---- Layered works ----------------------------------------------------- */
 
     async translations() {
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return [];
       const rows = await db.quranTranslation.findMany({
         where: publicWork(mode),
@@ -493,7 +516,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     },
 
     async translation(slug) {
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return null;
       const row = await db.quranTranslation.findFirst({
         where: { slug, ...publicWork(mode) },
@@ -503,7 +526,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     },
 
     async transliterations() {
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return [];
       const rows = await db.quranTransliteration.findMany({
         where: publicWork(mode),
@@ -515,7 +538,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     },
 
     async transliteration(slug) {
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return null;
       const row = await db.quranTransliteration.findFirst({
         where: { slug, ...publicWork(mode) },
@@ -525,7 +548,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     },
 
     async tafsirs() {
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return [];
       const rows = await db.quranTafsir.findMany({
         where: publicWork(mode),
@@ -537,7 +560,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     },
 
     async tafsir(slug) {
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return null;
       const row = await db.quranTafsir.findFirst({
         where: { slug, ...publicWork(mode) },
@@ -547,7 +570,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     },
 
     async translationTexts(workId, surah, from, to) {
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return [];
       const rows = await db.quranTranslationText.findMany({
         where: {
@@ -564,7 +587,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     },
 
     async transliterationTexts(workId, surah, from, to) {
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return [];
       const rows = await db.quranTransliterationText.findMany({
         where: {
@@ -581,7 +604,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     },
 
     async tafsirEntries(workId, surah, from, to) {
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return [];
       const range = ayahRange(from, to);
       const rows = await db.quranTafsirText.findMany({
@@ -608,7 +631,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
 
     async tafsirEntryPage(workId, offset) {
       const skip = boundedOffset(offset);
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return { items: [], total: 0, offset: skip };
       const where = { tafsirId: workId, tafsir: publicWork(mode) };
       const [total, rows] = await Promise.all([
@@ -633,7 +656,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     /* ---- Recitations ------------------------------------------------------- */
 
     async recitations() {
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return [];
       const rows = await db.quranRecitation.findMany({
         where: publicWork(mode),
@@ -645,7 +668,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     },
 
     async recitation(slug) {
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return null;
       const row = await db.quranRecitation.findFirst({
         where: { slug, ...publicWork(mode) },
@@ -655,7 +678,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     },
 
     async recitationsByReciter(personId) {
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return [];
       const rows = await db.quranRecitation.findMany({
         where: { personId, ...publicWork(mode) },
@@ -667,7 +690,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     },
 
     async recitationSegments(recitationId, surah) {
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return [];
       const rows = await db.quranRecitationSegment.findMany({
         where: {
@@ -704,7 +727,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     /* ---- Tajweed ----------------------------------------------------------- */
 
     async tajweedRules() {
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return [];
       const rows = await db.quranTajweedRule.findMany({
         where: publicWork(mode),
@@ -716,7 +739,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     },
 
     async tajweedRule(slug) {
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return null;
       const row = await db.quranTajweedRule.findFirst({
         where: { slug, ...publicWork(mode) },
@@ -729,7 +752,8 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
 
     async topicAyat(topicId, offset) {
       const skip = boundedOffset(offset);
-      if ((await activeMode(db)) === null) return { items: [], total: 0, offset: skip };
+      if ((await activeMode(db, admission)) === null)
+        return { items: [], total: 0, offset: skip };
       const where = { topicId };
       const [total, rows] = await Promise.all([
         db.quranTopic.count({ where }),
@@ -759,7 +783,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     /* ---- Sitemap: an APPROVED corpus only --------------------------------- */
 
     async ayahSitemap(offset, limit) {
-      if ((await activeMode(db)) !== 'approved') return [];
+      if (!(await sitemapMode())) return [];
       const rows = await db.ayah.findMany({
         select: { surahNumber: true, ayahNumber: true, updatedAt: true },
         orderBy: [...CANONICAL_ORDER],
@@ -774,21 +798,21 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
     },
 
     async ayahSitemapCount() {
-      if ((await activeMode(db)) !== 'approved') return 0;
+      if (!(await sitemapMode())) return 0;
       return db.ayah.count();
     },
 
     /* ---- Search ------------------------------------------------------------ */
 
     async searchAyah(ref) {
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return null;
       const [record] = await currentRecords(mode, [ref]);
       return record ?? null;
     },
 
     async searchAyahScopes(after, limit) {
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return [];
       const ayat = await db.ayah.findMany({
         where: citationsAfter(after),
@@ -819,7 +843,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
       if (refs.length === 0) return [];
       if (refs.length > TARGET_BATCH)
         throw new Error('Quran search batch exceeds its bound.');
-      if ((await activeMode(db)) === null) return [];
+      if ((await activeMode(db, admission)) === null) return [];
       const rows = await db.ayah.findMany({
         where: {
           OR: refs.map((ref) => ({ surahNumber: ref.surah, ayahNumber: ref.ayah })),
@@ -834,7 +858,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
       if (refs.length === 0) return [];
       if (refs.length > QURAN_SEARCH_RECORDS_MAX)
         throw new Error('Quran search record batch exceeds its bound.');
-      const mode = await activeMode(db);
+      const mode = await activeMode(db, admission);
       if (mode === null) return [];
       const distinct = new Map(refs.map((ref) => [`${ref.surah}:${ref.ayah}`, ref]));
       return currentRecords(mode, [...distinct.values()]);
@@ -844,7 +868,7 @@ export function createQuranPublicReader(): QuranPublicReaderPort {
 
     async segmentAsset(recitationId, segmentId) {
       const [mode, row] = await Promise.all([
-        activeMode(db),
+        activeMode(db, admission),
         db.quranRecitationSegment.findFirst({
           where: { id: segmentId, recitationId },
           select: {

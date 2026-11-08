@@ -404,6 +404,12 @@ describe.skipIf(!databaseConfigured)(
         'migration.publish',
         'migration.read',
       ];
+      /**
+       * Phase 30-RD: the narrow personal-data false-positive clearance,
+       * EXTERNALLY GATED like `migration.publish` — catalogued and grantable,
+       * bundled into no role (SECURITY_BASELINE.md §3.5).
+       */
+      const PHASE_30RD_KEYS = ['migration.clearPersonalData'];
       const PHASE_29_BUNDLED = ['migration.administer', 'migration.read'];
 
       /**
@@ -429,6 +435,7 @@ describe.skipIf(!databaseConfigured)(
         'messaging.moderate',
         'donations.refund',
         'migration.publish',
+        'migration.clearPersonalData',
       ];
 
       it('is exactly what the delivered migrations seeded', async () => {
@@ -456,6 +463,7 @@ describe.skipIf(!databaseConfigured)(
             ...PHASE_26_KEYS,
             ...PHASE_27_KEYS,
             ...PHASE_29_KEYS,
+            ...PHASE_30RD_KEYS,
           ].sort(),
         );
 
@@ -583,7 +591,7 @@ describe.skipIf(!databaseConfigured)(
           PHASE_27_KEYS,
         );
         expect(keys.filter((key) => key.startsWith('migration.')).sort()).toEqual(
-          PHASE_29_KEYS,
+          [...PHASE_29_KEYS, ...PHASE_30RD_KEYS].sort(),
         );
       });
 

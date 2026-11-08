@@ -30,7 +30,8 @@ import {
  *              address; its name and ISO 3166-1 alpha-2 code come from the FIXED
  *              table keyed by the page's path — the name exactly as the listing
  *              writes it. A path not in the table is no country: never guessed.
- *              "Korea" is deliberately absent — it does not say which Korea.
+ *              (R2) The table holds the page's 39 countries as listed on
+ *              2026-11-07; "Korea" is in it only on its own page's evidence.
  */
 
 export const MINHAJ_OVERSEAS_ADAPTER_KEY = 'minhaj-overseas-country';
@@ -46,7 +47,10 @@ export const MINHAJ_OVERSEAS_COUNTRIES: Readonly<
   Austria: { name: 'Austria', code: 'AT' },
   Bahrain: { name: 'Bahrain', code: 'BH' },
   Bangladesh: { name: 'Bangladesh', code: 'BD' },
+  Belgium: { name: 'Belgium', code: 'BE' },
   Canada: { name: 'Canada', code: 'CA' },
+  'Central-African-Republic': { name: 'Central African Republic', code: 'CF' },
+  Cyprus: { name: 'Cyprus', code: 'CY' },
   Denmark: { name: 'Denmark', code: 'DK' },
   Egypt: { name: 'Egypt', code: 'EG' },
   Finland: { name: 'Finland', code: 'FI' },
@@ -61,13 +65,22 @@ export const MINHAJ_OVERSEAS_COUNTRIES: Readonly<
   Italy: { name: 'Italy', code: 'IT' },
   Japan: { name: 'Japan', code: 'JP' },
   Jordan: { name: 'Jordan', code: 'JO' },
+  // R2: the listing writes only "Korea"; the country page's own news names the
+  // Republic of Korea ("Global Peace Conference in South Korea", tid 58679,
+  // surveyed 2026-11-07), so the code is that evidence, not a guess.
+  Korea: { name: 'Korea', code: 'KR' },
+  Kuwait: { name: 'Kuwait', code: 'KW' },
   Malaysia: { name: 'Malaysia', code: 'MY' },
   Netherlands: { name: 'Netherlands', code: 'NL' },
+  'New-Zealand': { name: 'New Zealand', code: 'NZ' },
   Norway: { name: 'Norway', code: 'NO' },
   Philippines: { name: 'Philippines', code: 'PH' },
+  Somalia: { name: 'Somalia', code: 'SO' },
   'South-Africa': { name: 'South Africa', code: 'ZA' },
   Spain: { name: 'Spain', code: 'ES' },
   Sweden: { name: 'Sweden', code: 'SE' },
+  Switzerland: { name: 'Switzerland', code: 'CH' },
+  Syria: { name: 'Syria', code: 'SY' },
   Taiwan: { name: 'Taiwan', code: 'TW' },
   Turkey: { name: 'Turkey', code: 'TR' },
   UAE: { name: 'UAE', code: 'AE' },

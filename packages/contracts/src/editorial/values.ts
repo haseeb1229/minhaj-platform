@@ -331,6 +331,30 @@ export const workflowCommandSchema = z.strictObject({
 });
 export type WorkflowCommand = z.infer<typeof workflowCommandSchema>;
 
+/** At most one review-queue page of records is named in one batch. */
+export const EDITORIAL_BATCH_LIMIT = 25;
+
+/**
+ * R2. A second administrator's "approve and publish" over a SELECTION of one
+ * kind's in-review records, each named at the version they were shown. Each
+ * record is then approved and published through the single-record workflow —
+ * checked and audited on its own, exactly as two single transitions are.
+ */
+export const workflowBatchSchema = z.strictObject({
+  kind: editorialKindSchema,
+  items: z
+    .array(
+      z.strictObject({
+        id: editorialIdSchema,
+        expectedVersion: z.number().int().positive(),
+      }),
+    )
+    .min(1)
+    .max(EDITORIAL_BATCH_LIMIT)
+    .refine((items) => new Set(items.map((item) => item.id)).size === items.length),
+});
+export type WorkflowBatch = z.infer<typeof workflowBatchSchema>;
+
 export interface EditorialSummary {
   readonly id: string;
   readonly slug: string;

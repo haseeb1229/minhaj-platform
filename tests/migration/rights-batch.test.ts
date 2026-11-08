@@ -46,6 +46,7 @@ function world(options: { readonly refuse?: ReadonlyMap<string, Error> } = {}) {
         if (failure !== undefined) throw failure;
       },
     },
+    sources: store.sourcePort,
     read: store.readPort,
     topics: new FakeTopics(),
     authority: new FakeAuthority(),

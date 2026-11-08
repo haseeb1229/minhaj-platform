@@ -11,6 +11,7 @@ import {
   createRecitationAssetPolicy,
   type RecitationAssetRequest,
 } from '@/contexts/quran';
+import { religiousReferencePreviewAdmitted } from '@/config/religious-reference';
 import { storageRuntime } from './storage';
 
 /**
@@ -31,7 +32,9 @@ import { storageRuntime } from './storage';
 let reader: QuranPublicReaderPort | null = null;
 
 function publicReader(): QuranPublicReaderPort {
-  return (reader ??= createQuranPublicReader());
+  return (reader ??= createQuranPublicReader({
+    admitReference: religiousReferencePreviewAdmitted(),
+  }));
 }
 
 /** The decision for one public request for a segment's audio. */

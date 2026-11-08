@@ -10,6 +10,7 @@ import {
 
 import {
   AUTHORISED_SOURCES,
+  MINHAJ_BOOKS_AUTHORS,
   MINHAJ_BOOKS_LISTINGS,
   MINHAJ_ORG_ARCHIVE_EXCLUSIONS,
   MINHAJ_ORG_ARCHIVE_TIDS,
@@ -84,7 +85,8 @@ describe('the authorised source catalogue', () => {
     expect(new Set(bindings).size).toBe(bindings.length);
     for (const binding of bindings) {
       expect(PAGE_BINDINGS).toContain(binding);
-      expect(binding.startsWith('/explore/')).toBe(true);
+      // An Explore route, or (R2) the contact route, which shows its Page above the form.
+      expect(binding.startsWith('/explore/') || binding === '/contact').toBe(true);
     }
     for (const tid of Object.keys(MINHAJ_ORG_PAGE_BINDINGS))
       expect(tid).toMatch(/^[1-9][0-9]{0,8}$/);
@@ -98,9 +100,28 @@ describe('the authorised source catalogue', () => {
     expect(new Set(MINHAJ_ORG_PROFILE_TIDS).size).toBe(MINHAJ_ORG_PROFILE_TIDS.length);
   });
 
-  it('names exactly the three owner-approved archives and their posts, each once (Phase 30-RD)', () => {
-    expect([...MINHAJ_ORG_COLLECTION_IDS]).toEqual(['12', '1', '2']);
-    expect(MINHAJ_ORG_ARCHIVE_TIDS).toHaveLength(114);
+  it('names the owner-approved archives and their posts, each once (Phase 30-RD, R2)', () => {
+    // The three of Phase 30-RD first, then the eleven of the R2 extension of §3.8.
+    expect([...MINHAJ_ORG_COLLECTION_IDS]).toEqual([
+      '12',
+      '1',
+      '2',
+      '9',
+      '5',
+      '4',
+      '3',
+      '11',
+      '54',
+      '7',
+      '6',
+      '13',
+      '52',
+      '67',
+    ]);
+    // 114 posts of the first three (in their original order), then 405 more.
+    expect(MINHAJ_ORG_ARCHIVE_TIDS).toHaveLength(519);
+    expect(MINHAJ_ORG_ARCHIVE_TIDS.slice(0, 2)).toEqual(['48059', '47265']);
+    expect(MINHAJ_ORG_ARCHIVE_TIDS[113]).toBe('3804');
     // Exactly the two entries found unmigratable, each a listed post with a reason.
     expect(Object.keys(MINHAJ_ORG_ARCHIVE_EXCLUSIONS).sort()).toEqual(['3484', '41122']);
     for (const [tid, reason] of Object.entries(MINHAJ_ORG_ARCHIVE_EXCLUSIONS)) {
@@ -152,6 +173,50 @@ ${cards
   it('walks the Stage-1A Hadith category FIRST, so a wider run keeps its records', () => {
     expect(MINHAJ_BOOKS_LISTINGS[0]).toBe('/english/cat/The-Hadith/');
     expect(new Set(MINHAJ_BOOKS_LISTINGS).size).toBe(MINHAJ_BOOKS_LISTINGS.length);
+    // R2: every English category, each a category path the adapter walks.
+    expect(MINHAJ_BOOKS_LISTINGS).toHaveLength(33);
+    for (const listing of MINHAJ_BOOKS_LISTINGS)
+      expect(listing).toMatch(/^\/english\/cat\/[A-Za-z0-9][A-Za-z0-9-]*\/$/);
+  });
+
+  it('reads each Minhaj Books author once, never one already public as a profile (R2)', () => {
+    expect(new Set(MINHAJ_BOOKS_AUTHORS).size).toBe(MINHAJ_BOOKS_AUTHORS.length);
+    for (const already of [
+      'Dr-Muhammad-Tahir-ul-Qadri',
+      'Dr-Hassan-Mohi-ud-Din-Qadri',
+      'Dr-Hussain-Mohi-ud-Din-Qadri',
+      'Dr-Farid-ud-Din-Qadri',
+    ])
+      expect(MINHAJ_BOOKS_AUTHORS).not.toContain(already);
+    const authors = authorisedSource('minhajbooks-authors');
+    expect(authors).toMatchObject({
+      contentKind: 'people.person',
+      hosts: ['www.minhajbooks.com'],
+      assetHosts: [],
+    });
+  });
+
+  it('registers the R2 listings on hosts already registered, each with its own language', () => {
+    const expected: Record<string, readonly [string, string | null, string]> = {
+      'minhaj-org-press-releases-ur': ['editorial.press-release', 'ur', 'www.minhaj.org'],
+      'minhaj-org-articles-ur': ['editorial.article', 'ur', 'www.minhaj.org'],
+      'minhaj-info-issues-ulama': ['library.magazine-issue', 'ur', 'minhaj.info'],
+      'minhaj-tv-videos-ur': ['media.video', 'ur', 'www.minhaj.tv'],
+      'minhajbooks-authors': ['people.person', 'en', 'www.minhajbooks.com'],
+    };
+    const earlierHosts = new Set(
+      AUTHORISED_SOURCES.filter((source) => !(source.key in expected)).flatMap(
+        (source) => source.hosts,
+      ),
+    );
+    for (const [key, [kind, language, host]] of Object.entries(expected)) {
+      const source = authorisedSource(key);
+      expect(source?.contentKind).toBe(kind);
+      expect(source?.defaultLanguageCode).toBe(language);
+      expect(source?.hosts).toEqual([host]);
+      // No new host: every R2 source reads a site already registered.
+      expect(earlierHosts.has(host)).toBe(true);
+    }
   });
 
   it('builds every registration’s adapter, of the registration’s own kind', () => {

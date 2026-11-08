@@ -35,3 +35,4 @@ export {
   createPeoplePersistence,
   createPeopleReader,
 } from './persistence.ts';
+export { publishedPortraitReferences } from './portrait-references.ts';

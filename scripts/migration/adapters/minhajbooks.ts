@@ -3,6 +3,7 @@ import {
   type DiscoveredItem,
   type MigrationSourceAdapter,
   type ParseResult,
+  type ParsedPerson,
   type ParsedWork,
 } from '@minhaj/contracts/migration';
 
@@ -15,6 +16,7 @@ import {
 import {
   checkSelection,
   firstPartyImage,
+  fixedItemDiscovery,
   nonEmpty,
   pathOf,
   retrieveOnce,
@@ -305,6 +307,136 @@ export function createMinhajBooksWorkAdapter(
           downloadAssetUrl: null,
           cover: cover?.image ?? null,
         },
+      };
+      return { kind: 'parsed', record };
+    },
+  };
+}
+
+/* ===========================================================================
+ * R2: the publisher's own author profiles — `people.person`
+ * ========================================================================= */
+
+export const MINHAJ_BOOKS_AUTHOR_ADAPTER_KEY = 'minhajbooks-author';
+
+/** An author page's path segment, as the site's author index links it. */
+const AUTHOR_SLUG = /^[A-Z][A-Za-z]*(?:-[A-Za-z]+){1,9}$/;
+const AUTHOR_PAGE_PATTERN = /^\/english\/author\/([A-Z][A-Za-z]*(?:-[A-Za-z]+){1,9})\/$/;
+
+export interface MinhajBooksAuthorAdapterOptions {
+  readonly baseUrl?: string;
+  /** The catalogue's author slugs (`Dr-Naeem-Mushtaq`) — a fixed, reviewed list. */
+  readonly authors: readonly string[];
+  /** The operator's `--items`: catalogued slugs to narrow to, or none for all. */
+  readonly items: readonly string[];
+  readonly selection: SourceSelection;
+}
+
+/**
+ * R2. A Minhaj Books author page (`/english/author/{Slug}/`) as one public
+ * profile: the publisher's own author box, `div.mib-author-box`, and nothing
+ * else on the page.
+ *
+ *   name       `.mib-author-name`, exactly as written;
+ *   biography  the exact source of the FULL biography paragraph
+ *              (`#mibAuthorBioFull`), else the box's only biography paragraph —
+ *              never the shortened teaser, which the site cuts mid-sentence;
+ *   portrait   the box's photo, a first-party JPEG or PNG on this host, with
+ *              the page's own copyright notice as rights evidence;
+ *   language   English: the `/english/` interface writes every author box in
+ *              English, and the name's script must agree.
+ *
+ * NOT READ: the social links, the book count, the book grid and the donation
+ * widgets. No contact detail is taken. The book grid links books only by slug,
+ * so no Work is related to the profile here.
+ */
+export function createMinhajBooksAuthorAdapter(
+  options: MinhajBooksAuthorAdapterOptions,
+): MigrationSourceAdapter {
+  const base = siteRoot(
+    options.baseUrl ?? MINHAJ_BOOKS_DEFAULT_BASE_URL,
+    MINHAJ_BOOKS_HOST,
+  );
+  checkSelection(options.selection);
+  if (
+    options.authors.length === 0 ||
+    new Set(options.authors).size !== options.authors.length ||
+    !options.authors.every((slug) => AUTHOR_SLUG.test(slug))
+  )
+    throw new Error('the catalogue names distinct author slugs such as Dr-Naeem-Mushtaq');
+  for (const item of options.items)
+    if (!options.authors.includes(item))
+      throw new Error('an item is not in the catalogue');
+  const selected =
+    options.items.length === 0
+      ? options.authors
+      : options.authors.filter((slug) => options.items.includes(slug));
+
+  return {
+    adapterKey: MINHAJ_BOOKS_AUTHOR_ADAPTER_KEY,
+    adapterVersion: '1',
+    parserKey: 'cheerio-minhajbooks-author',
+    parserVersion: '1',
+    contentKind: 'people.person',
+    accessMethod: 'http',
+    discover: fixedItemDiscovery(
+      base,
+      selected.map((slug) => {
+        const externalKey = canonicalSourceUrl(new URL(`/english/author/${slug}/`, base));
+        return {
+          externalKey,
+          originalUrl: externalKey,
+          legacyIdentifier: `author-${slug}`,
+        };
+      }),
+      options.selection.limit,
+    ),
+    retrieve: retrieveOnce,
+
+    parse(evidence): ParseResult {
+      const decoded = decodeHtml(evidence.body, evidence.contentType);
+      if (!decoded.ok) return { kind: 'failed', detail: decoded.detail };
+      const html = decoded.html;
+      const slug = AUTHOR_PAGE_PATTERN.exec(pathOf(evidence.finalUrl) ?? '')?.[1];
+      if (slug === undefined) return { kind: 'excluded', reason: 'not-an-author-page' };
+      if (!options.authors.includes(slug))
+        return { kind: 'excluded', reason: 'not-catalogued' };
+
+      const $ = loadHtml(html);
+      const box = $('div.mib-author-box');
+      if (box.length !== 1) return { kind: 'failed', detail: 'record-structure-missing' };
+      const name = nonEmpty(box.find('.mib-author-name').first().text());
+      if (name === null) return { kind: 'failed', detail: 'title-missing' };
+      if (scriptLocale(name, 'en') !== 'en')
+        return { kind: 'failed', detail: 'primary-locale-undetermined' };
+
+      const full = box.find('#mibAuthorBioFull');
+      const paragraphs = box.find('p.mib-author-bio');
+      const bio = full.length === 1 ? full : paragraphs.length === 1 ? paragraphs : null;
+      const biographyHtml =
+        bio !== null && cleanText(bio.text()).length > 0 ? innerSource(html, bio) : '';
+
+      const photo = box.find('.mib-author-photo img').first();
+      const portrait = firstPartyImage($, {
+        src: photo.attr('src'),
+        alt: nonEmpty(photo.attr('alt')) ?? name,
+        pageUrl: evidence.finalUrl,
+        hosts: [MINHAJ_BOOKS_HOST],
+      });
+
+      const record: ParsedPerson = {
+        kind: 'people.person',
+        name,
+        title: name,
+        primaryLocale: 'en',
+        languageCode: 'en',
+        publishedOn: null,
+        legacyIdentifier: `author-${slug}`,
+        categories: [],
+        links: [],
+        assets: portrait === null ? [] : [portrait.asset],
+        biographyHtml,
+        portrait: portrait?.image ?? null,
       };
       return { kind: 'parsed', record };
     },

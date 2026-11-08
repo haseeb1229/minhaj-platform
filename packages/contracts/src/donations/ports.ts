@@ -329,6 +329,12 @@ export interface DonationRefundPort {
 export interface DonationStaffPort {
   /** Filtered, bounded listing. Audited. */
   donations(actorId: string, query: DonationQuery): Promise<StaffDonationPage>;
+  /**
+   * R2. How many donations carry an ATTENTION flag — automatic progress
+   * stopped and an operator must look. The administration dashboard's count:
+   * a number that names no donor, so it is not an audited access.
+   */
+  attentionCount(): Promise<number>;
   /** One donation with its refunds. Audited as a financial-detail access. */
   donation(actorId: string, id: string): Promise<StaffDonationDetail | null>;
   /** Deterministic, bounded by `DONATION_EXPORT_ROWS`, newest first. Audited. */

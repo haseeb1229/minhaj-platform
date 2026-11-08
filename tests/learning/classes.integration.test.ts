@@ -1272,8 +1272,20 @@ live(
           // The CHECK speaks first: a terminal session holds no address.
         ).toBe(547);
 
-        // Completion of a trial completes its Booking.
+        // Completion of a trial completes its Booking — once the class has begun.
         const booked = await trial(live.id, teacher, 170);
+        expect(
+          await reasonOf(
+            admin.complete({
+              actorId: actor,
+              sessionId: booked.session.session.id,
+              expectedVersion: 1,
+            }),
+          ),
+        ).toBe('not-started');
+        await db.admin.query(
+          `UPDATE [dbo].[ClassSession] SET [startsAt] = DATEADD(minute, -90, SYSUTCDATETIME()), [endsAt] = DATEADD(minute, -30, SYSUTCDATETIME()) WHERE [id] = ${n(booked.session.session.id)};`,
+        );
         const completed = await admin.complete({
           actorId: actor,
           sessionId: booked.session.session.id,
@@ -1545,6 +1557,43 @@ live(
         );
 
         const cancelled = await createSession(scopeId, teacher, schedule(230));
+        // F38: a class that has not started is neither attended nor held — by
+        // its teacher or by the operator — and nothing is written.
+        expect(
+          await reasonOf(
+            teaching.markAttendance({
+              teacher: me,
+              sessionId: cancelled.session.id,
+              accountId: alice,
+              status: 'present',
+            }),
+          ),
+        ).toBe('not-started');
+        expect(
+          await reasonOf(
+            admin.correctAttendance({
+              actorId: actor,
+              sessionId: cancelled.session.id,
+              accountId: alice,
+              status: 'absent',
+            }),
+          ),
+        ).toBe('not-started');
+        expect(
+          await reasonOf(
+            teaching.complete({
+              teacher: me,
+              sessionId: cancelled.session.id,
+              expectedVersion: 1,
+            }),
+          ),
+        ).toBe('not-started');
+        expect(
+          await count(db.admin, 'Attendance', `[sessionId] = ${n(cancelled.session.id)}`),
+        ).toBe(0);
+        expect((await sessionColumns(db.admin, cancelled.session.id))?.state).toBe(
+          'scheduled',
+        );
         await teaching.cancel({
           teacher: me,
           sessionId: cancelled.session.id,

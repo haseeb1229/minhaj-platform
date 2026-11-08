@@ -217,6 +217,8 @@ interface Family extends Shape {
   /** The record table, for the timeline's SQL. Code-owned, never input. */
   readonly table: Prisma.Sql;
   readonly topicTable: Prisma.Sql;
+  /** Its revisions' translations, for the R2 content-language narrowing. */
+  readonly translationTable: Prisma.Sql;
   readonly delegates: (client: Client) => Delegates;
 }
 
@@ -228,6 +230,7 @@ const FAMILIES: Readonly<Record<NewsKind, Family>> = {
     kind: 'news-article',
     table: Prisma.sql`[dbo].[NewsArticle]`,
     topicTable: Prisma.sql`[dbo].[NewsArticleTopic]`,
+    translationTable: Prisma.sql`[dbo].[NewsArticleRevisionTranslation]`,
     issuer: false,
     coverage: false,
     centre: true,
@@ -242,6 +245,7 @@ const FAMILIES: Readonly<Record<NewsKind, Family>> = {
     kind: 'press-release',
     table: Prisma.sql`[dbo].[PressRelease]`,
     topicTable: Prisma.sql`[dbo].[PressReleaseTopic]`,
+    translationTable: Prisma.sql`[dbo].[PressReleaseRevisionTranslation]`,
     issuer: false,
     coverage: false,
     centre: false,
@@ -256,6 +260,7 @@ const FAMILIES: Readonly<Record<NewsKind, Family>> = {
     kind: 'statement',
     table: Prisma.sql`[dbo].[Statement]`,
     topicTable: Prisma.sql`[dbo].[StatementTopic]`,
+    translationTable: Prisma.sql`[dbo].[StatementRevisionTranslation]`,
     issuer: true,
     coverage: false,
     centre: false,
@@ -270,6 +275,7 @@ const FAMILIES: Readonly<Record<NewsKind, Family>> = {
     kind: 'media-coverage',
     table: Prisma.sql`[dbo].[MediaCoverage]`,
     topicTable: Prisma.sql`[dbo].[MediaCoverageTopic]`,
+    translationTable: Prisma.sql`[dbo].[MediaCoverageRevisionTranslation]`,
     issuer: false,
     coverage: true,
     centre: false,
@@ -988,21 +994,35 @@ const batchOf = (ids: readonly string[]) => {
 };
 
 /**
- * The four families as one relation of (kind, id, chronologyAt), filtered. A
- * NewsArticle's and a PressRelease's chronology is its record's own column
- * (Phase 30-R); a Statement's and a MediaCoverage's is its publication instant.
+ * The four families as one relation of (kind, id, chronologyAt, rank),
+ * filtered. A NewsArticle's and a PressRelease's chronology is its record's own
+ * column (Phase 30-R); a Statement's and a MediaCoverage's is its publication
+ * instant.
+ *
+ * R2: `kind` keeps one family's rows only; `language` keeps the records whose
+ * CURRENT revision has a translation in that language; `preferLanguage` ranks
+ * those records 0 and every other 1, for an ordering that puts them first.
+ * Every value is a bound parameter; the tables are code-owned, never input.
  */
 function timelineRows(filter: {
   readonly from: Date | null;
   readonly to: Date | null;
   readonly topicId: string | null;
+  readonly kind?: NewsKind | null | undefined;
+  readonly language?: string | null | undefined;
+  readonly preferLanguage?: string | null | undefined;
 }): Prisma.Sql {
+  const kinds = NEWS_KINDS.filter(
+    (kind) => filter.kind === null || filter.kind === undefined || filter.kind === kind,
+  );
   return Prisma.join(
-    NEWS_KINDS.map((kind) => {
+    kinds.map((kind) => {
       const family = FAMILIES[kind];
       const date = family.lead
         ? Prisma.sql`r.[chronologyAt]`
         : Prisma.sql`r.[publishedAt]`;
+      const translated = (language: string) =>
+        Prisma.sql`EXISTS (SELECT 1 FROM ${family.translationTable} l WHERE l.[ownerId] = r.[id] AND l.[revisionNumber] = r.[currentRevision] AND l.[languageCode] = ${language})`;
       const conditions = [Prisma.sql`r.[state] = N'published'`];
       if (filter.from !== null) conditions.push(Prisma.sql`${date} >= ${filter.from}`);
       if (filter.to !== null) conditions.push(Prisma.sql`${date} < ${filter.to}`);
@@ -1010,7 +1030,13 @@ function timelineRows(filter: {
         conditions.push(
           Prisma.sql`EXISTS (SELECT 1 FROM ${family.topicTable} t WHERE t.[ownerId] = r.[id] AND t.[revisionNumber] = r.[currentRevision] AND t.[topicId] = ${filter.topicId})`,
         );
-      return Prisma.sql`SELECT CAST(${kind} AS NVARCHAR(16)) AS [kind], r.[id], ${date} AS [chronologyAt] FROM ${family.table} r WHERE ${Prisma.join(conditions, ' AND ')}`;
+      if (filter.language !== null && filter.language !== undefined)
+        conditions.push(translated(filter.language));
+      const rank =
+        filter.preferLanguage === null || filter.preferLanguage === undefined
+          ? Prisma.sql`0`
+          : Prisma.sql`CASE WHEN ${translated(filter.preferLanguage)} THEN 0 ELSE 1 END`;
+      return Prisma.sql`SELECT CAST(${kind} AS NVARCHAR(16)) AS [kind], r.[id], ${date} AS [chronologyAt], ${rank} AS [rank] FROM ${family.table} r WHERE ${Prisma.join(conditions, ' AND ')}`;
     }),
     ' UNION ALL ',
   );
@@ -1112,8 +1138,15 @@ export function newsReads(): Pick<
             : new Date(Date.UTC(query.year, query.month, 1));
       const refs = await db().$queryRaw<
         { kind: string; id: string; chronologyAt: Date }[]
-      >`SELECT [kind], [id], [chronologyAt] FROM (${timelineRows({ from, to, topicId: query.topicId })}) AS [timeline]
-        ORDER BY [chronologyAt] DESC, [kind] ASC, [id] ASC
+      >`SELECT [kind], [id], [chronologyAt] FROM (${timelineRows({
+        from,
+        to,
+        topicId: query.topicId,
+        kind: query.kind,
+        language: query.language,
+        preferLanguage: query.preferLanguage,
+      })}) AS [timeline]
+        ORDER BY [rank] ASC, [chronologyAt] DESC, [kind] ASC, [id] ASC
         OFFSET ${offsetOf(query.offset)} ROWS FETCH NEXT ${take + 1} ROWS ONLY`;
       const cards = await cardsFor(
         refs.slice(0, take).map((ref) => ({ kind: ref.kind as NewsKind, id: ref.id })),
@@ -1121,10 +1154,16 @@ export function newsReads(): Pick<
       return { items: cards, more: refs.length > take };
     },
 
-    async newsArchivePeriods() {
+    async newsArchivePeriods(filter) {
       const rows = await db().$queryRaw<{ year: number; month: number; count: number }[]>`
         SELECT TOP (1200) YEAR([chronologyAt]) AS [year], MONTH([chronologyAt]) AS [month], COUNT_BIG(*) AS [count]
-        FROM (${timelineRows({ from: null, to: null, topicId: null })}) AS [timeline]
+        FROM (${timelineRows({
+          from: null,
+          to: null,
+          topicId: null,
+          kind: filter?.kind,
+          language: filter?.language,
+        })}) AS [timeline]
         GROUP BY YEAR([chronologyAt]), MONTH([chronologyAt])
         ORDER BY [year] DESC, [month] ASC`;
       return rows.map((row) => ({

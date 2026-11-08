@@ -141,6 +141,19 @@ export const MIGRATION_LIMITS = Object.freeze({
   note: 500,
   /** Distinct personal-data findings recorded for one revision (Phase 30-RD). */
   findings: 200,
+  /**
+   * R2. The most candidates one run-wide act is confirmed over — a run's whole
+   * approval set, its pictures on one host, or its approved revisions awaiting
+   * a manifest. A larger set is confirmed and decided in its first slice.
+   */
+  runCandidates: 10_000,
+  /**
+   * R2. Items one run-wide act decides per confirmation, each on its own and
+   * audited on its own: well inside the staging edge's 120-second read window.
+   */
+  runChunk: 150,
+  /** R2. Entries one run-wide manifest takes: the publication of one manifest stays bounded. */
+  runManifestEntries: 100,
   title: 240,
   description: 4000,
   url: 2000,
@@ -707,6 +720,55 @@ export const rightsBatchSchema = z
   })
   .strict();
 export type RightsBatch = z.output<typeof rightsBatchSchema>;
+
+/**
+ * R2. What a person confirms a run-wide act over: the size of the candidate
+ * set they were shown and its fingerprint — the SHA-256 of every candidate's
+ * `id:version`, in order, one per line. The service re-reads the set and
+ * refuses `conflict` unless both still match, so the act never reaches an
+ * item the person was not shown, nor one that has moved since.
+ */
+const runConfirmation = {
+  runId: migrationIdSchema,
+  expectedCount: z.number().int().min(1).max(MIGRATION_LIMITS.runCandidates),
+  fingerprint: z.string().regex(/^[0-9a-f]{64}$/),
+};
+
+/**
+ * R2. Approve a run's approval candidates — pending, valid, free of personal
+ * data, of a publishable kind — each through the single review's own checks
+ * and audit, the first `runChunk` of the confirmed set per act.
+ */
+export const runApprovalSchema = z.object({ ...runConfirmation, note }).strict();
+export type RunApproval = z.output<typeof runApprovalSchema>;
+
+/**
+ * R2. Clear for release a run's restricted pictures served by ONE of its
+ * source's registered hosts whose source stated organisational ownership with
+ * evidence and which have a public copy — under the licence, evidence and
+ * holder the person states, each acquisition decided and audited on its own.
+ */
+export const runRightsSchema = z
+  .object({
+    ...runConfirmation,
+    host: z
+      .string()
+      .min(1)
+      .max(253)
+      .regex(/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/),
+    licence: z.enum(['organisation-owned', 'licensed']),
+    licenceEvidence: z.string().trim().min(10).max(1000),
+    rightsHolder: z.string().trim().min(1).max(200),
+  })
+  .strict();
+export type RunRights = z.output<typeof runRightsSchema>;
+
+/**
+ * R2. A draft manifest over the next `runManifestEntries` of a balanced run's
+ * approved, publishable revisions no live manifest holds.
+ */
+export const runManifestSchema = z.object(runConfirmation).strict();
+export type RunManifest = z.output<typeof runManifestSchema>;
 
 export const legacyMappingDecisionSchema = z
   .object({
