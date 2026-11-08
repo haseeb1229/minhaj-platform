@@ -15,22 +15,21 @@ import {
  *
  * WHAT ONLY A BROWSER CAN SHOW. That the address alone decides the interface
  * language — English unprefixed, `/en/…` one permanent hop away, no cookie and
- * no `Accept-Language` ever redirecting anybody; that the header promotes only
- * what the platform actually holds and keeps a real search form and an account
- * entry; that the mobile drawer traps focus and locks the page behind it; that
- * the footer carries the organisation's mark and the one pre-adoption statement
- * and no legal link to an unpublished document; that the private surfaces wear
+ * no `Accept-Language` ever redirecting anybody; that the header always shows
+ * all nine domains with their mega menus, a real search form, an account entry
+ * and Donate; that the mobile drawer traps focus and locks the page behind it;
+ * that the footer is the full six-column index with the legal documents, the
+ * organisation's mark and the one pre-adoption statement; that every link the
+ * header and footer offer answers; that the private surfaces wear
  * the same product bar; that nothing scrolls sideways at 320 pixels in Arabic;
  * that the Content-Security-Policy does not break the page it protects; and —
  * the one that matters most — that a visitor carrying a session cookie and a
  * visitor carrying none are served the same public document.
  *
- * PRESENCE IS LIVE STATE. The header's destinations follow the content other
- * specs publish in parallel (through a presence snapshot up to 30 seconds old),
- * so this file asserts the policy's INVARIANTS — what is always promoted, what
- * is never promoted while only fixture corpora exist, the bar's bound and its
- * order — and leaves "this area appears once published" to the specs that
- * publish it.
+ * THE NAVIGATION IS UNCONDITIONAL (owner direction 2026-11-08). The header and
+ * footer show the same links whatever other specs publish in parallel, so this
+ * file asserts them exactly; a destination with nothing published answers with
+ * its own honest state, never a 404.
  *
  * NO PUBLIC SURFACE HERE NEEDS AN ACCOUNT, and that is itself the claim: the
  * public platform is fully usable signed out (PRODUCT_SCOPE.md).
@@ -63,18 +62,76 @@ const ORGANISATION = 'Minhaj-ul-Quran International';
 const PRE_ADOPTION = 'not currently commissioned';
 
 /**
- * R2 — the six header groups the presentation policy may show, in its fixed
- * display order (apps/web/src/shell/presence.ts). About MQI is always present
- * and always last; a group with no present destination is omitted.
+ * The nine domains of the primary navigation, always shown, in this order
+ * (apps/web/src/shell/menus.ts), in each locale's own words.
  */
-const GROUP_ORDER: readonly string[] = [
-  'Quran',
+const DOMAINS = {
+  en: [
+    'Explore',
+    'Quran',
+    'Hadith',
+    'Learn',
+    'Library',
+    'Watch',
+    'Fatwa',
+    'News and Events',
+    'Global Network',
+  ],
+  ur: [
+    'دریافت',
+    'قرآن',
+    'حدیث',
+    'تعلیم',
+    'کتب خانہ',
+    'ویڈیو',
+    'فتویٰ',
+    'خبریں اور تقریبات',
+    'عالمی نیٹ ورک',
+  ],
+  ar: [
+    'استكشاف',
+    'القرآن',
+    'الحديث',
+    'التعلّم',
+    'المكتبة',
+    'المرئيات',
+    'الفتاوى',
+    'الأخبار والفعاليات',
+    'الشبكة العالمية',
+  ],
+} as const;
+
+/** Each domain's landing, in the same order. */
+const LANDINGS = [
+  '/explore',
+  '/quran',
+  '/hadith',
+  '/learn',
+  '/library',
+  '/watch',
+  '/fatwa',
+  '/news',
+  '/global',
+] as const;
+
+/** The six footer columns, in order (INFORMATION_ARCHITECTURE.md §4). */
+const FOOTER_COLUMNS = [
+  'About Minhaj-ul-Quran',
   'Knowledge',
-  'Watch & Listen',
-  'Learn',
-  'News & Events',
-  'About MQI',
-];
+  'Library and Media',
+  'Learn and Participate',
+  'Our Work',
+  'Global and Contact',
+] as const;
+
+/** The footer's closing row: every legal document, always, then the sitemap. */
+const FOOTER_UTILITY = [
+  '/legal/privacy',
+  '/legal/terms',
+  '/legal/cookies',
+  '/legal/accessibility',
+  '/sitemap',
+] as const;
 
 /** The organisation's official channels, the only links that leave the app. */
 const OFFICIAL_CHANNELS: readonly string[] = [
@@ -87,19 +144,6 @@ const OFFICIAL_CHANNELS: readonly string[] = [
 
 /** Only the app's own addresses are fetched by a link check. */
 const internal = (href: string) => href.startsWith('/');
-
-/**
- * Destinations that need an APPROVED corpus or service. The suite only ever
- * activates fixture corpora, so these are never promoted during a run — a
- * fixture text in the main navigation would advertise test data as the
- * platform's Quran.
- *
- * R2: `/hadith` itself is the Hadith WORKS landing — linked as "Hadith works"
- * whenever the Library holds a public work filed under Hadith, which other
- * specs publish — so the corpus-only destination checked here is the
- * collections browser beneath it.
- */
-const NEVER_PROMOTED_WITH_FIXTURES = ['/quran', '/hadith/collections', '/fatwa'] as const;
 
 /** Does the document scroll sideways? The one thing no layout may do. */
 async function overflows(page: Page): Promise<boolean> {
@@ -455,31 +499,38 @@ test.describe('reserved routes are honest', () => {
     }
   });
 
-  test('lists only published Explore pages, while a reserved one still answers honestly', async ({
+  test('lists every Explore section and page, each answering honestly', async ({
     page,
   }) => {
     await page.goto('/explore');
     const hrefs = await hrefsOf(page.getByRole('main'));
 
-    // No Explore page is published during a run, so the index lists only what
-    // an owner delivered elsewhere (the newsletter) and the Leadership section
-    // once profiles exist — never a reserved address.
-    expect(hrefs).toContain('/newsletter');
-    for (const href of hrefs) {
-      for (const reserved of [
-        '/explore/about',
-        '/explore/shaykh-ul-islam',
-        '/explore/community',
-        '/explore/organization',
-        '/explore/digital-resources',
-      ])
-        expect(href.startsWith(reserved), `/explore lists reserved ${href}`).toBe(false);
-
+    // The whole index, whatever is published (owner direction 2026-11-08):
+    // all seven sections, their reserved pages, and the newsletter an owner
+    // delivers elsewhere — and every one of them answers.
+    for (const expected of [
+      '/explore/about',
+      '/explore/leadership',
+      '/explore/shaykh-ul-islam',
+      '/explore/organization',
+      '/explore/our-work',
+      '/explore/community',
+      '/explore/digital-resources',
+      '/explore/about/vision',
+      '/explore/shaykh-ul-islam/biography',
+      '/newsletter',
+    ])
+      expect(hrefs, expected).toContain(expected);
+    for (const href of new Set(hrefs))
       expect((await page.request.get(href)).status(), href).toBe(200);
-    }
 
-    // Unlisted, not removed: the reserved address still renders its honest
-    // state, in every locale.
+    // A section lists its reserved pages too, the newsletter among them, and
+    // says what is still unpublished.
+    await page.goto('/explore/digital-resources');
+    expect(await hrefsOf(page.getByRole('main'))).toContain('/newsletter');
+    await expect(page.getByRole('main')).toContainText('Not yet published');
+
+    // A reserved address renders its honest state, in every locale.
     for (const locale of ['en', 'ur', 'ar'] as const) {
       const target = localizedPath(locale, '/explore/about/vision');
       expect((await page.goto(target))?.status(), target).toBe(200);
@@ -665,9 +716,11 @@ test.describe('the anonymous public tree is the same for everybody', () => {
  * ========================================================================= */
 
 test.describe('the public header', () => {
-  test('is a utility strip and one row: wordmark, grouped navigation, search', async ({
+  test('is a utility strip and one row: wordmark, the nine domains, search', async ({
     page,
   }) => {
+    // Its own budget: every link of the nine menus is requested once.
+    test.setTimeout(240_000);
     await page.goto('/explore');
     const banner = page.getByRole('banner');
 
@@ -676,32 +729,34 @@ test.describe('the public header', () => {
     await expect(wordmark).toHaveCount(1);
     await expect(wordmark).toHaveAttribute('href', '/');
 
-    // THE GROUPED NAVIGATION (R2) — disclosure buttons in the policy's fixed
-    // order, About MQI always present and always last.
+    // THE UTILITY STRIP: Find a Centre, Membership, Contact & Help — and
+    // Donate, always, whether or not giving is open (`/donate` says so).
+    expect(
+      await hrefsOf(banner.getByRole('navigation', { name: 'The organisation' })),
+    ).toEqual(['/global/find-a-centre', '/membership', '/help']);
+    await expect(
+      banner.getByRole('link', { name: 'Donate', exact: true }),
+    ).toHaveAttribute('href', '/donate');
+
+    // THE NINE DOMAINS, always, in order — one disclosure button each.
     const nav = banner.getByRole('navigation', { name: NAV });
     await expect(nav).toBeVisible();
     const buttons = nav.getByRole('button');
-    // The group the visitor is inside also carries a visually hidden marker.
+    // The domain the visitor is inside also carries a visually hidden marker.
     const names = (await buttons.allInnerTexts()).map((text) =>
       text.replace('(current section)', '').trim(),
     );
-    expect(names.length).toBeGreaterThanOrEqual(1);
-    expect(names.length).toBeLessThanOrEqual(GROUP_ORDER.length);
-    expect(names.at(-1)).toBe('About MQI');
-    const positions = names.map((name) => GROUP_ORDER.indexOf(name));
-    expect(positions, `groups ${names.join(' | ')}`).not.toContain(-1);
-    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect(names).toEqual([...DOMAINS.en]);
 
-    // FIXTURE CORPORA ARE NEVER ADVERTISED. Every Quran, Hadith or Fatwa
-    // activation in this suite is a fixture, so none of them is a destination
-    // anywhere in the header, closed panels included.
+    // Every domain's landing is in the header, the sitemap is not.
     const header = await anchorsOf(banner);
-    for (const absent of NEVER_PROMOTED_WITH_FIXTURES)
-      expect(header, `header promotes ${absent}`).not.toContain(absent);
+    for (const landing of LANDINGS)
+      expect(header, `header links ${landing}`).toContain(landing);
     expect(header, 'header links the sitemap').not.toContain('/sitemap');
 
-    // Each group is a DISCLOSURE: keyboard-operable, never a trap, one open at a
-    // time, every link in its panel a working page.
+    // Each domain is a DISCLOSURE: keyboard-operable, never a trap, one open at
+    // a time, and every link of its full menu a working page.
+    const checked = new Set<string>();
     for (let index = 0; index < names.length; index += 1) {
       const trigger = buttons.nth(index);
       await expect(trigger).toHaveAttribute('aria-expanded', 'false');
@@ -712,29 +767,65 @@ test.describe('the public header', () => {
       await expect(nav.locator('[aria-expanded="true"]')).toHaveCount(1);
       const panel = page.locator(`#${await trigger.getAttribute('aria-controls')}`);
       await expect(panel).toBeVisible();
-      for (const href of await hrefsOf(panel))
+      const links = await hrefsOf(panel);
+      expect(links, names[index]).toContain(LANDINGS[index]);
+      expect(links.length, names[index]).toBeGreaterThan(2);
+      for (const href of links) {
+        if (checked.has(href)) continue;
+        checked.add(href);
         expect((await page.request.get(href)).status(), href).toBe(200);
+      }
       await page.keyboard.press('Escape');
       await expect(trigger).toHaveAttribute('aria-expanded', 'false');
       await expect(trigger).toBeFocused();
     }
+    // The full map: over a hundred distinct addresses across the nine menus.
+    expect(checked.size).toBeGreaterThan(100);
 
-    // ArrowDown opens a group and moves into its first link.
-    await buttons.last().focus();
+    // ArrowDown opens a domain and moves into its first link, its landing.
+    await buttons.first().focus();
     await page.keyboard.press('ArrowDown');
-    await expect(buttons.last()).toHaveAttribute('aria-expanded', 'true');
+    await expect(buttons.first()).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator(':focus')).toHaveAttribute('href', '/explore');
     await page.keyboard.press('Escape');
 
-    // The About group marks itself as the visitor's current section here.
+    // Explore marks itself as the visitor's current section here.
     await expect(
-      nav.getByRole('button', { name: /About MQI.*current section/ }),
+      nav.getByRole('button', { name: /Explore.*current section/ }),
     ).toHaveCount(1);
 
     // NO PRE-ADOPTION MARKER in the header, and the organisation's mark only in
     // the footer.
     await expect(banner).not.toContainText(PRE_ADOPTION);
     await expect(banner.getByRole('img', { name: ORGANISATION })).toHaveCount(0);
+  });
+
+  test('shows the nine domains in Urdu and Arabic too, mirrored for the keyboard', async ({
+    page,
+  }) => {
+    for (const locale of ['ur', 'ar'] as const) {
+      await page.goto(localizedPath(locale, ''));
+      const banner = page.getByRole('banner');
+      const nav = banner
+        .getByRole('navigation')
+        .filter({ has: page.getByRole('button') });
+      const buttons = nav.getByRole('button');
+      expect(
+        (await buttons.allInnerTexts()).map((text) => text.trim()),
+        locale,
+      ).toEqual([...DOMAINS[locale]]);
+      for (const landing of LANDINGS)
+        expect(await anchorsOf(banner), `${locale} ${landing}`).toContain(
+          localizedPath(locale, landing),
+        );
+
+      // ArrowLeft moves to the NEXT domain in a right-to-left bar.
+      await buttons.first().focus();
+      await page.keyboard.press('ArrowLeft');
+      await expect(buttons.nth(1), locale).toBeFocused();
+      await page.keyboard.press('End');
+      await expect(buttons.last(), locale).toBeFocused();
+    }
   });
 
   test('searches from a palette with a real form that submits q by GET', async ({
@@ -771,16 +862,17 @@ test.describe('the public header', () => {
     }
   });
 
-  test('reaches search from the keyboard straight after the groups, and by Ctrl+K', async ({
+  test('reaches search from the keyboard straight after the domains, and by Ctrl+K', async ({
     page,
   }) => {
     await page.goto('/');
     const banner = page.getByRole('banner');
     const nav = banner.getByRole('navigation', { name: NAV });
     const stops = await nav.getByRole('button').count();
+    expect(stops).toBe(DOMAINS.en.length);
 
-    // From the wordmark, Tab walks the group buttons in order (closed panels
-    // hold no stop) and then lands on Search — no hidden duplicate.
+    // From the wordmark, Tab walks the nine domain buttons in order (closed
+    // panels hold no stop) and then lands on Search — no hidden duplicate.
     await banner.getByRole('link', { name: WORDMARK }).focus();
     for (let index = 0; index < stops; index += 1) {
       await page.keyboard.press('Tab');
@@ -918,9 +1010,11 @@ test.describe('the mobile navigation', () => {
     ).not.toBe('hidden');
   });
 
-  test('holds search, one accordion per group, the organisation and the language', async ({
+  test('holds search, one accordion per domain, Donate, the organisation and the language', async ({
     page,
   }) => {
+    // Its own budget: every link it offers is requested once.
+    test.setTimeout(240_000);
     await page.goto('/');
 
     // The account entry sits in the phone header itself, relabelled for this
@@ -933,21 +1027,25 @@ test.describe('the mobile navigation', () => {
     const drawer = page.getByRole('dialog', { name: NAV });
     await expect(drawer).toBeVisible();
 
-    // One accordion per group; opened, each lists its present destinations —
-    // About always among them, fixture corpora never.
+    // One accordion per domain, all nine; opened, each lists its landing and
+    // every link of its menu.
     const groups = drawer.getByRole('navigation', { name: NAV }).locator('summary');
-    const count = await groups.count();
-    expect(count).toBeGreaterThanOrEqual(1);
-    for (let index = 0; index < count; index += 1) await groups.nth(index).click();
+    expect((await groups.allInnerTexts()).map((text) => text.trim())).toEqual([
+      ...DOMAINS.en,
+    ]);
+    for (let index = 0; index < DOMAINS.en.length; index += 1)
+      await groups.nth(index).click();
     const hrefs = await hrefsOf(drawer.getByRole('navigation', { name: NAV }));
-    expect(hrefs).toContain('/explore');
-    for (const absent of NEVER_PROMOTED_WITH_FIXTURES)
-      expect(hrefs).not.toContain(absent);
+    for (const landing of LANDINGS) expect(hrefs).toContain(landing);
+    expect(new Set(hrefs).size).toBeGreaterThan(100);
 
-    // The organisation's own links, About among them, and the language switcher.
+    // Donate, always; the utility links; and the language switcher.
+    await expect(
+      drawer.getByRole('link', { name: 'Donate', exact: true }),
+    ).toHaveAttribute('href', '/donate');
     expect(
       await hrefsOf(drawer.getByRole('navigation', { name: 'The organisation' })),
-    ).toContain('/explore');
+    ).toEqual(['/global/find-a-centre', '/membership', '/help']);
     await expect(drawer.getByRole('navigation', { name: SWITCHER })).toBeVisible();
 
     // Every link the drawer offers is a working page.
@@ -986,9 +1084,11 @@ test.describe('the mobile navigation', () => {
  * ========================================================================= */
 
 test.describe('the public footer', () => {
-  test('is curated columns and the official channels, every link working', async ({
+  test('is the six-column index, the official channels and the legal row, every link working', async ({
     page,
   }) => {
+    // Its own budget: every link it offers is requested once.
+    test.setTimeout(240_000);
     await page.goto('/');
     const footer = page.getByRole('contentinfo');
 
@@ -997,17 +1097,27 @@ test.describe('the public footer', () => {
       '/',
     );
 
-    // R2: up to six columns, each a labelled navigation; the three that hold a
-    // destination needing no evidence are always there.
-    for (const [group, always] of [
-      ['Quran & Knowledge', '/topics'],
-      ['About MQI', '/explore'],
-      ['Learn & take part', '/my'],
+    // The six columns, always, each a labelled navigation under a heading.
+    await expect(footer.getByRole('heading', { level: 2 })).toContainText([
+      ...FOOTER_COLUMNS,
+    ]);
+    for (const [column, sample] of [
+      ['About Minhaj-ul-Quran', '/explore/about'],
+      ['Knowledge', '/fatwa'],
+      ['Library and Media', '/library/books'],
+      ['Learn and Participate', '/donate'],
+      ['Our Work', '/explore/our-work'],
+      ['Global and Contact', '/global/find-a-centre'],
     ] as const) {
-      const nav = footer.getByRole('navigation', { name: group, exact: true });
-      await expect(nav, group).toBeVisible();
-      expect(await hrefsOf(nav), group).toContain(always);
+      const nav = footer.getByRole('navigation', { name: column, exact: true });
+      await expect(nav, column).toBeVisible();
+      expect(await hrefsOf(nav), column).toContain(sample);
     }
+
+    // Every legal document, published or not, then the human sitemap.
+    expect(
+      await hrefsOf(footer.getByRole('navigation', { name: 'Legal and site' })),
+    ).toEqual([...FOOTER_UTILITY]);
 
     // The official channels: exactly minhaj.org's own addresses, outbound.
     const channels = footer.getByRole('navigation', { name: 'Official channels' });
@@ -1015,15 +1125,11 @@ test.describe('the public footer', () => {
     for (const link of await channels.getByRole('link').all())
       await expect(link).toHaveAttribute('rel', 'external noopener noreferrer');
 
-    // Not a sitemap: the columns, the channels, and no legal navigation while
-    // no legal page is published.
-    const navigations = await footer.getByRole('navigation').count();
-    expect(navigations).toBeGreaterThanOrEqual(4);
-    expect(navigations).toBeLessThanOrEqual(7);
+    // The six columns, the channels and the legal row — nothing else.
+    await expect(footer.getByRole('navigation')).toHaveCount(8);
 
     const seen = new Set(await hrefsOf(footer));
-    for (const absent of NEVER_PROMOTED_WITH_FIXTURES)
-      expect([...seen], `footer promotes ${absent}`).not.toContain(absent);
+    expect(seen.size).toBeGreaterThan(70);
     for (const href of seen) {
       if (!internal(href)) {
         expect(OFFICIAL_CHANNELS, href).toContain(href);
@@ -1033,20 +1139,22 @@ test.describe('the public footer', () => {
     }
   });
 
-  test('links a legal document only once it is published', async ({ page }) => {
-    // No legal page is published during a run: each answers honestly…
+  test('always links the legal documents, each answering honestly while unpublished', async ({
+    page,
+  }) => {
+    // No legal page is published during a run: each is still linked, from the
+    // page itself too, and answers that it is not yet published.
     for (const document of ['privacy', 'terms', 'cookies', 'accessibility']) {
       const response = await page.goto(`/legal/${document}`);
       expect(response?.status(), document).toBe(200);
       await expect(page.getByRole('main'), document).toContainText('Not yet published');
 
-      // …and the footer promotes none of them, not even on the page itself.
-      const footer = page.getByRole('contentinfo');
-      await expect(
-        footer.getByRole('navigation', { name: 'Legal and site' }),
-        document,
-      ).toHaveCount(0);
-      await expect(footer.locator('a[href^="/legal/"]'), document).toHaveCount(0);
+      const legal = page
+        .getByRole('contentinfo')
+        .getByRole('navigation', { name: 'Legal and site' });
+      await expect(legal.locator(`a[href="/legal/${document}"]`), document).toHaveCount(
+        1,
+      );
     }
   });
 
@@ -1277,7 +1385,7 @@ test.describe('the pre-adoption indexing posture', () => {
  * ========================================================================= */
 
 test.describe('navigation is honest about what exists', () => {
-  test('renders no link to an undelivered domain, and lists every delivered one', async ({
+  test('renders no link to an undelivered domain, and links every delivered one', async ({
     page,
   }) => {
     // Only domains still awaiting implementation remain absent — absent, not
@@ -1298,29 +1406,30 @@ test.describe('navigation is honest about what exists', () => {
       await page.goto(path);
       const hrefs = await anchorsOf(page.locator('body'));
 
-      // The header and footer promote by evidence now; the human sitemap is
-      // where EVERY delivered public route is listed, whatever is published.
-      if (path === '/sitemap')
-        for (const delivered of [
-          '/contact',
-          '/help',
-          '/feedback',
-          '/library',
-          '/library/articles',
-          '/search',
-          '/topics',
-          '/watch',
-          '/listen',
-          '/global',
-          '/global/find-a-centre',
-          '/newsletter',
-          '/membership',
-          '/donate',
-          '/collections',
-          '/learn/live',
-          '/learn/teachers',
-        ])
-          expect(hrefs, `sitemap lists delivered ${delivered}`).toContain(delivered);
+      // The header and footer link every one of these on every public page,
+      // whatever is published (owner direction 2026-11-08), and the human
+      // sitemap lists them too.
+      for (const delivered of [
+        '/contact',
+        '/help',
+        '/feedback',
+        '/library',
+        '/library/articles',
+        '/search',
+        '/topics',
+        '/watch',
+        '/listen',
+        '/global',
+        '/global/find-a-centre',
+        '/newsletter',
+        '/membership',
+        '/donate',
+        '/collections',
+        '/learn/live',
+        '/learn/teachers',
+        ...LANDINGS,
+      ])
+        expect(hrefs, `${path} links delivered ${delivered}`).toContain(delivered);
 
       for (const href of hrefs) {
         for (const domain of deferred)

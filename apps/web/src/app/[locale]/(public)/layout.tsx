@@ -26,9 +26,10 @@ import { requireLocale } from '@/config/route-locale';
  * islands after render (§8.2) — the header's account entry is one — never by
  * making this layout ask who is looking.
  *
- * RENDERED PER REQUEST (Rebaseline R1): the header and footer promote only
- * areas with published content, read from PUBLIC evidence
- * (`@/composition/presence`) — not from anything about the visitor.
+ * RENDERED PER REQUEST (since Rebaseline R1): the header's mega panels carry
+ * recent records and the footer the Quran text's attribution while a reference
+ * preview is active, read from PUBLIC data (`@/composition/presence`) — never
+ * from anything about the visitor. The navigation itself is unconditional.
  */
 export const dynamic = 'force-dynamic';
 

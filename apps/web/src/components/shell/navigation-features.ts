@@ -12,13 +12,13 @@ import { editorialReadRuntime } from '@/composition/editorial-read';
 import { libraryReadRuntime } from '@/composition/library-read';
 import { mediaReadRuntime } from '@/composition/media-read';
 import { directionOf } from '@/config/locale';
-import type { NavigationGroupId } from '@/shell/presence';
+import type { DomainMenuKey } from '@/shell/menus';
 
 /**
  * THE MEGA-NAVIGATION'S FEATURED CARDS (R2) — one real, recent record with a
  * real picture per panel where the corpus has one: the newest video with a
- * poster (Watch & Listen), the newest book with a cover (Knowledge), the
- * newest news story with a lead image (News & Events).
+ * poster (Watch), the newest book with a cover (Library), the newest news
+ * story with a lead image (News & Events).
  *
  * PUBLIC READS ONLY, through the same composition roots the public pages use;
  * no session, no request API. Each read FAILS CLOSED on its own: a panel whose
@@ -42,7 +42,7 @@ export interface NavigationFeature {
 }
 
 export type NavigationFeatures = Readonly<
-  Partial<Record<NavigationGroupId, NavigationFeature>>
+  Partial<Record<DomainMenuKey, NavigationFeature>>
 >;
 
 const TTL_MS = 30_000;
@@ -113,15 +113,15 @@ const quietly = (read: Promise<NavigationFeature | null>) =>
   read.catch((): NavigationFeature | null => null);
 
 async function compute(locale: Locale): Promise<NavigationFeatures> {
-  const [watch, knowledge, news] = await Promise.all([
+  const [watch, library, news] = await Promise.all([
     quietly(latestVideo(locale)),
     quietly(latestBook(locale)),
     quietly(latestStory(locale)),
   ]);
   return Object.freeze({
     ...(watch === null ? {} : { watch }),
-    ...(knowledge === null ? {} : { knowledge }),
-    ...(news === null ? {} : { news }),
+    ...(library === null ? {} : { library }),
+    ...(news === null ? {} : { 'news-events': news }),
   });
 }
 

@@ -353,14 +353,30 @@ test.describe('a public page', () => {
  * ========================================================================= */
 
 test.describe('a signed-in reader', () => {
-  test('the landing shows a new account how to begin, and no empty panels', async () => {
+  test('the landing shows a new account how to begin, and every section honestly empty', async () => {
     await owner.goto('/my');
     const main = owner.getByRole('main');
-    // R2: every module renders only with something in it, so a brand-new
-    // account sees one module — how to begin — instead of a wall of empties.
-    await expect(main.getByRole('heading', { level: 2 })).toHaveText([
+    // Owner direction 2026-11-08: every section has its module on the home
+    // page, each saying in words that nothing is there yet — and a brand-new
+    // account is also shown how to begin, first. (R2 showed only the
+    // beginning — historical.)
+    await expect(main.getByRole('heading', { level: 2 }).first()).toHaveText(
       myCopy('home.start.heading'),
-    ]);
+    );
+    const saved = main.getByRole('region', { name: copy('home', 'savedHeading') });
+    await expect(saved).toContainText(copy('saved', 'empty'));
+    await expect(saved.getByRole('link', { name: copy('nav', 'notes') })).toHaveAttribute(
+      'href',
+      '/my/saved/notes',
+    );
+    await expect(
+      main.getByRole('region', { name: copy('home', 'quranHeading') }),
+    ).toContainText(copy('home', 'quranNone'));
+    await expect(
+      main
+        .getByRole('region', { name: copy('home', 'notificationsHeading') })
+        .getByRole('link', { name: copy('nav', 'notificationSettings') }),
+    ).toHaveAttribute('href', '/my/settings/notifications');
     await expect(main.getByRole('heading', { level: 3 })).toHaveText([
       myCopy('home.start.interests.title'),
       myCopy('home.start.save.title'),
@@ -371,8 +387,7 @@ test.describe('a signed-in reader', () => {
       main.getByRole('link', { name: myCopy('home.start.interests.action') }),
     ).toHaveAttribute('href', '/my/settings/interests');
     await expect(main).toContainText(myCopy('home.intro.new'));
-    await expect(main).not.toContainText(copy('home', 'savedHeading'));
-    await expect(main).not.toContainText(copy('home', 'notificationsHeading'));
+    // Nothing to pick up yet, so nothing offered to continue.
     await expect(main).not.toContainText(myCopy('home.continue.heading'));
   });
 
@@ -660,8 +675,14 @@ test.describe('a signed-in reader', () => {
       PAGE.video,
     );
     await expect(main).toContainText(myCopy('home.intro.returning'));
-    // No notification yet, so no notifications module.
-    await expect(main).not.toContainText(copy('home', 'notificationsHeading'));
+    // No notification yet: the module is there, with nothing listed in it.
+    const notifications = main.getByRole('region', {
+      name: copy('home', 'notificationsHeading'),
+    });
+    await expect(notifications).toBeVisible();
+    await expect(
+      notifications.getByRole('list', { name: copy('notifications', 'list') }),
+    ).toHaveCount(0);
   });
 });
 

@@ -1259,10 +1259,13 @@ critical path, which §8.3.1 exists to prevent.
 > Caching such a route is a **later, separate decision** with its own invalidation proof
 > (§8.4, DELIVERY_PLAN.md Phase 34). Serving it uncached is correct until then.
 
-**The public shell is a content route since Rebaseline R1 (2026-11-06).** The header, footer and
-`/explore` index now promote destinations from public evidence (INFORMATION_ARCHITECTURE.md §2.2):
+**The public shell is a content route since Rebaseline R1 (2026-11-06).** From R1 until the owner
+direction of 2026-11-08 the header and footer promoted destinations from public evidence
+(historical); since then the navigation is unconditional (INFORMATION_ARCHITECTURE.md §2.2), but
+the shell still reads public data per request — the header's mega panels carry recent featured
+records and the footer the Quran text's licence attribution while a reference preview is active:
 `apps/web/src/composition/presence.ts` reads each owning context's own **public** reads (approved
-active corpora, published records, published Pages, open giving) into one snapshot. So the public
+active corpora, published records, open giving) into one snapshot. So the public
 layout (`app/[locale]/(public)/layout.tsx`) and `/explore` are declared **content routes**
 (`force-dynamic`) and are held to every content-route rule above: they reach no session service,
 no identity or authorisation service, no logger and no authentication library. The snapshot is

@@ -28,6 +28,14 @@ import { requireRoute } from '@/shell/registry';
  * reader (`@/composition/library-read`) — the first page of its own listings,
  * bounded — so the page renders per request and a withdrawn book leaves it at
  * once. Nothing here can reach Identity, a session or a cookie.
+ *
+ * FAIL CLOSED, SHELF BY SHELF. The directory and the hero are code, so a read
+ * that fails withholds only its own shelf — never the whole front door behind
+ * the error page.
+ *
+ * SAID ON THE PAGE, not only in a document: titles and descriptions are this
+ * platform's descriptive metadata, while a translated EDITION is domain data
+ * recorded against a Work (DOMAIN_MODEL.md §10.1) — the hero says so.
  */
 export const dynamic = 'force-dynamic';
 
@@ -47,12 +55,26 @@ export async function generateMetadata({
   });
 }
 
+/**
+ * One content read, failing closed: a runtime that cannot be composed (it
+ * throws before any promise exists) and a read that rejects both answer
+ * `empty`, so only that shelf is withheld.
+ */
+async function orEmpty<T>(read: () => Promise<T>, empty: T): Promise<T> {
+  try {
+    return await read();
+  } catch {
+    return empty;
+  }
+}
+
 /** How many topic shelves the landing offers, largest topic first. */
 const TOPIC_SHELVES = 3;
 /** How many records one shelf holds before linking to the whole set. */
 const SHELF = 12;
 
 type DirectoryKey =
+  | 'books'
   | 'research'
   | 'research-papers'
   | 'publications'
@@ -71,7 +93,7 @@ const DIRECTORY: readonly {
   readonly key: 'books' | 'scholarly' | 'periodicals' | 'access';
   readonly sections: readonly DirectoryKey[];
 }[] = [
-  { key: 'books', sections: ['authors', 'topics', 'languages'] },
+  { key: 'books', sections: ['books', 'authors', 'topics', 'languages'] },
   {
     key: 'scholarly',
     sections: ['research', 'research-papers', 'publications', 'encyclopedias'],
@@ -91,22 +113,38 @@ export default async function LibraryLandingPage({
     getTranslations({ locale, namespace: 'shell' }),
   ]);
 
-  const reads = libraryReadRuntime();
   const [newest, facets, issues] = await Promise.all([
-    reads.works({ sort: 'newest', titleLocale: locale }),
-    reads.topicFacets(0),
-    reads.scholarlyList('magazine-issue', {}),
+    orEmpty(
+      async () =>
+        (await libraryReadRuntime().works({ sort: 'newest', titleLocale: locale })).items,
+      [],
+    ),
+    orEmpty(async () => (await libraryReadRuntime().topicFacets(0)).items, []),
+    orEmpty(
+      async () => (await libraryReadRuntime().scholarlyList('magazine-issue', {})).items,
+      [],
+    ),
   ]);
-  const topicIds = facets.items.slice(0, TOPIC_SHELVES).map((facet) => facet.id);
+  const topicIds = facets.slice(0, TOPIC_SHELVES).map((facet) => facet.id);
   const [references, ...byTopic] = await Promise.all([
-    libraryReferenceNames({ personIds: [], topicIds }, locale),
+    orEmpty(() => libraryReferenceNames({ personIds: [], topicIds }, locale), null),
     ...topicIds.map((topic) =>
-      reads.works({ topic, sort: 'title', titleLocale: locale }),
+      orEmpty(
+        async () =>
+          (
+            await libraryReadRuntime().works({
+              topic,
+              sort: 'title',
+              titleLocale: locale,
+            })
+          ).items,
+        [],
+      ),
     ),
   ]);
   const topicShelves = topicIds.flatMap((id, index) => {
-    const topic = references.topics.get(id);
-    const works = byTopic[index]?.items ?? [];
+    const topic = references?.topics.get(id);
+    const works = byTopic[index] ?? [];
     return topic === undefined || works.length === 0 ? [] : [{ id, topic, works }];
   });
 
@@ -115,7 +153,7 @@ export default async function LibraryLandingPage({
     ...items.filter((item) => item.cover !== null),
     ...items.filter((item) => item.cover === null),
   ];
-  const books = coversFirst(newest.items).slice(0, SHELF);
+  const books = coversFirst(newest).slice(0, SHELF);
   const shelfLabels = {
     previousLabel: t('landing.showPrevious'),
     nextLabel: t('landing.showNext'),
@@ -150,10 +188,20 @@ export default async function LibraryLandingPage({
             >
               {t('scholarly.viewAll.magazine')}
             </ActionLink>
+            <ActionLink
+              href={localizedPath(locale, '/library/resources')}
+              tone="secondary"
+            >
+              {t('landing.allResources')}
+            </ActionLink>
           </>
         }
         aside={<CoverStack works={books} />}
-      />
+      >
+        <p className="max-w-[var(--measure-prose)] border-s-2 border-accent-rule ps-3 text-sm text-foreground-muted">
+          {t('metadataNotice')}
+        </p>
+      </Hero>
 
       <Container>
         <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-page)]">
@@ -195,7 +243,7 @@ export default async function LibraryLandingPage({
             </LibraryShelf>
           ))}
 
-          {issues.items.length === 0 ? null : (
+          {issues.length === 0 ? null : (
             <LibraryShelf
               id="library-issues"
               heading={t('landing.latestIssues')}
@@ -205,7 +253,7 @@ export default async function LibraryLandingPage({
               }}
               {...shelfLabels}
             >
-              {issues.items.slice(0, SHELF).map((row) => (
+              {issues.slice(0, SHELF).map((row) => (
                 <PeriodicalCard key={row.id} locale={locale} row={row} t={t} />
               ))}
             </LibraryShelf>
@@ -219,6 +267,7 @@ export default async function LibraryLandingPage({
               groups={DIRECTORY.map((group) => ({
                 id: `library-${group.key}`,
                 heading: t(`landing.groups.${group.key}.heading`),
+                intro: t(`landing.groups.${group.key}.intro`),
                 links: group.sections.map((section) => ({
                   href: localizedPath(locale, `/library/${section}`),
                   title: t(`section.${section}`),

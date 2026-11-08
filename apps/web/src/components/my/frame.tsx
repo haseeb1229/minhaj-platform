@@ -63,10 +63,21 @@ export function MyShell({
   );
 }
 
+/** A link onward, named by where it goes. */
+export interface MyLink {
+  readonly href: string;
+  readonly text: string;
+}
+
 /**
  * A My Minhaj page: its `main`, its one `h1` and introduction, an optional
  * primary action, and — when the page is one of several views of the same
  * thing — the tabs between them.
+ *
+ * `related` is the page's neighbours (owner direction 2026-11-08: the
+ * cross-links between Learning, Classes, Teachers and Messages are always
+ * offered), listed at the foot of the page. A neighbour the tabs already
+ * offer is not repeated.
  *
  * `reading` bounds a page of prose and forms to a comfortable measure; lists
  * and the home page use the column's full width.
@@ -76,6 +87,7 @@ export function MyPage({
   description,
   action,
   tabs,
+  related,
   measure = 'full',
   children,
 }: {
@@ -90,9 +102,12 @@ export function MyPage({
       readonly current: boolean;
     }[];
   };
+  readonly related?: { readonly label: string; readonly links: readonly MyLink[] };
   readonly measure?: 'full' | 'reading';
   readonly children: ReactNode;
 }) {
+  const tabbed = new Set(tabs?.items.map((tab) => tab.href) ?? []);
+  const neighbours = related?.links.filter((link) => !tabbed.has(link.href)) ?? [];
   return (
     <main
       className={`flex w-full min-w-0 flex-col gap-8 ${measure === 'reading' ? 'max-w-3xl' : ''}`}
@@ -114,27 +129,47 @@ export function MyPage({
         {tabs === undefined ? null : <LinkTabs label={tabs.label} tabs={tabs.items} />}
       </div>
       {children}
+      {related === undefined || neighbours.length === 0 ? null : (
+        <nav aria-label={related.label} className="border-t border-border pt-4">
+          <MyLinks links={neighbours} />
+        </nav>
+      )}
     </main>
+  );
+}
+
+/** A row of links onward — a home card's ways in, or a page's neighbours. */
+export function MyLinks({ links }: { readonly links: readonly MyLink[] }) {
+  return (
+    <ul className="flex flex-wrap gap-x-6">
+      {links.map((link) => (
+        <li key={link.href}>
+          <OnwardLink href={link.href}>{link.text}</OnwardLink>
+        </li>
+      ))}
+    </ul>
   );
 }
 
 /**
  * One titled part of a page: an `h2`, an optional one-line explanation, an
- * optional link onward ("See all"), then the content. Unboxed — the heading
- * and a hairline carry the structure, so a page of sections is not a stack of
- * identical cards.
+ * optional link onward ("See all"), then the content and, when given, its
+ * further ways onward. Unboxed — the heading and a hairline carry the
+ * structure, so a page of sections is not a stack of identical cards.
  */
 export function MySection({
   id,
   heading,
   intro,
   link,
+  links,
   children,
 }: {
   readonly id: string;
   readonly heading: ReactNode;
   readonly intro?: ReactNode;
-  readonly link?: { readonly href: string; readonly text: string };
+  readonly link?: MyLink;
+  readonly links?: readonly MyLink[];
   readonly children: ReactNode;
 }) {
   return (
@@ -155,6 +190,7 @@ export function MySection({
         )}
       </div>
       {children}
+      {links === undefined ? null : <MyLinks links={links} />}
     </section>
   );
 }
@@ -200,18 +236,18 @@ export function MyRail({
   );
 }
 
-/** One module of the rail. */
+/** One module of the rail: its heading, its content and its ways onward. */
 export function MyRailModule({
   id,
   icon,
   heading,
-  link,
+  links,
   children,
 }: {
   readonly id: string;
   readonly icon: Parameters<typeof Icon>[0]['name'];
   readonly heading: ReactNode;
-  readonly link?: { readonly href: string; readonly text: string };
+  readonly links: readonly MyLink[];
   readonly children: ReactNode;
 }) {
   return (
@@ -221,11 +257,7 @@ export function MyRailModule({
         {heading}
       </h2>
       <div className="flex min-w-0 flex-col gap-3 text-sm">{children}</div>
-      {link === undefined ? null : (
-        <div>
-          <OnwardLink href={link.href}>{link.text}</OnwardLink>
-        </div>
-      )}
+      <MyLinks links={links} />
     </section>
   );
 }

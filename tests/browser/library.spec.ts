@@ -166,6 +166,8 @@ test.describe('an anonymous visitor reads the Library', () => {
       page.getByRole('link', { name: 'Synthetic browser proof work' }),
     ).toBeVisible();
     await expect(page.getByText('Synthetic hidden draft work')).toHaveCount(0);
+    // Descriptive metadata is not a translated edition, and the listing says so.
+    await expect(page.getByText(/^Titles and descriptions are shown/)).toBeVisible();
 
     // The Urdu INTERFACE lists every content language — it is not an Urdu filter.
     // The Work has no Urdu LABEL, so it is titled in its own primary language

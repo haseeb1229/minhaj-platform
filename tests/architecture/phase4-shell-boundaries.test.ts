@@ -57,11 +57,14 @@ const PUBLIC_GROUP = path.join(APP_SRC, 'app', '[locale]', '(public)');
  * quietly exempt something.
  */
 const CONTENT_ROUTE_FILES = [
-  // REBASELINE R1 — THE SHELL IS CONTENT-AWARE. The public layout's header and
-  // footer, and the Explore index, promote only areas with published content
-  // (`@/composition/presence`), so they read public data per request exactly
-  // like a content route — and are held to every content-route rule below: no
-  // session, no identity, no logger, no authentication library, dynamic.
+  // THE SHELL READS PUBLIC DATA (since Rebaseline R1). The header's mega
+  // panels carry featured records, the footer the Quran text's attribution
+  // while a reference preview is active, and the Explore landing features
+  // published Pages and people (its index of every section is code alone since
+  // 2026-11-08), so they read public data per request
+  // exactly like a content route — and are held to every content-route rule
+  // below: no session, no identity, no logger, no authentication library,
+  // dynamic. (The navigation itself is unconditional since 2026-11-08.)
   'apps/web/src/app/[locale]/(public)/layout.tsx',
   'apps/web/src/app/[locale]/(public)/explore/page.tsx',
   'apps/web/src/app/[locale]/(public)/contact/page.tsx',

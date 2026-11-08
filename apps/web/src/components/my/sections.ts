@@ -3,50 +3,35 @@ import { localizedPath, type Locale } from '@minhaj/contracts';
 import type { WorkspaceLink, WorkspaceLinkGroup } from '@/components/workspace/nav-match';
 
 /**
- * MY MINHAJ'S MAP (R2) — which sections the area offers, in which groups, and
+ * MY MINHAJ'S MAP — which sections the area offers, in which groups, and
  * which sibling views a page carries as tabs. PURE, so the rules are proved by
  * unit test rather than by eye.
  *
- * PRESENTATION ONLY. Hiding a section is a kindness to the reader, never a
- * control: every page re-checks its own session and its owner's rules, and a
- * page whose section is hidden still answers at its address. A section is
- * offered when the deployment has switched its capability on — the reasons a
- * person would look there — so a new account is not shown a column of doors
- * that open onto "not available". A person who already has something in a
- * hidden section (a donation made before giving closed) reaches it from the
- * home page, whose modules render only when there is something to show.
+ * EVERY SECTION IS ALWAYS LISTED (owner direction 2026-11-08). Learning,
+ * Classes, Teachers, Messages, Questions, Membership and Donations are offered
+ * to every account whether or not this deployment has switched their service
+ * on; each page says, in words, when its service is not available yet. (R2
+ * listed a section only while its capability was on — historical, superseded
+ * 2026-11-08 by owner direction.)
  *
- * NO EMPTY GROUP. A group is listed only while at least one of its sections
- * is, so a heading never stands alone (the administration's F54 defect).
+ * PRESENTATION ONLY. Listing a section is a kindness to the reader, never a
+ * control: every page re-checks its own session and its owner's rules.
+ *
+ * THE WAY TO ONE'S OWN WORK. A person who holds teaching or administrative
+ * authority is also offered the Teacher area and the administration. Whether
+ * they do is decided on the server by Identity & Access (`staff.ts` beside the
+ * layout) and handed in here; the target areas keep their own gates.
  */
 
-/** What the deployment has switched on — session-free, deployment-wide state. */
-export interface MyCapabilities {
-  /** A Quran corpus a visitor may read is active. */
-  readonly quran: boolean;
-  /** At least one published course. */
-  readonly learning: boolean;
-  /** Live classes are switched on (any activation). */
-  readonly live: boolean;
-  /** At least one kind of conversation is switched on. */
-  readonly messaging: boolean;
-  /** The question service is accepting questions. */
-  readonly questions: boolean;
-  /** At least one membership type is open for application. */
-  readonly membership: boolean;
-  /** Online giving is open. */
-  readonly giving: boolean;
+/** Which staff areas the signed-in person may enter — Identity's answer. */
+export interface MyStaffAreas {
+  readonly teacher: boolean;
+  readonly admin: boolean;
 }
 
-/** Nothing known: only the sections every account always has. */
-export const NO_CAPABILITIES: MyCapabilities = Object.freeze({
-  quran: false,
-  learning: false,
-  live: false,
-  messaging: false,
-  questions: false,
-  membership: false,
-  giving: false,
+export const NO_STAFF_AREAS: MyStaffAreas = Object.freeze({
+  teacher: false,
+  admin: false,
 });
 
 export const MY_GROUPS = Object.freeze([
@@ -81,13 +66,13 @@ export type MySectionKey =
   | 'notifications'
   | 'settings';
 
+export type MyStaffKey = 'teacher' | 'admin';
+
 interface SectionSpec {
   readonly key: MySectionKey;
   readonly path: string;
   readonly also?: readonly string[];
   readonly exact?: boolean;
-  /** The capability that must be on for the section to be offered. */
-  readonly needs?: (capabilities: MyCapabilities) => boolean;
 }
 
 const GROUPS: Readonly<Record<MyGroupKey, readonly SectionSpec[]>> = {
@@ -98,24 +83,25 @@ const GROUPS: Readonly<Record<MyGroupKey, readonly SectionSpec[]>> = {
     { key: 'collections', path: '/saved/collections' },
     { key: 'history', path: '/history/reading', also: ['/history'] },
   ],
-  quran: [{ key: 'quran', path: '/progress/quran', needs: (c) => c.quran }],
+  quran: [{ key: 'quran', path: '/progress/quran' }],
   learning: [
-    {
-      key: 'courses',
-      path: '/learning',
-      also: ['/progress/courses'],
-      needs: (c) => c.learning || c.live,
-    },
-    { key: 'classes', path: '/classes', needs: (c) => c.live },
-    { key: 'teachers', path: '/teachers', needs: (c) => c.live },
+    { key: 'courses', path: '/learning', also: ['/progress/courses'] },
+    { key: 'classes', path: '/classes' },
+    { key: 'teachers', path: '/teachers' },
   ],
-  messages: [{ key: 'messages', path: '/messages', needs: (c) => c.messaging }],
-  questions: [{ key: 'questions', path: '/questions', needs: (c) => c.questions }],
-  membership: [{ key: 'membership', path: '/membership', needs: (c) => c.membership }],
-  giving: [{ key: 'giving', path: '/donations', needs: (c) => c.giving }],
+  messages: [{ key: 'messages', path: '/messages' }],
+  questions: [{ key: 'questions', path: '/questions' }],
+  membership: [{ key: 'membership', path: '/membership' }],
+  giving: [{ key: 'giving', path: '/donations' }],
   notifications: [{ key: 'notifications', path: '/notifications' }],
   settings: [{ key: 'settings', path: '/settings/profile', also: ['/settings'] }],
 };
+
+/** The staff areas, outside `/my`, in a fixed order. */
+const STAFF: readonly { readonly key: MyStaffKey; readonly path: string }[] = [
+  { key: 'teacher', path: '/teacher' },
+  { key: 'admin', path: '/admin' },
+];
 
 /** A `/my` address in the reader's locale. */
 export function myPath(locale: Locale, path = ''): string {
@@ -123,40 +109,41 @@ export function myPath(locale: Locale, path = ''): string {
 }
 
 /**
- * The area's navigation: every offered section, in its group, in a fixed
- * order. A group with one section is a plain entry; a group with several is
- * labelled. Labels come from the caller (the `my.nav` catalogue).
+ * The area's navigation: every section, in its group, in a fixed order, then
+ * — only for a person Identity says holds the authority — the staff areas.
+ * Library and Learning are labelled groups; every other section is a plain
+ * entry. Labels come from the caller (the `my.nav` catalogue).
  */
 export function myNavigation(
   locale: Locale,
-  capabilities: MyCapabilities,
+  staff: MyStaffAreas,
   label: {
-    readonly section: (key: MySectionKey) => string;
-    readonly group: (key: 'library' | 'learning') => string;
+    readonly section: (key: MySectionKey | MyStaffKey) => string;
+    readonly group: (key: 'library' | 'learning' | 'staff') => string;
   },
 ): readonly WorkspaceLinkGroup[] {
-  return MY_GROUPS.flatMap((group): WorkspaceLinkGroup[] => {
-    const links: WorkspaceLink[] = GROUPS[group]
-      .filter((spec) => spec.needs === undefined || spec.needs(capabilities))
-      .map((spec) => ({
-        key: spec.key,
-        href: myPath(locale, spec.path),
-        text: label.section(spec.key),
-        ...(spec.exact === true ? { exact: true } : {}),
-        ...(spec.also === undefined
-          ? {}
-          : { also: spec.also.map((path) => myPath(locale, path)) }),
-      }));
-    if (links.length === 0) return [];
-    const labelled = links.length > 1 && (group === 'library' || group === 'learning');
-    return [
-      {
-        key: group,
-        ...(labelled ? { label: label.group(group) } : {}),
-        links,
-      },
-    ];
+  const sections = MY_GROUPS.map((group): WorkspaceLinkGroup => {
+    const links: WorkspaceLink[] = GROUPS[group].map((spec) => ({
+      key: spec.key,
+      href: myPath(locale, spec.path),
+      text: label.section(spec.key),
+      ...(spec.exact === true ? { exact: true } : {}),
+      ...(spec.also === undefined
+        ? {}
+        : { also: spec.also.map((path) => myPath(locale, path)) }),
+    }));
+    return group === 'library' || group === 'learning'
+      ? { key: group, label: label.group(group), links }
+      : { key: group, links };
   });
+  const work: WorkspaceLink[] = STAFF.filter((area) => staff[area.key]).map((area) => ({
+    key: area.key,
+    href: localizedPath(locale, area.path),
+    text: label.section(area.key),
+  }));
+  return work.length === 0
+    ? sections
+    : [...sections, { key: 'staff', label: label.group('staff'), links: work }];
 }
 
 /* ===========================================================================

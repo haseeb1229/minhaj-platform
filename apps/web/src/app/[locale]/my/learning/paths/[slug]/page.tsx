@@ -10,6 +10,7 @@ import { Alert, EmptyState, Panel, TextLink } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
 import { MyPage } from '@/components/my/frame';
 import { myPageMetadata } from '@/components/my/metadata';
+import { learningLinks } from '@/components/my-learning/nav';
 import { requireLocale } from '@/config/route-locale';
 import { requireActiveSession } from '../../../guard';
 
@@ -46,13 +47,14 @@ export default async function MyLearningPathPage({
     localizedPath(locale, `/my/learning/paths/${encodeURIComponent(slug)}`),
   );
   const t = await getTranslations({ locale, namespace: 'myLearning' });
+  const related = { label: t('nav.label'), links: learningLinks(locale, t) };
 
   const read = await learningRead('learning-my-path', () =>
     learningRuntime().learner.path({ accountId: session.account.id }, slug),
   );
   if (!read.ok)
     return (
-      <MyPage title={t('path.fallbackTitle')}>
+      <MyPage related={related} title={t('path.fallbackTitle')}>
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -64,6 +66,7 @@ export default async function MyLearningPathPage({
 
   return (
     <MyPage
+      related={related}
       title={
         <span lang={label?.locale} dir="auto" className="wrap-anywhere">
           {label?.title}

@@ -109,6 +109,7 @@ export default async function BooksPage({ params, searchParams }: ListingParams)
       ]}
       title={t('books')}
       lede={t('booksDescription')}
+      notice={t('metadataNotice')}
     >
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-10">
         {/*

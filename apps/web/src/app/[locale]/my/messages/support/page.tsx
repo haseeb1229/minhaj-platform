@@ -5,9 +5,10 @@ import { getTranslations } from 'next-intl/server';
 import {
   ConversationBadges,
   ConversationList,
+  messagingLinks,
+  messagingMessages,
   MessagingTime,
   UnreadBadge,
-  messagingMessages,
 } from '@/components/messaging/parts';
 import { conversationPath } from '@/components/messaging/presentation';
 import { messagingRead } from '@/components/messaging/read';
@@ -59,6 +60,7 @@ export default async function MySupportPage({
     localizedPath(locale, '/my/messages/support'),
   );
   const t = await getTranslations({ locale, namespace: 'messages' });
+  const related = { label: t('nav.label'), links: messagingLinks(locale, t) };
   const actor = { accountId: session.account.id };
   const { service } = messagingRuntime();
   const timeZone = session.account.timezone;
@@ -73,7 +75,7 @@ export default async function MySupportPage({
 
   if (!read.ok || !read.value.active)
     return (
-      <MyPage title={t('support.title')} description={description}>
+      <MyPage related={related} title={t('support.title')} description={description}>
         {read.ok || read.failure === 'not-found' ? (
           <Alert tone="info">{t('support.notActivated')}</Alert>
         ) : (
@@ -91,7 +93,7 @@ export default async function MySupportPage({
   const { open, earlier } = read.value.overview;
 
   return (
-    <MyPage title={t('support.title')} description={description}>
+    <MyPage related={related} title={t('support.title')} description={description}>
       <Panel>
         <div className="flex min-w-0 flex-col gap-3">
           <SectionHeading>{t('support.openHeading')}</SectionHeading>

@@ -11,11 +11,17 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { editorialReadRuntime } from '@/composition/editorial-read';
 import { peopleReadRuntime } from '@/composition/people-read';
 import { ListingIntro } from '@/components/editorial/frame';
-import { CardGrid, Container, TextLink } from '@/components/ui';
+import { CardGrid, Container, LinkCard, TextLink } from '@/components/ui';
 import { PublicationStatus } from '@/components/shell/publication-status';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
-import { EXPLORE_SECTIONS, exploreSlugsOf, type ExploreSection } from '@/shell/explore';
+import {
+  EXPLORE_SECTIONS,
+  exploreHrefOf,
+  exploreSlugsOf,
+  ownerPathOf,
+  type ExploreSection,
+} from '@/shell/explore';
 import { requireRoute } from '@/shell/registry';
 import { ExploreCard, LeaderCard } from '@/components/explore/cards';
 
@@ -29,12 +35,15 @@ import { ExploreCard, LeaderCard } from '@/components/explore/cards';
  * authority (the same rule the locale segment follows,
  * SECURITY_BASELINE.md §9.1).
  *
- * WHAT IT SHOWS (R2). Its own title and its PUBLISHED pages, each a picture-led
- * card with its own title, excerpt and lead image. A page not yet published is
- * not listed — its reserved address still answers honestly if reached — and a
- * section with nothing published renders the publication-status state and
- * points to the other sections.
- * Organisational words enter only as `Page` records through the Phase-6
+ * WHAT IT SHOWS. Its own title and EVERY page it reserves (restored after R2,
+ * owner direction 2026-11-08 — R2 had listed published pages only). Each
+ * PUBLISHED Page is a picture-led card with its own title, excerpt and lead
+ * image; every page not yet published follows as a plainly marked card that
+ * leads to its reserved route's honest state; a page an owner delivers
+ * elsewhere (the newsletter) links to that owner's page. The
+ * publication-status state stands whenever something the section reserves is
+ * still unpublished, so the section is never presented as complete when it is
+ * not. Organisational words enter only as `Page` records through the Phase-6
  * workflow (OPEN_DECISIONS.md §6.1); none is written here.
  *
  * LEADERSHIP (Phase 30-R) has no pages of its own: it shows the founder's
@@ -102,21 +111,27 @@ export default async function ExploreSectionPage({ params }: SectionParams) {
       />
     );
 
-  // This section's PUBLISHED Pages, in the order the section lists them. A
-  // reserved address with nothing on it is not listed (R2): it still answers,
-  // honestly, if somebody reaches it, but it is not offered as a destination.
-  const mine = slugs.flatMap((slug) => {
-    const page = pages.find(
-      (entry) => entry.routeBinding === `/explore/${section}/${slug}`,
-    );
-    return page === undefined ? [] : [page];
-  });
+  // Every page the section reserves, in its own order: its published Page, or
+  // nothing yet. A page an owner delivers elsewhere is never a Page here.
+  const entries = slugs.map((slug) => ({
+    slug,
+    owned: ownerPathOf(section, slug) !== null,
+    page: pages.find((entry) => entry.routeBinding === `/explore/${section}/${slug}`),
+  }));
+  const mine = entries.flatMap(({ page }) => (page === undefined ? [] : [page]));
+  const rest = entries.filter(({ page }) => page === undefined);
   const leaders = people?.items ?? [];
   const founder =
     section === 'leadership'
       ? pages.find((page) => page.routeBinding === '/explore/shaykh-ul-islam/biography')
       : undefined;
   const nothing = mine.length === 0 && leaders.length === 0 && founder === undefined;
+  // Complete only when every reserved page is published (or delivered by its
+  // owner), or — for a section with no pages — when it shows somebody.
+  const complete =
+    slugs.length > 0
+      ? rest.every(({ owned }) => owned)
+      : leaders.length > 0 || founder !== undefined;
 
   return (
     <>
@@ -167,16 +182,42 @@ export default async function ExploreSectionPage({ params }: SectionParams) {
             </CardGrid>
           )}
 
-          {/* A section with nothing published is a reserved route: it says so
-              in the accepted words (ROUTE_MAP.md §5.2) and points onwards. */}
-          {nothing ? (
+          {/*
+           * The rest of what this section reserves, as whole-card links: each
+           * is a delivered route that says honestly whether it has been
+           * published, or the owner's own page (the newsletter).
+           */}
+          {rest.length === 0 ? null : (
+            <nav aria-label={title}>
+              <CardGrid>
+                {rest.map(({ slug, owned }) => (
+                  <LinkCard
+                    key={slug}
+                    href={exploreHrefOf(locale, section, slug)}
+                    headingLevel="h2"
+                    {...(owned ? {} : { eyebrow: t('home.status.unavailable') })}
+                    title={t(
+                      `explore.${section}.pages.${slug}` as 'explore.about.pages.vision',
+                    )}
+                  />
+                ))}
+              </CardGrid>
+            </nav>
+          )}
+
+          {/* Anything still unpublished is said in the accepted words
+              (ROUTE_MAP.md §5.2); a section with nothing published at all
+              also points onwards. */}
+          {complete ? null : (
             <div className="flex flex-col items-start gap-4">
               <PublicationStatus locale={locale} />
-              <TextLink href={localizedPath(locale, '/explore')}>
-                {local('otherSections')}
-              </TextLink>
+              {nothing ? (
+                <TextLink href={localizedPath(locale, '/explore')}>
+                  {local('otherSections')}
+                </TextLink>
+              ) : null}
             </div>
-          ) : null}
+          )}
         </div>
       </Container>
     </>

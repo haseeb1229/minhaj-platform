@@ -15,7 +15,7 @@ import { Icon } from '@/components/ui/icon';
 import { rovingIndex, type Direction } from '@/components/ui/interaction';
 
 /**
- * THE MEGA-NAVIGATION (R2) — the header's six grouped disclosures.
+ * THE MEGA-NAVIGATION (R2) — the header's nine domain disclosures.
  *
  * DISCLOSURES, NOT A MENU AND NOT A DIALOG. Each group is a real `<button>`
  * with `aria-expanded`/`aria-controls` and its panel follows it in the DOM, so
@@ -31,8 +31,8 @@ import { rovingIndex, type Direction } from '@/components/ui/interaction';
  * closes it. Never hover-only — activation is always a press.
  *
  * THE PANELS ARE SERVER-RENDERED, handed in as nodes. The browser receives
- * the open/closed behaviour and nothing else: no route registry, no presence
- * policy, no message catalogue (ARCHITECTURE.md §13.8).
+ * the open/closed behaviour and nothing else: no route registry, no menu
+ * grouping, no message catalogue (ARCHITECTURE.md §13.8).
  *
  * POSITIONED AGAINST THE HEADER, not the button: nothing between the panel and
  * the `<header>` is a containing block, so every panel spans the header's full
@@ -141,7 +141,11 @@ export function MegaNav({
         if (next !== null && !event.currentTarget.contains(next)) setOpenId(null);
       }}
     >
-      {/* Wraps rather than overflows if a translation ever outgrows the row. */}
+      {/*
+       * Nine domains in one row from 1280 px, measured in all three languages
+       * (compact 14 px labels and an icon-only Search make the room); it wraps
+       * rather than overflows if a translation ever outgrows the row.
+       */}
       <ul className="flex list-none flex-wrap items-center gap-0.5 p-0">
         {groups.map((group, index) => {
           const open = openId === group.id;
@@ -157,9 +161,9 @@ export function MegaNav({
                 aria-controls={panelId(group.id)}
                 onClick={() => setOpenId(open ? null : group.id)}
                 onKeyDown={(event) => onTriggerKeyDown(event, index)}
-                className={`relative inline-flex min-h-11 items-center gap-1 rounded-control px-2.5 text-[0.9375rem] whitespace-nowrap text-foreground transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border aria-expanded:bg-surface-sunken xl:px-3 ${
+                className={`relative inline-flex min-h-11 items-center gap-1 rounded-control px-2 text-sm whitespace-nowrap text-foreground transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border aria-expanded:bg-surface-sunken ${
                   inside
-                    ? 'font-semibold after:absolute after:start-3 after:end-3 after:bottom-1 after:h-0.5 after:rounded-full after:bg-accent'
+                    ? 'font-semibold after:absolute after:start-2 after:end-2 after:bottom-1 after:h-0.5 after:rounded-full after:bg-accent'
                     : 'font-medium'
                 }`}
               >

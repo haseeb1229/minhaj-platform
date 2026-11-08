@@ -116,6 +116,13 @@ test.describe('administrative routes', () => {
   }) => {
     await registerAndSignIn(page, 'nobody');
 
+    // Owner direction 2026-11-08: My Minhaj offers the way to the staff areas
+    // only to a person Identity grants them. An ordinary member is offered
+    // neither — not hidden by the browser, never rendered at all.
+    await page.goto('/my');
+    await expect(page.getByRole('main')).toBeVisible();
+    await expect(page.locator('a[href="/admin"], a[href="/teacher"]')).toHaveCount(0);
+
     // 404, not 403: a 403 would confirm the route exists and that somebody may
     // use it, which is a map of the platform's privileged shape handed to
     // anyone with an account (SECURITY_BASELINE.md §1.5).
@@ -144,6 +151,21 @@ test.describe('administrative routes', () => {
 test.describe('the privileged administrator', () => {
   // EVERY TEST BELOW IS THE BOOTSTRAPPED ADMINISTRATOR, already signed in.
   test.use({ storageState: ADMINISTRATOR_STATE });
+
+  test('is offered the administration from My Minhaj, and not the Teacher area', async ({
+    page,
+  }) => {
+    // Identity's live evaluation of this session opens administrative
+    // surfaces, so My Minhaj's navigation offers the way there; the Platform
+    // Administrator role does not carry `teaching.perform`, so no Teacher area.
+    await page.goto('/my');
+    const admin = page.locator('a[href="/admin"]:visible');
+    await expect(admin).toHaveCount(1);
+    await expect(admin).toHaveText('Administration');
+    await expect(page.locator('a[href="/teacher"]')).toHaveCount(0);
+    await admin.click();
+    await page.waitForURL((url) => url.pathname === '/admin');
+  });
 
   test('reads every surface its role reaches', async ({ page }) => {
     await page.goto('/admin');
@@ -224,25 +246,21 @@ test.describe('the privileged administrator', () => {
     await expect(main).not.toContainText('Deferred');
     await expect(main).not.toContainText('No route yet');
 
-    // PROMOTION, not placement (Rebaseline R1): the view states the policy the
-    // shell applies — what is always promoted, what waits for published
-    // content, what is only reachable by its address — and English paths are
-    // unprefixed.
+    // PROMOTION, not placement: the view states what the header and footer
+    // always link (owner direction 2026-11-08 — unconditional) and what is only
+    // reachable by its address — and English paths are unprefixed.
     await expect(main.getByRole('columnheader', { name: 'Promotion' })).toHaveCount(1);
     await expect(main.getByRole('columnheader', { name: 'Placement' })).toHaveCount(0);
     const rowAt = (path: string) =>
       main
         .getByRole('row')
         .filter({ has: page.getByRole('cell', { name: path, exact: true }) });
-    await expect(rowAt('/explore')).toContainText('Always promoted');
-    // Only fixture corpora exist during a run, so the Quran is never promoted.
-    await expect(rowAt('/quran')).toContainText('Waits for published quran');
-    // R2: Contact is linked once its own organisational Page is published
-    // (no Pages are published during a run).
-    await expect(rowAt('/contact')).toContainText('Waits for its page to be published');
-    await expect(rowAt('/donate')).toContainText(
-      /Waits for published giving|Promoted now \(giving is published\)/,
-    );
+    // Whatever is published: a fixture-only Quran, an unpublished Contact
+    // Page and closed giving are all linked, always.
+    // Today every registered route has its place in the header or footer.
+    for (const path of ['/explore', '/quran', '/contact', '/donate', '/legal/privacy'])
+      await expect(rowAt(path), path).toContainText('Always promoted');
+    await expect(main).not.toContainText('Waits for');
     await expect(main).not.toContainText('/en/');
 
     // The posture this deployment is actually in, stated on the screen.

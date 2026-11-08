@@ -458,22 +458,25 @@ test.describe('availability', () => {
       expect(await page.content(), target).not.toContain(TEXT.draft);
       await expectNoPaymentDetailFields(page, target);
 
-      // NOTHING PROMOTES A CLOSED SERVICE (Rebaseline R1). The page answers at
-      // its address, but neither the header nor the footer offers Donate while
-      // giving is closed — hidden markup included, so the drawer's copy is
-      // covered too.
-      // By NAME, not by address: on /donate the header's language switcher
-      // links to the page itself, which is not a promotion of giving.
+      // DONATE IS ALWAYS IN THE SHELL (owner direction 2026-11-08): the header
+      // and the footer's Learn and Participate column link it while giving is
+      // closed too, and this page says so honestly (above).
       await expect(
         page
           .getByRole('banner')
-          .getByRole('link', { name: copy('shell.nav.donate'), exact: true }),
+          .getByRole('link', { name: copy('shell.nav.donate', {}, locale), exact: true }),
         target,
-      ).toHaveCount(0);
+      ).toHaveAttribute('href', target);
       await expect(
-        page.getByRole('contentinfo').locator(`a[href="${target}"]`),
+        page
+          .getByRole('contentinfo')
+          .getByRole('navigation', {
+            name: copy('shell.footer.columns.learnParticipate', {}, locale),
+            exact: true,
+          })
+          .locator(`a[href="${target}"]`),
         target,
-      ).toHaveCount(0);
+      ).toHaveCount(1);
     }
 
     // My donations says the same, and offers no form either.
@@ -528,27 +531,24 @@ test.describe('availability', () => {
       await expectNoPaymentDetailFields(page, target);
     }
 
-    // OPEN, AND NOW PROMOTED: with an activation and a published campaign the
-    // header offers Donate as its call to action and the footer's "Learn &
-    // take part" column (R2) lists it. The shell's presence snapshot may be up to 30 seconds
-    // old, so the promotion is awaited rather than assumed.
-    await expect(async () => {
-      await page.goto('/');
-      await expect(
-        page
-          .getByRole('banner')
-          .getByRole('link', { name: copy('shell.nav.donate'), exact: true }),
-      ).toHaveAttribute('href', '/donate', { timeout: 1_000 });
-      await expect(
-        page
-          .getByRole('contentinfo')
-          .getByRole('navigation', {
-            name: copy('shell.footer.groups.participate'),
-            exact: true,
-          })
-          .locator('a[href="/donate"]'),
-      ).toHaveCount(1, { timeout: 1_000 });
-    }).toPass({ timeout: 50_000, intervals: [2_000, 5_000] });
+    // OPEN, AND STILL LINKED THE SAME WAY: the header's Donate and the
+    // footer's Learn and Participate column link the page, as they do while
+    // giving is closed (owner direction 2026-11-08).
+    await page.goto('/');
+    await expect(
+      page
+        .getByRole('banner')
+        .getByRole('link', { name: copy('shell.nav.donate'), exact: true }),
+    ).toHaveAttribute('href', '/donate');
+    await expect(
+      page
+        .getByRole('contentinfo')
+        .getByRole('navigation', {
+          name: copy('shell.footer.columns.learnParticipate'),
+          exact: true,
+        })
+        .locator('a[href="/donate"]'),
+    ).toHaveCount(1);
     await page.goto('/ur');
     await expect(
       page

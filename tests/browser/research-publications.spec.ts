@@ -371,6 +371,19 @@ test.describe('Library-wide surfaces include what Phase 9 delivered', () => {
         page.getByRole('main').getByRole('link', { name, exact: true }),
       ).toBeVisible();
     }
+    // The way to every resource type, the Books entry of the directory, and
+    // the metadata notice, said on the page (DOMAIN_MODEL.md §10.1).
+    const main = page.getByRole('main');
+    await expect(
+      main.getByRole('link', { name: 'See every resource type', exact: true }),
+    ).toHaveAttribute('href', '/library/resources');
+    await expect(
+      main.getByRole('region', { name: 'Books and editions' }).getByRole('link', {
+        name: 'Books',
+        exact: true,
+      }),
+    ).toHaveAttribute('href', '/library/books');
+    await expect(main.getByText(/^Titles and descriptions are shown/)).toBeVisible();
 
     await page.goto('/library/resources');
     await expect(page.getByRole('link', { name: RESEARCH_TITLE })).toBeVisible();

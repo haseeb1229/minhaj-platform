@@ -7,11 +7,12 @@ import { sessionIsFuture } from '@minhaj/contracts/learning';
 
 import {
   AttendanceBadge,
+  classLinks,
+  classMessages,
   ClassSchedule,
   JoinLink,
   ParticipationBadge,
   SessionStateBadge,
-  classMessages,
 } from '@/components/my-classes/parts';
 import { LearningTitle } from '@/components/my-learning/parts';
 import { learningRead } from '@/components/my-learning/read';
@@ -58,6 +59,7 @@ export default async function MyClassPage({
   const path = localizedPath(locale, `/my/classes/${encodeURIComponent(id)}`);
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myClasses' });
+  const related = { label: t('nav.label'), links: classLinks(locale, t) };
   const actor = { accountId: session.account.id };
 
   const read = await learningRead('learning-my-class', async () => {
@@ -72,7 +74,7 @@ export default async function MyClassPage({
   });
   if (!read.ok)
     return (
-      <MyPage title={t('detail.fallbackTitle')}>
+      <MyPage related={related} title={t('detail.fallbackTitle')}>
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -95,6 +97,7 @@ export default async function MyClassPage({
 
   return (
     <MyPage
+      related={related}
       title={title}
       description={
         <div className="flex flex-wrap items-center gap-2">

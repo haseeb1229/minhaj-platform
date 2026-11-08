@@ -3,7 +3,11 @@ import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { TeacherName } from '@/components/live-learning/parts';
-import { ConversationList, messagingMessages } from '@/components/messaging/parts';
+import {
+  ConversationList,
+  messagingLinks,
+  messagingMessages,
+} from '@/components/messaging/parts';
 import { readCursor, withQuery } from '@/components/messaging/presentation';
 import {
   courseListings,
@@ -59,6 +63,7 @@ export default async function MyMessagesPage({
   const path = localizedPath(locale, '/my/messages');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'messages' });
+  const related = { label: t('nav.label'), links: messagingLinks(locale, t) };
   const cursor = readCursor(await searchParams);
   const actor = { accountId: session.account.id };
   const { service } = messagingRuntime();
@@ -74,7 +79,7 @@ export default async function MyMessagesPage({
 
   if (!read.ok)
     return (
-      <MyPage title={t('title')} description={description}>
+      <MyPage related={related} title={t('title')} description={description}>
         <Alert tone="error">
           {read.failure === 'invalid' ? t('list.stale') : t('failure.load')}
         </Alert>
@@ -106,7 +111,7 @@ export default async function MyMessagesPage({
   ]);
 
   return (
-    <MyPage title={t('title')} description={description}>
+    <MyPage related={related} title={t('title')} description={description}>
       {capabilities.fixture ? <Alert tone="warning">{t('fixture')}</Alert> : null}
       {anyActive ? null : <Alert tone="info">{t('notActivated')}</Alert>}
 

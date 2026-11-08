@@ -149,9 +149,31 @@ async function coversFor(
 }
 
 /**
+ * The topic names of one page of Collections, in ONE owner read. Topics are a
+ * way onwards, not the record: a failed read leaves the cards without chips
+ * rather than taking the listing down.
+ */
+async function topicNamesFor(
+  items: readonly CollectionSummary[],
+  locale: Locale,
+): Promise<ReadonlyMap<string, { slug: string; name: string }>> {
+  try {
+    return (
+      await referenceNames(
+        { personIds: [], topicIds: items.flatMap((item) => item.topicIds) },
+        locale,
+      )
+    ).topics;
+  } catch {
+    return new Map();
+  }
+}
+
+/**
  * A grid of image-led cards: each Collection's cover (when a member gives it
- * one), its title in its own language and its own summary. The title is the
- * card's one link.
+ * one), its type, its title in its own language and its own summary — the
+ * title is the card's one link — and, beneath the card, its topics as links of
+ * their own to each topic's page.
  */
 async function CollectionGrid({
   locale,
@@ -164,8 +186,12 @@ async function CollectionGrid({
   readonly label: string;
   readonly headingLevel: 'h2' | 'h3';
 }) {
-  const news = await getTranslations({ locale, namespace: 'news' });
-  const covers = await coversFor(items);
+  const [news, t, covers, topicNames] = await Promise.all([
+    getTranslations({ locale, namespace: 'news' }),
+    getTranslations({ locale, namespace: 'collections' }),
+    coversFor(items),
+    topicNamesFor(items, locale),
+  ]);
   return (
     <ul
       className="grid list-none grid-cols-1 gap-x-6 gap-y-10 p-0 sm:grid-cols-2 lg:grid-cols-3"
@@ -175,20 +201,39 @@ async function CollectionGrid({
         const translation = translationFor(item, locale);
         const cover = covers.get(item.slug);
         const language = languageOf(translation.languageCode, locale, news);
+        const topics = item.topicIds.flatMap((id) => {
+          const topic = topicNames.get(id);
+          return topic === undefined ? [] : [topic];
+        });
         return (
-          <MediaCard
-            key={item.slug}
-            href={localizedPath(locale, collectionPathOf(item.slug))}
-            title={translation.title}
-            description={translation.excerpt}
-            lang={translation.languageCode}
-            dir={directionOf(translation.languageCode)}
-            headingLevel={headingLevel}
-            aspect="wide"
-            sizes="(min-width: 64rem) 22rem, (min-width: 40rem) 45vw, 100vw"
-            image={cover === undefined ? null : leadCardImage(cover, '')}
-            {...(language === undefined ? {} : { language })}
-          />
+          <li key={item.slug} className="flex min-w-0 flex-col gap-3">
+            <MediaCard
+              as="div"
+              href={localizedPath(locale, collectionPathOf(item.slug))}
+              type={t('type')}
+              title={translation.title}
+              description={translation.excerpt}
+              lang={translation.languageCode}
+              dir={directionOf(translation.languageCode)}
+              headingLevel={headingLevel}
+              aspect="wide"
+              sizes="(min-width: 64rem) 22rem, (min-width: 40rem) 45vw, 100vw"
+              image={cover === undefined ? null : leadCardImage(cover, '')}
+              {...(language === undefined ? {} : { language })}
+            />
+            {topics.length === 0 ? null : (
+              <TopicChips
+                label={t('topics')}
+                topics={topics.map((topic) => ({
+                  href: localizedPath(
+                    locale,
+                    `/topics/${encodeURIComponent(topic.slug)}`,
+                  ),
+                  text: topic.name,
+                }))}
+              />
+            )}
+          </li>
         );
       })}
     </ul>
@@ -227,6 +272,7 @@ export async function CollectionsPage({
           <p className="text-lede max-w-[var(--measure-prose)] text-foreground-muted">
             {t('description')}
           </p>
+          <MetaRow items={KIND_ORDER.map((kind) => t(`kindsPlural.${kind}`))} />
         </div>
         {page.items.length === 0 ? (
           offset > 0 ? (
@@ -259,6 +305,9 @@ export async function CollectionsPage({
     </Container>
   );
 }
+
+/** The kinds of record a Collection can gather, in the order the listing names them. */
+const KIND_ORDER = ['article', 'news', 'work', 'video'] as const;
 
 /* ===========================================================================
  * /collections/{slug}

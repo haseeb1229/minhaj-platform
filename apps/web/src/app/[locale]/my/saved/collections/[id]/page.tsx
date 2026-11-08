@@ -26,6 +26,7 @@ import {
 } from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
 import { resolvePersonalTargets } from '@/composition/personal-targets';
+import { savedLinks } from '@/components/personal/nav';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../../(identity)/form-state';
 import { requireActiveSession } from '../../../guard';
@@ -86,13 +87,14 @@ export default async function MyCollectionPage({
   );
   if (valid === null) notFound();
   const t = await getTranslations({ locale, namespace: 'personal' });
+  const related = { label: t('nav.label'), links: savedLinks(locale, t) };
   const read = await personalRead('personal-collection', () =>
     personalisationRuntime().saved.collection({ accountId: session.account.id }, valid),
   );
 
   if (!read.ok)
     return (
-      <MyPage title={t('collection.title')}>
+      <MyPage related={related} title={t('collection.title')}>
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -123,6 +125,7 @@ export default async function MyCollectionPage({
 
   return (
     <MyPage
+      related={related}
       title={
         <span dir="auto" className="wrap-anywhere">
           {collection.title}

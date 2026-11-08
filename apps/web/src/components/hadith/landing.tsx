@@ -10,7 +10,7 @@ import { SEARCH_QUERY_MAX_LENGTH } from '@minhaj/contracts/search';
 import { hadithReadRuntime } from '@/composition/hadith-read';
 import { libraryReadRuntime } from '@/composition/library-read';
 import { WorkCard } from '@/components/library/cards';
-import { CoverStack, LibraryDirectory, LibraryShelf } from '@/components/library/landing';
+import { CoverStack, LibraryShelf } from '@/components/library/landing';
 import {
   ActionLink,
   Breadcrumbs,
@@ -264,8 +264,13 @@ const WORKS_SHELF = 12;
  * a part of the section that is not open. Every work links to its own Library
  * page, and "all" to the Library's own listing for the Topic.
  *
- * With no such work (or no Topic) the shelf is simply absent; the rest still
- * points at the delivered areas that serve the subject (the topic hub, Learn).
+ * Below it, HOW THE SECTION IS ORGANISED: the collections and their study,
+ * each described and marked as opening once a collection is activated — words
+ * only, never a link into a part that is not open — and exploring and
+ * learning, linked to the delivered areas that already serve them (the topic
+ * hub, Learn). Then the way back home.
+ *
+ * With no such work (or no Topic) the shelf is simply absent.
  */
 export async function HadithLandingUnavailable({ locale }: { readonly locale: Locale }) {
   const [t, parts, topic] = await Promise.all([
@@ -281,22 +286,12 @@ export async function HadithLandingUnavailable({ locale }: { readonly locale: Lo
     ...works.filter((work) => work.cover !== null),
     ...works.filter((work) => work.cover === null),
   ].slice(0, WORKS_SHELF);
-  const elsewhere = [
-    {
-      id: 'hadith-elsewhere',
-      heading: t('works.moreHeading'),
-      links: (
-        [
-          ['explore', pathFor(locale, requireRoute('topics'))],
-          ['learn', pathFor(locale, requireRoute('learn'))],
-        ] as const
-      ).map(([key, href]) => ({
-        href,
-        title: t(`unavailable.go.${key}`),
-        description: t(`unavailable.parts.${key}`),
-      })),
-    },
-  ];
+  const structure = [
+    { key: 'collections', href: null },
+    { key: 'study', href: null },
+    { key: 'explore', href: pathFor(locale, requireRoute('topics')) },
+    { key: 'learn', href: pathFor(locale, requireRoute('learn')) },
+  ] as const;
 
   return (
     <>
@@ -352,7 +347,40 @@ export async function HadithLandingUnavailable({ locale }: { readonly locale: Lo
             </p>
           </section>
 
-          <LibraryDirectory groups={elsewhere} />
+          <section className="flex flex-col gap-5" aria-labelledby="hadith-structure">
+            <SectionHeader
+              id="hadith-structure"
+              heading={t('unavailable.structureHeading')}
+              intro={t('unavailable.structureIntro')}
+            />
+            <ul className="grid list-none grid-cols-1 gap-x-10 gap-y-8 p-0 *:min-w-0 sm:grid-cols-2 lg:grid-cols-4">
+              {structure.map((part) => (
+                <li key={part.key} className="flex h-full min-w-0 flex-col gap-2.5">
+                  <h3 className="border-b border-border pb-2 text-subheading font-semibold">
+                    {t(`landing.${part.key}`)}
+                  </h3>
+                  <p className="text-sm text-foreground-muted">
+                    {t(`unavailable.parts.${part.key}`)}
+                  </p>
+                  <p className="mt-auto pt-1 text-sm">
+                    {part.href === null ? (
+                      <span className="text-caption font-medium text-foreground-muted">
+                        {t('unavailable.awaiting')}
+                      </span>
+                    ) : (
+                      <TextLink href={part.href}>
+                        {t(`unavailable.go.${part.key}`)}
+                      </TextLink>
+                    )}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <p>
+            <TextLink href={localizedPath(locale, '')}>{t('unavailable.home')}</TextLink>
+          </p>
         </div>
       </Container>
     </>

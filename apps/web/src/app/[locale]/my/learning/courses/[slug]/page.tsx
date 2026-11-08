@@ -20,6 +20,7 @@ import { Alert, Panel, SectionHeading, TextLink } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
 import { MyPage } from '@/components/my/frame';
 import { myPageMetadata } from '@/components/my/metadata';
+import { learningLinks } from '@/components/my-learning/nav';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../../(identity)/form-state';
 import { requireActiveSession } from '../../../guard';
@@ -72,6 +73,7 @@ export default async function MyCoursePage({
   const path = localizedPath(locale, `/my/learning/courses/${encodeURIComponent(slug)}`);
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myLearning' });
+  const related = { label: t('nav.label'), links: learningLinks(locale, t) };
   const actor = { accountId: session.account.id };
 
   const read = await learningRead('learning-my-course', () =>
@@ -79,7 +81,7 @@ export default async function MyCoursePage({
   );
   if (!read.ok)
     return (
-      <MyPage title={t('course.fallbackTitle')}>
+      <MyPage related={related} title={t('course.fallbackTitle')}>
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -108,6 +110,7 @@ export default async function MyCoursePage({
 
   return (
     <MyPage
+      related={related}
       title={
         <span lang={label?.locale} dir="auto" className="wrap-anywhere">
           {label?.title}

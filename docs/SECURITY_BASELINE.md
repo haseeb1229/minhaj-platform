@@ -162,7 +162,14 @@ assignment and **takes effect immediately**, including in messaging (§12.2).
 
 ### 3.4 Enforcement rules
 
-1. **Server-side always.** Client-side checks are presentation only.
+1. **Server-side always.** Client-side checks are presentation only. *(2026-11-08, owner
+   direction)* My Minhaj's links to `/teacher` and `/admin` follow this rule: the `/my` layout
+   decides them on the server from Identity's live `evaluate` of the request's own session —
+   `teaching.perform`, or any permission that opens an administrative surface — never from a
+   profile, a client claim or request input, and offers neither without a session or when the
+   read fails (`apps/web/src/app/[locale]/my/staff-areas.ts`). A link grants nothing: the target
+   areas keep their own gates. The public `/api/my/account-state` answer is unchanged (one
+   boolean).
 2. **Every protected mutation involving an authenticated principal re-checks authorisation
    independently.** Route protection is navigational convenience, not a security boundary.
 3. **Default deny.** Absence of a grant is denial.

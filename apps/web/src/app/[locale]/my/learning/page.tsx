@@ -23,6 +23,7 @@ import {
 } from '@/components/personal/presentation';
 import { Alert, EmptyState, Pager, Panel, TextLink } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
+import { learningLinks } from '@/components/my-learning/nav';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
 import { requireActiveSession } from '../guard';
@@ -74,6 +75,13 @@ export default async function MyLearningPage({
   const path = localizedPath(locale, '/my/learning');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myLearning' });
+  // The catalogue is this page's own action; it is not repeated at its foot.
+  const related = {
+    label: t('nav.label'),
+    links: learningLinks(locale, t).filter(
+      (link) => link.href !== localizedPath(locale, '/learn/courses'),
+    ),
+  };
   const offset = readPersonalOffset(await searchParams);
   const read = await learningRead('learning-my-learning', () =>
     learningPanels(session.account.id, offset),
@@ -92,7 +100,13 @@ export default async function MyLearningPage({
 
   if (!read.ok)
     return (
-      <MyPage title={t('title')} description={description} tabs={tabs} action={browse}>
+      <MyPage
+        related={related}
+        title={t('title')}
+        description={description}
+        tabs={tabs}
+        action={browse}
+      >
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -101,7 +115,13 @@ export default async function MyLearningPage({
   const timeZone = session.account.timezone;
 
   return (
-    <MyPage title={t('title')} description={description} tabs={tabs} action={browse}>
+    <MyPage
+      related={related}
+      title={t('title')}
+      description={description}
+      tabs={tabs}
+      action={browse}
+    >
       {/* ---- Courses ----------------------------------------------------- */}
 
       <MySection id="learning-courses" heading={t('courses.heading')}>

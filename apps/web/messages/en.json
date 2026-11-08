@@ -41,21 +41,16 @@
       "browse": "Browse",
       "quickLinks": "Go to",
       "noQuickLinks": "No area matches. Press Enter to search everything.",
-      "groups": {
-        "quran": "Quran",
-        "knowledge": "Knowledge",
-        "watch": "Watch & Listen",
-        "learn": "Learn",
-        "news": "News & Events",
-        "about": "About MQI"
-      },
       "intros": {
+        "explore": "Minhaj-ul-Quran International: who it is and where it works.",
         "quran": "The Quran, by surah and by juz, with its translations.",
-        "knowledge": "Books, periodicals, research and the religious sciences.",
-        "watch": "Lectures, speeches and programmes, on video and audio.",
+        "hadith": "The Prophetic traditions, their collections and their sciences.",
         "learn": "Courses and study you can open freely.",
-        "news": "News, statements and gatherings from around the world.",
-        "about": "Minhaj-ul-Quran International: who it is and where it works."
+        "library": "Books, periodicals, research and the religious sciences.",
+        "watch": "Lectures, speeches and programmes, on video and audio.",
+        "fatwa": "Rulings on questions people have asked, and how to ask your own.",
+        "newsEvents": "News, statements and gatherings from around the world.",
+        "global": "Minhaj-ul-Quran's centres and communities in countries around the world."
       },
       "featured": {
         "video": "Latest video",
@@ -67,160 +62,55 @@
           "title": "Read the Quran",
           "description": "Every surah of the Quran, in order."
         },
-        "surahs": {
-          "title": "Surah index",
-          "description": "All 114 surahs, with their names and length."
-        },
-        "juz": {
-          "title": "Juz index",
-          "description": "The thirty parts, for daily reading."
-        },
-        "translations": {
-          "title": "Translations",
-          "description": "Irfan-ul-Quran and the other published translations."
-        },
-        "quranSearch": {
-          "title": "Search the Quran",
-          "description": "Find a verse by a word or its reference."
-        },
         "library": {
           "title": "Library",
           "description": "The whole catalogue of books and periodicals."
-        },
-        "books": {
-          "title": "Books",
-          "description": "Published books, by title, author and language."
-        },
-        "magazines": {
-          "title": "Magazines",
-          "description": "Magazine issues, newest first."
-        },
-        "research": {
-          "title": "Research",
-          "description": "Research titles and scholarly studies."
-        },
-        "encyclopedias": {
-          "title": "Encyclopedias",
-          "description": "Reference works in many volumes."
-        },
-        "articles": {
-          "title": "Articles",
-          "description": "Essays and writing on faith and society."
-        },
-        "hadith": {
-          "title": "Hadith",
-          "description": "Collections of hadith and their study."
-        },
-        "fatwa": {
-          "title": "Fatwa",
-          "description": "Answers to religious questions."
-        },
-        "topics": {
-          "title": "Topics"
         },
         "watch": {
           "title": "Watch",
           "description": "Lectures, speeches and programmes on video."
         },
-        "series": {
-          "title": "Series",
-          "description": "Lectures in order, episode by episode."
-        },
-        "playlists": {
-          "title": "Playlists",
-          "description": "Curated selections of videos."
-        },
-        "listen": {
-          "title": "Listen",
-          "description": "Audio lectures and series."
-        },
-        "learn": {
-          "title": "Courses",
-          "description": "Courses to study at your own pace."
-        },
-        "paths": {
-          "title": "Learning paths",
-          "description": "Courses in a recommended order."
-        },
-        "live": {
-          "title": "Live classes",
-          "description": "Scheduled classes with a teacher."
-        },
-        "teachers": {
-          "title": "Teachers",
-          "description": "The teachers who lead live classes."
-        },
         "news": {
           "title": "Latest news",
           "description": "Stories from Minhaj-ul-Quran's work worldwide."
-        },
-        "press": {
-          "title": "Press releases",
-          "description": "Official statements to the media."
-        },
-        "events": {
-          "title": "Events",
-          "description": "Conferences, gatherings and programmes."
-        },
-        "collections": {
-          "title": "Campaigns and collections",
-          "description": "Coverage gathered around one occasion."
-        },
-        "about": {
-          "title": "About Minhaj-ul-Quran",
-          "description": "The organisation, its people and its work."
-        },
-        "introduction": {
-          "title": "Introduction",
-          "description": "Minhaj-ul-Quran International in brief."
-        },
-        "founder": {
-          "title": "The founder",
-          "description": "Shaykh-ul-Islam Dr Muhammad Tahir-ul-Qadri."
-        },
-        "leadership": {
-          "title": "Leadership",
-          "description": "The people who lead the organisation."
-        },
-        "departments": {
-          "title": "Departments",
-          "description": "How the organisation's work is divided."
-        },
-        "forums": {
-          "title": "Forums",
-          "description": "The organisation's forums and wings."
-        },
-        "history": {
-          "title": "History",
-          "description": "How the movement began and grew."
-        },
-        "global": {
-          "title": "Worldwide",
-          "description": "The countries where Minhaj-ul-Quran is present."
-        },
-        "centres": {
-          "title": "Find a centre",
-          "description": "Local centres near you."
-        },
-        "help": {
-          "title": "Help"
-        },
-        "contact": {
-          "title": "Contact"
-        },
-        "myMinhaj": {
-          "title": "My Minhaj"
-        },
-        "membership": {
-          "title": "Membership"
-        },
-        "donate": {
-          "title": "Donate"
-        },
-        "hadithWorks": {
-          "title": "Hadith works",
-          "description": "Books of hadith and its sciences from the Library."
         }
+      }
+    },
+    "menu": {
+      "overview": "{section} overview",
+      "columns": {
+        "connect": "Connect",
+        "read": "Read",
+        "study": "Study",
+        "explore": "Explore",
+        "learn": "Learn",
+        "browse": "Browse",
+        "learning": "Learning",
+        "topics": "Topics",
+        "live": "Live",
+        "people": "People",
+        "writtenWorks": "Written works",
+        "periodicals": "Periodicals",
+        "access": "Access",
+        "watch": "Watch",
+        "seriesPrograms": "Series and programmes",
+        "byTopic": "By topic",
+        "listen": "Listen",
+        "find": "Find",
+        "ask": "Ask",
+        "understand": "Understand",
+        "news": "News",
+        "events": "Events",
+        "media": "Media",
+        "archive": "Archive",
+        "structure": "Structure"
+      },
+      "labels": {
+        "help": "Help and FAQ",
+        "quranRead": "Read the Quran",
+        "quranSurah": "Surah index",
+        "quranJuz": "Juz index",
+        "hadithIntroduction": "Introduction to Hadith"
       }
     },
     "home": {
@@ -233,6 +123,25 @@
         "exploreLibrary": "Explore the Library",
         "storyLabel": "From the news"
       },
+      "search": {
+        "label": "Search the Quran, Hadith, the Library and more",
+        "submit": "Find"
+      },
+      "exploreAction": "Explore the platform",
+      "exploreHeading": "Explore",
+      "exploreIntro": "Sections describing the organisation, its leadership and its work. Each section is published as it is completed.",
+      "sources": {
+        "heading": "Quran and Hadith",
+        "intro": "Two separate sources, each with its own reader, index and search."
+      },
+      "areas": {
+        "heading": "Across the platform",
+        "intro": "Every area can be read without an account."
+      },
+      "organisation": {
+        "heading": "About the organisation",
+        "intro": "Pages published from the organisation's own site, for review before adoption."
+      },
       "quran": {
         "heading": "The Holy Quran",
         "intro": "All {count} surahs, each with its ayat in order. Begin with one of these, or open the full index.",
@@ -241,6 +150,8 @@
         "quickLabel": "Surahs to begin with"
       },
       "status": {
+        "available": "Available",
+        "fixture": "Test text only",
         "reference": "Preview",
         "unavailable": "Not yet published"
       },
@@ -263,7 +174,10 @@
       },
       "links": {
         "allNews": "All news",
-        "allCollections": "All collections"
+        "allEvents": "All events",
+        "allCollections": "All collections",
+        "allTopics": "All topics",
+        "fatwa": "Browse Fatwa"
       },
       "people": {
         "label": "Leadership profiles",
@@ -271,7 +185,8 @@
       },
       "global": {
         "heading": "Around the world",
-        "countries": "{count, plural, one {country in the Global Network directory} other {countries in the Global Network directory}}"
+        "countries": "{count, plural, one {country in the Global Network directory} other {countries in the Global Network directory}}",
+        "presenceIntro": "Countries where the organisation states it is present. No centre is listed here yet."
       },
       "account": {
         "heading": "Keep your place with My Minhaj",
@@ -386,13 +301,13 @@
       "legalHeading": "Legal and site",
       "preAdoption": "One Minhaj is an independently developed platform. It is not currently commissioned, sponsored, adopted or deployed by Minhaj-ul-Quran International, and nothing here should be read as an official statement by the organisation.",
       "description": "Books, lectures, news and learning from Minhaj-ul-Quran International, gathered in one multilingual platform.",
-      "groups": {
-        "quranKnowledge": "Quran & Knowledge",
-        "library": "Library",
-        "watchListen": "Watch & Listen",
-        "newsEvents": "News & Events",
-        "about": "About MQI",
-        "participate": "Learn & take part"
+      "columns": {
+        "about": "About Minhaj-ul-Quran",
+        "knowledge": "Knowledge",
+        "libraryMedia": "Library and Media",
+        "learnParticipate": "Learn and Participate",
+        "ourWork": "Our Work",
+        "globalContact": "Global and Contact"
       },
       "channels": "Official channels",
       "channelsIntro": "Minhaj-ul-Quran International's own accounts and apps.",
@@ -1263,11 +1178,7 @@
       "columnPromotion": "Promotion",
       "promotion": {
         "always": "Always promoted",
-        "live": "Promoted now ({signal} is published)",
-        "waiting": "Waits for published {signal}",
-        "never": "Not promoted — reachable by its address",
-        "pageLive": "Promoted now (its page is published)",
-        "pageWaiting": "Waits for its page to be published"
+        "never": "Not promoted — reachable by its address"
       }
     },
     "audit": {
@@ -2217,18 +2128,23 @@
     },
     "landing": {
       "browseBooks": "Browse all books",
+      "allResources": "See every resource type",
       "groups": {
         "books": {
-          "heading": "Books and editions"
+          "heading": "Books and editions",
+          "intro": "Published works with their editions and translations, and the ways to browse them."
         },
         "scholarly": {
-          "heading": "Research and publications"
+          "heading": "Research and publications",
+          "intro": "Research, papers, reports and reference works, with abstracts and citations where they exist."
         },
         "periodicals": {
-          "heading": "Periodicals and articles"
+          "heading": "Periodicals and articles",
+          "intro": "Magazines and journals issue by issue, and articles from the editorial process."
         },
         "access": {
-          "heading": "Access and availability"
+          "heading": "Access and availability",
+          "intro": "What can be read here, what may be downloaded, and where printed copies can be obtained."
         }
       },
       "newest": "Newest publications",
@@ -2537,8 +2453,11 @@
       "featuredIntro": "Videos selected to be featured on this page.",
       "latestIntro": "The most recently published videos, newest first.",
       "formatsHeading": "Browse by kind of video",
+      "formatsIntro": "Each kind of recording has a view of its own.",
       "groupsHeading": "Series, programmes and playlists",
+      "groupsIntro": "Videos gathered together, to be watched in order.",
       "findHeading": "Speakers, topics and audio",
+      "findIntro": "Find videos by who speaks or what they are about, or listen instead.",
       "seeAll": "All {name}"
     },
     "viewsLabel": "Kind of video",
@@ -3030,6 +2949,13 @@
   "collections": {
     "title": "Collections",
     "description": "Curated sets of articles, news, books and videos, each gathered around a theme and arranged in a deliberate order.",
+    "type": "Collection",
+    "kindsPlural": {
+      "article": "Articles",
+      "news": "News",
+      "work": "Books",
+      "video": "Videos"
+    },
     "topics": "Topics",
     "empty": "No collections have been published yet.",
     "pageEmpty": "There are no more collections on this page.",
@@ -3169,8 +3095,11 @@
     "next": "Next page",
     "landing": {
       "read": "Read",
+      "readIntro": "Enter the text in its own order, or go straight to a citation.",
       "study": "Study",
+      "studyIntro": "Published works read beside the text, each with its own translators and source.",
       "explore": "Explore",
+      "exploreIntro": "Material from across the platform classified under the Quran.",
       "learn": "Learn",
       "learnIntro": "Courses that teach the Quran, taught through Learn.",
       "learnAll": "All courses in Learn",
@@ -3743,7 +3672,12 @@
     "unavailable": {
       "body": "Hadith collections are not yet available on this site.",
       "home": "Return to the home page",
+      "structureHeading": "How this section is organised",
+      "structureIntro": "The collections and their study open once a collection is activated. Exploring and learning are already served elsewhere on the platform.",
+      "awaiting": "Opens when a collection is activated",
       "parts": {
+        "collections": "Published collections, read by book and chapter, with a permanent address for every citation.",
+        "study": "The original text with its source and edition, published translations, commentary and study material.",
         "explore": "Books, videos, research and topics from across the platform, connected through the topic hub.",
         "learn": "Structured courses and learning paths, taught through Learn."
       },
@@ -3896,8 +3830,7 @@
       "shelf": "Hadith works in the Library",
       "shelfAll": "All hadith works",
       "showPrevious": "Show previous",
-      "showNext": "Show next",
-      "moreHeading": "Elsewhere on the platform"
+      "showNext": "Show next"
     }
   },
   "fatwa": {
@@ -4884,6 +4817,7 @@
     },
     "countryNews": "Latest news from centres in {country}",
     "countryNeighbours": "Elsewhere in {region}",
+    "dataNotice": "Directory details are published only once the organisation has confirmed them. Where nothing is listed, nothing has been confirmed yet.",
     "presenceNotice": "The countries below are those the organisation states it is present in. No centre address has been published yet."
   },
   "personalIsland": {
@@ -6261,10 +6195,7 @@
       "aside": "More for you",
       "shortcuts": "Shortcuts",
       "shortcut": {
-        "availability": "Offer availability",
-        "reports": "Attendance reports",
-        "resources": "Course materials",
-        "profile": "Your profile"
+        "reports": "Attendance reports"
       },
       "unavailable": "This part can’t be shown right now."
     },
@@ -8432,7 +8363,8 @@
       "close": "Close",
       "group": {
         "library": "Library",
-        "learning": "Learning"
+        "learning": "Learning",
+        "staff": "Your work"
       },
       "section": {
         "home": "Home",
@@ -8449,7 +8381,9 @@
         "membership": "Membership",
         "giving": "Giving",
         "notifications": "Notifications",
-        "settings": "Settings"
+        "settings": "Settings",
+        "teacher": "Teacher area",
+        "admin": "Administration"
       }
     },
     "titles": {
@@ -8570,10 +8504,10 @@
       "membership": {
         "since": "Member since {date}"
       },
+      "unavailable": "Can’t be shown right now.",
       "rail": "Waiting for you",
       "account": {
-        "signedInAs": "Signed in as",
-        "settings": "Account settings"
+        "heading": "Your account"
       }
     },
     "saved": {

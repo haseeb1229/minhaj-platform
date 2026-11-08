@@ -82,7 +82,8 @@ export function CoverStack({ works }: { readonly works: readonly WorkRecord[] })
 
 /**
  * Every other way into the Library, as a directory of named links with one
- * line each — words, not a wall of identical cards.
+ * line each — words, not a wall of identical cards. A group may carry one
+ * line of its own, under its heading, saying what it gathers.
  */
 export function LibraryDirectory({
   groups,
@@ -90,6 +91,7 @@ export function LibraryDirectory({
   readonly groups: readonly {
     readonly id: string;
     readonly heading: string;
+    readonly intro?: string;
     readonly links: readonly {
       readonly href: string;
       readonly title: string;
@@ -111,6 +113,9 @@ export function LibraryDirectory({
           >
             {group.heading}
           </h3>
+          {group.intro === undefined ? null : (
+            <p className="text-sm text-foreground-muted">{group.intro}</p>
+          )}
           <ul className="m-0 flex list-none flex-col gap-1 p-0">
             {group.links.map((link) => (
               <li key={link.href} className="flex items-start gap-3 py-1.5">

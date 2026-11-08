@@ -511,23 +511,30 @@ test.describe('a fixture corpus', () => {
       'recitations',
     ])
       expect(hrefs, section).toContain(`/quran/${section}`);
+    // Full-text search sits in the hero beside the quick jump: a GET form to
+    // the Quran's own search, so it works without script.
+    const search = page
+      .getByRole('main')
+      .getByRole('search', { name: 'Search the Quran' });
+    await expect(search).toHaveAttribute('action', '/quran/search');
+    await expect(search).toHaveAttribute('method', 'get');
+    await expect(search.getByLabel('Search the Quran for')).toHaveAttribute('name', 'q');
     // No statistics and no sample verse on the landing.
     await expect(page.getByRole('main')).not.toContainText('NON_QURAN_FIXTURE_CANONICAL');
 
-    // A FIXTURE CORPUS IS NEVER PROMOTED (Rebaseline R1). The reader works at
-    // its address, under its banner, but the shell advertises the Quran only
-    // for an APPROVED corpus: no header, drawer or footer link leads here.
-    // The PRIMARY NAVIGATION, not the whole banner: the language switcher
-    // there links to this very page in English, which is not a promotion.
+    // THE NAVIGATION IS UNCONDITIONAL (owner direction 2026-11-08): the Quran
+    // is one of the nine domains whatever corpus is active, so the header's
+    // Quran menu leads here, and the footer's Knowledge column to the Surah
+    // index, while the fixture reads at its address under its banner.
     await expect(
       page
         .getByRole('banner')
         .getByRole('navigation', { name: 'Main navigation' })
         .locator('a[href="/quran"]'),
-    ).toHaveCount(0);
-    await expect(page.getByRole('contentinfo').locator('a[href="/quran"]')).toHaveCount(
-      0,
-    );
+    ).toHaveCount(1);
+    await expect(
+      page.getByRole('contentinfo').locator('a[href="/quran/surah"]'),
+    ).toHaveCount(1);
   });
 
   test('reads Surah index → Surah → Ayah by keyboard alone, with a visible focus', async ({

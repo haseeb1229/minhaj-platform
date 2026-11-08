@@ -38,6 +38,7 @@ import { AuthorChips, Contents, ReadingDates } from '@/components/editorial/read
 import { BreadcrumbData } from '@/components/media/parts';
 import { LeadFigure, leadCardImage } from '@/components/editorial/lead-image';
 import {
+  ActionLink,
   Badge,
   Breadcrumbs,
   Container,
@@ -408,18 +409,23 @@ function LanguageFilter({
   );
 }
 
-/** A listing's opening: the trail, its one `h1`, its lede and its controls. */
+/**
+ * A listing's opening: the trail, its one `h1`, its lede, the landing's own
+ * actions when it has any, and its controls.
+ */
 function ListingHead({
   trailLabel,
   trail,
   title,
   lede,
+  actions,
   children,
 }: {
   readonly trailLabel: string;
   readonly trail: readonly { readonly href?: string; readonly text: string }[];
   readonly title: string;
   readonly lede: string;
+  readonly actions?: ReactNode;
   readonly children: ReactNode;
 }) {
   return (
@@ -431,6 +437,9 @@ function ListingHead({
           <p className="text-lede max-w-[var(--measure-prose)] text-foreground-muted">
             {lede}
           </p>
+          {actions === undefined ? null : (
+            <div className="flex flex-wrap items-center gap-3 pt-2">{actions}</div>
+          )}
         </div>
         <div className="flex flex-col gap-4">{children}</div>
       </div>
@@ -519,6 +528,16 @@ export async function NewsLandingPage({
         trail={[trail.home, { text: t('title') }]}
         title={t('title')}
         lede={t('description')}
+        actions={
+          <>
+            <ActionLink href={pathFor(locale, requireRoute('events'))}>
+              {t('events')}
+            </ActionLink>
+            <ActionLink href={localizedPath(locale, '/news/archive')} tone="secondary">
+              {t('archive')}
+            </ActionLink>
+          </>
+        }
       >
         <NewsSections locale={locale} current="news-article" t={t} />
         <LanguageFilter current={language} hrefFor={(lang) => listing(lang)} t={t} />
@@ -593,6 +612,16 @@ export async function NewsLandingPage({
                 </h2>
                 <ul className="flex list-none flex-col p-0">
                   {[
+                    ...others.map((kind) => ({
+                      href: localizedPath(locale, newsListPathOf(kind)),
+                      title: t(`families.${kind}`),
+                      body: t(`familyBody.${kind}`),
+                    })),
+                    {
+                      href: localizedPath(locale, '/news/archive'),
+                      title: t('archive'),
+                      body: t('archiveBody'),
+                    },
                     {
                       href: pathFor(locale, requireRoute('events')),
                       title: t('events'),

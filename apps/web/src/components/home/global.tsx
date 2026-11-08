@@ -5,6 +5,7 @@ import { getTranslations } from 'next-intl/server';
 import { placeName } from '@/components/global/presentation';
 import { Stat } from '@/components/ui';
 import { directionOf } from '@/config/locale';
+import { pathFor, requireRoute } from '@/shell/registry';
 
 import { HomeSection } from './section';
 
@@ -13,13 +14,20 @@ import { HomeSection } from './section';
  * and every one of them by name — a typographic map of the network, set in
  * newspaper columns and ordered as the reader's language orders names. Each
  * name opens its country's page. Nothing renders when no country is published.
+ *
+ * THE WAY ON is the Centre finder once a Centre is listed; before that it is
+ * the countries directory, never an empty finder, and the introduction says
+ * plainly that no Centre is listed yet (the pre-R2 portal's behaviour).
  */
 export async function GlobalReach({
   locale,
   countries,
+  hasCentres,
 }: {
   readonly locale: Locale;
   readonly countries: readonly PublicCountryChoice[];
+  /** True once the directory lists at least one public Centre. */
+  readonly hasCentres: boolean;
 }) {
   if (countries.length === 0) return null;
   const [t, global] = await Promise.all([
@@ -37,7 +45,13 @@ export async function GlobalReach({
       band="sunken"
       header={{
         heading: t('home.global.heading'),
-        action: { href: globalPaths.countries(locale), text: global('allCountries') },
+        ...(hasCentres ? {} : { intro: t('home.global.presenceIntro') }),
+        action: hasCentres
+          ? {
+              href: pathFor(locale, requireRoute('find-a-centre')),
+              text: t('nav.findACentre'),
+            }
+          : { href: globalPaths.countries(locale), text: global('allCountries') },
       }}
     >
       <div className="grid grid-cols-1 gap-x-12 gap-y-8 lg:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">

@@ -13,6 +13,7 @@ import { LearningTitle } from '@/components/my-learning/parts';
 import { learningRead } from '@/components/my-learning/read';
 import { teacherPageMetadata } from '@/components/teacher/metadata';
 import { participantNames } from '@/components/teacher/names';
+import { teacherLinks } from '@/components/teacher/nav';
 import {
   NoScope,
   NotActivated,
@@ -101,6 +102,7 @@ export default async function TeacherOverviewPage({
     return (
       <TeacherFrame title={title} description={description}>
         <NoScope locale={locale} t={t} />
+        <Shortcuts locale={locale} t={t} />
       </TeacherFrame>
     );
 
@@ -493,7 +495,24 @@ function NextClass({
   );
 }
 
-/** The few places a teacher goes to on purpose rather than from a task. */
+/** Each section's picture in the list below. */
+const SECTION_ICONS: Readonly<Record<string, IconName>> = {
+  today: 'calendar',
+  calendar: 'calendar',
+  students: 'user',
+  messages: 'message',
+  courses: 'book',
+  resources: 'book',
+  attendance: 'check',
+  availability: 'plus',
+  profile: 'user',
+};
+
+/**
+ * Every section of the area, always — all nine, as before R2 (restored
+ * 2026-11-08 by owner direction) — and the attendance reports a teacher goes
+ * to on purpose rather than from a task.
+ */
 function Shortcuts({
   locale,
   t,
@@ -501,23 +520,23 @@ function Shortcuts({
   readonly locale: Locale;
   readonly t: TeacherTranslator;
 }) {
-  const links: {
+  const links: readonly {
     readonly href: string;
     readonly text: string;
     readonly icon: IconName;
   }[] = [
+    ...teacherLinks(locale, t)
+      .filter((link) => link.key !== 'overview')
+      .map((link) => ({
+        href: link.href,
+        text: link.text,
+        icon: SECTION_ICONS[link.key] ?? 'arrow-end',
+      })),
     {
-      href: '/teacher/availability',
-      text: t('home.shortcut.availability'),
-      icon: 'plus',
-    },
-    {
-      href: '/teacher/attendance/reports',
+      href: localizedPath(locale, '/teacher/attendance/reports'),
       text: t('home.shortcut.reports'),
       icon: 'list',
     },
-    { href: '/teacher/resources', text: t('home.shortcut.resources'), icon: 'book' },
-    { href: '/teacher/profile', text: t('home.shortcut.profile'), icon: 'user' },
   ];
   return (
     <TeacherSection id="overview-shortcuts" heading={t('home.shortcuts')}>
@@ -525,7 +544,7 @@ function Shortcuts({
         {links.map((link) => (
           <li key={link.href}>
             <a
-              href={localizedPath(locale, link.href)}
+              href={link.href}
               className="flex min-h-11 items-center gap-3 rounded-control px-2 text-sm font-medium text-foreground no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border"
             >
               <Icon name={link.icon} size={20} className="text-foreground-muted" />

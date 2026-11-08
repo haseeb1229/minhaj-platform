@@ -509,12 +509,15 @@ function presenceLine(
  * published Countries — how many, across which regions of the world — then the
  * ways into the directory and every Country by region.
  *
- * NOTHING IS INVENTED, AND NOTHING EMPTY IS OFFERED. The count is the published
- * Countries; no map, flag wall or photograph stands in for data. Until a
- * Centre is published the Centre finder and the Centre list are not offered
- * (they could only come back empty), and the one line above the Countries says
- * plainly that no centre address is published yet. Local Events are each
- * Centre's own and are not linked here.
+ * EVERY WAY IN, ALWAYS. Find a Centre leads the page and the finder, the
+ * Countries, the Centres and Pakistan are always offered, as the directory's
+ * own entry points. Until a Centre is published, the line above the Countries
+ * says plainly that no centre address is published yet, and the finder and the
+ * Centre list say so themselves — an honest state, never a hidden door.
+ *
+ * NOTHING IS INVENTED. The count is the published Countries; no map, flag wall
+ * or photograph stands in for data, and the data notice closes the page. Local
+ * Events are each Centre's own and are not linked here.
  */
 export async function GlobalLandingPage({ locale }: { readonly locale: Locale }) {
   const t = await getTranslations({ locale, namespace: 'global' });
@@ -524,15 +527,9 @@ export async function GlobalLandingPage({ locale }: { readonly locale: Locale })
     globalReadRuntime().countryChoices(),
   ]);
   const entries = [
-    ...(hasCentres
-      ? ([{ key: 'finder', icon: 'search', href: globalPaths.finder(locale) }] as const)
-      : []),
+    { key: 'finder', icon: 'search', href: globalPaths.finder(locale) },
     { key: 'countries', icon: 'globe', href: globalPaths.countries(locale) },
-    ...(hasCentres
-      ? ([
-          { key: 'centres', icon: 'map-pin', href: globalPaths.centres(locale) },
-        ] as const)
-      : []),
+    { key: 'centres', icon: 'map-pin', href: globalPaths.centres(locale) },
     { key: 'pakistan', icon: 'grid', href: globalPaths.pakistan(locale) },
   ] as const;
   const presence = presenceLine(countries, t);
@@ -543,23 +540,18 @@ export async function GlobalLandingPage({ locale }: { readonly locale: Locale })
       <PageHero
         title={t('title')}
         lede={presence ?? t('intro')}
-        {...(hasCentres
-          ? {
-              actions: (
-                <ActionLink href={globalPaths.finder(locale)}>
-                  {t('sections.finder')}
-                </ActionLink>
-              ),
-            }
-          : countries.length === 0
-            ? {}
-            : {
-                actions: (
-                  <ActionLink href={globalPaths.countries(locale)}>
-                    {t('allCountries')}
-                  </ActionLink>
-                ),
-              })}
+        actions={
+          <>
+            <ActionLink href={globalPaths.finder(locale)}>
+              {t('sections.finder')}
+            </ActionLink>
+            {countries.length === 0 ? null : (
+              <ActionLink href={globalPaths.countries(locale)} tone="secondary">
+                {t('allCountries')}
+              </ActionLink>
+            )}
+          </>
+        }
       >
         {hasCentres || countries.length > 0 ? null : (
           <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
@@ -599,11 +591,10 @@ export async function GlobalLandingPage({ locale }: { readonly locale: Locale })
               </li>
             ))}
           </ul>
-          {hasCentres ? (
-            <p className="max-w-[var(--measure-prose)] pt-2 text-sm text-foreground-muted">
-              {t('landing.localBody')}
-            </p>
-          ) : null}
+          <div className="flex max-w-[var(--measure-prose)] flex-col gap-1 pt-2">
+            <h3 className="text-sm font-semibold">{t('landing.localTitle')}</h3>
+            <p className="text-sm text-foreground-muted">{t('landing.localBody')}</p>
+          </div>
         </section>
 
         <section aria-labelledby="global-countries" className="flex flex-col gap-6">
@@ -611,6 +602,14 @@ export async function GlobalLandingPage({ locale }: { readonly locale: Locale })
             id="global-countries"
             heading={t('byRegion')}
             intro={hasCentres ? t('countriesIntro') : t('presenceNotice')}
+            {...(countries.length === 0
+              ? {}
+              : {
+                  action: {
+                    href: globalPaths.countries(locale),
+                    text: t('allCountries'),
+                  },
+                })}
           />
           {countries.length === 0 ? (
             <EmptyState>{t('countriesEmpty')}</EmptyState>
@@ -618,6 +617,10 @@ export async function GlobalLandingPage({ locale }: { readonly locale: Locale })
             <CountriesByRegion countries={countries} locale={locale} t={t} />
           )}
         </section>
+
+        <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
+          {t('dataNotice')}
+        </p>
       </DirectoryBody>
     </>
   );
@@ -802,13 +805,22 @@ export async function FinderPage({
  * ========================================================================= */
 
 /**
- * Every public Country, by world region (R2) — one page, because the whole
- * list is short enough to scan and a region is how a visitor looks for one.
+ * The public Countries in bounded pages of `GLOBAL_PAGE`, `?offset=` (Phase
+ * 16), each page grouped by world region (R2) — so the directory lists EVERY
+ * published Country however many there are, never a list cut at a bound.
  */
-export async function CountriesPage({ locale }: { readonly locale: Locale }) {
+export async function CountriesPage({
+  locale,
+  query,
+}: {
+  readonly locale: Locale;
+  readonly query: Query;
+}) {
   const t = await getTranslations({ locale, namespace: 'global' });
   const trail = await globalTrail(locale);
-  const countries = await globalReadRuntime().countryChoices();
+  const offset = readOffsetOf(query, 'offset');
+  const page = await globalReadRuntime().countries(offset);
+  const base = globalPaths.countries(locale);
   const title = t('sections.countries');
 
   return (
@@ -817,20 +829,32 @@ export async function CountriesPage({ locale }: { readonly locale: Locale }) {
         label={trail.label}
         trail={[trail.home, trail.global, { text: title }]}
       />
-      <PageHero title={title} lede={presenceLine(countries, t) ?? t('countriesIntro')}>
+      <PageHero title={title} lede={t('countriesIntro')}>
         <GlobalSections locale={locale} current="countries" t={t} />
       </PageHero>
       <DirectoryBody>
-        {countries.length === 0 ? (
-          <EmptyState>{t('countriesEmpty')}</EmptyState>
-        ) : (
-          <CountriesByRegion
-            countries={countries}
-            locale={locale}
-            t={t}
-            headingLevel="h2"
+        <div className="flex flex-col gap-8">
+          {page.items.length === 0 ? (
+            <EmptyState>{offset > 0 ? t('pageEmpty') : t('countriesEmpty')}</EmptyState>
+          ) : (
+            <CountriesByRegion
+              countries={page.items}
+              locale={locale}
+              t={t}
+              headingLevel="h2"
+            />
+          )}
+          <Pagination
+            label={title}
+            previous={
+              offset > 0
+                ? withQuery(base, { offset: Math.max(0, offset - GLOBAL_PAGE) })
+                : null
+            }
+            next={page.hasMore ? withQuery(base, { offset: offset + GLOBAL_PAGE }) : null}
+            {...pages(t)}
           />
-        )}
+        </div>
       </DirectoryBody>
     </>
   );

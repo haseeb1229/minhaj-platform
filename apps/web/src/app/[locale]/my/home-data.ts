@@ -153,6 +153,10 @@ export async function readHome(accountId: string, locale: Locale) {
 
   return {
     course,
+    /** How many courses the person is on, from the first page of enrolments. */
+    enrolled: learning.ok
+      ? { count: learning.value.items.length, hasMore: learning.value.hasMore }
+      : null,
     learningFailed: !learning.ok,
     nextClass: classes.ok ? classes.value : null,
     classesFailed: !classes.ok,

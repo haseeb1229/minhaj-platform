@@ -19,6 +19,7 @@ import {
   TextInput,
 } from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
+import { savedLinks } from '@/components/personal/nav';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../(identity)/form-state';
 import { requireActiveSession } from '../../guard';
@@ -57,6 +58,7 @@ export default async function MyCollectionsPage({
     localizedPath(locale, '/my/saved/collections'),
   );
   const t = await getTranslations({ locale, namespace: 'personal' });
+  const related = { label: t('nav.label'), links: savedLinks(locale, t) };
   const my = await getTranslations({ locale, namespace: 'my' });
   const read = await personalRead('personal-collections', () =>
     personalisationRuntime().saved.collections({ accountId: session.account.id }),
@@ -69,6 +71,7 @@ export default async function MyCollectionsPage({
 
   return (
     <MyPage
+      related={related}
       title={t('collections.title')}
       description={
         <>

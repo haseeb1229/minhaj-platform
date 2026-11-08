@@ -40,7 +40,6 @@ export function SearchPalette({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [shortcut, setShortcut] = useState<string | null>(null);
   const fieldId = `${useId()}-q`;
 
   // The shortcut, everywhere on the page. Ctrl+K is also the browser's own
@@ -55,12 +54,6 @@ export function SearchPalette({
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-
-  // The hint names the key this visitor's keyboard has. Decided after
-  // hydration, so the server's document is the same for everyone.
-  useEffect(() => {
-    setShortcut(/Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘K' : 'Ctrl K');
   }, []);
 
   const needle = query.trim().toLocaleLowerCase();
@@ -83,20 +76,12 @@ export function SearchPalette({
         label: (
           <>
             <Icon name="search" />
-            <span className="max-xl:sr-only">{labels.open}</span>
-            {shortcut === null ? null : (
-              <kbd
-                aria-hidden="true"
-                dir="ltr"
-                className="rounded border border-border px-1.5 font-sans text-caption text-foreground-muted max-xl:hidden"
-              >
-                {shortcut}
-              </kbd>
-            )}
+            {/* Named, never labelled on screen: the nine domains need the row. */}
+            <span className="sr-only">{labels.open}</span>
           </>
         ),
         className:
-          'inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-control text-sm font-medium text-foreground transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border xl:border xl:border-border-strong xl:px-3',
+          'inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-control text-sm font-medium text-foreground transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border xl:border xl:border-border-strong',
       }}
     >
       <form role="search" action={action} method="get" className="flex items-stretch">

@@ -1633,8 +1633,8 @@ export async function VideoPreview({
  * The landing page
  * ========================================================================= */
 
-/** How many Videos the landing's featured or latest grid shows under the lead. */
-const LANDING = 9;
+/** How many Videos the landing's featured or latest grid shows, the lead included. */
+const LANDING = 12;
 
 /** How many posters one shelf of the landing carries. */
 const SHELF = 12;
@@ -1829,9 +1829,14 @@ export async function WatchLandingPage({
             <div className="grid gap-x-10 gap-y-8 border-t border-border pt-6 sm:grid-cols-2 lg:grid-cols-3">
               {LANDING_GROUPS.map((group) => (
                 <div key={group.key} className="flex min-w-0 flex-col gap-3">
-                  <h3 className="text-subheading font-semibold">
-                    {t(`landing.${group.key}Heading`)}
-                  </h3>
+                  <div className="flex flex-col gap-1">
+                    <h3 className="text-subheading font-semibold">
+                      {t(`landing.${group.key}Heading`)}
+                    </h3>
+                    <p className="text-sm text-foreground-muted">
+                      {t(`landing.${group.key}Intro`)}
+                    </p>
+                  </div>
                   <ul className="flex list-none flex-col p-0">
                     {group.surfaces.map((surface) => (
                       <li key={surface}>

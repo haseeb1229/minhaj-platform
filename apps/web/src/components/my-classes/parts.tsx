@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { getTranslations } from 'next-intl/server';
 
-import type { Locale } from '@minhaj/contracts';
+import { localizedPath, type Locale } from '@minhaj/contracts';
 import type {
   AttendanceStatus,
   LearnerClassView,
@@ -10,6 +10,7 @@ import type {
 } from '@minhaj/contracts/learning';
 
 import { ClassTime } from '@/components/live-learning/parts';
+import type { MyLink } from '@/components/my/frame';
 import { PersonalTime } from '@/components/personal/parts';
 import { StatusBadge } from '@/components/ui';
 
@@ -32,6 +33,21 @@ import { StatusBadge } from '@/components/ui';
  */
 
 export type ClassesTranslator = Awaited<ReturnType<typeof getTranslations<'myClasses'>>>;
+
+/**
+ * The neighbouring pages each My Classes page links to — classes, teachers,
+ * learning and the public schedule, always (restored 2026-11-08 by owner
+ * direction after R2 had dropped them).
+ */
+export function classLinks(locale: Locale, t: ClassesTranslator): readonly MyLink[] {
+  return [
+    { href: localizedPath(locale, '/my/classes'), text: t('nav.classes') },
+    { href: localizedPath(locale, '/my/teachers'), text: t('nav.teachers') },
+    { href: localizedPath(locale, '/my/learning'), text: t('nav.learning') },
+    { href: localizedPath(locale, '/learn/live'), text: t('nav.schedule') },
+    { href: localizedPath(locale, '/my'), text: t('nav.account') },
+  ];
+}
 
 /**
  * The words for every refusal a My Classes action can return — a category,

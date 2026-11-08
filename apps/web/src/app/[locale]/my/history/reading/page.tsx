@@ -20,6 +20,7 @@ import { personalRead } from '@/components/personal/read';
 import { Alert, EmptyState, Pager } from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
 import { resolvePersonalTargets } from '@/composition/personal-targets';
+import { historyLinks } from '@/components/personal/nav';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../(identity)/form-state';
 import { requireActiveSession } from '../../guard';
@@ -56,6 +57,7 @@ export default async function ReadingHistoryPage({
   const path = localizedPath(locale, '/my/history/reading');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'personal' });
+  const related = { label: t('nav.label'), links: historyLinks(locale, t) };
   const my = await getTranslations({ locale, namespace: 'my' });
   const actor = { accountId: session.account.id };
   const offset = readPersonalOffset(await searchParams);
@@ -70,7 +72,7 @@ export default async function ReadingHistoryPage({
 
   if (!read.ok)
     return (
-      <MyPage title={t('history.readingTitle')} tabs={tabs}>
+      <MyPage related={related} title={t('history.readingTitle')} tabs={tabs}>
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -85,6 +87,7 @@ export default async function ReadingHistoryPage({
 
   return (
     <MyPage
+      related={related}
       title={t('history.readingTitle')}
       description={<p>{t('history.readingDescription')}</p>}
       tabs={tabs}

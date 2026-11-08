@@ -22,7 +22,7 @@ import {
   requireRoute,
   routeByKey,
 } from '../../apps/web/src/shell/registry.ts';
-import { policyRouteKeys } from '../../apps/web/src/shell/presence.ts';
+import { shellLinkedKeys } from '../../apps/web/src/shell/menus.ts';
 
 /**
  * PHASE 4 — the shell route registry.
@@ -121,10 +121,10 @@ describe('a deferred capability cannot be linked', () => {
     }
   });
 
-  it('lets the presentation policy promote only registered, linkable routes', () => {
-    // R1: what the header and footer PROMOTE is decided by `@/shell/presence`;
-    // every route it can name must exist here and carry a path.
-    for (const key of policyRouteKeys()) {
+  it('lets the header and footer link only registered, linkable routes', () => {
+    // The navigation (`@/shell/menus`) names routes by key; every route it
+    // links must exist here and carry a path.
+    for (const key of shellLinkedKeys()) {
       const route = routeByKey(key);
       expect(route, key).not.toBeNull();
       expect(route !== null && isAvailable(route), key).toBe(true);

@@ -19,6 +19,7 @@ import { personalRead } from '@/components/personal/read';
 import { Alert, EmptyState, Field, Pager, TextArea } from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
 import { resolvePersonalTargets } from '@/composition/personal-targets';
+import { savedLinks } from '@/components/personal/nav';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../(identity)/form-state';
 import { requireActiveSession } from '../../guard';
@@ -58,6 +59,7 @@ export default async function NotesPage({
   const path = localizedPath(locale, '/my/saved/notes');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'personal' });
+  const related = { label: t('nav.label'), links: savedLinks(locale, t) };
   const my = await getTranslations({ locale, namespace: 'my' });
   const offset = readPersonalOffset(await searchParams);
   const read = await personalRead('personal-notes', () =>
@@ -66,7 +68,7 @@ export default async function NotesPage({
 
   if (!read.ok)
     return (
-      <MyPage title={t('notes.title')}>
+      <MyPage related={related} title={t('notes.title')}>
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -86,6 +88,7 @@ export default async function NotesPage({
 
   return (
     <MyPage
+      related={related}
       title={t('notes.title')}
       description={<p>{t('notes.description')}</p>}
       measure="reading"

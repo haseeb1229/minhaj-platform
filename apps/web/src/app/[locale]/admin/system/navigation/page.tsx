@@ -12,8 +12,7 @@ import {
   StatusBadge,
 } from '@/components/ui';
 import { publicIndexingEnabled } from '@/config/indexing';
-import { readPresence } from '@/composition/presence';
-import { promotionRuleOf } from '@/shell/presence';
+import { shellLinkedKeys } from '@/shell/menus';
 import { SHELL_ROUTES, isAvailable, type ShellRoute } from '@/shell/registry';
 import { adminPageMetadata } from '../../metadata';
 
@@ -61,13 +60,14 @@ export default async function NavigationStatusPage({
   const locale = await requireLocale(params);
   const t = await getTranslations({ locale, namespace: 'admin' });
   const shell = await getTranslations({ locale, namespace: 'shell' });
-  const presence = await readPresence();
 
   await requireAdminPage(
     locale,
     'navigation.read',
     localizedPath(locale, '/admin/system/navigation'),
   );
+
+  const linked = shellLinkedKeys();
 
   return (
     <main className="flex flex-col gap-4">
@@ -120,22 +120,15 @@ export default async function NavigationStatusPage({
                 : t('navigation.noPath')}
             </DataCell>
 
+            {/*
+             * The header and footer link a fixed set of routes to every
+             * visitor (`@/shell/menus`); every other route is reachable by its
+             * address, the sitemap and links inside content.
+             */}
             <DataCell wrap>
-              {(() => {
-                const rule = promotionRuleOf(
-                  route.key,
-                  isAvailable(route) ? route.path : undefined,
-                );
-                if (rule === undefined) return t('navigation.promotion.never');
-                if (rule.kind === 'always') return t('navigation.promotion.always');
-                if (rule.kind === 'page')
-                  return presence.publishedPages.has(rule.binding)
-                    ? t('navigation.promotion.pageLive')
-                    : t('navigation.promotion.pageWaiting');
-                return presence.signals.has(rule.signal)
-                  ? t('navigation.promotion.live', { signal: rule.signal })
-                  : t('navigation.promotion.waiting', { signal: rule.signal });
-              })()}
+              {linked.has(route.key)
+                ? t('navigation.promotion.always')
+                : t('navigation.promotion.never')}
             </DataCell>
 
             <DataCell>

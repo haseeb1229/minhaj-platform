@@ -661,6 +661,11 @@ test.describe('an anonymous visitor finds Collections', () => {
     // card is set as text — never a placeholder.
     await expect(page.locator('main img')).toHaveCount(0);
     await expect(list.getByText(MEMBER.work.title)).toHaveCount(0);
+    // Each card says what it is; the listing names the kinds a Collection
+    // gathers.
+    await expect(list.getByText('Collection', { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('main')).toContainText('Articles');
+    await expect(page.getByRole('main')).toContainText('Videos');
 
     const anonymous = await page.getByRole('main').innerText();
     const signedIn = await author.goto('/collections');

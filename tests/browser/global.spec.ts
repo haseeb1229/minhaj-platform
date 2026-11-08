@@ -291,6 +291,21 @@ test.describe('an anonymous visitor explores the Global Network', () => {
     await expect(page.getByRole('main').locator('a[href*="/events"]')).toHaveCount(0);
     // The seeded Countries are listed; the directory is not called empty.
     const main = page.getByRole('main');
+    // Find a Centre leads the page, and the data notice closes it.
+    await expect(
+      main.getByRole('link', { name: 'Find a Centre', exact: true }).first(),
+    ).toHaveAttribute('href', '/global/find-a-centre');
+    await expect(
+      main.getByText('Directory details are published only once the organisation', {
+        exact: false,
+      }),
+    ).toBeVisible();
+    // The Countries directory is paged with `?offset=`, never cut at a bound:
+    // a page past the end says so and links back.
+    expect((await page.request.get('/global/countries?offset=abc')).status()).toBe(200);
+    expect(
+      await (await page.request.get('/global/countries?offset=960')).text(),
+    ).toContain('There is nothing on this page.');
     await expect(main.getByRole('link', { name: NAME.plainCountry })).toBeVisible();
     await expect(
       main.getByText('No centres have been published in the directory yet.', {

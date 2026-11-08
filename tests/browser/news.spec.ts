@@ -184,8 +184,6 @@ test('authors each family through the shared workflow, refusing what does not be
 test('shows News and Events to an anonymous visitor with no cookie, and the same body signed in', async ({
   page,
 }) => {
-  // Room for the shell's presence snapshot to catch up (see below).
-  test.setTimeout(120_000);
   const external: string[] = [];
   page.on('request', (request) => {
     if (!request.url().startsWith(baseUrl())) external.push(request.url());
@@ -210,6 +208,19 @@ test('shows News and Events to an anonymous visitor with no cookie, and the same
     await expect(main.locator(`a[href="${href}"]`).first()).toBeVisible();
   // Events (Phase 14) are linked as the other half of News and Events.
   await expect(main.locator('a[href="/events"]').first()).toBeVisible();
+  // The opening's own ways on — Events and the archive — and the browse list,
+  // which names every News family and the archive with what each one holds.
+  for (const name of ['Events', 'News archive'])
+    await expect(main.getByRole('link', { name, exact: true }).first()).toBeVisible();
+  const browse = main.locator('section[aria-labelledby="news-browse"]');
+  for (const href of [
+    '/news/press-releases',
+    '/news/statements',
+    '/news/media-coverage',
+    '/news/archive',
+    '/events',
+  ])
+    await expect(browse.locator(`a[href="${href}"]`)).toHaveCount(1);
   // Nothing that does not exist is linked. The newsletter is delivered by
   // Phase 21 and reached from Explore, not from News.
   await expect(main.locator('a[href="/newsletter"]')).toHaveCount(0);
@@ -223,29 +234,15 @@ test('shows News and Events to an anonymous visitor with no cookie, and the same
     'alt',
     'Minhaj-ul-Quran International',
   );
-  // PROMOTED BY EVIDENCE: published news puts News in the primary navigation's
-  // "News & Events" group (R2: grouped navigation — the link sits in that
-  // group's panel, closed until opened) and in the footer's News & Events
-  // column. The shell's presence snapshot may be up to 30 seconds old, so the
-  // promotion is awaited, never assumed.
+  // News and Events is one of the nine domains, always (owner direction
+  // 2026-11-08): its mega menu leads to this landing, closed until opened.
   const mainNavigation = page
     .getByRole('banner')
     .getByRole('navigation', { name: 'Main navigation' });
-  await expect(async () => {
-    await page.goto('/news');
-    await expect(mainNavigation.locator('a[href="/news"]')).toHaveCount(1, {
-      timeout: 1_000,
-    });
-    await expect(
-      page
-        .getByRole('contentinfo')
-        .getByRole('navigation', { name: 'News & Events' })
-        .locator('a[href="/news"]'),
-    ).toHaveCount(1, { timeout: 1_000 });
-  }).toPass({ timeout: 45_000, intervals: [2_000, 5_000] });
-  // Opening the group shows the link; the current section is marked for
-  // assistive technology on the link and on its group's trigger.
-  const group = mainNavigation.getByRole('button', { name: /^News & Events/ });
+  await expect(mainNavigation.locator('a[href="/news"]')).toHaveCount(1);
+  // Opening the domain shows the link; the current section is marked for
+  // assistive technology on the link and on its domain's trigger.
+  const group = mainNavigation.getByRole('button', { name: /^News and Events/ });
   await expect(group).toContainText('(current section)');
   await group.click();
   await expect(mainNavigation.locator('a[href="/news"]')).toBeVisible();

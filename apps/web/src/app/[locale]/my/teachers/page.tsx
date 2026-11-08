@@ -15,6 +15,7 @@ import { teacherProfilesFor } from '@/composition/learning-teachers';
 import { messagingRuntime } from '@/composition/messaging';
 import { MyPage } from '@/components/my/frame';
 import { myPageMetadata } from '@/components/my/metadata';
+import { classLinks } from '@/components/my-classes/parts';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
 import { requireActiveSession } from '../guard';
@@ -56,6 +57,7 @@ export default async function MyTeachersPage({
   const path = localizedPath(locale, '/my/teachers');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myClasses' });
+  const related = { label: t('nav.label'), links: classLinks(locale, t) };
   const description = <p>{t('teachers.description')}</p>;
 
   const read = await learningRead('learning-my-teachers', async () => {
@@ -81,7 +83,7 @@ export default async function MyTeachersPage({
 
   if (!read.ok)
     return (
-      <MyPage title={t('teachers.title')} description={description}>
+      <MyPage related={related} title={t('teachers.title')} description={description}>
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -90,7 +92,7 @@ export default async function MyTeachersPage({
   const timeZone = session.account.timezone;
 
   return (
-    <MyPage title={t('teachers.title')} description={description}>
+    <MyPage related={related} title={t('teachers.title')} description={description}>
       {startable.ok || startable.failure !== 'unavailable' ? null : (
         <Alert tone="error">{m('start.unavailable')}</Alert>
       )}

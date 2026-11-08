@@ -1,12 +1,13 @@
 import { localizedPath } from '@minhaj/contracts';
 import type { Locale } from '@minhaj/contracts';
 import { leadImagePath, newsPathOf, type NewsSummary } from '@minhaj/contracts/editorial';
+import { SEARCH_QUERY_MAX_LENGTH } from '@minhaj/contracts/search';
 import { getTranslations } from 'next-intl/server';
 
 import { contentLanguageBadge } from '@/components/content-language';
 import { translationFor } from '@/components/editorial/presentation';
 import { quranPath } from '@/components/quran/presentation';
-import { ActionLink, Hero, LanguageBadge, ResponsiveImage } from '@/components/ui';
+import { ActionLink, Hero, Icon, LanguageBadge, ResponsiveImage } from '@/components/ui';
 import { directionOf } from '@/config/locale';
 
 /**
@@ -17,6 +18,12 @@ import { directionOf } from '@/config/locale';
  * Quran text visitors may navigate to; otherwise the heading and the first
  * action speak of the Library alone, so the opening never promises a page that
  * says "not yet".
+ *
+ * THE SEARCH BOX AND THE WAY TO BROWSE sit beneath the two paths: a GET form
+ * to the delivered `/search` page — it works without JavaScript, and its query
+ * is a shareable address — and the link to Explore for a visitor who came to
+ * browse rather than search. The form's label and button are worded so that
+ * neither collides with the header's search or the not-found page's.
  *
  * THE PICTURE IS A RECORD, never decoration: the newest story that has a lead
  * image, with its date and headline as the caption and the headline as the one
@@ -58,7 +65,47 @@ export async function HomeHero({
         )
       }
       {...(story === null ? {} : { aside: <HeroStory locale={locale} story={story} /> })}
-    />
+    >
+      <form
+        method="get"
+        action={localizedPath(locale, '/search')}
+        role="search"
+        aria-label={t('home.search.label')}
+        className="flex w-full max-w-2xl flex-col gap-2 pt-2"
+      >
+        <label
+          htmlFor="home-search"
+          className="text-sm font-semibold text-ink-foreground"
+        >
+          {t('home.search.label')}
+        </label>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            id="home-search"
+            type="search"
+            name="q"
+            maxLength={SEARCH_QUERY_MAX_LENGTH}
+            autoComplete="off"
+            className="min-h-12 w-full min-w-0 flex-1 rounded-control border border-ink-border bg-surface-raised px-4 text-base text-foreground"
+          />
+          <button
+            type="submit"
+            className="inline-flex min-h-12 items-center justify-center rounded-control bg-ink-accent px-6 text-sm font-semibold text-ink transition-colors duration-[var(--duration-fast)] hover:bg-ink-foreground active:bg-ink-muted"
+          >
+            {t('home.search.submit')}
+          </button>
+        </div>
+      </form>
+      <p>
+        <a
+          href={localizedPath(locale, '/explore')}
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-foreground underline decoration-ink-accent underline-offset-4 hover:decoration-ink-foreground"
+        >
+          {t('home.exploreAction')}
+          <Icon name="arrow-end" size={16} />
+        </a>
+      </p>
+    </Hero>
   );
 }
 

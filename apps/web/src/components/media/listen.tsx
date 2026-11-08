@@ -205,9 +205,10 @@ function TrackRow({
 
 /**
  * A page of rows with every speaker's name resolved in ONE People call and the
- * content languages in ONE Taxonomy call — never a call per row.
+ * content languages in ONE Taxonomy call — never a call per row. Also composed
+ * by the home page's Listen module.
  */
-async function TrackList({
+export async function TrackList({
   locale,
   tracks,
   label,

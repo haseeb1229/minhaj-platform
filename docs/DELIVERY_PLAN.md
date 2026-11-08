@@ -2743,6 +2743,14 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 >   `?order=curated|newest|oldest`; countries grouped by world region from their ISO code; a
 >   narrative `/explore`; search facets for areas with content; the Hadith works landing; the calm
 >   Fatwa page; content-language badges (ROUTE_MAP.md §3).
+>   *Superseded in part 2026-11-08 by owner direction:* the features R2 had dropped from these
+>   pages are back in R2's components — the home page's hero search, Explore link, Quran and Hadith
+>   cards, areas, Explore sections, and its audio, Events, rulings, organisation and topics modules;
+>   the full `/explore` index with every reserved page; the Quran landing's full-text search; the
+>   Hadith landing's structure; the Library's resources link, Books entry, group intros, metadata
+>   notice and per-shelf fail-closed reads; Watch's twelve-video grid and group intros; News'
+>   Events and archive links and family cards; Collections' topic chips and kinds row; and Global's
+>   always-present finder, data notice and `/global/countries?offset=` paging (ROUTE_MAP.md §3).
 > - **Quran reference preview** — the `reference` authority and its database separation rules,
 >   the two-condition deployment gate (`RELIGIOUS_REFERENCE_PREVIEW`, refused beside indexing), one
 >   exhaustive mode posture table, the reference notice and "About this text" panel, the reader
@@ -2756,6 +2764,11 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 >   SECURITY_BASELINE.md §10.10.
 > - **My Minhaj** — its own frame and grouped, capability-aware navigation, a home overview of what to
 >   resume and what is next, and an IANA time-zone picker (INFORMATION_ARCHITECTURE.md §5).
+>   *Superseded in part 2026-11-08 by owner direction:* every section is listed and has its home
+>   module for every account (honest empty / not-available states), the neighbour links between
+>   Learning, Classes, Teachers and Messages and the Teacher home's full section list are back,
+>   and a teaching or administrative authority holder is linked to `/teacher` / `/admin` from
+>   Identity's live permission evaluation (INFORMATION_ARCHITECTURE.md §5; ROUTE_MAP.md §5–§6).
 > - **Teacher** — a Monday-to-Sunday week (`?week=`), class stages, dialogs for "mark held" and
 >   "cancel", a student directory, fixed page titles; attendance and "mark held" are refused
 >   server-side before a class starts (Learning's `not-started`; DOMAIN_MODEL.md §13.5).

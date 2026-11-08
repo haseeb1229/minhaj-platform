@@ -24,6 +24,7 @@ import {
   TextLink,
 } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
+import { learningLinks } from '@/components/my-learning/nav';
 import { requireLocale } from '@/config/route-locale';
 import { requireActiveSession } from '../../guard';
 
@@ -60,6 +61,7 @@ export default async function CourseProgressPage({
   const path = localizedPath(locale, '/my/progress/courses');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myLearning' });
+  const related = { label: t('nav.label'), links: learningLinks(locale, t) };
   const offset = readPersonalOffset(await searchParams);
   const read = await learningRead('learning-course-progress', () =>
     learningRuntime().learner.courses({ accountId: session.account.id }, offset),
@@ -73,7 +75,12 @@ export default async function CourseProgressPage({
 
   if (!read.ok)
     return (
-      <MyPage title={t('progressPage.title')} description={description} tabs={tabs}>
+      <MyPage
+        related={related}
+        title={t('progressPage.title')}
+        description={description}
+        tabs={tabs}
+      >
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -81,7 +88,12 @@ export default async function CourseProgressPage({
   const page = read.value;
 
   return (
-    <MyPage title={t('progressPage.title')} description={description} tabs={tabs}>
+    <MyPage
+      related={related}
+      title={t('progressPage.title')}
+      description={description}
+      tabs={tabs}
+    >
       {page.items.length === 0 ? (
         offset === 0 ? (
           <EmptyState

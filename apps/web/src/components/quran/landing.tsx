@@ -5,6 +5,7 @@ import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
 import type { QuranAvailability } from '@minhaj/contracts/quran';
+import { SEARCH_QUERY_MAX_LENGTH } from '@minhaj/contracts/search';
 
 import { quranReadRuntime } from '@/composition/quran-read';
 import { LibraryDirectory } from '@/components/library/landing';
@@ -12,10 +13,12 @@ import {
   ActionLink,
   Alert,
   Breadcrumbs,
+  Button,
   Container,
   EmptyState,
   Hero,
   SectionHeader,
+  TextInput,
   TextLink,
 } from '@/components/ui';
 import { Tabs } from '@/components/ui/tabs';
@@ -31,8 +34,10 @@ import { RELATED_KINDS } from './related';
  * `/quran` — the Quran landing (ROUTE_MAP.md §3.3; R2).
  *
  * THE WAY IN FIRST. It opens with where a reader wants to go — type a place
- * ("18:10", a Surah's name, "juz 15"), continue where this browser last read,
- * or start at the beginning — and then lays the whole text out as an index:
+ * ("18:10", a Surah's name, "juz 15"), search the text and its published
+ * translations for words (a GET form to `/quran/search`, working without
+ * JavaScript), continue where this browser last read, or start at the
+ * beginning — and then lays the whole text out as an index:
  * every Surah (number, title, ayat, revelation and its Arabic name in the
  * Quran face) and, in the second tab, every Juz. Below it a quiet directory
  * of the rest of the section — reading, the published works beside the text,
@@ -115,9 +120,24 @@ export async function QuranLandingPage({
           : t(`sectionBody.${link.key}` as 'sectionBody.read'),
     }));
   const directory = [
-    { id: 'quran-read', heading: t('landing.read'), links: linksOf(read) },
-    { id: 'quran-study', heading: t('landing.study'), links: linksOf(study) },
-    { id: 'quran-explore', heading: t('landing.explore'), links: linksOf(explore) },
+    {
+      id: 'quran-read',
+      heading: t('landing.read'),
+      intro: t('landing.readIntro'),
+      links: linksOf(read),
+    },
+    {
+      id: 'quran-study',
+      heading: t('landing.study'),
+      intro: t('landing.studyIntro'),
+      links: linksOf(study),
+    },
+    {
+      id: 'quran-explore',
+      heading: t('landing.explore'),
+      intro: t('landing.exploreIntro'),
+      links: linksOf(explore),
+    },
     { id: 'quran-learn', heading: t('landing.learn'), links: linksOf(learn) },
   ].filter((group) => group.links.length > 0);
 
@@ -157,6 +177,29 @@ export async function QuranLandingPage({
             labels={await quickJumpLabels(locale)}
           />
         )}
+        <form
+          method="get"
+          action={quranPath(locale, 'search')}
+          role="search"
+          aria-label={t('sections.search')}
+          className="flex w-full max-w-2xl flex-col gap-2"
+        >
+          <label htmlFor="quran-landing-search" className="text-sm font-semibold">
+            {t('search.label')}
+          </label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="min-w-0 flex-1">
+              <TextInput
+                id="quran-landing-search"
+                type="search"
+                name="q"
+                maxLength={SEARCH_QUERY_MAX_LENGTH}
+                autoComplete="off"
+              />
+            </div>
+            <Button tone="secondary">{t('search.submit')}</Button>
+          </div>
+        </form>
       </Hero>
 
       <Container>

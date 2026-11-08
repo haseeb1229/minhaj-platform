@@ -1,23 +1,32 @@
 /**
- * WHICH MODULES THE MY MINHAJ HOME SHOWS (R2) — PURE, so "every module
- * renders only with something in it" is proved by unit test.
+ * WHICH MODULES THE MY MINHAJ HOME SHOWS — PURE, so the rule is proved by unit
+ * test.
  *
- * The home page is the person's own: what to continue, what is next, what is
- * waiting. A module with nothing in it is not a module — it is a heading over
- * an apology, and a page of those is the status board this replaces. So each
- * module is chosen from what the reads returned, and a new account, which has
- * nothing yet, is shown how to begin instead of a wall of empties.
+ * EVERY SECTION HAS ITS MODULE, ALWAYS (owner direction 2026-11-08). Classes,
+ * Learning, Saved, the Quran reading position, History, Messages,
+ * Notifications, Questions, Membership and Donations are on the home page for
+ * every account, each saying honestly what is there — or that nothing is yet —
+ * with its ways onward. R2 showed a module only with something in it
+ * (historical, superseded 2026-11-08 by owner direction).
+ *
+ * TWO MODULES STILL COME AND GO, because they are not sections: "Make My
+ * Minhaj yours" while a first step is open, and "Continue" while there is
+ * something to pick up. The person's chosen interests appear once chosen.
  *
  * A READ THAT FAILED IS NOT "NOTHING". The page names the parts it could not
- * show in one notice; it never turns an outage into an empty state.
+ * show in one notice, and the module says it cannot be shown; it never turns
+ * an outage into an empty state.
  */
 
 export type DashboardModule =
   | 'start'
   | 'continue'
-  | 'upcoming'
+  | 'classes'
+  | 'learning'
   | 'saved'
   | 'interests'
+  | 'quran'
+  | 'history'
   | 'messages'
   | 'notifications'
   | 'questions'
@@ -69,26 +78,36 @@ export function isNewAccount(signals: DashboardSignals): boolean {
 }
 
 /**
- * The modules, in reading order: begin (while a step is open), continue, what
- * is next, what is kept, then what is waiting, then the account's standing.
- * The main column takes the first group and the side column the rest — see
- * `dashboardColumns`.
+ * The modules, in reading order: begin (while a step is open), continue
+ * (while there is something to pick up), then every section — classes,
+ * learning, what is kept, the person's interests once chosen, the Quran
+ * position and history — then what is waiting and the account's standing.
+ * See `dashboardColumns` for where each sits.
  */
 export function dashboardModules(signals: DashboardSignals): readonly DashboardModule[] {
   const steps = startSteps(signals);
-  const shown: DashboardModule[] = [];
-  if (steps.interests || steps.save) shown.push('start');
-  if (signals.continuing > 0) shown.push('continue');
-  if (signals.upcomingClass) shown.push('upcoming');
-  if (signals.saved > 0) shown.push('saved');
-  if (signals.interests > 0) shown.push('interests');
-  if (signals.conversations > 0) shown.push('messages');
-  if (signals.notifications > 0) shown.push('notifications');
-  if (signals.questions > 0) shown.push('questions');
-  if (signals.membership) shown.push('membership');
-  if (signals.donations > 0) shown.push('giving');
-  return shown;
+  return [
+    ...(steps.interests || steps.save ? (['start'] as const) : []),
+    ...(signals.continuing > 0 ? (['continue'] as const) : []),
+    'classes',
+    'learning',
+    'saved',
+    ...(signals.interests > 0 ? (['interests'] as const) : []),
+    'quran',
+    'history',
+    'messages',
+    'notifications',
+    'questions',
+    'membership',
+    'giving',
+  ];
 }
+
+/** Side by side in the main column on a wide screen: two short modules. */
+const PAIRED: ReadonlySet<DashboardModule> = new Set<DashboardModule>([
+  'quran',
+  'history',
+]);
 
 const SIDE: ReadonlySet<DashboardModule> = new Set<DashboardModule>([
   'messages',
@@ -98,13 +117,18 @@ const SIDE: ReadonlySet<DashboardModule> = new Set<DashboardModule>([
   'giving',
 ]);
 
-/** The modules split into the wide main column and the narrow side column. */
+/**
+ * The modules split into the wide main column, the pair beneath it and the
+ * narrow side column.
+ */
 export function dashboardColumns(modules: readonly DashboardModule[]): {
   readonly main: readonly DashboardModule[];
+  readonly paired: readonly DashboardModule[];
   readonly side: readonly DashboardModule[];
 } {
   return {
-    main: modules.filter((module) => !SIDE.has(module)),
+    main: modules.filter((module) => !SIDE.has(module) && !PAIRED.has(module)),
+    paired: modules.filter((module) => PAIRED.has(module)),
     side: modules.filter((module) => SIDE.has(module)),
   };
 }

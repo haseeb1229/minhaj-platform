@@ -2096,6 +2096,17 @@ test.describe('Phase 23 — switched on, and who may enter', () => {
         target,
       ).toHaveCount(0);
     }
+    // Nor does My Minhaj offer that profile the way there (owner direction
+    // 2026-11-08): the link follows Identity's `teaching.perform`, never a
+    // profile — while a live holder is offered it.
+    await profileOnly.page.goto('/my');
+    await expect(profileOnly.page.getByRole('main')).toBeVisible();
+    await expect(profileOnly.page.locator('a[href="/teacher"]')).toHaveCount(0);
+    await teacherOne.page.goto('/my');
+    await expect(teacherOne.page.locator('a[href="/teacher"]:visible')).toHaveText(
+      copy('my.nav.section.teacher'),
+    );
+    await expect(teacherOne.page.locator('a[href="/admin"]')).toHaveCount(0);
 
     // `teaching.perform` with no scope: the area, and nothing in it.
     const two = teacherTwo.page;

@@ -20,6 +20,7 @@ import { personalRead } from '@/components/personal/read';
 import { Alert, EmptyState, Pager } from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
 import { resolvePersonalTargets } from '@/composition/personal-targets';
+import { savedLinks } from '@/components/personal/nav';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../(identity)/form-state';
 import { requireActiveSession } from '../../guard';
@@ -55,6 +56,7 @@ export default async function BookmarksPage({
   const path = localizedPath(locale, '/my/saved/bookmarks');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'personal' });
+  const related = { label: t('nav.label'), links: savedLinks(locale, t) };
   const my = await getTranslations({ locale, namespace: 'my' });
   const offset = readPersonalOffset(await searchParams);
   const read = await personalRead('personal-bookmarks', () =>
@@ -67,7 +69,7 @@ export default async function BookmarksPage({
 
   if (!read.ok)
     return (
-      <MyPage title={t('bookmarks.title')} tabs={tabs}>
+      <MyPage related={related} title={t('bookmarks.title')} tabs={tabs}>
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -82,6 +84,7 @@ export default async function BookmarksPage({
 
   return (
     <MyPage
+      related={related}
       title={t('bookmarks.title')}
       description={<p>{t('bookmarks.description')}</p>}
       tabs={tabs}

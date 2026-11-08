@@ -26,12 +26,12 @@ import { expect, localizedPath, test } from './support';
  * re-baselined the same way, in the commit that makes it.
  *
  * WHAT IS PHOTOGRAPHED, AND WHAT IS NOT. Only regions whose SIZE and content do
- * not depend on what the parallel specs publish: the phone header (its grouped
+ * not depend on what the parallel specs publish: the phone header (its
  * navigation lives in the Menu sheet), the footer's brand column, the words of
  * the home and Library heroes (their pictures and cover stacks are content),
- * the search empty state, and the sign-in form. The desktop navigation and the
- * footer's link groups follow live presence and change size as other specs
- * publish, so a screenshot of them would compare the run's timing, not the
+ * the search empty state, and the sign-in form. The desktop mega panels carry
+ * live featured records and the footer a licence line that follows live
+ * presence, so a screenshot of them would compare the run's timing, not the
  * design. Animations are stopped and reduced motion requested; every
  * screenshot waits for the self-hosted fonts.
  */

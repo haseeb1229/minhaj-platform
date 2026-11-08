@@ -218,6 +218,14 @@ test.describe('an anonymous visitor browses Watch', () => {
     for (const absent of ['/watch/audio', '/watch/galleries']) {
       expect(hrefs).not.toContain(absent);
     }
+    // Each group of the browse index says, in a line, what it gathers.
+    const browse = page.getByRole('main').getByRole('navigation', { name: 'Browse' });
+    for (const intro of [
+      'Each kind of recording has a view of its own.',
+      'Videos gathered together, to be watched in order.',
+      'Find videos by who speaks or what they are about, or listen instead.',
+    ])
+      await expect(browse.getByText(intro, { exact: true })).toBeVisible();
     // A card paints no remote image.
     await expect(page.locator('main img')).toHaveCount(0);
   });

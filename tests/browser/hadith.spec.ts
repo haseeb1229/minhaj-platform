@@ -174,7 +174,12 @@ const LOCALES: readonly UiLocale[] = ['en', 'ur', 'ar'];
 
 interface HadithCopy {
   readonly fixture: string;
-  readonly unavailable: { readonly body: string };
+  readonly unavailable: {
+    readonly body: string;
+    readonly home: string;
+    readonly structureHeading: string;
+    readonly awaiting: string;
+  };
   readonly works: { readonly awaiting: string };
 }
 
@@ -533,10 +538,19 @@ test.describe('while no collection is activated', () => {
       );
       await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
 
+      // How the section is organised, in words: the collections and their
+      // study each await an activated collection (two parts, never a link).
+      const main = page.getByRole('main');
+      await expect(
+        main.getByRole('heading', { name: COPY[locale].unavailable.structureHeading }),
+      ).toBeVisible();
+      await expect(main.getByText(COPY[locale].unavailable.awaiting)).toHaveCount(2);
+
       // Nothing to enter: no section card, no number, no sample, no search —
       // only the way home.
-      const main = page.getByRole('main');
-      expect(await hrefsIn(page)).toContain(localizedPath(locale, ''));
+      await expect(
+        main.getByRole('link', { name: COPY[locale].unavailable.home }),
+      ).toHaveAttribute('href', localizedPath(locale, ''));
       expect((await hrefsIn(page)).filter((href) => href.includes('/hadith'))).toEqual(
         [],
       );
@@ -678,20 +692,19 @@ test.describe('a fixture activation', () => {
     // Hadith's own search, beside the site-wide one in the header.
     await expect(page.getByRole('main').getByRole('search')).toHaveCount(1);
 
-    // A FIXTURE COLLECTION IS NEVER PROMOTED (Rebaseline R1): Hadith appears in
-    // the shell only for an APPROVED corpus — not in the header, the drawer or
-    // the footer — while the fixture still reads at its address.
-    // The PRIMARY NAVIGATION, not the whole banner: the language switcher
-    // there links to this very page in English, which is not a promotion.
+    // THE NAVIGATION IS UNCONDITIONAL (owner direction 2026-11-08): Hadith is
+    // one of the nine domains whatever corpus is active, so the header's
+    // Hadith menu leads here, and the footer's Knowledge column to its
+    // collections, while the fixture reads at its address under its banner.
     await expect(
       page
         .getByRole('banner')
         .getByRole('navigation', { name: 'Main navigation' })
         .locator('a[href="/hadith"]'),
-    ).toHaveCount(0);
-    await expect(page.getByRole('contentinfo').locator('a[href="/hadith"]')).toHaveCount(
-      0,
-    );
+    ).toHaveCount(1);
+    await expect(
+      page.getByRole('contentinfo').locator('a[href="/hadith/collections"]'),
+    ).toHaveCount(1);
   });
 
   test('a citation shows its original, chain and gradings exactly as sourced, in every locale', async ({

@@ -10,11 +10,12 @@ import {
 
 import {
   AttendanceBadge,
+  classLinks,
+  classMessages,
   ClassSchedule,
   JoinLink,
   ParticipationBadge,
   SessionStateBadge,
-  classMessages,
 } from '@/components/my-classes/parts';
 import { LearningTitle } from '@/components/my-learning/parts';
 import { pickLabel } from '@/components/my-learning/presentation';
@@ -96,6 +97,13 @@ export default async function MyClassesPage({
   const path = localizedPath(locale, '/my/classes');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myClasses' });
+  // The live schedule is this page's own action; it is not repeated at its foot.
+  const related = {
+    label: t('nav.label'),
+    links: classLinks(locale, t).filter(
+      (link) => link.href !== localizedPath(locale, '/learn/live'),
+    ),
+  };
   const offset = readPersonalOffset(await searchParams);
   const read = await learningRead('learning-my-classes', () =>
     classPanels(session.account.id, offset),
@@ -109,7 +117,12 @@ export default async function MyClassesPage({
 
   if (!read.ok)
     return (
-      <MyPage title={t('title')} description={description} action={schedule}>
+      <MyPage
+        related={related}
+        title={t('title')}
+        description={description}
+        action={schedule}
+      >
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -166,7 +179,12 @@ export default async function MyClassesPage({
   };
 
   return (
-    <MyPage title={t('title')} description={description} action={schedule}>
+    <MyPage
+      related={related}
+      title={t('title')}
+      description={description}
+      action={schedule}
+    >
       {activated ? null : <Alert tone="info">{t('notActivated')}</Alert>}
 
       {/* ---- Upcoming ---------------------------------------------------- */}

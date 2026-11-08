@@ -14,66 +14,74 @@ import {
 import { NavLink } from '@/components/shell/nav-link';
 import { SearchPalette } from '@/components/shell/search-palette';
 import { Container, Icon, MediaCard } from '@/components/ui';
-import { readPresence } from '@/composition/presence';
 import {
-  givingPromoted,
-  navigationGroups,
-  utilityLinks,
-  type NavItem,
-  type NavigationGroup,
-} from '@/shell/presence';
+  domainMenus,
+  headerUtility,
+  type DomainMenu,
+  type DomainMenuKey,
+  type MenuColumn,
+} from '@/shell/menus';
 import { pathFor, requireRoute } from '@/shell/registry';
 
 /**
- * THE PUBLIC HEADER (R2 — grouped mega-navigation).
+ * THE PUBLIC HEADER — the nine domains, always (owner direction 2026-11-08).
  *
- * TWO ROWS ON A LAPTOP, ONE ON A PHONE.
+ * TWO ROWS ON A WIDE SCREEN, ONE ON A PHONE.
  *
- *   - A thin utility strip: the organisation, help and contact at the inline
- *     start; the language switcher, My Minhaj or Sign in, and Donate (only
- *     while giving is open) at the inline end.
- *   - The main row: the One Minhaj wordmark; six grouped disclosures — Quran,
- *     Knowledge, Watch & Listen, Learn, News & Events, About MQI — each opening
- *     a panel of its present destinations with one-line descriptions and, where
- *     the corpus has one, a featured record with its real picture; and Search
- *     (a palette, Ctrl/⌘K).
- *   - Below 1024 px: wordmark, search, account and Menu, which opens a sheet
- *     with one accordion per group and the language switcher.
+ *   - A thin utility strip: Find a Centre, Membership and Contact & Help at
+ *     the inline start; the language switcher, My Minhaj or Sign in, and
+ *     Donate at the inline end (INFORMATION_ARCHITECTURE.md §2.1).
+ *   - The main row: the One Minhaj wordmark; the nine domains — Explore,
+ *     Quran, Hadith, Learn, Library, Watch, Fatwa, News & Events, Global — each
+ *     a disclosure opening its full mega menu: a one-line purpose, the way to
+ *     the domain's landing, its columns of links and, for Watch, Library and
+ *     News & Events, a recent record with its real picture; and Search (a
+ *     palette, Ctrl/⌘K).
+ *   - Below 1280 px: wordmark, search, account and Menu, which opens a sheet
+ *     with one accordion per domain holding every link of its menu, Donate,
+ *     the utility links and the language switcher.
  *
- * WHY THE ACCOUNT AND DONATE SIT IN THE STRIP. Measured in the shipped faces,
- * the six English group labels alone take ~700 px with their controls; with
- * the wordmark, Search, the account and Donate in the same row it would not
- * fit 1024 px (nor 1280 px with Search's label). The strip has the room, and
- * the main row stays one line in all three languages.
+ * WHY 1280 PX. Measured in a real browser in the shipped faces, the nine
+ * domain buttons (14 px labels) with the wordmark and an icon-only Search fit
+ * one row at 1280 px in English, Urdu and Arabic, but not at 1024 px in
+ * English. Below 1280 px the sheet carries the same links, so exactly one
+ * navigation is usable at any width.
  *
- * CONTENT-AWARE. Which groups and destinations exist is the presentation
- * policy's decision (`@/shell/presence`) over public evidence (`readPresence`):
- * a group with nothing present is not shown, and nothing absent is linked.
- *
- * SESSION-FREE. Nothing here reads who is looking (ARCHITECTURE.md §8.1). The
- * account entry is a private island that asks one boolean after the page loads.
+ * UNCONDITIONAL. Every domain and link is shown whatever the platform has
+ * published (`@/shell/menus`); a destination with nothing published answers
+ * with its own honest state. Nothing here reads who is looking either
+ * (ARCHITECTURE.md §8.1): the account entry is a private island that asks one
+ * boolean after the page loads.
  */
-export async function SiteHeader({ locale }: { readonly locale: Locale }) {
-  const [t, presence] = await Promise.all([
-    getTranslations({ locale, namespace: 'shell' }),
-    readPresence(),
-  ]);
-  const features = await readNavigationFeatures(locale);
 
-  const groups = navigationGroups(presence);
-  const utility = utilityLinks(presence);
-  const giving = givingPromoted(presence);
+/** Each domain's one-line purpose, under `nav.intros`. */
+const INTROS = {
+  explore: 'nav.intros.explore',
+  quran: 'nav.intros.quran',
+  hadith: 'nav.intros.hadith',
+  learn: 'nav.intros.learn',
+  library: 'nav.intros.library',
+  watch: 'nav.intros.watch',
+  fatwa: 'nav.intros.fatwa',
+  'news-events': 'nav.intros.newsEvents',
+  global: 'nav.intros.global',
+} as const satisfies Record<DomainMenuKey, string>;
+
+type ShellTranslator = Awaited<ReturnType<typeof getTranslations<'shell'>>>;
+
+/** A registry or menu label, resolved in the `shell` namespace. */
+const labelOf = (t: ShellTranslator, key: string): string => t(key as 'nav.home');
+
+export async function SiteHeader({ locale }: { readonly locale: Locale }) {
+  const [t, features] = await Promise.all([
+    getTranslations({ locale, namespace: 'shell' }),
+    readNavigationFeatures(locale),
+  ]);
+
+  const menus = domainMenus();
+  const utility = headerUtility();
   const searchAction = pathFor(locale, requireRoute('search'));
   const donateHref = pathFor(locale, requireRoute('donate'));
-
-  const hrefOf = (item: NavItem) =>
-    item.kind === 'route'
-      ? pathFor(locale, requireRoute(item.route))
-      : localizedPath(locale, item.binding);
-  const titleOf = (item: NavItem) =>
-    t(`nav.items.${item.id}.title` as 'nav.items.about.title');
-  const groupLabel = (group: NavigationGroup) =>
-    t(`nav.groups.${group.id}` as 'nav.groups.about');
 
   const account = {
     myHref: pathFor(locale, requireRoute('my-minhaj')),
@@ -88,19 +96,19 @@ export async function SiteHeader({ locale }: { readonly locale: Locale }) {
 
   return (
     <header className="relative border-b border-border bg-surface-raised">
-      {/* THE UTILITY STRIP — the organisation and the language, from a laptop up. */}
+      {/* THE UTILITY STRIP — from a laptop up. */}
       <div className="hidden border-b border-border/70 bg-surface lg:block">
         <Container>
           <div className="flex min-h-9 items-center justify-between gap-6 text-sm">
             <nav aria-label={t('nav.utility')}>
               <ul className="flex list-none flex-wrap items-center gap-x-5 p-0">
-                {utility.map((item) => (
-                  <li key={item.id}>
+                {utility.map((link) => (
+                  <li key={link.key}>
                     <NavLink
-                      href={hrefOf(item)}
+                      href={pathFor(locale, link.route)}
                       className="inline-flex min-h-9 items-center text-foreground-muted no-underline underline-offset-4 hover:text-foreground hover:underline aria-[current]:text-foreground"
                     >
-                      {titleOf(item)}
+                      {labelOf(t, link.label)}
                     </NavLink>
                   </li>
                 ))}
@@ -110,22 +118,20 @@ export async function SiteHeader({ locale }: { readonly locale: Locale }) {
               <LocaleSwitcher locale={locale} />
               <span aria-hidden="true" className="h-4 border-s border-border-strong/50" />
               <AccountEntry {...account} variant="strip" />
-              {giving ? (
-                <a
-                  href={donateHref}
-                  className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-action px-3 text-sm font-semibold text-action-foreground no-underline transition-colors duration-[var(--duration-fast)] hover:bg-action-hover"
-                >
-                  <Icon name="heart" size={16} />
-                  {t('nav.donate')}
-                </a>
-              ) : null}
+              <a
+                href={donateHref}
+                className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-action px-3 text-sm font-semibold text-action-foreground no-underline transition-colors duration-[var(--duration-fast)] hover:bg-action-hover"
+              >
+                <Icon name="heart" size={16} />
+                {t('nav.donate')}
+              </a>
             </div>
           </div>
         </Container>
       </div>
 
       <Container>
-        <div className="flex min-h-[4.25rem] items-center gap-2 sm:gap-3 lg:gap-4 xl:gap-6">
+        <div className="flex min-h-[4.25rem] items-center gap-2 sm:gap-3">
           <a
             href={pathFor(locale, requireRoute('home'))}
             className="inline-flex min-h-11 shrink-0 items-center rounded-control no-underline"
@@ -134,27 +140,21 @@ export async function SiteHeader({ locale }: { readonly locale: Locale }) {
             <span className="sr-only"> — {t('nav.home')}</span>
           </a>
 
-          {/* THE MEGA-NAVIGATION — from a laptop up. */}
-          <div className="hidden min-w-0 flex-1 lg:block">
+          {/* THE MEGA-NAVIGATION — the nine domains, from 1280 px up. */}
+          <div className="hidden min-w-0 flex-1 xl:block">
             <MegaNav
               label={t('nav.primary')}
               currentLabel={t('nav.currentSection')}
-              groups={groups.map((group) => ({
-                id: group.id,
-                label: groupLabel(group),
-                prefixes: group.items.map(hrefOf),
+              groups={menus.map((menu) => ({
+                id: menu.key,
+                label: labelOf(t, menu.landing.label),
+                prefixes: hrefsOf(locale, menu),
                 panel: (
                   <MegaPanel
-                    intro={t(`nav.intros.${group.id}` as 'nav.intros.about')}
-                    items={group.items.map((item) => ({
-                      key: item.id,
-                      href: hrefOf(item),
-                      title: titleOf(item),
-                      description: t(
-                        `nav.items.${item.id}.description` as 'nav.items.about.description',
-                      ),
-                    }))}
-                    featured={features[group.id]}
+                    locale={locale}
+                    menu={menu}
+                    t={t}
+                    featured={features[menu.key]}
                     featuredLabel={featuredLabel}
                   />
                 ),
@@ -176,14 +176,17 @@ export async function SiteHeader({ locale }: { readonly locale: Locale }) {
                 quickLinks: t('nav.quickLinks'),
                 noQuickLinks: t('nav.noQuickLinks'),
               }}
-              quickLinks={groups.flatMap((group) =>
-                group.items.map((item) => ({ href: hrefOf(item), label: titleOf(item) })),
-              )}
+              quickLinks={menus.map((menu) => ({
+                href: pathFor(locale, menu.landing),
+                label: labelOf(t, menu.landing.label),
+              }))}
             />
 
-            {/* THE PHONE AND TABLET ROW — account, then Menu; exactly one navigation is usable at any width. */}
-            <div className="flex items-center gap-1 lg:hidden">
-              <AccountEntry {...account} variant="icon" />
+            {/* BELOW 1280 PX — the account (until the strip carries it), then Menu. */}
+            <div className="flex items-center gap-1 xl:hidden">
+              <span className="lg:hidden">
+                <AccountEntry {...account} variant="icon" />
+              </span>
               <MobileNav
                 openLabel={t('nav.openMenu')}
                 closeLabel={t('nav.closeMenu')}
@@ -220,53 +223,31 @@ export async function SiteHeader({ locale }: { readonly locale: Locale }) {
 
                   <nav aria-label={t('nav.primary')}>
                     <ul className="flex list-none flex-col p-0">
-                      {groups.map((group) => (
-                        <li key={group.id} className="border-b border-border">
-                          <details className="group/acc">
-                            <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 font-serif text-xl text-foreground [&::-webkit-details-marker]:hidden">
-                              {groupLabel(group)}
-                              <Icon
-                                name="chevron-down"
-                                className="text-foreground-muted transition-transform duration-[var(--duration-fast)] group-open/acc:rotate-180"
-                              />
-                            </summary>
-                            <ul className="flex list-none flex-col gap-0.5 p-0 pb-4">
-                              {group.items.map((item) => (
-                                <li key={item.id}>
-                                  <NavLink
-                                    href={hrefOf(item)}
-                                    className="flex min-h-11 items-center rounded-control px-3 text-base text-foreground no-underline hover:bg-surface-sunken aria-[current]:font-semibold aria-[current]:text-action"
-                                  >
-                                    {titleOf(item)}
-                                  </NavLink>
-                                </li>
-                              ))}
-                            </ul>
-                          </details>
+                      {menus.map((menu) => (
+                        <li key={menu.key} className="border-b border-border">
+                          <DrawerSection locale={locale} menu={menu} t={t} />
                         </li>
                       ))}
                     </ul>
                   </nav>
 
-                  {giving ? (
-                    <a
-                      href={donateHref}
-                      className="flex min-h-12 items-center justify-center gap-2 rounded-control bg-action px-4 text-base font-semibold text-action-foreground no-underline hover:bg-action-hover"
-                    >
-                      <Icon name="heart" size={16} />
-                      {t('nav.donate')}
-                    </a>
-                  ) : null}
+                  <a
+                    href={donateHref}
+                    className="flex min-h-12 items-center justify-center gap-2 rounded-control bg-action px-4 text-base font-semibold text-action-foreground no-underline hover:bg-action-hover"
+                  >
+                    <Icon name="heart" size={16} />
+                    {t('nav.donate')}
+                  </a>
 
                   <nav aria-label={t('nav.utility')}>
                     <ul className="flex list-none flex-wrap gap-x-5 gap-y-1 p-0">
-                      {utility.map((item) => (
-                        <li key={item.id}>
+                      {utility.map((link) => (
+                        <li key={link.key}>
                           <a
-                            href={hrefOf(item)}
+                            href={pathFor(locale, link.route)}
                             className="inline-flex min-h-11 items-center text-foreground-muted no-underline hover:text-foreground hover:underline"
                           >
-                            {titleOf(item)}
+                            {labelOf(t, link.label)}
                           </a>
                         </li>
                       ))}
@@ -287,59 +268,121 @@ export async function SiteHeader({ locale }: { readonly locale: Locale }) {
 }
 
 /**
- * ONE MEGA PANEL: the group's one-line purpose, its destinations in two or
- * three columns each with a one-line description, and — where the corpus has
- * one — a recent record with its real picture at the inline end.
+ * The addresses a domain owns, for its current-section marker: its landing
+ * and every link of its menu. Where two domains list one address, the first
+ * in the bar's order is marked.
+ */
+function hrefsOf(locale: Locale, menu: DomainMenu): string[] {
+  return [
+    pathFor(locale, menu.landing),
+    ...menu.columns.flatMap((column) => [
+      ...(column.heading.route === null ? [] : [pathFor(locale, column.heading.route)]),
+      ...column.links.map((link) => pathFor(locale, link.route)),
+    ]),
+  ];
+}
+
+/**
+ * A column heading: a label, or a link when the heading is itself a section.
+ * NOT A REAL HEADING: a panel is navigation inside the banner, and forty
+ * headings in every page's outline would bury its own. Each list is instead
+ * NAMED by its heading (`aria-labelledby`) — "Study, list, 4 items".
+ */
+function ColumnHeading({
+  id,
+  column,
+  locale,
+  t,
+  tall = false,
+}: {
+  readonly id: string;
+  readonly column: MenuColumn;
+  readonly locale: Locale;
+  readonly t: ShellTranslator;
+  /** A 44-pixel target, for the touch-first sheet. */
+  readonly tall?: boolean;
+}) {
+  const text = labelOf(t, column.heading.label);
+  // One height for a linked and a plain heading, so the columns' lists align.
+  const height = `inline-flex ${tall ? 'min-h-11' : 'min-h-8'} items-center`;
+  return (
+    <p
+      id={id}
+      className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase"
+    >
+      {column.heading.route === null ? (
+        <span className={height}>{text}</span>
+      ) : (
+        <a
+          href={pathFor(locale, column.heading.route)}
+          className={`${height} underline decoration-accent-rule underline-offset-4 hover:decoration-accent`}
+        >
+          {text}
+        </a>
+      )}
+    </p>
+  );
+}
+
+/**
+ * ONE MEGA PANEL: the domain's one-line purpose and the way to its landing;
+ * its columns of links; and — for Watch, Library and News & Events, where the
+ * corpus has one — a recent record with its real picture at the inline end.
  */
 function MegaPanel({
-  intro,
-  items,
+  locale,
+  menu,
+  t,
   featured,
   featuredLabel,
 }: {
-  readonly intro: string;
-  readonly items: readonly {
-    readonly key: string;
-    readonly href: string;
-    readonly title: string;
-    readonly description: string;
-  }[];
+  readonly locale: Locale;
+  readonly menu: DomainMenu;
+  readonly t: ShellTranslator;
   readonly featured: NavigationFeature | undefined;
   readonly featuredLabel: (feature: NavigationFeature) => string;
 }) {
+  const domain = labelOf(t, menu.landing.label);
   return (
     <Container>
       <div
-        className={`grid gap-10 py-8 ${featured === undefined ? '' : 'grid-cols-[minmax(0,1fr)_17rem] xl:grid-cols-[minmax(0,1fr)_19rem]'}`}
+        className={`grid gap-10 py-7 ${featured === undefined ? '' : 'grid-cols-[minmax(0,1fr)_17rem]'}`}
       >
-        <div className="flex min-w-0 flex-col gap-5">
-          <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
-            {intro}
-          </p>
-          <ul
-            className={`grid list-none gap-x-6 gap-y-1 p-0 ${items.length > 4 ? 'grid-cols-2 xl:grid-cols-3' : 'grid-cols-2'}`}
-          >
-            {items.map((item) => (
-              <li key={item.key} className="min-w-0">
-                <NavLink
-                  href={item.href}
-                  className="group/item flex min-h-11 flex-col gap-0.5 rounded-control px-3 py-2.5 no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken aria-[current]:bg-accent-surface"
-                >
-                  <span className="inline-flex items-center gap-1.5 font-semibold text-foreground">
-                    {item.title}
-                    <Icon
-                      name="arrow-end"
-                      size={16}
-                      className="text-accent opacity-0 transition-opacity duration-[var(--duration-fast)] group-hover/item:opacity-100 group-focus-visible/item:opacity-100"
-                    />
-                  </span>
-                  <span className="text-sm text-foreground-muted">
-                    {item.description}
-                  </span>
-                </NavLink>
-              </li>
-            ))}
-          </ul>
+        <div className="flex min-w-0 flex-col gap-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 border-b border-border pb-4">
+            <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
+              {t(INTROS[menu.key])}
+            </p>
+            <NavLink
+              href={pathFor(locale, menu.landing)}
+              className="inline-flex min-h-9 shrink-0 items-center gap-1.5 text-sm font-semibold text-action no-underline underline-offset-4 hover:underline"
+            >
+              {t('menu.overview', { section: domain })}
+              <Icon name="arrow-end" size={16} />
+            </NavLink>
+          </div>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))] gap-x-8 gap-y-6">
+            {menu.columns.map((column, index) => {
+              const id = `menu-${menu.key}-${String(index)}`;
+              return (
+                <div key={column.key} className="flex min-w-0 flex-col gap-2">
+                  <ColumnHeading id={id} column={column} locale={locale} t={t} />
+                  <ul aria-labelledby={id} className="flex list-none flex-col p-0">
+                    {column.links.map((link) => (
+                      <li key={link.key}>
+                        <NavLink
+                          href={pathFor(locale, link.route)}
+                          className="inline-flex min-h-8 items-center rounded-control py-1 text-sm wrap-anywhere text-foreground no-underline transition-colors duration-[var(--duration-fast)] hover:text-action hover:underline hover:underline-offset-4 aria-[current]:font-semibold aria-[current]:text-action"
+                        >
+                          {labelOf(t, link.label)}
+                        </NavLink>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
         </div>
         {featured === undefined ? null : (
           <MediaCard
@@ -364,5 +407,66 @@ function MegaPanel({
         )}
       </div>
     </Container>
+  );
+}
+
+/**
+ * One domain in the sheet: a native disclosure holding its landing and every
+ * link of its menu. `<details>` gives the state, the keyboard behaviour and the
+ * announced expansion with no script, and a closed one is out of the tab
+ * order. Every target is at least 44 pixels tall.
+ */
+function DrawerSection({
+  locale,
+  menu,
+  t,
+}: {
+  readonly locale: Locale;
+  readonly menu: DomainMenu;
+  readonly t: ShellTranslator;
+}) {
+  const domain = labelOf(t, menu.landing.label);
+  return (
+    <details className="group/acc">
+      <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 font-serif text-xl text-foreground [&::-webkit-details-marker]:hidden">
+        {domain}
+        <Icon
+          name="chevron-down"
+          className="text-foreground-muted transition-transform duration-[var(--duration-fast)] group-open/acc:rotate-180"
+        />
+      </summary>
+      <div className="flex flex-col gap-4 pb-5">
+        <NavLink
+          href={pathFor(locale, menu.landing)}
+          className="inline-flex min-h-11 items-center gap-1.5 text-base font-semibold text-action no-underline underline-offset-4 hover:underline"
+        >
+          {t('menu.overview', { section: domain })}
+          <Icon name="arrow-end" size={16} />
+        </NavLink>
+        {menu.columns.map((column, index) => {
+          const id = `drawer-${menu.key}-${String(index)}`;
+          return (
+            <div key={column.key} className="flex flex-col gap-1">
+              <ColumnHeading id={id} column={column} locale={locale} t={t} tall />
+              <ul
+                aria-labelledby={id}
+                className="flex list-none flex-col border-s border-border p-0 ps-3"
+              >
+                {column.links.map((link) => (
+                  <li key={link.key}>
+                    <NavLink
+                      href={pathFor(locale, link.route)}
+                      className="flex min-h-11 items-center rounded-control px-2 text-base wrap-anywhere text-foreground no-underline hover:bg-surface-sunken aria-[current]:font-semibold aria-[current]:text-action"
+                    >
+                      {labelOf(t, link.label)}
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </details>
   );
 }

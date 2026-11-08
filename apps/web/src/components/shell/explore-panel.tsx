@@ -1,67 +1,48 @@
 import { localizedPath, type Locale } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
-import { readPresence } from '@/composition/presence';
-import {
-  EXPLORE_SECTIONS,
-  exploreHrefOf,
-  exploreSlugsOf,
-  ownerPathOf,
-} from '@/shell/explore';
-import { hasSignal } from '@/shell/presence';
+import { EXPLORE_SECTIONS, exploreHrefOf, exploreSlugsOf } from '@/shell/explore';
 
 /**
- * THE ORGANISATION INDEX on `/explore` (Rebaseline R1).
+ * THE ORGANISATION INDEX on `/explore` — every section and every page it
+ * reserves, one panel per section under a real heading.
  *
- * PUBLISHED PAGES ONLY. The Explore route list reserves some forty pages for
- * the organisation's own content; promoting every reserved address made the
- * product look unfinished, so this index lists a page only once it is published
- * (or delivered by its owner elsewhere) and a section only when it holds
- * something to read. Reserved addresses still answer, honestly, if visited.
- * Leadership is listed when contributor profiles are published.
+ * THE WHOLE INDEX, ALWAYS (restored after R2, owner direction 2026-11-08).
+ * R1 had narrowed this index to published pages only; the owner wants the
+ * organisation's full structure visible again, as it was before R1. Every
+ * entry resolves — the panel is built from the allowlists the routes
+ * themselves validate against, so a link here and a 404 there cannot
+ * disagree — and a page not yet published renders its honest
+ * publication-status state when visited (ROUTE_MAP.md §5.2). A page an owner
+ * delivers elsewhere (the newsletter) links to that owner's page.
+ *
+ * A Server Component: it ships neither the labels nor the route list to the
+ * browser, and it reads nothing but code, so a content read that fails cannot
+ * take the index down with it.
  */
 export async function ExplorePanel({ locale }: { readonly locale: Locale }) {
-  const [t, presence] = await Promise.all([
-    getTranslations({ locale, namespace: 'shell' }),
-    readPresence(),
-  ]);
-
-  const sections = EXPLORE_SECTIONS.map((section) => {
-    const landingPublished =
-      presence.publishedPages.has(`/explore/${section}`) ||
-      (section === 'leadership' && hasSignal(presence, 'people'));
-    const pages = exploreSlugsOf(section).filter(
-      (slug) =>
-        ownerPathOf(section, slug) !== null ||
-        presence.publishedPages.has(`/explore/${section}/${slug}`),
-    );
-    return { section, landingPublished, pages };
-  }).filter(({ landingPublished, pages }) => landingPublished || pages.length > 0);
+  const t = await getTranslations({ locale, namespace: 'shell' });
 
   return (
     <div className="grid grid-cols-1 gap-x-8 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
-      {sections.map(({ section, landingPublished, pages }) => {
-        const title = t(`explore.${section}.title` as 'explore.about.title');
+      {EXPLORE_SECTIONS.map((section) => {
+        const slugs = exploreSlugsOf(section);
         return (
           <section
             key={section}
             className="flex flex-col gap-3 rounded-panel border border-border bg-surface-raised p-6 shadow-panel"
           >
-            <h2 className="text-heading">
-              {landingPublished ? (
-                <a
-                  href={localizedPath(locale, `/explore/${section}`)}
-                  className="text-foreground no-underline hover:underline hover:underline-offset-4"
-                >
-                  {title}
-                </a>
-              ) : (
-                title
-              )}
-            </h2>
-            {pages.length === 0 ? null : (
+            <h3 className="text-heading">
+              <a
+                href={localizedPath(locale, `/explore/${section}`)}
+                className="text-foreground no-underline hover:underline hover:underline-offset-4"
+              >
+                {t(`explore.${section}.title` as 'explore.about.title')}
+              </a>
+            </h3>
+            {slugs.length === 0 ? null : (
               <ul className="flex list-none flex-col gap-1 p-0">
-                {pages.map((slug) => (
+                {slugs.map((slug) => (
                   <li key={slug}>
                     <a
                       href={exploreHrefOf(locale, section, slug)}

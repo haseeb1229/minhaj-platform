@@ -174,7 +174,6 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/editorial/article-card.tsx',
     'apps/web/src/components/editorial/lead-image.tsx',
     // Phase 30-R: a published Explore Page as a card.
-    'apps/web/src/components/editorial/page-card.tsx',
     // Phase 14: the Event pages and their pure presentation rules.
     'apps/web/src/components/editorial/events.tsx',
     'apps/web/src/components/editorial/event-presentation.ts',
@@ -280,6 +279,7 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/learning-island/learning-island.tsx',
     'apps/web/src/components/learning-island/requests.ts',
     'apps/web/src/components/my-learning/action-support.ts',
+    'apps/web/src/components/my-learning/nav.ts',
     'apps/web/src/components/my-learning/parts.tsx',
     'apps/web/src/components/my-learning/presentation.ts',
     'apps/web/src/components/my-learning/read.ts',
@@ -365,6 +365,7 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/personal-island/personal-island.tsx',
     'apps/web/src/components/personal-island/requests.ts',
     'apps/web/src/components/personal/action-support.ts',
+    'apps/web/src/components/personal/nav.ts',
     'apps/web/src/components/personal/parts.tsx',
     'apps/web/src/components/personal/presentation.ts',
     'apps/web/src/components/personal/read.ts',
@@ -432,6 +433,16 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/home/quran.tsx',
     'apps/web/src/components/home/section.tsx',
     'apps/web/src/components/home/watch.tsx',
+    // Restored after R2 (owner direction 2026-11-08): the home page's sources,
+    // areas and Explore sections, and its audio, Events, rulings, organisation
+    // and topics modules.
+    'apps/web/src/components/home/directory.tsx',
+    'apps/web/src/components/home/events.tsx',
+    'apps/web/src/components/home/fatwa.tsx',
+    'apps/web/src/components/home/listen.tsx',
+    'apps/web/src/components/home/organisation.tsx',
+    'apps/web/src/components/home/sources.tsx',
+    'apps/web/src/components/home/topics.tsx',
     'apps/web/src/components/library/cards.tsx',
     'apps/web/src/components/library/landing.tsx',
     'apps/web/src/components/editorial/long-form.ts',
@@ -459,9 +470,9 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/workspace/nav-match.ts',
     'apps/web/src/components/workspace/parts.tsx',
     'apps/web/src/components/workspace/workspace-nav.tsx',
-    // R1: the header, footer and Explore index render per request because
-    // they read the public presence snapshot (`@/composition/presence`), but
-    // none of them declares a segment config or calls a request API itself.
+    // The header, footer and Explore index render per request because they
+    // read public data (featured records, `@/composition/presence`), but none
+    // of them declares a segment config or calls a request API itself.
     'apps/web/src/components/shell/site-header.tsx',
     // The organisation's official mark, once, in the footer.
     'apps/web/src/components/shell/brand-lockup.tsx',

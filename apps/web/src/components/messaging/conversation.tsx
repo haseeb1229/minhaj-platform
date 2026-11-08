@@ -28,6 +28,7 @@ import {
   ThreadItems,
   UnreadBadge,
   counterpartName,
+  messagingLinks,
   messagingMessages,
   threadLabels,
   type MessagingTranslator,
@@ -128,6 +129,7 @@ function Frame({
     <MyPage
       title={title}
       measure="reading"
+      related={{ label: t('nav.label'), links: messagingLinks(locale, t) }}
       {...(description === undefined ? {} : { description })}
     >
       {children}

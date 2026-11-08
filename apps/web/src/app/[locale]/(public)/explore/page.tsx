@@ -22,8 +22,10 @@ import { ExploreCard, LeaderCard } from '@/components/explore/cards';
  * R2: A NARRATIVE BEFORE THE INDEX. The organisation's own published Pages
  * open the page, picture-led (the founder's biography first when published),
  * then its published leadership by portrait, then the index of every section
- * — the same panel the navigation renders, so the two cannot list different
- * things. PUBLISHED ONLY: no reserved address is listed anywhere here.
+ * and every page it reserves (restored after R2, owner direction 2026-11-08):
+ * the featured cards are published Pages only, while the index lists the
+ * organisation's whole structure and each reserved page answers with its
+ * honest publication-status state.
  */
 
 /**

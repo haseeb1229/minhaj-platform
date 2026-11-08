@@ -172,8 +172,9 @@ reachable, and the owner **declined external hadith corpora** (no third-party co
 scraped mirror). No Hadith reference preview exists, and no hadith text or grading is shown.
 Instead, while no collection is activated, the Hadith landing presents **MQI's own hadith works** —
 the Library's published Works classified under the `hadith` Topic — and says that the collections
-reader awaits an authorised source (ROUTE_MAP.md §3.4; INFORMATION_ARCHITECTURE.md §2.2, the
-`hadithWorks` signal). That is Library content under its own pre-adoption basis (§3.1, §3.9), not a
+reader awaits an authorised source (ROUTE_MAP.md §3.4; INFORMATION_ARCHITECTURE.md §2.2 — the
+`hadithWorks` signal that promoted it is historical since 2026-11-08, when the navigation became
+unconditional). That is Library content under its own pre-adoption basis (§3.1, §3.9), not a
 Hadith corpus.
 
 ### 1.4 Authorised Fatwa scholars
@@ -1268,7 +1269,7 @@ decision of Minhaj-ul-Quran International, and none closes an entry above:
 |---|---|
 | **English URLs are unprefixed** (`/`, `/library`); Urdu and Arabic keep `/ur/…` and `/ar/…`. Every `/en` and `/en/…` answers one 301 to the unprefixed address, query preserved and merged with slug history. Locale resolution is deterministic: no locale cookie, no `Accept-Language` redirect, `/` answers 200 in English. One canonical address per interface locale still holds; made before public indexing, so no search equity was affected. Supersedes the Phase-3A `/{locale}` contract and its 307 | ROUTE_MAP.md §1.1, §1.3, §9.1–§9.2.1 |
 | **Interim One Minhaj visual identity** — replaceable; the official logo unmodified as a secondary footer mark; the brand pack stays OPEN | §6.4; ARCHITECTURE.md §13.2–§13.3 |
-| **Content-aware navigation** — a destination is promoted only with published content or an open service; every route stays reachable by address | INFORMATION_ARCHITECTURE.md §2.2, §4 |
+| **Content-aware navigation** — a destination is promoted only with published content or an open service; every route stays reachable by address. *(Historical, superseded 2026-11-08 by owner direction — below)* | INFORMATION_ARCHITECTURE.md §2.2, §4 |
 | **Readiness vocabulary** — never a bare "complete"; readiness is reported in six separate dimensions: **Engineering**, **Product**, **Content**, **Activation**, **Production**, **Flagship/presentation** | PRODUCT_SCOPE.md, *Product status and acceptance*; DELIVERY_PLAN.md (Rebaseline R1 record) |
 
 **Owner decisions recorded at Rebaseline R2 (2026-11-06, Haseeb, project owner).** Again product
@@ -1278,11 +1279,19 @@ is a decision of Minhaj-ul-Quran International, and none closes an entry above:
 | Decided | Where |
 |---|---|
 | **R2 scope widened to every surface** — public, My Minhaj, Teacher and Admin — in one macro. Supersedes the R1 record's split "home and landings in R2; My Minhaj, Teacher and Admin in R3/R4" | DELIVERY_PLAN.md (Rebaseline R1 and R2 records) |
-| **Grouped navigation** — six fixed header groups (Quran · Knowledge · Watch & Listen · Learn · News & Events · About MQI), each listing only its present destinations, a utility strip, six footer columns and the official channels. Supersedes R1's ranked bar of at most six (`PRIMARY_LIMIT`) and "More"; content-aware presence still hides genuinely empty destinations | INFORMATION_ARCHITECTURE.md §1.5, §2, §4 |
+| **Grouped navigation** — six fixed header groups (Quran · Knowledge · Watch & Listen · Learn · News & Events · About MQI), each listing only its present destinations, a utility strip, six footer columns and the official channels. Supersedes R1's ranked bar of at most six (`PRIMARY_LIMIT`) and "More"; content-aware presence still hides genuinely empty destinations. *(Historical, superseded 2026-11-08 by owner direction — below)* | INFORMATION_ARCHITECTURE.md §1.5, §2, §4 |
 | **Comprehensive pre-adoption presentation corpus** (staging only) | §3.9; MIGRATION_STRATEGY.md §19 |
 | **Quran staging reference preview** — Tanzil Uthmani 1.1 verbatim (CC BY 3.0) with Irfan-ul-Quran, labelled, gated and never indexable; Bismillah and Arabic-default rules (staging only; §1.1–§1.2 stay OPEN) | §1.1, §1.2; DOMAIN_MODEL.md §8.4; SECURITY_BASELINE.md §5.1 |
 | **No external hadith corpus**; Hadith presents MQI's hadith works (§1.3 stays OPEN) | §1.3 |
 | **Staging demonstration data** as operator-run environment data, never an application mode (staging only) | §4.2 |
+
+**Owner direction recorded 2026-11-08 (Haseeb, project owner).** A product decision for the
+independently developed platform, not a decision of Minhaj-ul-Quran International:
+
+| Decided | Where |
+|---|---|
+| **Unconditional navigation restored** — the nine domains (Explore · Quran · Hadith · Learn · Library · Watch · Fatwa · News & Events · Global) always in the header, each with its full mega menu; the utility strip (Find a Centre · Membership · Contact & Help, the language switcher, the account entry, Donate always); the six-column footer index with the legal documents and the Sitemap always linked. Reverses the R1 content-aware and R2 grouped navigation, which the owner judged a usability regression because they hid most destinations; a destination with nothing published answers with its own honest state. R2's visual components, keyboard behaviour, featured cards, official channels and footer pre-adoption statement are kept | INFORMATION_ARCHITECTURE.md §1.5, §2, §3, §4 |
+| **Public page features restored** — what the R1/R2 redesign removed from the home page and the section landings returns, behaving as at Phase-30 exit (commit `0382218`) in R2's visual components: the home hero's search and Explore link, the always-present Quran and Hadith cards, areas and Explore sections, and the audio, Events, rulings, organisation and topics modules; the full `/explore` index of every reserved page; and the Quran, Hadith, Library, Watch, News, Collections and Global landings' removed links, notices, intros and paging | ROUTE_MAP.md §3.1–§3.9 |
 
 ---
 

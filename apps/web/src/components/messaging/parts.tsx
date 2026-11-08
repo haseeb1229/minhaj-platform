@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { ReactNode } from 'react';
 import type { getTranslations } from 'next-intl/server';
 
-import type { Locale } from '@minhaj/contracts';
+import { localizedPath, type Locale } from '@minhaj/contracts';
 import type { CourseListing } from '@minhaj/contracts/learning';
 import {
   MESSAGING_LIMITS,
@@ -15,6 +15,7 @@ import {
 } from '@minhaj/contracts/messaging';
 
 import { ActionForm, type FormActionState } from '@/app/[locale]/(identity)/form-state';
+import type { MyLink } from '@/components/my/frame';
 import { LearningTitle } from '@/components/my-learning/parts';
 import { ConfirmField } from '@/components/personal/parts';
 import { displayTimeZone } from '@/components/personal/presentation';
@@ -54,6 +55,23 @@ import {
  */
 
 export type MessagingTranslator = Awaited<ReturnType<typeof getTranslations<'messages'>>>;
+
+/**
+ * The neighbouring pages each person-facing Messaging page links to —
+ * Support and the person's teachers on every one, always (restored
+ * 2026-11-08 by owner direction after R2 had dropped them).
+ */
+export function messagingLinks(
+  locale: Locale,
+  t: MessagingTranslator,
+): readonly MyLink[] {
+  return [
+    { href: localizedPath(locale, '/my/messages'), text: t('nav.messages') },
+    { href: localizedPath(locale, '/my/messages/support'), text: t('nav.support') },
+    { href: localizedPath(locale, '/my/teachers'), text: t('nav.teachers') },
+    { href: localizedPath(locale, '/my'), text: t('nav.account') },
+  ];
+}
 
 /**
  * The words for every refusal a Messaging action can return — a category,

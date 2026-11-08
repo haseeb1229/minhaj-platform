@@ -220,6 +220,18 @@ variant is canonical to the bare Collection address and is never a sitemap entry
 carry a published Editorial Page above the contact form — the source's contact page is bound to it
 in the R2 migration catalogue (MIGRATION_STRATEGY.md §19).
 
+**Owner direction 2026-11-08 — the home page's features restored.** No route changes. The R2 home
+page had dropped features the Phase-30 portal (commit `0382218`) carried; they are back, in R2's
+visual components: the hero's search box (a GET form to `/search?q=`, beside the header's search
+palette) and its link to `/explore`; the **Quran and Hadith** cards, always present as peers and
+each saying whether a text is available (available · reference preview · test text only · not yet
+published); the six other areas (Learn, Library, Watch, Fatwa, News and Events, Global) and the
+seven Explore sections, always; and, each only while its owner has something published, audio
+lectures (→ `/listen/lectures`), Events (upcoming, else the latest past ones, labelled as past),
+the latest rulings while Fatwa is activated, the organisation's published Explore Pages, and the
+taxonomy's top-level topics (→ `/topics`). The Global module's way on is the Centre finder once a
+Centre is listed, else the countries directory.
+
 ### 3.2 Explore
 
 | Route | Purpose |
@@ -251,10 +263,19 @@ canonical at `/people/{slug}`, and links the Shaykh-ul-Islam biography. No new p
 **Rebaseline R2.** `/explore` opens with a narrative — the organisation's own published Pages,
 picture-led (the founder's biography first when published), then its published leadership by
 portrait — before the index of every section, which is the same panel the header's About MQI
-group renders; it still lists published pages only. The R2 migration catalogue binds one more
-Explore address, `organization/annual-reports` (and the root `/contact`, §3.1), and extends the
-curated archives to all fourteen genuine `lkcatid` archives at `/collections/{slug}`
-(OPEN_DECISIONS.md §3.9; MIGRATION_STRATEGY.md §19). No new path is created.
+group renders; until 2026-11-08 it listed published pages only (historical, superseded below).
+The R2 migration catalogue binds one more Explore address, `organization/annual-reports` (and the
+root `/contact`, §3.1), and extends the curated archives to all fourteen genuine `lkcatid`
+archives at `/collections/{slug}` (OPEN_DECISIONS.md §3.9; MIGRATION_STRATEGY.md §19). No new path
+is created.
+
+**Owner direction 2026-11-08.** The `/explore` index again lists **every section and every page it
+reserves**, whatever is published, as it did at Phase-30 exit; the narrative above it still shows
+published Pages and people only. Each section landing lists its published Pages as picture-led
+cards and then every other page it reserves — a page not yet published marked "Not yet published"
+and answering with its honest reserved state, a page an owner delivers elsewhere linking there
+(Digital resources → `/newsletter`) — and carries the publication-status notice while anything
+it reserves is unpublished. No route changes.
 
 ### 3.3 Quran
 
@@ -322,6 +343,10 @@ banner on every Ayah). Unlike fixture mode, a reference corpus is a navigation d
   an Ayah and hidden from assistive technology; **never on Surahs 1 or 9**. An approved corpus
   decides its own convention, so nothing is shown there until that is a recorded decision.
 
+**Owner direction 2026-11-08.** The `/quran` landing's hero again carries the full-text search
+form (a GET form to `/quran/search?q=`, working without JavaScript) beneath R2's quick jump, and its
+Read, Study and Explore groups carry their introductions again. No route changes.
+
 ### 3.4 Hadith
 
 | Route | Purpose |
@@ -361,8 +386,16 @@ classified under the `hadith` Topic, as a shelf of covers each linking to its `/
 page, with "all" leading to `/hadith/books` — and a short word on the hadith sciences, with one calm
 sentence that the collections reader awaits an authorised source; it links nothing that is not open
 (the collection, browse and search routes keep their honest unavailable state at their addresses).
-With no such Work the shelf is absent. The shell promotes `/hadith` as "Hadith works" under the
-`hadithWorks` signal (INFORMATION_ARCHITECTURE.md §2.2); an activated collection takes over as before.
+With no such Work the shelf is absent. From R2 until 2026-11-08 the shell promoted `/hadith` as
+"Hadith works" under a `hadithWorks` signal (historical); since the owner direction of 2026-11-08
+the header's Hadith domain links `/hadith` always (INFORMATION_ARCHITECTURE.md §2.2). An activated
+collection takes over as before.
+
+**Owner direction 2026-11-08.** While no collection is activated, the landing again shows how the
+section is organised, as at Phase-30 exit: Collections and Study each described and marked "Opens
+when a collection is activated" (not linked), Explore and Learn linked to the `hadith` topic hub and
+Learn; and a link back to the home page. It replaces R2's short "elsewhere on the platform" list,
+which repeated those two links. No route changes.
 
 ### 3.5 Learn
 
@@ -423,6 +456,13 @@ recorded year last, then A–Z); both are total orders ending on the identifier,
 or skip a Work, and an unknown value is the default. The legacy slug order is no longer what a
 visitor meets. Like every filter, `?sort` is canonical to the base listing and never a sitemap
 entry. A magazine's issues are grouped by year on its page.
+
+**Owner direction 2026-11-08.** `/library` again offers "See every resource type"
+(`/library/resources`) in its hero, lists Books first in its directory, introduces each directory
+group, and carries the Library's metadata notice — as `/library/books` does again. Each of the
+landing's reads fails closed on its own: a read that fails hides only its own shelf, never the
+whole page. No route changes.
+
 ### 3.7 Watch / Listen
 
 | Route | Purpose |
@@ -444,6 +484,9 @@ creates). To let the browser honour it, the two player routes — `/watch/videos
 delegates `autoplay` to the page itself and the two embed origins; every other route still declines
 `autoplay` (SECURITY_BASELINE.md §16.2; ARCHITECTURE.md §4.7.1). Structured data keeps the plain
 embed URL; the CSP is unchanged.
+
+**Owner direction 2026-11-08.** The `/watch` landing's grid shows twelve videos again, and its
+browse groups (formats, groupings, find) carry their introductions again. No route changes.
 
 ### 3.8 Fatwa
 
@@ -480,8 +523,10 @@ Structured data is `BreadcrumbList` only.
 activation `/fatwa` is a calm "coming" page rather than a bare refusal: what the service will hold,
 how asking will work, and an **outbound link to Minhaj-ul-Quran's own fatwa website**
 (`https://thefatwa.com/urdu/index.html`, the one address in `components/fatwa/official-site.ts` —
-a plain link, never fetched, embedded or tracked). The shell does not promote `/fatwa` until the
-service is active and a ruling is published (the `fatwa` signal, unchanged).
+a plain link, never fetched, embedded or tracked). From R1 until 2026-11-08 the shell did not
+promote `/fatwa` until the service was active and a ruling published (historical); since the owner
+direction of 2026-11-08 the Fatwa domain is always in the header and links this page, which says
+honestly what it holds (INFORMATION_ARCHITECTURE.md §2.2).
 
 ### 3.9 News, Events, Media, Global
 
@@ -505,10 +550,21 @@ language's records first (each group still newest first). `/news/archive` also t
 **`?type=`** — one of the four News families — beside `?lang`, `?year` and `?month`, and counts its
 periods over the same narrowing. A repeated or unknown value is simply ignored, never broadened
 into an error; every variant stays canonical to its base listing and outside the sitemap. The
-`/news` landing leads with the newest story and the next three beside it. `/global/countries` lists
-every public Country at once, grouped by world region (derived from each Country's ISO 3166-1 code;
-an unplaced code is shown under "other", never dropped) — its former `?offset` paging is
-withdrawn.
+`/news` landing leads with the newest story and the next three beside it. From R2 until 2026-11-08
+`/global/countries` listed every public Country at once (at most 300), grouped by world region
+(derived from each Country's ISO 3166-1 code; an unplaced code is shown under "other", never
+dropped), its `?offset` paging withdrawn (historical, superseded below).
+
+**Owner direction 2026-11-08.** The `/news` landing again opens with links to Events and the News
+archive, and its browse list again names Press releases, Statements, Media coverage and the
+archive beside R2's Events, Collections and photograph rows. `/collections` cards again show their
+type and their topics (each a link to `/topics/{slug}`), with the kinds a Collection may hold named
+under the lede. `/global` always offers Find a Centre and lists the Finder, Countries, Centres and
+Pakistan entries whether or not a Centre is published (as at Phase-30 exit), shows local news,
+events and contacts, and closes with the directory's data notice. `/global/countries` is paged again
+with **`?offset=`** (24 Countries a page, each page grouped by world region; past the end, an
+honest empty page), canonical to the bare listing and never a sitemap entry. No route is added.
+
 ### 3.10 Legal and machine-readable
 
 | Route | Purpose |
@@ -603,14 +659,21 @@ own every operation reachable beneath it:
 removed. The area's navigation (`apps/web/src/components/my/sections.ts`) lists its sections in ten
 fixed groups — Home · Library (saved, notes, collections, history) · Quran (`/my/progress/quran`) ·
 Learning (`/my/learning`, `/my/classes`, `/my/teachers`) · Messages · Questions · Membership ·
-Giving (`/my/donations`) · Notifications · Settings — and offers a section only while the
-deployment has switched its capability on, answered by each owner's session-free read
-(`apps/web/src/app/[locale]/my/capabilities.ts`): a readable Quran corpus, a published course or
-live learning, a conversation type, Fatwa intake, an open membership type, open giving. A group with
-no offered section is not listed. **This is presentation, never a control:** a hidden section's page
-still answers at its address with its own session and owner checks, and the `/my` home links
-anything the person already has there (its modules render only when there is something to show).
-A read that fails hides only its own section.
+Giving (`/my/donations`) · Notifications · Settings.
+
+**Every section, always (owner direction 2026-11-08).** The navigation lists every section above
+for every account, and the `/my` home has a module for each — with an honest empty or "not
+available yet" state rather than disappearing; each page says in words when its service is not
+switched on. My Learning, My Classes, My Teachers and the Messages pages carry their neighbour
+links again. A person Identity & Access says may enter `/teacher` (live `teaching.perform`) or
+`/admin` (any permission that opens an administrative surface — the admin shell's own
+`reachableSurfaces` filter) also sees a "Your work" group linking there, decided server-side by the
+`/my` layout from the session's live permission evaluation (`apps/web/src/app/[locale]/my/staff.ts`,
+rule in `staff-areas.ts`); no session or a failed read offers neither, and the target areas keep
+their own gates. **This is presentation, never a control.** *Historical, superseded 2026-11-08:*
+R2 offered a section only while the deployment had switched its capability on, from each owner's
+session-free read (the former `my/capabilities.ts`), and the home's modules rendered only when there
+was something to show.
 
 ### 5.1 Route, owner and delivery register
 
@@ -733,7 +796,7 @@ to the holder of its 32-byte opaque token (a malformed and an unknown token answ
 | `/admin/system/integrations` — provider configuration and status | Platform integrations | **Phase 2** for email; extended per provider |
 | `/admin/communications/newsletter` | **Personalisation & Notifications** | **Phase 21** — delivered: subscription counts and a paginated list of masked addresses, states and consent dates under `newsletter.read`; suppress and reinstate (to `unsubscribed`, requiring fresh confirmation) under `newsletter.operate`. No campaign, sending or segmentation surface exists |
 | `/admin/communications/delivery` — pending, failed, suppressed mail | The shared communication concern | **Phase 2** |
-| `/admin/system/navigation` | Layer 4 shell | **Phase 4**, only to the extent it is genuinely promised. Read-only. Since Rebaseline R1 its Placement column (registry `placements`) is replaced by a **Promotion** column — always / waits for a named signal / promoted now / not promoted (reachable by address) — from the content-aware presentation policy (INFORMATION_ARCHITECTURE.md §2.2). Since Rebaseline R2 the rule is one of three kinds — **always**, a **signal** (promoted now / waiting for it) or a published **Page** binding (promoted now / waiting for its Page), matched by route key or by the route's address — or not promoted |
+| `/admin/system/navigation` | Layer 4 shell | **Phase 4**, only to the extent it is genuinely promised. Read-only. Since Rebaseline R1 its Placement column (registry `placements`) is replaced by a **Promotion** column — always / waits for a named signal / promoted now / not promoted (reachable by address) — from the content-aware presentation policy (INFORMATION_ARCHITECTURE.md §2.2). Since Rebaseline R2 the rule is one of three kinds — **always**, a **signal** (promoted now / waiting for it) or a published **Page** binding (promoted now / waiting for its Page), matched by route key or by the route's address — or not promoted (historical). Since the owner direction of 2026-11-08 the navigation is unconditional and the column says, per route, whether the header or footer **always** links it or it is reachable by its address only (`shellLinkedKeys` in `apps/web/src/shell/menus.ts`) |
 
 **Every route above carries:** a semantic owner · a delivery phase · availability rules
 (§5.2) · defined empty, loading and error behaviour where applicable · and permissions where
@@ -814,6 +877,12 @@ narrows that page in the browser only and reads nothing new; a class's "mark hel
 open in a dialog (ARCHITECTURE.md §13). Every Teacher page names itself in the title template
 ("Calendar · Teacher area · One Minhaj") with fixed words — a class or learner page is "Class" or
 "Student", so no learner's name reaches a tab or history; all stay `noindex`.
+
+**Teacher home sections (owner direction 2026-11-08).** `/teacher` again lists every section of the
+area — Today's classes, Calendar, Students, Messages, Courses, Resources, Attendance, Availability,
+Profile — plus the attendance reports, both on the full home and on the "no course yet" home
+(R2 had narrowed the list to four shortcuts — historical, superseded). A teaching-authority holder
+reaches `/teacher` from My Minhaj's "Your work" group (§5).
 
 ---
 
