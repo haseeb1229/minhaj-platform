@@ -27,6 +27,7 @@ import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../(identity)/form-state';
 import { createCampaignAction } from '../actions';
 import { adminDonationsCopy, type AdminDonationsCopy } from '../shared';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/donations/campaigns` — every campaign, any state
@@ -43,7 +44,7 @@ import { adminDonationsCopy, type AdminDonationsCopy } from '../shared';
  * NO CAMPAIGN HAS A PUBLIC ADDRESS OF ITS OWN. Every published campaign is on
  * `/donate`; there is no per-campaign route, sitemap entry or search result.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminDonations', 'campaigns.title');
 
 export const dynamic = 'force-dynamic';
 

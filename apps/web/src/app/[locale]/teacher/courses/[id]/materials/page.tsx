@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
@@ -17,6 +18,7 @@ import {
 import { NotActivated } from '@/components/teacher/parts';
 import { readLesson } from '@/components/teacher/presentation';
 import { Alert, EmptyState, Panel, SectionHeading, TextLink } from '@/components/ui';
+import { teacherPageMetadata } from '@/components/teacher/metadata';
 import { learningRuntime } from '@/composition/learning';
 import { requireLocale } from '@/config/route-locale';
 import { requireTeacher } from '../../../guard';
@@ -33,7 +35,13 @@ import { requireTeacher } from '../../../guard';
  * NO UPLOAD. Materials are written into the Course by the Learning
  * administration; a teacher reads them here.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return teacherPageMetadata(params, 'materials');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -80,7 +88,7 @@ export default async function CourseMaterialsPage({
   return (
     <CourseFrame
       course={course}
-      heading={t('materials.title')}
+      view="materials"
       description={<p>{t('materials.description')}</p>}
       locale={locale}
       t={t}

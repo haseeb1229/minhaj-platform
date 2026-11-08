@@ -36,6 +36,7 @@ import {
   type Query,
 } from '../../shared';
 import { ItemOutcomeBadge, ReconciliationBadge, RunStateBadge } from '../../status';
+import { adminPageMetadata } from '../../../metadata';
 
 /**
  * `/{locale}/admin/migration/runs/{id}` — one import run under
@@ -45,7 +46,7 @@ import { ItemOutcomeBadge, ReconciliationBadge, RunStateBadge } from '../../stat
  * be cancelled under `migration.administer`, at the version shown; nothing
  * else about a run is decided here — the command line runs and resumes it.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminMigration', 'run.title');
 
 export const dynamic = 'force-dynamic';
 
@@ -169,6 +170,7 @@ export default async function MigrationRunPage({
             {t('run.errorsLink')}
           </TextLink>
           <TextLink href={`${base}/rights`}>{t('run.rightsLink')}</TextLink>
+          <TextLink href={`${base}/approve`}>{t('runBatch.approveLink')}</TextLink>
         </p>
       </Panel>
 

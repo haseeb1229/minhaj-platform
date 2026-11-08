@@ -1,30 +1,29 @@
 import type { Metadata } from 'next';
-import { localizedPath } from '@minhaj/contracts';
 import type { ReactNode } from 'react';
 import { getTranslations } from 'next-intl/server';
 
-import { WorkspaceShell } from '@/components/workspace/parts';
-import { WorkspaceNav } from '@/components/workspace/workspace-nav';
+import { MyShell } from '@/components/my/frame';
+import { MyNav } from '@/components/my/my-nav';
+import { myNavigation } from '@/components/my/sections';
 import { requireLocale } from '@/config/route-locale';
 import { privateAreaMetadata } from '@/shell/private-metadata';
+import { myCapabilities } from './capabilities';
 
 /**
- * My Minhaj's workspace frame (ROUTE_MAP.md §5.1): a header band naming the
- * area and the area's sections, beside every `/my` page.
+ * My Minhaj's frame (ROUTE_MAP.md §5.1; redesigned in R2): the product bar,
+ * the area's grouped navigation and the page.
  *
  * IT READS NO SESSION. Every page beneath runs `requireActiveSession` itself,
  * with its OWN return path, so a signed-out visitor is sent to sign in and
  * brought back to the exact page they asked for. A guard here could only send
- * them back to `/my`. The frame holds nothing personal — the area's name and
- * links to routes every account has — and the person's own details are shown
- * by the pages that read them.
- *
- * THE AREA NAMES ITSELF IN TEXT, not a heading, so each page keeps exactly one
- * `h1` inside its own `main`.
+ * them back to `/my`. The frame holds nothing personal: the navigation is
+ * chosen from deployment state alone — which sections are switched on
+ * (`./capabilities.ts`) — and the person's own details are shown by the pages
+ * that read them.
  *
  * `noindex, nofollow` and per request for the whole tree, as every page beneath
  * already declares: a cached copy of anything under `/my` would be somebody
- * else's.
+ * else's. Each page names itself in the title template ("Saved · My Minhaj").
  */
 export async function generateMetadata({
   params,
@@ -48,91 +47,28 @@ export default async function MyLayout({
   const locale = await requireLocale(params);
   const w = await getTranslations({ locale, namespace: 'workspace' });
   const identity = await getTranslations({ locale, namespace: 'identity' });
-  const personal = await getTranslations({ locale, namespace: 'personal' });
-  const learning = await getTranslations({ locale, namespace: 'myLearning' });
-  const classes = await getTranslations({ locale, namespace: 'myClasses' });
-  const messages = await getTranslations({ locale, namespace: 'messages' });
-  const membership = await getTranslations({ locale, namespace: 'myMembership' });
-  const donations = await getTranslations({ locale, namespace: 'myDonations' });
-
-  const my = localizedPath(locale, '/my');
+  const t = await getTranslations({ locale, namespace: 'my' });
+  const groups = myNavigation(locale, await myCapabilities(), {
+    section: (key) => t(`nav.section.${key}`),
+    group: (key) => t(`nav.group.${key}`),
+  });
 
   return (
-    <WorkspaceShell
+    <MyShell
       locale={locale}
-      skipLabel={w('skip')}
       area={identity('my.title')}
+      skipLabel={w('skip')}
       nav={
-        <WorkspaceNav
+        <MyNav
           label={identity('my.title')}
-          variant="sidebar"
-          groups={[
-            {
-              key: 'my',
-              links: [
-                { key: 'overview', href: my, text: w('my.overview'), exact: true },
-                {
-                  key: 'learning',
-                  href: `${my}/learning`,
-                  text: learning('nav.learning'),
-                  also: [`${my}/progress/courses`],
-                },
-                {
-                  key: 'classes',
-                  href: `${my}/classes`,
-                  text: classes('nav.classes'),
-                  also: [`${my}/teachers`],
-                },
-                {
-                  key: 'messages',
-                  href: `${my}/messages`,
-                  text: messages('nav.messages'),
-                },
-                {
-                  key: 'notifications',
-                  href: `${my}/notifications`,
-                  text: personal('nav.notifications'),
-                },
-                { key: 'saved', href: `${my}/saved`, text: personal('nav.saved') },
-                {
-                  key: 'history',
-                  href: `${my}/history/reading`,
-                  text: w('my.history'),
-                  also: [`${my}/history`],
-                },
-                {
-                  key: 'quran',
-                  href: `${my}/progress/quran`,
-                  text: personal('nav.quran'),
-                },
-                {
-                  key: 'questions',
-                  href: `${my}/questions`,
-                  text: identity('my.questions'),
-                },
-                {
-                  key: 'membership',
-                  href: `${my}/membership`,
-                  text: membership('nav.membership'),
-                },
-                {
-                  key: 'donations',
-                  href: `${my}/donations`,
-                  text: donations('nav.donations'),
-                },
-                {
-                  key: 'settings',
-                  href: `${my}/settings/profile`,
-                  text: w('my.settings'),
-                  also: [`${my}/settings`],
-                },
-              ],
-            },
-          ]}
+          groups={groups}
+          menuLabel={t('nav.menu')}
+          closeLabel={t('nav.close')}
+          homeLabel={t('nav.section.home')}
         />
       }
     >
       {children}
-    </WorkspaceShell>
+    </MyShell>
   );
 }

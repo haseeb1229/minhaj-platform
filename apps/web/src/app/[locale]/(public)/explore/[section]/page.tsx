@@ -11,19 +11,13 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { editorialReadRuntime } from '@/composition/editorial-read';
 import { peopleReadRuntime } from '@/composition/people-read';
 import { ListingIntro } from '@/components/editorial/frame';
-import { ExplorePageCard, exploreSectionOf } from '@/components/editorial/page-card';
-import { PersonCard } from '@/components/people/person-card';
-import { CardGrid, Container, LinkCard } from '@/components/ui';
+import { CardGrid, Container, TextLink } from '@/components/ui';
 import { PublicationStatus } from '@/components/shell/publication-status';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
-import {
-  EXPLORE_SECTIONS,
-  exploreHrefOf,
-  exploreSlugsOf,
-  type ExploreSection,
-} from '@/shell/explore';
+import { EXPLORE_SECTIONS, exploreSlugsOf, type ExploreSection } from '@/shell/explore';
 import { requireRoute } from '@/shell/registry';
+import { ExploreCard, LeaderCard } from '@/components/explore/cards';
 
 /**
  * An Explore SECTION shell (ROUTE_MAP.md §3.2).
@@ -35,16 +29,17 @@ import { requireRoute } from '@/shell/registry';
  * authority (the same rule the locale segment follows,
  * SECURITY_BASELINE.md §9.1).
  *
- * WHAT IT SHOWS. Its own title and its pages: each PUBLISHED Page as a card with
- * its own title, excerpt and lead image, and every page not yet published as a
- * plainly marked reserved link — so the section is never presented as complete
- * when it is not. Organisational words enter only as `Page` records through
- * the Phase-6 workflow (OPEN_DECISIONS.md §6.1); none is written here.
+ * WHAT IT SHOWS (R2). Its own title and its PUBLISHED pages, each a picture-led
+ * card with its own title, excerpt and lead image. A page not yet published is
+ * not listed — its reserved address still answers honestly if reached — and a
+ * section with nothing published renders the publication-status state and
+ * points to the other sections.
+ * Organisational words enter only as `Page` records through the Phase-6
+ * workflow (OPEN_DECISIONS.md §6.1); none is written here.
  *
  * LEADERSHIP (Phase 30-R) has no pages of its own: it shows the founder's
- * published biography Page and every PUBLISHED People profile, People's own
- * public read. The publication-status state stands whenever something the
- * section reserves is still unpublished.
+ * published biography Page and every PUBLISHED People profile by portrait,
+ * People's own public read.
  */
 
 export const dynamic = 'force-dynamic';
@@ -88,13 +83,14 @@ export default async function ExploreSectionPage({ params }: SectionParams) {
   const slugs = exploreSlugsOf(section);
   const title = t(`explore.${section}.title` as 'explore.about.title');
 
-  const [published, pages, people, profile] = await Promise.all([
+  const [published, pages, people, profile, local] = await Promise.all([
     readPage(`/explore/${section}`),
     editorialReadRuntime().explorePages(),
     section === 'leadership'
       ? peopleReadRuntime().people.publicPeople({ locale })
       : Promise.resolve(null),
     getTranslations({ locale, namespace: 'people' }),
+    getTranslations({ locale, namespace: 'exploreLanding' }),
   ]);
   if (published)
     return (
@@ -106,21 +102,21 @@ export default async function ExploreSectionPage({ params }: SectionParams) {
       />
     );
 
-  // This section's published Pages, by the page slug of their binding.
-  const mine = pages.filter((page) => exploreSectionOf(page.routeBinding) === section);
-  const pageAt = (slug: string) =>
-    mine.find((page) => page.routeBinding === `/explore/${section}/${slug}`);
+  // This section's PUBLISHED Pages, in the order the section lists them. A
+  // reserved address with nothing on it is not listed (R2): it still answers,
+  // honestly, if somebody reaches it, but it is not offered as a destination.
+  const mine = slugs.flatMap((slug) => {
+    const page = pages.find(
+      (entry) => entry.routeBinding === `/explore/${section}/${slug}`,
+    );
+    return page === undefined ? [] : [page];
+  });
   const leaders = people?.items ?? [];
   const founder =
     section === 'leadership'
       ? pages.find((page) => page.routeBinding === '/explore/shaykh-ul-islam/biography')
       : undefined;
-  // Complete only when every reserved page is published, or — for a section
-  // with no pages — when it shows somebody.
-  const complete =
-    slugs.length > 0
-      ? slugs.every((slug) => pageAt(slug) !== undefined)
-      : leaders.length > 0 || founder !== undefined;
+  const nothing = mine.length === 0 && leaders.length === 0 && founder === undefined;
 
   return (
     <>
@@ -137,50 +133,30 @@ export default async function ExploreSectionPage({ params }: SectionParams) {
 
       <Container>
         <div className="flex flex-col gap-10 py-[var(--space-page)]">
-          {/*
-           * The pages this section reserves, as whole-card links. Each one is a
-           * delivered route that says honestly whether it has been published.
-           */}
-          {slugs.length === 0 ? null : (
-            <nav aria-label={title}>
-              <CardGrid>
-                {slugs.map((slug) => {
-                  const page = pageAt(slug);
-                  return page === undefined ? (
-                    <LinkCard
-                      key={slug}
-                      href={exploreHrefOf(locale, section, slug)}
-                      headingLevel="h2"
-                      eyebrow={t('home.status.unavailable')}
-                      title={t(
-                        `explore.${section}.pages.${slug}` as 'explore.about.pages.vision',
-                      )}
-                    />
-                  ) : (
-                    <ExplorePageCard
-                      key={slug}
-                      locale={locale}
-                      page={page}
-                      headingLevel="h2"
-                    />
-                  );
-                })}
-              </CardGrid>
-            </nav>
+          {mine.length === 0 ? null : (
+            <CardGrid label={title}>
+              {mine.map((page, index) => (
+                <ExploreCard
+                  key={page.routeBinding}
+                  locale={locale}
+                  page={page}
+                  headingLevel="h2"
+                  priority={index === 0}
+                />
+              ))}
+            </CardGrid>
           )}
 
-          {leaders.length === 0 && founder === undefined ? null : (
-            <CardGrid label={title}>
-              {founder === undefined ? null : (
-                <ExplorePageCard
-                  locale={locale}
-                  page={founder}
-                  eyebrow={t('explore.shaykh-ul-islam.title')}
-                  headingLevel="h2"
-                />
-              )}
+          {founder === undefined ? null : (
+            <CardGrid label={t('explore.shaykh-ul-islam.title')} columns={2}>
+              <ExploreCard locale={locale} page={founder} headingLevel="h2" priority />
+            </CardGrid>
+          )}
+
+          {leaders.length === 0 ? null : (
+            <CardGrid label={title} columns={4}>
               {leaders.map((person) => (
-                <PersonCard
+                <LeaderCard
                   key={person.id}
                   locale={locale}
                   person={person}
@@ -191,7 +167,16 @@ export default async function ExploreSectionPage({ params }: SectionParams) {
             </CardGrid>
           )}
 
-          {complete ? null : <PublicationStatus locale={locale} />}
+          {/* A section with nothing published is a reserved route: it says so
+              in the accepted words (ROUTE_MAP.md §5.2) and points onwards. */}
+          {nothing ? (
+            <div className="flex flex-col items-start gap-4">
+              <PublicationStatus locale={locale} />
+              <TextLink href={localizedPath(locale, '/explore')}>
+                {local('otherSections')}
+              </TextLink>
+            </div>
+          ) : null}
         </div>
       </Container>
     </>

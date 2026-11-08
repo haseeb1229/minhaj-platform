@@ -1,14 +1,11 @@
 import 'server-only';
 
-import type { ReactNode } from 'react';
 import type { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
-import type { PersonalTargetKind } from '@minhaj/contracts/personalisation';
 
 import type { ResolvedTarget } from '@/composition/personal-targets';
-import { StatusBadge, TextLink } from '@/components/ui';
-import { WorkspaceLinks, WorkspacePage } from '@/components/workspace/parts';
+import { TextLink } from '@/components/ui';
 import { displayTimeZone } from './presentation';
 
 /**
@@ -75,60 +72,6 @@ export function TargetTitle({
     <span className="text-foreground-muted">
       {resolved?.status === 'unknown' ? t('target.unknown') : t('target.unavailable')}
     </span>
-  );
-}
-
-/** What kind of thing a target is — in words, never by colour or icon alone. */
-export function KindBadge({
-  kind,
-  t,
-}: {
-  readonly kind: PersonalTargetKind;
-  readonly t: PersonalTranslator;
-}) {
-  return <StatusBadge tone="neutral">{t(`kinds.${kind}`)}</StatusBadge>;
-}
-
-/**
- * The heading and introduction of a My Minhaj page, inside the area's
- * workspace frame, bounded to a reading measure.
- */
-export function PersonalFrame({
-  title,
-  description,
-  back,
-  children,
-}: {
-  readonly title: ReactNode;
-  readonly description?: ReactNode;
-  /** Where the page sits: links up and across, below the content. */
-  readonly back: ReactNode;
-  readonly children: ReactNode;
-}) {
-  return (
-    <WorkspacePage
-      title={title}
-      measure="reading"
-      {...(description === undefined ? {} : { description })}
-    >
-      {children}
-      {back}
-    </WorkspacePage>
-  );
-}
-
-/** A labelled group of links to neighbouring pages, each a 44-pixel target. */
-export function PersonalLinks({
-  label,
-  links,
-}: {
-  readonly label: string;
-  readonly links: readonly { readonly href: string; readonly text: string }[];
-}) {
-  return (
-    <nav aria-label={label}>
-      <WorkspaceLinks links={links} />
-    </nav>
   );
 }
 

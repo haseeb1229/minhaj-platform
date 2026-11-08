@@ -1,26 +1,22 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { PERSONAL_LIMITS, targetKey } from '@minhaj/contracts/personalisation';
 
 import { pageLinks } from '@/components/hadith/presentation';
-import { Pagination } from '@/components/media/parts';
-import { savedLinks } from '@/components/personal/nav';
-import {
-  KindBadge,
-  PersonalFrame,
-  PersonalLinks,
-  PersonalTime,
-  TargetTitle,
-  refusalMessages,
-} from '@/components/personal/parts';
+import { MyPage } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
+import { TargetItem } from '@/components/my/targets';
+import { shortDate } from '@/components/my/time';
+import { refusalMessages } from '@/components/personal/parts';
 import {
   encodeTarget,
   personalOffsetHref,
   readPersonalOffset,
 } from '@/components/personal/presentation';
 import { personalRead } from '@/components/personal/read';
-import { Alert, EmptyState, Field, Panel, TextArea } from '@/components/ui';
+import { Alert, EmptyState, Field, Pager, TextArea } from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
 import { resolvePersonalTargets } from '@/composition/personal-targets';
 import { requireLocale } from '@/config/route-locale';
@@ -40,7 +36,13 @@ import { removeNoteAction, writeNoteAction } from '../actions';
  * changed since, in another tab or on another device, is a conflict the person
  * is told about, never a silent overwrite.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'notes');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -56,17 +58,17 @@ export default async function NotesPage({
   const path = localizedPath(locale, '/my/saved/notes');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'personal' });
+  const my = await getTranslations({ locale, namespace: 'my' });
   const offset = readPersonalOffset(await searchParams);
   const read = await personalRead('personal-notes', () =>
     personalisationRuntime().saved.notes({ accountId: session.account.id }, offset),
   );
-  const back = <PersonalLinks label={t('nav.label')} links={savedLinks(locale, t)} />;
 
   if (!read.ok)
     return (
-      <PersonalFrame title={t('notes.title')} back={back}>
+      <MyPage title={t('notes.title')}>
         <Alert tone="error">{t('failure.load')}</Alert>
-      </PersonalFrame>
+      </MyPage>
     );
 
   const page = read.value;
@@ -80,85 +82,76 @@ export default async function NotesPage({
     conflict: t('notes.conflict'),
     invalid: t('notes.invalid', limits),
   });
+  const timeZone = session.account.timezone;
 
   return (
-    <PersonalFrame
+    <MyPage
       title={t('notes.title')}
       description={<p>{t('notes.description')}</p>}
-      back={back}
+      measure="reading"
     >
       {page.items.length === 0 ? (
-        <EmptyState>{page.total === 0 ? t('notes.empty') : t('list.beyond')}</EmptyState>
+        page.total === 0 ? (
+          <EmptyState icon="list" title={my('notes.emptyTitle')}>
+            {t('notes.empty')}
+          </EmptyState>
+        ) : (
+          <EmptyState>{t('list.beyond')}</EmptyState>
+        )
       ) : (
-        <ol aria-label={t('notes.list')} className="flex flex-col gap-3">
+        <ol aria-label={t('notes.list')} className="flex flex-col border-t border-border">
           {page.items.map((note) => {
             const field = `note-${note.savedItemId}`;
             return (
-              <Panel key={note.savedItemId} as="li">
-                <article className="flex min-w-0 flex-col gap-3">
-                  <TargetTitle resolved={titles.get(targetKey(note.target))} t={t} />
-                  <div className="flex flex-wrap items-center gap-3 text-sm text-foreground-muted">
-                    <KindBadge kind={note.target.kind} t={t} />
-                    <span>
-                      {t('notes.updatedAt')}{' '}
-                      <PersonalTime
-                        value={note.updatedAt}
-                        locale={locale}
-                        timeZone={session.account.timezone}
-                      />
-                    </span>
-                  </div>
-                  <p dir="auto" className="whitespace-pre-wrap wrap-anywhere">
-                    {note.body}
-                  </p>
-
-                  <details>
-                    <summary className="cursor-pointer text-sm font-medium">
-                      {t('notes.edit')}
-                    </summary>
-                    <div className="mt-3">
-                      <ActionForm
-                        action={writeNoteAction}
-                        submitLabel={t('notes.save')}
-                        pendingLabel={t('common.working')}
-                        preserveInput
-                        messages={{ ...messages, success: t('notes.saved') }}
-                      >
-                        <input type="hidden" name="locale" value={locale} />
-                        <input
-                          type="hidden"
-                          name="target"
-                          value={encodeTarget(note.target)}
-                        />
-                        <input type="hidden" name="version" value={note.version} />
-                        <Field
-                          id={field}
-                          label={t('notes.label')}
-                          help={t('notes.help', limits)}
-                        >
-                          {(props) => (
-                            <TextArea
-                              {...props}
-                              name="body"
-                              rows={6}
-                              maxLength={PERSONAL_LIMITS.noteMax}
-                              defaultValue={note.body}
-                              dir="auto"
-                              required
-                            />
-                          )}
-                        </Field>
-                      </ActionForm>
-                    </div>
-                  </details>
-
-                  <div className="self-start">
+              <TargetItem
+                key={note.savedItemId}
+                kind={note.target.kind}
+                resolved={titles.get(targetKey(note.target))}
+                words={{
+                  kind: (kind) => t(`kinds.${kind}`),
+                  unavailable: t('target.unavailable'),
+                  unknown: t('target.unknown'),
+                }}
+                meta={[
+                  my('notes.changed', {
+                    date: shortDate(new Date(note.updatedAt), locale, timeZone),
+                  }),
+                ]}
+                actions={
+                  <ActionForm
+                    action={removeNoteAction}
+                    submitLabel={t('notes.delete')}
+                    pendingLabel={t('common.working')}
+                    tone="destructive"
+                    messages={messages}
+                  >
+                    <input type="hidden" name="locale" value={locale} />
+                    <input
+                      type="hidden"
+                      name="target"
+                      value={encodeTarget(note.target)}
+                    />
+                    <input type="hidden" name="version" value={note.version} />
+                  </ActionForm>
+                }
+              >
+                <p
+                  dir="auto"
+                  className="mt-2 rounded-control bg-surface-sunken px-4 py-3 text-sm whitespace-pre-wrap wrap-anywhere"
+                >
+                  {note.body}
+                </p>
+                <details className="mt-1">
+                  <summary className="inline-flex min-h-11 cursor-pointer items-center text-sm font-semibold text-action">
+                    {t('notes.edit')}
+                  </summary>
+                  <div className="mt-2">
                     <ActionForm
-                      action={removeNoteAction}
-                      submitLabel={t('notes.delete')}
+                      action={writeNoteAction}
+                      submitLabel={t('notes.save')}
                       pendingLabel={t('common.working')}
-                      tone="destructive"
-                      messages={messages}
+                      preserveInput
+                      messages={{ ...messages, success: t('notes.saved') }}
                     >
                       <input type="hidden" name="locale" value={locale} />
                       <input
@@ -167,16 +160,33 @@ export default async function NotesPage({
                         value={encodeTarget(note.target)}
                       />
                       <input type="hidden" name="version" value={note.version} />
+                      <Field
+                        id={field}
+                        label={t('notes.label')}
+                        help={t('notes.help', limits)}
+                      >
+                        {(props) => (
+                          <TextArea
+                            {...props}
+                            name="body"
+                            rows={6}
+                            maxLength={PERSONAL_LIMITS.noteMax}
+                            defaultValue={note.body}
+                            dir="auto"
+                            required
+                          />
+                        )}
+                      </Field>
                     </ActionForm>
                   </div>
-                </article>
-              </Panel>
+                </details>
+              </TargetItem>
             );
           })}
         </ol>
       )}
 
-      <Pagination
+      <Pager
         label={t('notes.list')}
         previous={
           links.previous === null ? null : personalOffsetHref(path, links.previous)
@@ -185,6 +195,6 @@ export default async function NotesPage({
         previousLabel={t('list.previous')}
         nextLabel={t('list.next')}
       />
-    </PersonalFrame>
+    </MyPage>
   );
 }

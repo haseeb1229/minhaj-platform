@@ -1,12 +1,9 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { TeacherName } from '@/components/live-learning/parts';
-import {
-  ConversationList,
-  messagingLinks,
-  messagingMessages,
-} from '@/components/messaging/parts';
+import { ConversationList, messagingMessages } from '@/components/messaging/parts';
 import { readCursor, withQuery } from '@/components/messaging/presentation';
 import {
   courseListings,
@@ -15,10 +12,11 @@ import {
 } from '@/components/messaging/read';
 import { LearningTitle } from '@/components/my-learning/parts';
 import { pickLabel } from '@/components/my-learning/presentation';
-import { PersonalFrame, PersonalLinks } from '@/components/personal/parts';
 import { Alert, EmptyState, Panel, SectionHeading, TextLink } from '@/components/ui';
 import { teacherProfilesFor } from '@/composition/learning-teachers';
 import { messagingRuntime } from '@/composition/messaging';
+import { MyPage } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
 import { requireActiveSession } from '../guard';
@@ -39,7 +37,13 @@ import { startTeachingAction } from './actions';
  * organisation has activated it; until then the page says so in words rather
  * than listing an empty inbox.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'messages');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -58,7 +62,6 @@ export default async function MyMessagesPage({
   const cursor = readCursor(await searchParams);
   const actor = { accountId: session.account.id };
   const { service } = messagingRuntime();
-  const back = <PersonalLinks label={t('nav.label')} links={messagingLinks(locale, t)} />;
   const description = <p>{t('description')}</p>;
 
   const read = await messagingRead('messaging-my-list', async () => {
@@ -71,7 +74,7 @@ export default async function MyMessagesPage({
 
   if (!read.ok)
     return (
-      <PersonalFrame title={t('title')} description={description} back={back}>
+      <MyPage title={t('title')} description={description}>
         <Alert tone="error">
           {read.failure === 'invalid' ? t('list.stale') : t('failure.load')}
         </Alert>
@@ -80,7 +83,7 @@ export default async function MyMessagesPage({
             <TextLink href={path}>{t('list.first')}</TextLink>
           </p>
         ) : null}
-      </PersonalFrame>
+      </MyPage>
     );
 
   const { capabilities, page } = read.value;
@@ -103,7 +106,7 @@ export default async function MyMessagesPage({
   ]);
 
   return (
-    <PersonalFrame title={t('title')} description={description} back={back}>
+    <MyPage title={t('title')} description={description}>
       {capabilities.fixture ? <Alert tone="warning">{t('fixture')}</Alert> : null}
       {anyActive ? null : <Alert tone="info">{t('notActivated')}</Alert>}
 
@@ -221,6 +224,6 @@ export default async function MyMessagesPage({
           </div>
         </Panel>
       ) : null}
-    </PersonalFrame>
+    </MyPage>
   );
 }

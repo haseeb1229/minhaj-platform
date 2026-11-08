@@ -529,8 +529,8 @@ test.describe('availability', () => {
     }
 
     // OPEN, AND NOW PROMOTED: with an activation and a published campaign the
-    // header offers Donate as its call to action and the footer's Take part
-    // group lists it. The shell's presence snapshot may be up to 30 seconds
+    // header offers Donate as its call to action and the footer's "Learn &
+    // take part" column (R2) lists it. The shell's presence snapshot may be up to 30 seconds
     // old, so the promotion is awaited rather than assumed.
     await expect(async () => {
       await page.goto('/');
@@ -542,7 +542,10 @@ test.describe('availability', () => {
       await expect(
         page
           .getByRole('contentinfo')
-          .getByRole('navigation', { name: 'Take part', exact: true })
+          .getByRole('navigation', {
+            name: copy('shell.footer.groups.participate'),
+            exact: true,
+          })
           .locator('a[href="/donate"]'),
       ).toHaveCount(1, { timeout: 1_000 });
     }).toPass({ timeout: 50_000, intervals: [2_000, 5_000] });

@@ -6,6 +6,7 @@ import { libraryReferenceChoices, libraryRuntime } from '@/composition/library';
 import { requireLocale } from '@/config/route-locale';
 import { PageHeading, Panel, SectionHeading, TextLink } from '@/components/ui';
 import { EditionAssetForm, EditionForm, libraryCopy } from '../../forms';
+import { adminPageMetadata } from '../../../metadata';
 
 /**
  * `/{locale}/admin/library/editions/{id}` — editing one Edition.
@@ -24,6 +25,7 @@ import { EditionAssetForm, EditionForm, libraryCopy } from '../../forms';
  * already recorded against THIS Edition, only to a caller holding the permission
  * right now, and only when Storage's own custody check also passes (§16, §28, §45).
  */
+export const generateMetadata = adminPageMetadata('admin', 'titles.library.edition');
 export const dynamic = 'force-dynamic';
 
 export default async function EditionEditor({

@@ -26,6 +26,7 @@ import {
 import { identityRuntime } from '@/composition/identity';
 import { taxonomyRuntime } from '@/composition/taxonomy';
 import { DetailRow, StatusBadge, TextLink } from '@/components/ui';
+import { AdminPager } from '../pager';
 import { adminCopy } from '../shared';
 import { StepUpPrompt } from '../step-up';
 
@@ -266,31 +267,28 @@ export function WrittenText({
   );
 }
 
-/** A bounded listing's previous and next links, from what the page returned. */
+/** The shared administrative pager over a Fatwa listing at `base`. */
 export function Pager({
   offset,
-  shown,
   total,
   base,
   copy,
 }: {
   readonly offset: number;
-  readonly shown: number;
   readonly total: number;
   readonly base: string;
   readonly copy: Copy;
 }) {
-  const hasMore = offset + shown < total;
-  if (offset === 0 && !hasMore) return null;
-  const current = Math.floor(offset / FATWA_PAGE_SIZE) + 1;
-  const href = (page: number) => (page <= 1 ? base : `${base}?page=${String(page)}`);
   return (
-    <nav className="flex gap-6" aria-label={copy.t('pagerLabel')}>
-      {offset > 0 ? (
-        <TextLink href={href(current - 1)}>{copy.t('previous')}</TextLink>
-      ) : null}
-      {hasMore ? <TextLink href={href(current + 1)}>{copy.t('next')}</TextLink> : null}
-    </nav>
+    <AdminPager
+      label={copy.t('pagerLabel')}
+      offset={offset}
+      pageSize={FATWA_PAGE_SIZE}
+      total={total}
+      href={(page) => (page <= 1 ? base : `${base}?page=${String(page)}`)}
+      previousLabel={copy.t('previous')}
+      nextLabel={copy.t('next')}
+    />
   );
 }
 

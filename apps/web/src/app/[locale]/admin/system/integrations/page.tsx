@@ -13,6 +13,7 @@ import {
   SectionHeading,
   StatusBadge,
 } from '@/components/ui';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * Provider configuration and status — for the Phase-2 email integration.
@@ -36,7 +37,7 @@ import {
  * reports itself unavailable and refuses to send; it never turns a real send
  * into a silent one, and this page says which of the two is true.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('admin', 'integrations.title');
 export const dynamic = 'force-dynamic';
 
 export default async function IntegrationsPage({

@@ -1,4 +1,4 @@
-import { localizedPath } from '@minhaj/contracts';
+import { localeSchema, localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { z } from 'zod';
@@ -7,8 +7,10 @@ import type { Locale } from '@minhaj/contracts';
 import {
   NEWS_EARLIEST_YEAR,
   NEWS_MAX_OFFSET,
+  isNewsKind,
   leadImagePath,
   newsPathOf,
+  type NewsKind,
   type PublicNews,
 } from '@minhaj/contracts/editorial';
 
@@ -76,13 +78,60 @@ export function readNewsArchiveQuery(query: Query): {
   return { year, month, offset: readNewsOffset(query) };
 }
 
-/** The archive's address for a year, a month and an offset, neutral values omitted. */
-export function newsArchivePath(
+/**
+ * R2 — the News listings' narrowing, TOLERATED like the archive's: `?lang=` is
+ * one of the three content languages and `?type=` one of the four families;
+ * anything else — a repeated parameter, another value — is simply absent.
+ */
+export function readNewsFilters(query: Query): {
+  readonly language: Locale | null;
+  readonly kind: NewsKind | null;
+} {
+  const raw = (key: string) => {
+    const value = query[key];
+    return typeof value === 'string' && value.length <= 16 ? value : null;
+  };
+  const language = raw('lang');
+  const kind = raw('type');
+  return {
+    language: language === null ? null : (localeSchema.safeParse(language).data ?? null),
+    kind: kind !== null && isNewsKind(kind) ? kind : null,
+  };
+}
+
+/**
+ * The address of a News listing (`/news` or a family's own) with its language
+ * narrowing and offset, neutral values omitted — the first page of every
+ * language is the bare listing.
+ */
+export function newsListingPath(
   locale: string,
-  filter: { readonly year: number | null; readonly month: number | null },
+  path: string,
+  filter: { readonly language: Locale | null },
   offset = 0,
 ): string {
   const search = new URLSearchParams();
+  if (filter.language !== null) search.set('lang', filter.language);
+  if (offset > 0) search.set('offset', String(offset));
+  const encoded = search.toString();
+  return localizedPath(locale, `${path}${encoded === '' ? '' : `?${encoded}`}`);
+}
+
+/** The archive's address for a year, a month and an offset, neutral values omitted. */
+export function newsArchivePath(
+  locale: string,
+  filter: {
+    readonly year: number | null;
+    readonly month: number | null;
+    readonly kind?: NewsKind | null;
+    readonly language?: Locale | null;
+  },
+  offset = 0,
+): string {
+  const search = new URLSearchParams();
+  if (filter.kind !== null && filter.kind !== undefined) search.set('type', filter.kind);
+  if (filter.language !== null && filter.language !== undefined)
+    search.set('lang', filter.language);
   if (filter.year !== null) search.set('year', String(filter.year));
   if (filter.year !== null && filter.month !== null)
     search.set('month', String(filter.month));

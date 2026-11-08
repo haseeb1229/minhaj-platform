@@ -1,5 +1,14 @@
 import { leadImagePath, type PublicLeadImage } from '@minhaj/contracts/editorial';
 
+import type { CardImage } from '@/components/ui/cards';
+import { derivativeSrcSet } from '@/components/ui/image-derivatives';
+
+/** A card's picture: a full-width column on a phone, a third of a laptop's row. */
+const CARD_SIZES = '(min-width: 64rem) 22rem, (min-width: 40rem) 50vw, 100vw';
+
+/** A record page's hero: the reading column (`max-w-4xl`, 56rem) at most. */
+const FIGURE_SIZES = '(min-width: 56rem) 56rem, 100vw';
+
 /**
  * An Editorial record's LEAD IMAGE (Phase 30-R) — a first-party stored asset,
  * always through Editorial's own byte route, never a remote address.
@@ -33,9 +42,12 @@ export function LeadThumbnail({
   readonly priority?: boolean;
   readonly className?: string;
 }) {
+  const path = leadImagePath(image);
+  const srcSet = derivativeSrcSet(path, image.width);
   return (
     <img
-      src={leadImagePath(image)}
+      src={path}
+      {...(srcSet === undefined ? {} : { srcSet, sizes: CARD_SIZES })}
       alt={alt}
       {...(alt === '' ? {} : { lang })}
       width={image.width}
@@ -49,8 +61,10 @@ export function LeadThumbnail({
 }
 
 /**
- * A record page's hero: the whole image at its own proportions, loaded first
- * because it is the page's largest picture, with its credit as a caption.
+ * A record page's hero: the whole image at its own proportions — the measured
+ * `width` and `height` reserve its box, so no inline style is needed (the CSP
+ * refuses one) — loaded first because it is the page's largest picture, with
+ * its credit as a caption.
  */
 export function LeadFigure({
   image,
@@ -64,10 +78,13 @@ export function LeadFigure({
   /** The credit line, already worded in the interface language, or null. */
   readonly caption: string | null;
 }) {
+  const path = leadImagePath(image);
+  const srcSet = derivativeSrcSet(path, image.width);
   return (
     <figure className="flex max-w-4xl flex-col gap-2">
       <img
-        src={leadImagePath(image)}
+        src={path}
+        {...(srcSet === undefined ? {} : { srcSet, sizes: FIGURE_SIZES })}
         alt={alt}
         {...(alt === '' ? {} : { lang })}
         width={image.width}
@@ -75,7 +92,6 @@ export function LeadFigure({
         loading="eager"
         fetchPriority="high"
         decoding="async"
-        style={{ aspectRatio: `${String(image.width)} / ${String(image.height)}` }}
         className="h-auto max-h-[36rem] w-full rounded-panel bg-surface-sunken object-contain"
       />
       {caption === null ? null : (
@@ -85,4 +101,18 @@ export function LeadFigure({
       )}
     </figure>
   );
+}
+
+/**
+ * R2 — the same lead image as the shared cards take it (`EditorialCard`,
+ * `ListRow`, `MediaCard`): Editorial's own first-party address and its measured
+ * box, never a remote one. Each card crops it to its own ratio.
+ */
+export function leadCardImage(image: PublicLeadImage, alt: string): CardImage {
+  return {
+    path: leadImagePath(image),
+    alt,
+    width: image.width,
+    height: image.height,
+  };
 }

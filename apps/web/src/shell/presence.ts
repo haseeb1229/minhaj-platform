@@ -1,5 +1,5 @@
 /**
- * THE PRESENTATION POLICY — what the shell ADVERTISES (Rebaseline R1).
+ * THE PRESENTATION POLICY — what the shell ADVERTISES (R1, regrouped by R2).
  *
  * The route registry (`registry.ts`) records which routes EXIST: delivered,
  * reserved or deferred. This module decides which of them the header, the
@@ -7,6 +7,13 @@
  * than from the existence of a route: a destination is advertised only while
  * the platform holds published content for it, or a service is genuinely open
  * (owner direction 2026-11-06 — "real content before empty capability").
+ *
+ * R2 — GROUPED, NOT RANKED. R1 kept the six best-ranked destinations in one bar
+ * and hid the rest under "More". The owner found that too thin for the breadth
+ * of the organisation, so the header is now six fixed groups — Quran,
+ * Knowledge, Watch & Listen, Learn, News & Events, About MQI — each listing
+ * only its PRESENT destinations, in a fixed order. A group with nothing present
+ * is omitted whole. Nothing is capped, and nothing absent is advertised.
  *
  * NOTHING HERE HIDES A ROUTE. Every route stays reachable by its address, by
  * search and by a link inside content, and an unavailable one still answers
@@ -23,22 +30,55 @@
 
 /** One piece of public evidence the policy may require. */
 export const PRESENCE_SIGNALS = Object.freeze([
-  /** An approved (not fixture) Quran corpus is active. */
+  /**
+   * A Quran corpus a visitor may read is active: an approved one, or — only on
+   * a deployment that explicitly admits it — a reference preview. Never a
+   * fixture.
+   */
   'quran',
+  /** The active Quran corpus is a reference preview (it needs attribution). */
+  'quranReference',
   /** An approved (not fixture) Hadith corpus is active. */
   'hadith',
+  /**
+   * At least one public Library work is classified under the Hadith Topic —
+   * MQI's own hadith works, which the Hadith landing presents without a corpus.
+   */
+  'hadithWorks',
   /** At least one published Library work, periodical or article. */
   'library',
+  /** At least one published Library work (a book). */
+  'books',
+  /** At least one published magazine. */
+  'magazines',
+  /** At least one published research title. */
+  'research',
+  /** At least one published encyclopedia. */
+  'encyclopedias',
+  /** At least one published article. */
+  'articles',
   /** At least one published video. */
   'watch',
+  /** At least one published video series. */
+  'series',
+  /** At least one published playlist. */
+  'playlists',
   /** At least one published audio track. */
   'listen',
   /** At least one published course. */
   'learn',
+  /** At least one published learning path. */
+  'paths',
+  /** Live learning is approved and a class is scheduled. */
+  'live',
+  /** Live learning is approved and a teacher is listed. */
+  'teachers',
   /** An approved Fatwa service is active and holds a published ruling. */
   'fatwa',
   /** At least one published news item. */
   'news',
+  /** At least one published press release. */
+  'press',
   /** At least one published Event. */
   'events',
   /** At least one published Collection. */
@@ -51,6 +91,8 @@ export const PRESENCE_SIGNALS = Object.freeze([
   'centres',
   /** At least one published help article. */
   'help',
+  /** At least one membership type is open for application. */
+  'membership',
   /** Online giving is open (provider + activation) and a campaign is published. */
   'giving',
 ] as const);
@@ -74,75 +116,235 @@ export function hasSignal(snapshot: PresenceSnapshot, signal: PresenceSignal): b
   return snapshot.signals.has(signal);
 }
 
-/** A destination the shell may promote. */
-export interface Destination {
-  /** Registry key of the route it opens. */
-  readonly route: string;
-  /** Message key within the `shell` namespace. */
-  readonly label: string;
-  /** The evidence it requires, or `null` when it is always promoted. */
-  readonly requires: PresenceSignal | null;
-}
+/**
+ * A destination the shell may promote: a registry route behind a signal (or
+ * none), or a published Page by its route binding. Its words live in the
+ * `shell` catalogue under `nav.items.{id}` — `title`, and a one-line
+ * `description` for the navigation panels.
+ */
+export type NavItem =
+  | {
+      readonly kind: 'route';
+      readonly id: string;
+      /** Registry key of the route it opens. */
+      readonly route: string;
+      /** The evidence it requires, or `null` when it is always promoted. */
+      readonly requires: PresenceSignal | null;
+    }
+  | {
+      readonly kind: 'page';
+      readonly id: string;
+      /** The published Page's route binding, which is also its address. */
+      readonly binding: string;
+    };
 
-interface PrimaryDestination extends Destination {
-  /** Lower keeps its place in the bar first when more than `PRIMARY_LIMIT` qualify. */
-  readonly rank: number;
+const route = (id: string, key: string, requires: PresenceSignal | null): NavItem =>
+  Object.freeze({ kind: 'route', id, route: key, requires });
+const page = (id: string, binding: string): NavItem =>
+  Object.freeze({ kind: 'page', id, binding });
+
+/**
+ * EVERY DESTINATION THE SHELL CAN NAME, once. The groups below refer to these
+ * by id, so a destination has one rule wherever it appears.
+ */
+const ITEMS = Object.freeze({
+  // Quran — a separate domain, promoted only with a readable corpus.
+  quran: route('quran', 'quran', 'quran'),
+  surahs: route('surahs', 'quran.surah', 'quran'),
+  juz: route('juz', 'quran.juz', 'quran'),
+  translations: route('translations', 'quran.translations', 'quran'),
+  quranSearch: route('quranSearch', 'quran.search', 'quran'),
+  // Knowledge — the Library's catalogue and the religious reference services.
+  library: route('library', 'library', 'library'),
+  books: route('books', 'library.books', 'books'),
+  magazines: route('magazines', 'library.magazines', 'magazines'),
+  research: route('research', 'library.research', 'research'),
+  encyclopedias: route('encyclopedias', 'library.encyclopedias', 'encyclopedias'),
+  articles: route('articles', 'articles', 'articles'),
+  hadith: route('hadith', 'hadith', 'hadith'),
+  // The same landing, named for what it holds while no corpus is active.
+  hadithWorks: route('hadithWorks', 'hadith', 'hadithWorks'),
+  fatwa: route('fatwa', 'fatwa', 'fatwa'),
+  topics: route('topics', 'topics', null),
+  // Watch & Listen.
+  watch: route('watch', 'watch', 'watch'),
+  series: route('series', 'watch.series', 'series'),
+  playlists: route('playlists', 'watch.playlists', 'playlists'),
+  listen: route('listen', 'listen', 'listen'),
+  // Learn.
+  learn: route('learn', 'learn', 'learn'),
+  paths: route('paths', 'learn.paths', 'paths'),
+  live: route('live', 'learn.live', 'live'),
+  teachers: route('teachers', 'learn.teachers', 'teachers'),
+  // News & Events.
+  news: route('news', 'news-events', 'news'),
+  press: route('press', 'news.press-releases', 'press'),
+  events: route('events', 'events', 'events'),
+  collections: route('collections', 'collections', 'collections'),
+  // About MQI — the organisation needs no record to exist; its pages do.
+  about: route('about', 'explore', null),
+  introduction: page('introduction', '/explore/about/introduction'),
+  founder: page('founder', '/explore/shaykh-ul-islam/biography'),
+  leadership: route('leadership', 'explore.leadership', 'people'),
+  departments: page('departments', '/explore/organization/departments'),
+  forums: page('forums', '/explore/organization/forums'),
+  history: page('history', '/explore/about/history'),
+  global: route('global', 'global', 'presence'),
+  centres: route('centres', 'find-a-centre', 'centres'),
+  // Taking part.
+  help: route('help', 'contact-help', 'help'),
+  contact: page('contact', '/contact'),
+  myMinhaj: route('myMinhaj', 'my-minhaj', null),
+  membership: route('membership', 'membership', 'membership'),
+  donate: route('donate', 'donate', 'giving'),
+} satisfies Record<string, NavItem>);
+
+type ItemId = keyof typeof ITEMS;
+
+/** The six header groups, in display order. */
+export const NAVIGATION_GROUP_IDS = Object.freeze([
+  'quran',
+  'knowledge',
+  'watch',
+  'learn',
+  'news',
+  'about',
+] as const);
+
+export type NavigationGroupId = (typeof NAVIGATION_GROUP_IDS)[number];
+
+/**
+ * THE HEADER GROUPS. Each group's FIRST item is its landing; the rest are the
+ * ways into it a visitor most often wants. Quran and Hadith stay separate
+ * destinations: Hadith sits with the reference services in Knowledge because
+ * it has no corpus of its own yet, never inside the Quran group.
+ */
+const GROUPS: Readonly<Record<NavigationGroupId, readonly ItemId[]>> = Object.freeze({
+  quran: ['quran', 'surahs', 'juz', 'translations', 'quranSearch'],
+  knowledge: [
+    'library',
+    'books',
+    'magazines',
+    'research',
+    'encyclopedias',
+    'articles',
+    'hadith',
+    'hadithWorks',
+    'fatwa',
+  ],
+  watch: ['watch', 'series', 'playlists', 'listen'],
+  learn: ['learn', 'paths', 'live', 'teachers'],
+  news: ['news', 'press', 'events', 'collections'],
+  about: [
+    'about',
+    'introduction',
+    'founder',
+    'leadership',
+    'departments',
+    'forums',
+    'history',
+    'global',
+    'centres',
+  ],
+});
+
+/** The thin strip above the header: the organisation and how to reach it. */
+const UTILITY: readonly ItemId[] = Object.freeze(['about', 'help', 'contact', 'centres']);
+
+/** The six footer columns, in display order. */
+export const FOOTER_GROUP_IDS = Object.freeze([
+  'quranKnowledge',
+  'library',
+  'watchListen',
+  'newsEvents',
+  'about',
+  'participate',
+] as const);
+
+export type FooterGroupId = (typeof FOOTER_GROUP_IDS)[number];
+
+/**
+ * THE FOOTER — six curated columns, not the legacy sitemap. News has a column
+ * of its own and Learn shares one with the other ways to take part, so every
+ * header group is reachable from the footer too.
+ */
+const FOOTER: Readonly<Record<FooterGroupId, readonly ItemId[]>> = Object.freeze({
+  quranKnowledge: ['quran', 'surahs', 'hadith', 'hadithWorks', 'fatwa', 'topics'],
+  library: ['library', 'books', 'magazines', 'research', 'encyclopedias', 'articles'],
+  watchListen: ['watch', 'series', 'playlists', 'listen'],
+  newsEvents: ['news', 'press', 'events', 'collections'],
+  about: [
+    'about',
+    'introduction',
+    'founder',
+    'leadership',
+    'departments',
+    'global',
+    'centres',
+  ],
+  participate: [
+    'learn',
+    'paths',
+    'live',
+    'teachers',
+    'myMinhaj',
+    'membership',
+    'donate',
+    'help',
+    'contact',
+  ],
+});
+
+/** The published legal documents, in their fixed order. */
+const LEGAL: readonly NavItem[] = Object.freeze([
+  page('privacy', '/legal/privacy'),
+  page('terms', '/legal/terms'),
+  page('cookies', '/legal/cookies'),
+  page('accessibility', '/legal/accessibility'),
+]);
+
+/** Whether this snapshot lets the shell promote an item. */
+export function shows(snapshot: PresenceSnapshot, item: NavItem): boolean {
+  if (item.kind === 'page') return snapshot.publishedPages.has(item.binding);
+  return item.requires === null || hasSignal(snapshot, item.requires);
 }
 
 /**
- * THE PRIMARY DESTINATIONS, in DISPLAY order.
- *
- * Intent-led and content-led rather than a copy of the legacy sitemap: the
- * religious corpora first (when an approved corpus is active), then the
- * reading, watching and learning surfaces, then the organisation's news and
- * curated archives, and the organisation itself last. Quran and Hadith stay
- * separate top-level domains.
+ * The present items of a list, in its order — each ADDRESS once. Two items may
+ * name one destination under different evidence (Hadith with its corpus,
+ * "Hadith works" without one); where both are present the first is kept.
  */
-const PRIMARY: readonly PrimaryDestination[] = Object.freeze([
-  { route: 'quran', label: 'nav.quran', requires: 'quran', rank: 1 },
-  { route: 'hadith', label: 'nav.hadith', requires: 'hadith', rank: 2 },
-  { route: 'library', label: 'nav.library', requires: 'library', rank: 3 },
-  { route: 'watch', label: 'nav.watch', requires: 'watch', rank: 4 },
-  { route: 'learn', label: 'nav.learn', requires: 'learn', rank: 6 },
-  { route: 'fatwa', label: 'nav.fatwa', requires: 'fatwa', rank: 7 },
-  { route: 'news-events', label: 'nav.news', requires: 'news', rank: 5 },
-  { route: 'collections', label: 'nav.collections', requires: 'collections', rank: 8 },
-  // The organisation is always present: it needs no published record to exist.
-  { route: 'explore', label: 'nav.about', requires: null, rank: 0 },
-] satisfies PrimaryDestination[]);
-
-/** At most this many destinations sit in the bar; the rest open under "More". */
-export const PRIMARY_LIMIT = 6;
-
-export interface PrimaryNavigation {
-  /** The destinations shown directly, in display order. */
-  readonly bar: readonly Destination[];
-  /** Qualifying destinations beyond the limit, in display order. */
-  readonly more: readonly Destination[];
+function present(snapshot: PresenceSnapshot, ids: readonly ItemId[]): NavItem[] {
+  const seen = new Set<string>();
+  return ids
+    .map((id) => ITEMS[id])
+    .filter((item) => {
+      if (!shows(snapshot, item)) return false;
+      const target = item.kind === 'route' ? item.route : item.binding;
+      if (seen.has(target)) return false;
+      seen.add(target);
+      return true;
+    });
 }
 
-function qualifies(snapshot: PresenceSnapshot, destination: Destination): boolean {
-  return destination.requires === null || hasSignal(snapshot, destination.requires);
+export interface NavigationGroup<Id extends string = NavigationGroupId> {
+  /** Message key suffix: `nav.groups.{id}` (header) or `footer.groups.{id}`. */
+  readonly id: Id;
+  /** The present destinations, in the group's fixed order; never empty. */
+  readonly items: readonly NavItem[];
 }
 
-/** The header's primary navigation for this snapshot. */
-export function primaryNavigation(snapshot: PresenceSnapshot): PrimaryNavigation {
-  const qualified = PRIMARY.filter((destination) => qualifies(snapshot, destination));
-  const kept = new Set(
-    [...qualified]
-      .sort((a, b) => a.rank - b.rank)
-      .slice(0, PRIMARY_LIMIT)
-      .map((destination) => destination.route),
-  );
-  const strip = ({ route, label, requires }: PrimaryDestination): Destination => ({
-    route,
-    label,
-    requires,
-  });
-  return {
-    bar: qualified.filter((d) => kept.has(d.route)).map(strip),
-    more: qualified.filter((d) => !kept.has(d.route)).map(strip),
-  };
+/** The header's groups for this snapshot; a group with nothing present is omitted. */
+export function navigationGroups(snapshot: PresenceSnapshot): readonly NavigationGroup[] {
+  return NAVIGATION_GROUP_IDS.map((id) => ({
+    id,
+    items: present(snapshot, GROUPS[id]),
+  })).filter((group) => group.items.length > 0);
+}
+
+/** The utility strip's links for this snapshot. */
+export function utilityLinks(snapshot: PresenceSnapshot): readonly NavItem[] {
+  return present(snapshot, UTILITY);
 }
 
 /** Whether Donate may be promoted at all — never while giving is closed. */
@@ -150,123 +352,57 @@ export function givingPromoted(snapshot: PresenceSnapshot): boolean {
   return hasSignal(snapshot, 'giving');
 }
 
-/** A footer link: a registry route, or a published Page by its binding. */
-export type FooterLink =
-  | (Destination & { readonly kind: 'route' })
-  | { readonly kind: 'page'; readonly binding: string; readonly label: string };
-
-export interface FooterGroup {
-  /** Message key of the group heading within the `shell` namespace. */
-  readonly heading: string;
-  readonly links: readonly FooterLink[];
+/** The footer columns for this snapshot, each with at least one link. */
+export function footerGroups(
+  snapshot: PresenceSnapshot,
+): readonly NavigationGroup<FooterGroupId>[] {
+  return FOOTER_GROUP_IDS.map((id) => ({
+    id,
+    items: present(snapshot, FOOTER[id]),
+  })).filter((group) => group.items.length > 0);
 }
 
-const route = (
-  r: string,
-  label: string,
-  requires: PresenceSignal | null,
-): FooterLink => ({
-  kind: 'route',
-  route: r,
-  label,
-  requires,
-});
-const page = (binding: string, label: string): FooterLink => ({
-  kind: 'page',
-  binding,
-  label,
-});
-
-/**
- * THE FOOTER — deliberate groups, not the legacy sitemap. Every link obeys the
- * same rule as the header: a route needs its evidence, a Page must be
- * published. An emptied group is dropped whole.
- */
-const FOOTER: readonly FooterGroup[] = Object.freeze([
-  {
-    heading: 'footer.groups.discover',
-    links: [
-      route('quran', 'nav.quran', 'quran'),
-      route('hadith', 'nav.hadith', 'hadith'),
-      route('library', 'nav.library', 'library'),
-      route('watch', 'nav.watch', 'watch'),
-      route('listen', 'nav.listen', 'listen'),
-      route('fatwa', 'nav.fatwa', 'fatwa'),
-      route('news-events', 'nav.news', 'news'),
-      route('events', 'nav.events', 'events'),
-      route('collections', 'nav.collections', 'collections'),
-      route('topics', 'nav.topics', null),
-    ],
-  },
-  {
-    heading: 'footer.groups.organisation',
-    links: [
-      route('explore', 'nav.about', null),
-      page('/explore/about/introduction', 'explore.about.pages.introduction'),
-      route('explore.leadership', 'explore.leadership.title', 'people'),
-      route('global', 'nav.presence', 'presence'),
-      route('find-a-centre', 'nav.findACentre', 'centres'),
-    ],
-  },
-  {
-    heading: 'footer.groups.participate',
-    links: [
-      route('learn', 'nav.learn', 'learn'),
-      route('donate', 'nav.donate', 'giving'),
-      route('my-minhaj', 'nav.myMinhaj', null),
-      route('contact-help', 'nav.help', 'help'),
-    ],
-  },
-] satisfies FooterGroup[]);
-
-/** The published legal documents, in their fixed order. */
-const LEGAL: readonly FooterLink[] = Object.freeze([
-  page('/legal/privacy', 'legal.privacy'),
-  page('/legal/terms', 'legal.terms'),
-  page('/legal/cookies', 'legal.cookies'),
-  page('/legal/accessibility', 'legal.accessibility'),
-]);
-
-function shown(snapshot: PresenceSnapshot, link: FooterLink): boolean {
-  return link.kind === 'page'
-    ? snapshot.publishedPages.has(link.binding)
-    : qualifies(snapshot, link);
+/** The legal documents that are actually published. Labelled `legal.{id}`. */
+export function legalLinks(snapshot: PresenceSnapshot): readonly NavItem[] {
+  return LEGAL.filter((link) => shows(snapshot, link));
 }
 
-/** The footer groups for this snapshot, each with at least one link. */
-export function footerGroups(snapshot: PresenceSnapshot): readonly FooterGroup[] {
-  return FOOTER.map((group) => ({
-    heading: group.heading,
-    links: group.links.filter((link) => shown(snapshot, link)),
-  })).filter((group) => group.links.length > 0);
-}
-
-/** The legal documents that are actually published. */
-export function legalLinks(snapshot: PresenceSnapshot): readonly FooterLink[] {
-  return LEGAL.filter((link) => shown(snapshot, link));
-}
-
-/** Every route key and page binding this policy can emit, for the registry test. */
+/** Every route key this policy can emit, for the registry test. */
 export function policyRouteKeys(): readonly string[] {
-  return [
-    ...PRIMARY.map((d) => d.route),
-    ...FOOTER.flatMap((g) => g.links).flatMap((l) =>
-      l.kind === 'route' ? [l.route] : [],
-    ),
-  ];
+  return Object.values(ITEMS).flatMap((item: NavItem) =>
+    item.kind === 'route' ? [item.route] : [],
+  );
 }
 
+/** Every Page binding this policy can emit, for the registry test. */
+export function policyPageBindings(): readonly string[] {
+  return [...Object.values(ITEMS), ...LEGAL].flatMap((item: NavItem) =>
+    item.kind === 'page' ? [item.binding] : [],
+  );
+}
+
+/** Why the shell promotes a route, for the read-only administration view. */
+export type PromotionRule =
+  | { readonly kind: 'always' }
+  | { readonly kind: 'signal'; readonly signal: PresenceSignal }
+  | { readonly kind: 'page'; readonly binding: string };
+
 /**
- * The promotion rule for a registry route: `null` when the policy always
- * promotes it, the signal it waits for, or `undefined` when the shell never
- * promotes it (it is still reachable by its address). For the read-only
- * administration view of the effective navigation.
+ * The promotion rule for a registry route — by its key, or by its address when
+ * the shell names it as a published Page — or `undefined` when the shell never
+ * promotes it (it is still reachable by its address).
  */
-export function promotionRuleOf(routeKey: string): PresenceSignal | null | undefined {
-  const primary = PRIMARY.find((destination) => destination.route === routeKey);
-  if (primary !== undefined) return primary.requires;
-  for (const group of FOOTER)
-    for (const link of group.links)
-      if (link.kind === 'route' && link.route === routeKey) return link.requires;
+export function promotionRuleOf(
+  routeKey: string,
+  path?: string,
+): PromotionRule | undefined {
+  for (const item of [...Object.values(ITEMS), ...LEGAL] as NavItem[]) {
+    if (item.kind === 'route' && item.route === routeKey)
+      return item.requires === null
+        ? { kind: 'always' }
+        : { kind: 'signal', signal: item.requires };
+    if (item.kind === 'page' && path !== undefined && item.binding === path)
+      return { kind: 'page', binding: item.binding };
+  }
   return undefined;
 }

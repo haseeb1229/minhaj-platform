@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -8,15 +9,10 @@ import {
   targetKey,
 } from '@minhaj/contracts/personalisation';
 
-import { savedLinks } from '@/components/personal/nav';
-import {
-  ConfirmField,
-  KindBadge,
-  PersonalFrame,
-  PersonalLinks,
-  TargetTitle,
-  refusalMessages,
-} from '@/components/personal/parts';
+import { MyPage } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
+import { TargetItem } from '@/components/my/targets';
+import { ConfirmField, refusalMessages } from '@/components/personal/parts';
 import { encodeTarget } from '@/components/personal/presentation';
 import { personalRead } from '@/components/personal/read';
 import {
@@ -55,7 +51,13 @@ import {
  * Members are added from the public pages themselves; this page renames,
  * re-describes, reorders, removes members and deletes the list.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'collection');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -87,13 +89,12 @@ export default async function MyCollectionPage({
   const read = await personalRead('personal-collection', () =>
     personalisationRuntime().saved.collection({ accountId: session.account.id }, valid),
   );
-  const back = <PersonalLinks label={t('nav.label')} links={savedLinks(locale, t)} />;
 
   if (!read.ok)
     return (
-      <PersonalFrame title={t('collection.title')} back={back}>
+      <MyPage title={t('collection.title')}>
         <Alert tone="error">{t('failure.load')}</Alert>
-      </PersonalFrame>
+      </MyPage>
     );
   const collection = read.value;
   if (collection === null) notFound();
@@ -121,7 +122,7 @@ export default async function MyCollectionPage({
   );
 
   return (
-    <PersonalFrame
+    <MyPage
       title={
         <span dir="auto" className="wrap-anywhere">
           {collection.title}
@@ -137,7 +138,6 @@ export default async function MyCollectionPage({
           )}
         </>
       }
-      back={back}
     >
       <section className="flex flex-col gap-3" aria-labelledby="collection-members">
         <span id="collection-members">
@@ -146,18 +146,23 @@ export default async function MyCollectionPage({
         {members.length === 0 ? (
           <EmptyState>{t('collection.empty')}</EmptyState>
         ) : (
-          <ol aria-label={t('collection.members')} className="flex flex-col gap-3">
+          <ol
+            aria-label={t('collection.members')}
+            className="flex flex-col border-t border-border"
+          >
             {members.map((member, index) => (
-              <Panel key={member.savedItemId} as="li">
-                <div className="flex min-w-0 flex-col gap-3">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="text-sm text-foreground-muted">
-                      {t('collection.position', { position: index + 1 })}
-                    </span>
-                    <KindBadge kind={member.target.kind} t={t} />
-                  </div>
-                  <TargetTitle resolved={titles.get(targetKey(member.target))} t={t} />
-                  <div className="flex flex-wrap items-start gap-2">
+              <TargetItem
+                key={member.savedItemId}
+                kind={member.target.kind}
+                resolved={titles.get(targetKey(member.target))}
+                words={{
+                  kind: (kind) => t(`kinds.${kind}`),
+                  unavailable: t('target.unavailable'),
+                  unknown: t('target.unknown'),
+                }}
+                meta={[t('collection.position', { position: index + 1 })]}
+                actions={
+                  <>
                     {index === 0 ? null : (
                       <ActionForm
                         action={reorderCollectionAction}
@@ -200,9 +205,9 @@ export default async function MyCollectionPage({
                         value={encodeTarget(member.target)}
                       />
                     </ActionForm>
-                  </div>
-                </div>
-              </Panel>
+                  </>
+                }
+              />
             ))}
           </ol>
         )}
@@ -287,6 +292,6 @@ export default async function MyCollectionPage({
           </ActionForm>
         </Panel>
       </section>
-    </PersonalFrame>
+    </MyPage>
   );
 }

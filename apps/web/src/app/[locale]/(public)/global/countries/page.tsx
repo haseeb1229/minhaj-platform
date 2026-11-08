@@ -6,12 +6,11 @@ import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
 import { requireRoute } from '@/shell/registry';
 
-/** `/{locale}/global/countries` — the public Countries, in bounded pages. */
+/** `/{locale}/global/countries` — every public Country, by world region. */
 export const dynamic = 'force-dynamic';
 
 interface CountriesParams {
   readonly params: Promise<{ readonly locale: string }>;
-  readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export async function generateMetadata({ params }: CountriesParams): Promise<Metadata> {
@@ -25,7 +24,7 @@ export async function generateMetadata({ params }: CountriesParams): Promise<Met
   });
 }
 
-export default async function CountriesRoute({ params, searchParams }: CountriesParams) {
+export default async function CountriesRoute({ params }: CountriesParams) {
   const locale = await requireLocale(params);
-  return <CountriesPage locale={locale} query={await searchParams} />;
+  return <CountriesPage locale={locale} />;
 }

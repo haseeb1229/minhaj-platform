@@ -292,7 +292,8 @@ function QuranHit({
             <p
               lang={language.code}
               dir={language.direction}
-              className={`break-words ${arabic ? 'text-xl leading-loose' : 'text-sm'}`}
+              {...(arabic ? { translate: 'no' as const } : {})}
+              className={`break-words ${arabic ? 'quran-text text-xl leading-loose' : 'text-sm'}`}
             >
               <Highlighted text={display.text} query={query} />
             </p>

@@ -97,6 +97,10 @@
 
   /* A second elevation, for surfaces above the page: an open menu, a drawer. */
   --shadow-raised: 0 2px 4px rgb(22 32 27 / 0.05), 0 16px 32px -18px rgb(22 32 27 / 0.3);
+  /* R2 — the third and last elevation: a modal surface above a dimmed page
+     (a dialog, a sheet). Panel < raised < overlay; nothing sits higher. */
+  --shadow-overlay:
+    0 4px 8px rgb(22 32 27 / 0.08), 0 28px 56px -16px rgb(22 32 27 / 0.42);
 
   /* THE TYPE SCALE. Six roles, fluid where a heading must not dominate a
      phone. Latin line heights here; Urdu and Arabic are re-tuned below on the
@@ -133,6 +137,7 @@
   --font-serif: var(--font-face-display), Georgia, 'Times New Roman', serif;
   --font-urdu: var(--font-face-urdu), var(--font-face-naskh), serif;
   --font-naskh: var(--font-face-naskh), 'Segoe UI', serif;
+  --font-quran: var(--font-face-quran), var(--font-face-naskh), serif;
 }
 
 :root {
@@ -203,6 +208,17 @@
   }
   :is(h1, h2, h3, .font-display):lang(ar) {
     font-weight: 600;
+    letter-spacing: 0;
+  }
+
+  /* Quran text — the canonical Arabic of an Ayah — in the Quran face (R2),
+     with the two things a Quran page sets beside it in the same face: a
+     Surah's Arabic name and the presentational ayah-end mark (`.quran-name`).
+     Never interface Arabic. Two selectors' worth of specificity, so it wins
+     over the `[lang|='ar']` interface face it sits inside. */
+  [lang|='ar']:is(.quran-text, .quran-name) {
+    font-family: var(--font-quran);
+    font-weight: 400;
     letter-spacing: 0;
   }
 
@@ -438,4 +454,136 @@ p {
 }
 .library-reader:lang(ur) {
   --reader-line-height: 2.15;
+}
+
+/*
+ * R2 — THE LONG-FORM READING COLUMN of a published article or News record:
+ * 18px on a phone and 19px from a laptop, at a 70ch measure (in the text's own
+ * `ch`, so enlarging it narrows the column instead of widening it). Nastaliq
+ * is set larger and with at least twice its size between lines; Naskh with a
+ * little less. A heading the contents list links to stops clear of the sticky
+ * header when it is jumped to.
+ */
+.editorial-prose.long-form {
+  font-size: 1.125rem;
+  line-height: 1.7;
+  max-inline-size: 70ch;
+}
+.editorial-prose.long-form > * + * {
+  margin-block-start: 1.15em;
+}
+.editorial-prose.long-form :is(h2, h3) {
+  margin-block-start: 1.9em;
+  scroll-margin-block-start: 6rem;
+}
+.editorial-prose.long-form blockquote {
+  color: var(--color-foreground-muted);
+  font-size: 1.1em;
+}
+@media (min-width: 64rem) {
+  .editorial-prose.long-form {
+    font-size: 1.1875rem;
+    line-height: 1.65;
+  }
+}
+.editorial-prose.long-form:lang(ur) {
+  font-size: 1.3125rem;
+  line-height: 2.2;
+}
+.editorial-prose.long-form:lang(ar) {
+  font-size: 1.25rem;
+  line-height: 1.95;
+}
+
+/*
+ * R2 — THE QURAN READER (`@/components/quran/reader`).
+ *
+ * TWO SIZES, EACH A BASE TIMES A SCALE. The Arabic is 26px on a phone and
+ * 32px from a laptop at a line height of about two, so the marks above and
+ * below never touch the next line; translations are 17–18px at 1.6, with
+ * Urdu Nastaliq 1.2× larger at double leading. A page's `?size=` sets the
+ * Arabic scale by class; the reader's settings island overrides either scale
+ * through the CSSOM (`style.setProperty`, which `style-src 'self'` permits),
+ * so no markup ever carries a style attribute.
+ *
+ * WHICH DEFAULT TRANSLATIONS SHOW is the reader's `data-translations`
+ * (server default for the interface language, then the visitor's own choice).
+ * A translation the address chose carries no language mark and always shows.
+ *
+ * COPY AND SHARE NEED SCRIPT, so they are hidden until the island marks the
+ * reader `data-enhanced`. Nothing here animates.
+ */
+.quran-reader {
+  --quran-arabic-base: 1.625rem;
+  --quran-arabic-scale: 1;
+  --quran-translation-base: 1.0625rem;
+  --quran-translation-scale: 1;
+}
+@media (min-width: 64rem) {
+  .quran-reader {
+    --quran-arabic-base: 2rem;
+    --quran-translation-base: 1.125rem;
+  }
+}
+.quran-reader.quran-size-small {
+  --quran-arabic-scale: 0.85;
+}
+.quran-reader.quran-size-large {
+  --quran-arabic-scale: 1.2;
+}
+.quran-reader.quran-size-larger {
+  --quran-arabic-scale: 1.4;
+}
+.quran-ayah-text,
+.quran-bismillah {
+  font-size: calc(var(--quran-arabic-base, 1.625rem) * var(--quran-arabic-scale, 1));
+  line-height: 2.05;
+  overflow-wrap: anywhere;
+}
+.quran-ayah-end {
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+.quran-translation {
+  font-size: calc(
+    var(--quran-translation-base, 1.0625rem) * var(--quran-translation-scale, 1)
+  );
+  line-height: 1.6;
+}
+.quran-translation:lang(ur) {
+  font-size: calc(
+    1.2 * var(--quran-translation-base, 1.0625rem) * var(--quran-translation-scale, 1)
+  );
+  line-height: 2.15;
+}
+.quran-translation:lang(ar) {
+  font-size: calc(
+    1.15 * var(--quran-translation-base, 1.0625rem) * var(--quran-translation-scale, 1)
+  );
+  line-height: 1.95;
+}
+.quran-reader[data-translations='none'] [data-translation-language],
+.quran-reader[data-translations='ur']
+  [data-translation-language]:not([data-translation-language='ur']),
+.quran-reader[data-translations='en']
+  [data-translation-language]:not([data-translation-language='en']) {
+  display: none;
+}
+.quran-reader:not([data-enhanced]) .quran-ayah-tool {
+  display: none;
+}
+.quran-progress {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--color-accent);
+}
+.quran-progress::-webkit-progress-bar {
+  background: transparent;
+}
+.quran-progress::-webkit-progress-value {
+  background: var(--color-accent);
+}
+.quran-progress::-moz-progress-bar {
+  background: var(--color-accent);
 }

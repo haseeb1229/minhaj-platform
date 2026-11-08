@@ -18,13 +18,14 @@ import {
   Button,
   Container,
   Field,
+  Icon,
   PageHeading,
-  Panel,
   Prose,
   Select,
   TextLink,
 } from '@/components/ui';
-import { isFixture, type ReadingContext } from './read';
+import { corpusNotice, type ReadingContext } from './read';
+import { REFERENCE_LINKS } from './reference-sources';
 import {
   READING_LAYERS,
   TEXT_SIZES,
@@ -81,21 +82,115 @@ export function FixtureBanner({ text }: { readonly text: string }) {
   );
 }
 
-/** The fixture banner when, and only when, the corpus is fixture text. */
-export async function FixtureNotice({
+/** Where "About this text" lives: the Quran landing, at this anchor. */
+const ABOUT_ANCHOR = 'about-this-text';
+
+/**
+ * THE REFERENCE NOTICE — one discreet, truthful line at the top of every Quran
+ * page while the active corpus is the staging reference preview (Rebaseline
+ * R2). It says the text is shown for review and has not been checked by
+ * Minhaj-ul-Quran's religious authority for this platform, and points to the
+ * full attribution. It never calls the text approved and never says it is not
+ * the Quran: it is the Quran, from a named, licensed source.
+ */
+async function ReferenceNotice({ locale }: { readonly locale: Locale }) {
+  const t = await getTranslations({ locale, namespace: 'quran' });
+  return (
+    <p role="note" className="flex items-start gap-2 text-sm text-foreground-muted">
+      <Icon name="info" size={16} className="mt-1 text-warning" />
+      <span>
+        {t.rich('reference.notice', {
+          link: (chunks) => (
+            <TextLink href={`${localizedPath(locale, '/quran')}#${ABOUT_ANCHOR}`}>
+              {chunks}
+            </TextLink>
+          ),
+        })}
+      </span>
+    </p>
+  );
+}
+
+/**
+ * What every Quran page says first about its corpus — decided in one place
+ * (`QURAN_MODE_POSTURE`): the fixture banner, the reference-preview line, or
+ * nothing for an approved corpus.
+ */
+export async function CorpusNotice({
   locale,
   availability,
 }: {
   readonly locale: Locale;
   readonly availability: QuranAvailability;
 }) {
-  if (!isFixture(availability)) return null;
-  const t = await getTranslations({ locale, namespace: 'quran' });
-  return <FixtureBanner text={t('fixture')} />;
+  switch (corpusNotice(availability)) {
+    case 'fixture': {
+      const t = await getTranslations({ locale, namespace: 'quran' });
+      return <FixtureBanner text={t('fixture')} />;
+    }
+    case 'reference':
+      return <ReferenceNotice locale={locale} />;
+    case null:
+      return null;
+  }
 }
 
 /**
- * The frame of a Quran page: the column, the trail, and the fixture banner at
+ * "ABOUT THIS TEXT" — the reference preview's full attribution: the Tanzil
+ * Project's Uthmani text with its version and licence (its terms require the
+ * source to be named and linked), the Irfan-ul-Quran translation with its
+ * rights holder and official site, and the plain statement that none of it has
+ * been reviewed for this platform. Rendered only in reference mode; the
+ * translation line only where a translation is shown.
+ */
+export async function AboutThisText({
+  locale,
+  availability,
+  translation,
+}: {
+  readonly locale: Locale;
+  readonly availability: QuranAvailability;
+  /** Whether any public translation is shown beside the text. */
+  readonly translation: boolean;
+}) {
+  if (corpusNotice(availability) !== 'reference') return null;
+  const t = await getTranslations({ locale, namespace: 'quran' });
+  const link = (href: string) => (chunks: ReactNode) => (
+    <TextLink href={href}>{chunks}</TextLink>
+  );
+  return (
+    <section
+      id={ABOUT_ANCHOR}
+      aria-labelledby={`${ABOUT_ANCHOR}-heading`}
+      className="scroll-mt-20 border-t border-border pt-6"
+    >
+      <div className="grid grid-cols-1 gap-x-10 gap-y-3 text-sm md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
+        <h2 id={`${ABOUT_ANCHOR}-heading`} className="text-subheading font-semibold">
+          {t('reference.aboutHeading')}
+        </h2>
+        <div className="flex max-w-[var(--measure-prose)] flex-col gap-3">
+          <p>
+            {t.rich('reference.arabic', {
+              tanzil: link(REFERENCE_LINKS.tanzil),
+              licence: link(REFERENCE_LINKS.licence),
+            })}
+          </p>
+          {translation ? (
+            <p>
+              {t.rich('reference.translation', {
+                official: link(REFERENCE_LINKS.official),
+              })}
+            </p>
+          ) : null}
+          <p className="text-foreground-muted">{t('reference.status')}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The frame of a Quran page: the column, the trail, and the corpus notice at
  * the very top whenever it applies.
  */
 export async function QuranFrame({
@@ -113,7 +208,7 @@ export async function QuranFrame({
   return (
     <Container>
       <div className="flex min-w-0 flex-col gap-8 pt-6 pb-[var(--space-section)]">
-        <FixtureNotice locale={locale} availability={availability} />
+        <CorpusNotice locale={locale} availability={availability} />
         <Breadcrumbs label={parts.label} trail={trail} />
         {children}
       </div>
@@ -163,53 +258,12 @@ export async function QuranUnavailable({
  * Scripture and layers
  * ========================================================================= */
 
-const ARABIC_SIZE: Readonly<Record<TextSize, string>> = {
-  small: 'text-xl',
-  medium: 'text-2xl',
-  large: 'text-3xl',
-  larger: 'text-4xl',
-};
-
 export const LAYER_SIZE: Readonly<Record<TextSize, string>> = {
   small: 'text-sm',
   medium: 'text-base',
   large: 'text-lg',
   larger: 'text-xl',
 };
-
-/**
- * The canonical Arabic of one Ayah — `lang="ar" dir="rtl"` in every locale,
- * generous line height for the marks, and wrapping rather than overflowing a
- * narrow phone. The text is rendered as one text node, exactly as stored, in a
- * group NAMED as the Arabic text so it is told apart from every layer without
- * being seen.
- */
-export function ArabicText({
-  id,
-  label,
-  text,
-  size,
-}: {
-  readonly id: string;
-  readonly label: string;
-  readonly text: string;
-  readonly size: TextSize;
-}) {
-  return (
-    <div role="group" aria-labelledby={id} className="min-w-0">
-      <span id={id} className="sr-only">
-        {label}
-      </span>
-      <p
-        lang="ar"
-        dir="rtl"
-        className={`${ARABIC_SIZE[size]} leading-loose break-words text-start`}
-      >
-        {text}
-      </p>
-    </div>
-  );
-}
 
 /**
  * One layer's text in its own LABELLED group, marked with its own language and
@@ -289,11 +343,18 @@ export async function LayerNotices({
   );
 }
 
+/** Where the reading form lives on a page — the settings sheet links to it. */
+export const READING_OPTIONS_ID = 'reading-options';
+
 /**
  * The reading options — a REAL GET form, so every choice works without
  * JavaScript and every reading is a shareable address, and none of it is stored
  * anywhere. The options are exactly the public works; the canonical address of
  * the page carries none of them.
+ *
+ * R2: folded into a disclosure at the end of the reader. The everyday choices
+ * (which translations, how large) live in the reader's settings sheet; this
+ * form chooses particular works, a transliteration, a tafsir and a recitation.
  */
 export async function ReadingForm({
   locale,
@@ -318,14 +379,27 @@ export async function ReadingForm({
     choice.size !== DEFAULT_TEXT_SIZE;
 
   return (
-    <Panel>
+    <details
+      id={READING_OPTIONS_ID}
+      className="group scroll-mt-20 rounded-panel border border-border bg-surface-raised"
+    >
+      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 [&::-webkit-details-marker]:hidden">
+        <span className="flex flex-col">
+          <span className="text-subheading font-semibold">{t('reading.heading')}</span>
+          <span className="text-sm text-foreground-muted">{t('reading.summary')}</span>
+        </span>
+        <Icon
+          name="chevron-down"
+          size={20}
+          className="text-foreground-muted group-open:rotate-180"
+        />
+      </summary>
       <form
         method="get"
         action={action}
         aria-label={t('reading.heading')}
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-4 border-t border-border px-5 pt-4 pb-5"
       >
-        <h2 className="text-lg font-semibold">{t('reading.heading')}</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Field id="reading-translation" label={t('reading.translation')}>
             {(props) => (
@@ -334,7 +408,7 @@ export async function ReadingForm({
                 name="translation"
                 defaultValue={choice.translation ?? ''}
               >
-                <option value="">{t('reading.none')}</option>
+                <option value="">{t('reading.defaultTranslation')}</option>
                 {options.translations.map(workOption)}
               </Select>
             )}
@@ -388,7 +462,7 @@ export async function ReadingForm({
           {changed ? <TextLink href={action}>{t('reading.reset')}</TextLink> : null}
         </div>
       </form>
-    </Panel>
+    </details>
   );
 }
 

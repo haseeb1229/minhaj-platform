@@ -35,6 +35,7 @@ import {
   type Query,
 } from '../shared';
 import { DuplicateStateBadge } from '../status';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/migration/duplicates` — duplicate candidates under
@@ -47,7 +48,7 @@ import { DuplicateStateBadge } from '../status';
  * marked as such, no merge is offered, and the service and the database both
  * refuse one.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminMigration', 'duplicates.title');
 
 export const dynamic = 'force-dynamic';
 

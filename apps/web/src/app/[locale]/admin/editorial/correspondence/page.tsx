@@ -1,6 +1,6 @@
 import { localizedPath } from '@minhaj/contracts';
 import { z } from 'zod';
-import { getMessages, getTranslations } from 'next-intl/server';
+import { getFormatter, getMessages, getTranslations } from 'next-intl/server';
 import {
   correspondenceKindSchema,
   correspondenceStateSchema,
@@ -12,7 +12,7 @@ import {
   EmptyState,
   Field,
   Panel,
-  SectionHeading,
+  PageHeading,
   Select,
   TextArea,
   TextLink,
@@ -20,6 +20,9 @@ import {
 } from '@/components/ui';
 import { ActionForm } from '../../../(identity)/form-state';
 import { triageCorrespondence } from '../actions';
+import { adminPageMetadata } from '../../metadata';
+
+export const generateMetadata = adminPageMetadata('editorial', 'correspondence');
 export default async function Correspondence({
   params,
   searchParams,
@@ -53,10 +56,12 @@ export default async function Correspondence({
   );
   const href = (start: number) =>
     path + '?kind=' + kind + '&offset=' + start + (state ? '&state=' + state : '');
+  const format = await getFormatter({ locale });
+  const common = await getTranslations({ locale, namespace: 'admin.common' });
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeading>{t('correspondence')}</SectionHeading>
-      <form className="flex flex-wrap gap-3">
+    <main className="flex min-w-0 flex-col gap-6">
+      <PageHeading>{t('correspondence')}</PageHeading>
+      <form className="flex flex-wrap items-end gap-3">
         <Field id="kind" label={t('correspondence')}>
           {(props) => (
             <Select {...props} name="kind" defaultValue={kind}>
@@ -80,7 +85,7 @@ export default async function Correspondence({
             </Select>
           )}
         </Field>
-        <Button>{t('reload')}</Button>
+        <Button tone="secondary">{common('apply')}</Button>
       </form>
       {data.items.length ? (
         data.items.map((row) => (
@@ -100,7 +105,7 @@ export default async function Correspondence({
             <p>
               {t('retention')}:{' '}
               <time dateTime={row.retainUntil.toISOString()}>
-                {row.retainUntil.toISOString()}
+                {format.dateTime(row.retainUntil, { dateStyle: 'medium' })}
               </time>
             </p>
             {context.authorization.can('correspondence.administer') ? (
@@ -151,6 +156,6 @@ export default async function Correspondence({
         ) : null}
         {data.more ? <TextLink href={href(offset + 25)}>{t('next')}</TextLink> : null}
       </nav>
-    </div>
+    </main>
   );
 }

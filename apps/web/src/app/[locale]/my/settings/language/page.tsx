@@ -1,9 +1,15 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { endonymOf } from '@/config/locale';
+import { MyPage } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
+import { myTabs } from '@/components/my/sections';
+import { TimeZonePicker } from '@/components/my/time-zone-picker';
+import { timeZoneChoices } from '@/components/my/time-zones';
 import { requireLocale } from '@/config/route-locale';
-import { Field, PageHeading, Panel, Select, TextInput } from '@/components/ui';
+import { Field, Panel, Select } from '@/components/ui';
 import { ActionForm } from '../../../(identity)/form-state';
 import { updateLanguageAction } from '../../../(identity)/actions';
 import { requireActiveSession } from '../../guard';
@@ -16,7 +22,13 @@ import { requireActiveSession } from '../../guard';
  * in every language unless filtered (DOMAIN_MODEL.md §19.1). Nothing here
  * filters content.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'language');
+}
 
 /**
  * PER REQUEST, always. This surface reads a session or a one-time token, so
@@ -33,18 +45,23 @@ export default async function LanguagePage({
 }) {
   const locale = await requireLocale(params);
   const t = await getTranslations({ locale, namespace: 'identity' });
+  const my = await getTranslations({ locale, namespace: 'my' });
+  const tabs = {
+    label: my('tabs.label.settings'),
+    items: myTabs(locale, 'settings', 'language', (tab) => my(`tabs.${tab}`)),
+  };
   const session = await requireActiveSession(
     locale,
     localizedPath(locale, '/my/settings/language'),
   );
 
   return (
-    <main className="flex w-full max-w-3xl min-w-0 flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <PageHeading>{t('language.title')}</PageHeading>
-        <p className="text-foreground-muted">{t('language.description')}</p>
-      </header>
-
+    <MyPage
+      title={t('language.title')}
+      description={<p>{t('language.description')}</p>}
+      tabs={tabs}
+      measure="reading"
+    >
       <Panel>
         <ActionForm
           action={updateLanguageAction}
@@ -80,18 +97,26 @@ export default async function LanguagePage({
             )}
           </Field>
 
-          <Field id="timezone" label={t('setup.timezone')} help="IANA, e.g. Asia/Karachi">
+          <Field
+            id="timezone"
+            label={t('setup.timezone')}
+            help={my('settings.timeZone.help')}
+          >
             {(props) => (
-              <TextInput
-                {...props}
-                name="timezone"
+              <TimeZonePicker
+                field={props}
+                choices={timeZoneChoices(new Date(), session.account.timezone)}
                 defaultValue={session.account.timezone ?? 'Asia/Karachi'}
-                required
+                labels={{
+                  search: my('settings.timeZone.search'),
+                  device: my('settings.timeZone.device'),
+                  matches: my.raw('settings.timeZone.matches') as string,
+                }}
               />
             )}
           </Field>
         </ActionForm>
       </Panel>
-    </main>
+    </MyPage>
   );
 }

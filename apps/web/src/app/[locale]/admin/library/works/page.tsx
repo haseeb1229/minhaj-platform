@@ -15,6 +15,7 @@ import {
 } from '@/components/ui';
 import { pageOffset, queryValue, PAGE_SIZE } from '../../shared';
 import { libraryCopy, WorkForm } from '../forms';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/library/works` — the Works directory and the create form
@@ -33,6 +34,7 @@ import { libraryCopy, WorkForm } from '../forms';
  * `noindex` AND `no-store`, inherited from the administrative layout above. Every
  * value on this screen is private operator state.
  */
+export const generateMetadata = adminPageMetadata('library', 'admin.works');
 export const dynamic = 'force-dynamic';
 
 export default async function WorksDirectory({

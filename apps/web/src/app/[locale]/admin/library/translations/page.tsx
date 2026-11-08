@@ -14,6 +14,7 @@ import {
 } from '@/components/ui';
 import { pageOffset, queryValue, PAGE_SIZE } from '../../shared';
 import { libraryCopy, RemoveTranslationForm, TranslationForm } from '../forms';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/library/translations` — recording which Editions are GENUINE
@@ -31,6 +32,7 @@ import { libraryCopy, RemoveTranslationForm, TranslationForm } from '../forms';
  * with the caller's live permission, and an identifier naming nothing shows the
  * listing again rather than an error.
  */
+export const generateMetadata = adminPageMetadata('library', 'admin.translations');
 export const dynamic = 'force-dynamic';
 
 export default async function TranslationsPage({

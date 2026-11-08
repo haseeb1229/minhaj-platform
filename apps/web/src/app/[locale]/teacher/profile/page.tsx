@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
@@ -5,6 +6,7 @@ import type { ContributorCapabilities } from '@minhaj/contracts/identity';
 
 import { NotActivated, TeacherFrame } from '@/components/teacher/parts';
 import { Alert, DetailRow, Panel, SectionHeading, TextLink } from '@/components/ui';
+import { teacherPageMetadata } from '@/components/teacher/metadata';
 import { identityRuntime } from '@/composition/identity';
 import { appLogger } from '@/composition/logging';
 import { peopleReadRuntime } from '@/composition/people-read';
@@ -22,7 +24,13 @@ import { requireTeacher } from '../guard';
  * name is changed in the account's own settings. A profile grants nothing;
  * the projection is presentation, never a decision (DOMAIN_MODEL.md §5.2).
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return teacherPageMetadata(params, 'profile');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';

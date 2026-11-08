@@ -32,71 +32,265 @@
       "volunteer": "Volunteer",
       "topics": "Topics",
       "newsletter": "Newsletter",
-      "about": "About",
-      "news": "News",
-      "collections": "Collections",
-      "listen": "Listen",
-      "events": "Events",
-      "presence": "Worldwide",
-      "help": "Help",
-      "more": "More",
       "signIn": "Sign in",
       "signedIn": "(signed in)",
       "searchLabel": "Search One Minhaj",
-      "searchPlaceholder": "Search books, lectures, news…"
+      "searchPlaceholder": "Search books, lectures, news…",
+      "utility": "The organisation",
+      "currentSection": "(current section)",
+      "browse": "Browse",
+      "quickLinks": "Go to",
+      "noQuickLinks": "No area matches. Press Enter to search everything.",
+      "groups": {
+        "quran": "Quran",
+        "knowledge": "Knowledge",
+        "watch": "Watch & Listen",
+        "learn": "Learn",
+        "news": "News & Events",
+        "about": "About MQI"
+      },
+      "intros": {
+        "quran": "The Quran, by surah and by juz, with its translations.",
+        "knowledge": "Books, periodicals, research and the religious sciences.",
+        "watch": "Lectures, speeches and programmes, on video and audio.",
+        "learn": "Courses and study you can open freely.",
+        "news": "News, statements and gatherings from around the world.",
+        "about": "Minhaj-ul-Quran International: who it is and where it works."
+      },
+      "featured": {
+        "video": "Latest video",
+        "book": "New in the Library",
+        "news": "Latest story"
+      },
+      "items": {
+        "quran": {
+          "title": "Read the Quran",
+          "description": "Every surah of the Quran, in order."
+        },
+        "surahs": {
+          "title": "Surah index",
+          "description": "All 114 surahs, with their names and length."
+        },
+        "juz": {
+          "title": "Juz index",
+          "description": "The thirty parts, for daily reading."
+        },
+        "translations": {
+          "title": "Translations",
+          "description": "Irfan-ul-Quran and the other published translations."
+        },
+        "quranSearch": {
+          "title": "Search the Quran",
+          "description": "Find a verse by a word or its reference."
+        },
+        "library": {
+          "title": "Library",
+          "description": "The whole catalogue of books and periodicals."
+        },
+        "books": {
+          "title": "Books",
+          "description": "Published books, by title, author and language."
+        },
+        "magazines": {
+          "title": "Magazines",
+          "description": "Magazine issues, newest first."
+        },
+        "research": {
+          "title": "Research",
+          "description": "Research titles and scholarly studies."
+        },
+        "encyclopedias": {
+          "title": "Encyclopedias",
+          "description": "Reference works in many volumes."
+        },
+        "articles": {
+          "title": "Articles",
+          "description": "Essays and writing on faith and society."
+        },
+        "hadith": {
+          "title": "Hadith",
+          "description": "Collections of hadith and their study."
+        },
+        "fatwa": {
+          "title": "Fatwa",
+          "description": "Answers to religious questions."
+        },
+        "topics": {
+          "title": "Topics"
+        },
+        "watch": {
+          "title": "Watch",
+          "description": "Lectures, speeches and programmes on video."
+        },
+        "series": {
+          "title": "Series",
+          "description": "Lectures in order, episode by episode."
+        },
+        "playlists": {
+          "title": "Playlists",
+          "description": "Curated selections of videos."
+        },
+        "listen": {
+          "title": "Listen",
+          "description": "Audio lectures and series."
+        },
+        "learn": {
+          "title": "Courses",
+          "description": "Courses to study at your own pace."
+        },
+        "paths": {
+          "title": "Learning paths",
+          "description": "Courses in a recommended order."
+        },
+        "live": {
+          "title": "Live classes",
+          "description": "Scheduled classes with a teacher."
+        },
+        "teachers": {
+          "title": "Teachers",
+          "description": "The teachers who lead live classes."
+        },
+        "news": {
+          "title": "Latest news",
+          "description": "Stories from Minhaj-ul-Quran's work worldwide."
+        },
+        "press": {
+          "title": "Press releases",
+          "description": "Official statements to the media."
+        },
+        "events": {
+          "title": "Events",
+          "description": "Conferences, gatherings and programmes."
+        },
+        "collections": {
+          "title": "Campaigns and collections",
+          "description": "Coverage gathered around one occasion."
+        },
+        "about": {
+          "title": "About Minhaj-ul-Quran",
+          "description": "The organisation, its people and its work."
+        },
+        "introduction": {
+          "title": "Introduction",
+          "description": "Minhaj-ul-Quran International in brief."
+        },
+        "founder": {
+          "title": "The founder",
+          "description": "Shaykh-ul-Islam Dr Muhammad Tahir-ul-Qadri."
+        },
+        "leadership": {
+          "title": "Leadership",
+          "description": "The people who lead the organisation."
+        },
+        "departments": {
+          "title": "Departments",
+          "description": "How the organisation's work is divided."
+        },
+        "forums": {
+          "title": "Forums",
+          "description": "The organisation's forums and wings."
+        },
+        "history": {
+          "title": "History",
+          "description": "How the movement began and grew."
+        },
+        "global": {
+          "title": "Worldwide",
+          "description": "The countries where Minhaj-ul-Quran is present."
+        },
+        "centres": {
+          "title": "Find a centre",
+          "description": "Local centres near you."
+        },
+        "help": {
+          "title": "Help"
+        },
+        "contact": {
+          "title": "Contact"
+        },
+        "myMinhaj": {
+          "title": "My Minhaj"
+        },
+        "membership": {
+          "title": "Membership"
+        },
+        "donate": {
+          "title": "Donate"
+        },
+        "hadithWorks": {
+          "title": "Hadith works",
+          "description": "Books of hadith and its sciences from the Library."
+        }
+      }
     },
     "home": {
       "description": "A unified digital platform for the Quran, Hadith, learning, library and media resources of Minhaj-ul-Quran International.",
-      "lede": "A unified digital platform for the Quran, Hadith, learning, library and media resources of Minhaj-ul-Quran International.",
-      "exploreAction": "Explore the platform",
-      "exploreHeading": "Explore",
-      "exploreIntro": "Sections describing the organisation, its leadership and its work. Each section is published as it is completed.",
-      "accountHeading": "My Minhaj",
-      "accountBody": "An account is optional. Everything published here can be read without one; My Minhaj is for the parts of the platform that need to know who you are.",
-      "preAdoption": "Independently developed and in pre-adoption review. Each area fills as its content is published.",
-      "search": {
-        "label": "Search the Quran, Hadith, the Library and more",
-        "submit": "Find"
+      "hero": {
+        "title": "Read the Quran, and explore the scholarship of Minhaj-ul-Quran",
+        "titleLibrary": "Explore the scholarship of Minhaj-ul-Quran",
+        "lede": "Books, magazines, lectures and news from Minhaj-ul-Quran International, open to everyone without an account.",
+        "readQuran": "Read the Quran",
+        "exploreLibrary": "Explore the Library",
+        "storyLabel": "From the news"
       },
-      "sources": {
-        "heading": "Quran and Hadith",
-        "intro": "Two separate sources, each with its own reader, index and search."
+      "quran": {
+        "heading": "The Holy Quran",
+        "intro": "All {count} surahs, each with its ayat in order. Begin with one of these, or open the full index.",
+        "allSurahs": "All {count} surahs",
+        "byJuz": "Read by juz",
+        "quickLabel": "Surahs to begin with"
       },
       "status": {
-        "available": "Available",
-        "fixture": "Test text only",
+        "reference": "Preview",
         "unavailable": "Not yet published"
       },
-      "areas": {
-        "heading": "Across the platform",
-        "intro": "Every area can be read without an account."
+      "news": {
+        "more": "More news"
       },
       "library": {
-        "heading": "From the Library",
-        "book": "Book",
-        "magazine": "Magazine"
+        "heading": "From the Library"
+      },
+      "magazines": {
+        "heading": "Latest magazine issues",
+        "all": "All magazines"
+      },
+      "watch": {
+        "heading": "Lectures to watch"
+      },
+      "shelf": {
+        "previous": "Show previous",
+        "next": "Show next"
       },
       "links": {
         "allNews": "All news",
-        "allEvents": "All events",
-        "library": "Visit the Library",
-        "allCollections": "All collections",
-        "allTopics": "All topics",
-        "fatwa": "Browse Fatwa"
-      },
-      "featured": {
-        "eyebrow": "Featured story"
-      },
-      "organisation": {
-        "heading": "About the organisation",
-        "intro": "Pages published from the organisation's own site, for review before adoption."
+        "allCollections": "All collections"
       },
       "people": {
-        "intro": "Published profiles of the organisation’s leadership.",
+        "label": "Leadership profiles",
         "action": "All leadership"
       },
       "global": {
-        "presenceIntro": "Countries where the organisation states it is present. No centre is listed here yet."
+        "heading": "Around the world",
+        "countries": "{count, plural, one {country in the Global Network directory} other {countries in the Global Network directory}}"
+      },
+      "account": {
+        "heading": "Keep your place with My Minhaj",
+        "body": "Everything on this site is open without an account. An account adds what is yours: what you saved, where you stopped, and the classes you joined.",
+        "action": "Open My Minhaj",
+        "benefits": {
+          "save": {
+            "title": "Save for later",
+            "body": "Keep books, lectures and articles in one place."
+          },
+          "continue": {
+            "title": "Continue where you stopped",
+            "body": "Pick up your reading where you left off."
+          },
+          "learn": {
+            "title": "Join classes",
+            "body": "Enrol in courses and follow your progress."
+          }
+        }
       }
     },
     "explore": {
@@ -193,10 +387,16 @@
       "preAdoption": "One Minhaj is an independently developed platform. It is not currently commissioned, sponsored, adopted or deployed by Minhaj-ul-Quran International, and nothing here should be read as an official statement by the organisation.",
       "description": "Books, lectures, news and learning from Minhaj-ul-Quran International, gathered in one multilingual platform.",
       "groups": {
-        "discover": "Discover",
-        "organisation": "The organisation",
-        "participate": "Take part"
-      }
+        "quranKnowledge": "Quran & Knowledge",
+        "library": "Library",
+        "watchListen": "Watch & Listen",
+        "newsEvents": "News & Events",
+        "about": "About MQI",
+        "participate": "Learn & take part"
+      },
+      "channels": "Official channels",
+      "channelsIntro": "Minhaj-ul-Quran International's own accounts and apps.",
+      "quranAttribution": "Quran text: the Uthmani text of the Tanzil Project (tanzil.net), used unmodified under the CC BY 3.0 licence."
     },
     "reserved": {
       "heading": "Not yet published",
@@ -505,6 +705,77 @@
   "admin": {
     "title": "Administration",
     "description": "Identity, access and platform operations. Every action is checked on the server and recorded.",
+    "titles": {
+      "editorial": {
+        "article": "Article",
+        "collection": "Editorial collection",
+        "event": "Event",
+        "mediaCoverage": "Media coverage item",
+        "news": "News item",
+        "page": "Editorial page",
+        "pressRelease": "Press release",
+        "statement": "Statement"
+      },
+      "fatwa": {
+        "category": "Fatwa category",
+        "review": "Fatwa under review",
+        "published": "Published fatwa"
+      },
+      "global": {
+        "country": "Country",
+        "region": "Region",
+        "city": "City",
+        "centre": "Centre"
+      },
+      "hadith": {
+        "collection": "Hadith collection",
+        "book": "Hadith book",
+        "chapter": "Hadith chapter",
+        "record": "Hadith record",
+        "commentary": "Hadith commentary",
+        "science": "Hadith science"
+      },
+      "learning": {
+        "class": "Class",
+        "course": "Course",
+        "lesson": "Lesson",
+        "path": "Learning path"
+      },
+      "library": {
+        "work": "Library work",
+        "edition": "Edition",
+        "publication": "Publication",
+        "research": "Research work",
+        "researchPaper": "Research paper",
+        "magazine": "Magazine",
+        "issue": "Magazine issue",
+        "encyclopedia": "Encyclopedia"
+      },
+      "media": {
+        "video": "Video",
+        "series": "Series or programme",
+        "playlist": "Playlist",
+        "audio": "Audio recording",
+        "audioSeries": "Audio series",
+        "photo": "Photo",
+        "gallery": "Gallery"
+      },
+      "quran": {
+        "ayah": "Ayah",
+        "translation": "Quran translation",
+        "transliteration": "Transliteration",
+        "tafsir": "Tafsir",
+        "recitation": "Recitation",
+        "tajweed": "Tajweed rule"
+      }
+    },
+    "pager": {
+      "label": "Pages",
+      "page": "Page {page}",
+      "previous": "Previous",
+      "next": "Next",
+      "labelOf": "Pages of {section}"
+    },
     "nav": {
       "dashboard": "Dashboard",
       "users": "Accounts",
@@ -688,7 +959,8 @@
       "pending": "Working…",
       "saving": "Saving…",
       "yes": "Yes",
-      "no": "No"
+      "no": "No",
+      "all": "All"
     },
     "denied": {
       "noSession": "Sign in again to continue.",
@@ -801,7 +1073,11 @@
       "alreadyHeld": "That account already holds the role.",
       "revokeSubmit": "Revoke",
       "revokedMessage": "The assignment was revoked, and the account was signed out.",
-      "notHeld": "That assignment was already revoked."
+      "notHeld": "That assignment was already revoked.",
+      "findAccount": "Find an account",
+      "findAccountHelp": "Search active accounts by name or email address.",
+      "findAccountMore": "More accounts match. Search with more of the name or address.",
+      "findAccountNone": "No active account matches that search. Enter an identifier instead."
     },
     "security": {
       "title": "Identity security",
@@ -989,7 +1265,9 @@
         "always": "Always promoted",
         "live": "Promoted now ({signal} is published)",
         "waiting": "Waits for published {signal}",
-        "never": "Not promoted — reachable by its address"
+        "never": "Not promoted — reachable by its address",
+        "pageLive": "Promoted now (its page is published)",
+        "pageWaiting": "Waits for its page to be published"
       }
     },
     "audit": {
@@ -1000,9 +1278,12 @@
       "actor": "Actor",
       "target": "Target",
       "source": "Authorised by",
-      "filterAction": "Action",
+      "filterAction": "Action begins with",
       "filterActor": "Actor identifier",
-      "noPayload": "Change payloads are recorded but not displayed here."
+      "noPayload": "Change payloads are recorded but not displayed here.",
+      "filterActionHelp": "For example “role.” for every role change.",
+      "filterFrom": "From (UTC)",
+      "filterTo": "To (UTC)"
     },
     "integrations": {
       "title": "Integrations",
@@ -1268,7 +1549,47 @@
       "rebuilt": "A full rebuild has started. It runs in the background; refresh this page to follow it."
     },
     "home": {
-      "description": "Every area your permissions open, grouped by purpose."
+      "description": "What is waiting for you, and every area your permissions open.",
+      "areas": "All areas",
+      "queues": {
+        "title": "Needs attention",
+        "waiting": "Waiting",
+        "none": "Nothing waiting",
+        "unavailable": "Count unavailable",
+        "more": "{count}+",
+        "editorialReview": "Editorial items awaiting review",
+        "migrationStaged": "Migrated records awaiting review",
+        "migrationManifests": "Draft publish manifests",
+        "membershipApplications": "Open membership applications",
+        "messagingReports": "Open message reports",
+        "messagingSupport": "Open support conversations",
+        "donationsAttention": "Donations flagged for attention",
+        "fatwaIntake": "Questions in Fatwa intake",
+        "fatwaReview": "Rulings awaiting publication review",
+        "learningTrials": "Trial-class requests"
+      },
+      "activity": {
+        "title": "Recent activity",
+        "empty": "Nothing has been recorded yet.",
+        "all": "Open the audit record"
+      },
+      "status": {
+        "title": "Platform status",
+        "note": "As visitors see the public site now.",
+        "quran": "Quran reading",
+        "hadith": "Hadith reader",
+        "fatwa": "Fatwa service",
+        "live": "Live classes",
+        "giving": "Online giving",
+        "membership": "Membership applications",
+        "indexing": "Search engine indexing",
+        "quranApproved": "Approved text",
+        "quranReference": "Reference preview",
+        "on": "On",
+        "off": "Off",
+        "indexingOn": "Allowed",
+        "indexingOff": "Off"
+      }
     },
     "groups": {
       "access": "Identity and access",
@@ -1306,6 +1627,51 @@
       "integrations": "Outbound email provider configuration and status.",
       "delivery": "Pending, failed and suppressed outbound mail.",
       "search": "Search indexing lag and failures."
+    },
+    "confirm": {
+      "cancel": "Cancel",
+      "reasonRecorded": "Recorded with the change.",
+      "accountStatus": {
+        "title": "Change this account's status?",
+        "body": "The new status applies at once. Disabling, suspending or closing an account also signs it out everywhere.",
+        "confirm": "Change status"
+      },
+      "revoke": {
+        "title": "Revoke this role?",
+        "body": "The account loses everything this role allows straight away and is signed out. The assignment stays in the history.",
+        "confirm": "Revoke the role"
+      },
+      "deactivateRole": {
+        "title": "Deactivate this role?",
+        "body": "It can no longer be granted, and everyone holding it is signed out and loses what it allows.",
+        "confirm": "Deactivate the role"
+      },
+      "archive": {
+        "title": "Archive this item?",
+        "body": "It is taken off the public site and any schedule is cancelled. It stays here, with its history.",
+        "confirm": "Archive"
+      },
+      "rebuild": {
+        "title": "Rebuild the search index?",
+        "body": "Every published record is indexed again from the start. Search keeps answering while it runs, but new results may take a while to appear.",
+        "confirm": "Rebuild the index"
+      },
+      "exclude": {
+        "title": "Exclude this category?",
+        "body": "Its records will not be filed under any topic. You can reopen the decision later.",
+        "confirm": "Exclude"
+      }
+    },
+    "revisionDiff": {
+      "heading": "Changes since version {number}",
+      "title": "Title",
+      "body": "Text",
+      "added": "added",
+      "removed": "removed",
+      "unchanged": "No change.",
+      "truncated": "Too much changed to compare word by word, so the whole changed passage is shown as removed and added.",
+      "languageAdded": "{language} was added in this version.",
+      "languageRemoved": "{language} was removed in this version."
     }
   },
   "people": {
@@ -1329,7 +1695,6 @@
     "allVideos": "All videos with this speaker",
     "audio": "Audio",
     "allAudio": "All audio with this speaker",
-    "eyebrow": "Contributor",
     "biography": "Biography",
     "portraitCredit": "Photo",
     "facetsIntro": "The kinds of contribution described and published for this person."
@@ -1519,7 +1884,22 @@
     "leadImageAlt": "Image description: {alt}",
     "leadImageNoAlt": "This image has no description and is shown as decoration.",
     "sourcePublishedOn": "Original publication date",
-    "sourcePublishedOnHelp": "The date the original source published this, if known. Readers see this date, and listings are ordered by it. Leave empty for content first published here."
+    "sourcePublishedOnHelp": "The date the original source published this, if known. Readers see this date, and listings are ordered by it. Leave empty for content first published here.",
+    "batchHelp": "Tick the records on this page you have reviewed, then approve and publish them together. Each one is approved and published as its own recorded action; you cannot approve a record you created or last edited.",
+    "batchSelect": "Select “{title}”",
+    "batchSelectAll": "Select all on this page",
+    "batchConfirm": "I have reviewed every selected record and want to approve and publish each one now.",
+    "batchSubmit": "Approve and publish selected",
+    "batchPending": "Approving and publishing…",
+    "batchDecided": "Published",
+    "batchRefused": "Not published",
+    "batchUnknownRecord": "A record no longer on this page",
+    "batchNotFound": "This record no longer exists.",
+    "batchDone": "Every selected record was approved and published.",
+    "batchPartial": "Some records were not published. Each is listed with the reason.",
+    "batchNoneSelected": "Select at least one record first.",
+    "batchConfirmRequired": "Confirm that you have reviewed the selected records.",
+    "batchInterrupted": "The service stopped responding part-way. Records already published stay published; reload the queue to see where it stopped."
   },
   "library": {
     "title": "Library",
@@ -1781,7 +2161,8 @@
       "noIssues": "No issue of this magazine is published yet.",
       "issueNavigation": "Other issues of this magazine",
       "previousIssue": "Previous issue",
-      "nextIssue": "Next issue"
+      "nextIssue": "Next issue",
+      "undated": "Year not recorded"
     },
     "scholarlyAdmin": {
       "create": {
@@ -1836,32 +2217,41 @@
     },
     "landing": {
       "browseBooks": "Browse all books",
-      "allResources": "See every resource type",
       "groups": {
         "books": {
-          "heading": "Books and editions",
-          "intro": "Published works with their editions and translations, and the ways to browse them."
+          "heading": "Books and editions"
         },
         "scholarly": {
-          "heading": "Research and publications",
-          "intro": "Research, papers, reports and reference works, with abstracts and citations where they exist."
+          "heading": "Research and publications"
         },
         "periodicals": {
-          "heading": "Periodicals and articles",
-          "intro": "Magazines and journals issue by issue, and articles from the editorial process."
+          "heading": "Periodicals and articles"
         },
         "access": {
-          "heading": "Access and availability",
-          "intro": "What can be read here, what may be downloaded, and where printed copies can be obtained."
+          "heading": "Access and availability"
         }
-      }
+      },
+      "newest": "Newest publications",
+      "latestIssues": "Latest magazine issues",
+      "showPrevious": "Show previous",
+      "showNext": "Show next",
+      "directory": "More ways into the Library"
     },
     "kindBook": "Book",
     "coverAlt": "Cover of {title}",
     "editionCount": "{count, plural, one {# edition} other {# editions}}",
     "availabilityReading": "Reading",
     "availabilityDownload": "Download",
-    "readBelow": "This edition can be read in full on this page."
+    "readBelow": "This edition can be read in full on this page.",
+    "sort": {
+      "label": "Order",
+      "title": "Title, A to Z",
+      "newest": "Newest publication first"
+    },
+    "related": {
+      "heading": "More on {topic}",
+      "all": "All books on {topic}"
+    }
   },
   "search": {
     "title": "Search",
@@ -1922,6 +2312,11 @@
     "noResults": "No results for “{query}”.",
     "noResultsHelp": "Check the spelling, try fewer or different words, or remove a filter.",
     "pageStatus": "Page {page} of {pages}",
+    "pageLabel": "Page {page}",
+    "facets": "Result types",
+    "allTypes": "All results",
+    "tryInstead": "Or browse instead",
+    "searchAllTypes": "Search every type instead",
     "pagination": "Search result pages",
     "previous": "Previous page",
     "next": "Next page",
@@ -2107,8 +2502,8 @@
     },
     "playerHeading": "Video player",
     "player": {
-      "notice": "This video is played by {provider}. Nothing is loaded from {provider} until you choose to play it here: loading the player connects your browser to {provider}, which may collect data under its own terms.",
-      "load": "Load the video from {provider}",
+      "play": "Play “{title}” (plays from {provider})",
+      "disclosure": "Plays from {provider} in privacy-enhanced mode. Nothing is loaded from {provider} until you press play.",
       "fallback": "Watch “{title}” on {provider}",
       "frameTitle": "{title} — {provider} player",
       "unavailable": "{provider} does not currently offer this video to be played here.",
@@ -2116,9 +2511,6 @@
     },
     "metadataNotice": "This title and description describe the video in your language. They are not a translation or a dubbed version of it; the language of the video itself is stated below.",
     "captionsAvailable": "Captions are offered in the {provider} player.",
-    "captionsUnknown": "No captions are recorded for this video.",
-    "transcriptNone": "No transcript is available for this video.",
-    "transcriptBelow": "Available below.",
     "transcriptShow": "Read the transcript",
     "topics": "Topics",
     "inPlaylists": "In playlists",
@@ -2145,14 +2537,13 @@
       "featuredIntro": "Videos selected to be featured on this page.",
       "latestIntro": "The most recently published videos, newest first.",
       "formatsHeading": "Browse by kind of video",
-      "formatsIntro": "Each kind of recording has a view of its own.",
       "groupsHeading": "Series, programmes and playlists",
-      "groupsIntro": "Videos gathered together, to be watched in order.",
       "findHeading": "Speakers, topics and audio",
-      "findIntro": "Find videos by who speaks or what they are about, or listen instead."
+      "seeAll": "All {name}"
     },
     "viewsLabel": "Kind of video",
     "aboutHeading": "About this video",
+    "related": "Related videos",
     "kind": {
       "series": "Series",
       "program": "Programme",
@@ -2556,6 +2947,7 @@
       "media-coverage": "Summaries of coverage published by other outlets, with a link to each original where it is known."
     },
     "type": {
+      "article": "Article",
       "news-article": "News",
       "press-release": "Press release",
       "statement": "Statement",
@@ -2603,20 +2995,41 @@
     "sourceUnknown": "The address of the original coverage is not recorded.",
     "coverageNotice": "This page summarises coverage published by {outlet}. The original article belongs to its publisher.",
     "fallback": "Shown in {language} because it has not been translated into this language.",
-    "media": "Photographs and galleries",
-    "mediaBody": "Photographs, photo galleries and the photograph archive.",
     "previous": "Previous page",
     "next": "Next page",
     "centre": "Centre",
     "events": "Events",
     "eventsBody": "Upcoming and past gatherings, with when and where each is held.",
     "collections": "Collections",
-    "collectionsBody": "Curated sets of articles, news, books and videos, each gathered around one theme."
+    "collectionsBody": "Curated sets of articles, news, books and videos, each gathered around one theme.",
+    "authors": "Authors",
+    "updated": "Updated",
+    "contents": "On this page",
+    "related": "Related reading",
+    "moreNews": "More news",
+    "moreArticles": "More articles",
+    "allArticles": "All articles",
+    "languageFilter": "Content language",
+    "allLanguages": "All languages",
+    "languageEmpty": "Nothing has been published in this language yet.",
+    "languages": {
+      "en": "English",
+      "ur": "Urdu",
+      "ar": "Arabic"
+    },
+    "typeFilter": "Type of record",
+    "allTypes": "All types",
+    "archiveEverything": "Show everything published",
+    "byYear": "Browse by year",
+    "mediaSurface": {
+      "photos": "Photographs from events and programmes.",
+      "galleries": "Photographs gathered by occasion.",
+      "archive": "Every photograph, browsed by date."
+    }
   },
   "collections": {
     "title": "Collections",
     "description": "Curated sets of articles, news, books and videos, each gathered around a theme and arranged in a deliberate order.",
-    "type": "Collection",
     "topics": "Topics",
     "empty": "No collections have been published yet.",
     "pageEmpty": "There are no more collections on this page.",
@@ -2639,12 +3052,14 @@
       "work": "Book",
       "video": "Video"
     },
-    "kindsPlural": {
-      "article": "Articles",
-      "news": "News",
-      "work": "Books",
-      "video": "Videos"
-    }
+    "itemCount": "{count, plural, one {# item} other {# items}}",
+    "orderLabel": "Order of items",
+    "order": {
+      "curated": "Curated order",
+      "newest": "Newest first",
+      "oldest": "Oldest first"
+    },
+    "undated": "Undated"
   },
   "events": {
     "title": "Events",
@@ -2723,6 +3138,14 @@
     "description": "Read the Quran by Surah, by Juz and by Ayah, with translations, tafsir, transliteration, tajweed guidance and recitations.",
     "intro": "Read the Quran by Surah, by Juz or by citation, and study it alongside translations, tafsir, transliteration, tajweed guidance and recitations. Every Ayah has one permanent address you can cite.",
     "fixture": "Test fixture — this deployment shows non-authoritative engineering fixture text. It is not the Quran.",
+    "reference": {
+      "notice": "Preview: this Quran text and translation are shown for review and have not yet been checked by Minhaj-ul-Quran’s religious authority for this platform. <link>About this text</link>",
+      "aboutHeading": "About this text",
+      "arabic": "Arabic text: <tanzil>Tanzil Project</tanzil>, Uthmani text version 1.1, licensed under <licence>Creative Commons Attribution 3.0</licence> and reproduced without any change.",
+      "translation": "Translation: Irfan-ul-Quran by Shaykh-ul-Islam Dr Muhammad Tahir-ul-Qadri, © Minhaj-ul-Quran International (<official>irfan-ul-quran.com</official>).",
+      "status": "Shown here for preview; not yet reviewed by Minhaj-ul-Quran’s religious authority for this platform.",
+      "body": "A licensed preview of the Quran text with the Irfan-ul-Quran translation, not yet reviewed for this platform."
+    },
     "unavailable": {
       "body": "The Quran corpus is not yet available on this site.",
       "home": "Return to the home page",
@@ -2747,14 +3170,11 @@
     "landing": {
       "read": "Read",
       "study": "Study",
-      "eyebrow": "Read · Study · Explore · Learn",
-      "readIntro": "Enter the text in its own order, or go straight to a citation.",
-      "studyIntro": "Published works read beside the text, each with its own translators and source.",
       "explore": "Explore",
-      "exploreIntro": "Material from across the platform classified under the Quran.",
       "learn": "Learn",
       "learnIntro": "Courses that teach the Quran, taught through Learn.",
-      "learnAll": "All courses in Learn"
+      "learnAll": "All courses in Learn",
+      "more": "More in the Quran section"
     },
     "sections": {
       "read": "Start reading",
@@ -2831,7 +3251,9 @@
       "size": "Text size",
       "none": "None",
       "apply": "Apply",
-      "reset": "Reset reading options"
+      "reset": "Reset reading options",
+      "summary": "Choose a particular translation, a transliteration, a tafsir or a recitation.",
+      "defaultTranslation": "Default translations"
     },
     "size": {
       "small": "Small",
@@ -2866,7 +3288,8 @@
       "ayahOptional": "Ayah number (optional)",
       "submit": "Go",
       "surahMissing": "That Surah is not available. Choose one from the list.",
-      "ayahMissing": "That Surah has no Ayah with that number."
+      "ayahMissing": "That Surah has no Ayah with that number.",
+      "queryMissing": "Nothing matches “{query}”. Try a Surah number such as 18, a citation such as 18:10, a Surah’s name, or Juz 15."
     },
     "readIntro": "Choose where to begin. Nothing about your reading is stored: the address of the page you are on is all there is to come back to.",
     "beginAt": "Begin at Surah {number}",
@@ -2931,6 +3354,52 @@
       "pages": "Quran search result pages",
       "pageStatus": "Page {page} of {pages}",
       "layer": "Translation or transliteration · {language}"
+    },
+    "index": {
+      "heading": "Surahs and Juz",
+      "intro": "Every Surah in order, or the Quran by its thirty parts.",
+      "tabs": "Index of the Quran"
+    },
+    "jump": {
+      "label": "Go to a Surah, Ayah or Juz",
+      "help": "For example 18, 18:10, a Surah’s name, or Juz 15.",
+      "submit": "Go",
+      "opens": "Opens {target}",
+      "none": "Nothing matches yet."
+    },
+    "continue": {
+      "heading": "Continue reading"
+    },
+    "reader": {
+      "translationSwitch": "Translation",
+      "settings": "Settings",
+      "settingsTitle": "Reading settings",
+      "close": "Close",
+      "translationHeading": "Translation",
+      "both": "Both",
+      "none": "None",
+      "arabicSize": "Arabic text size",
+      "translationSize": "Translation text size",
+      "decrease": "Smaller",
+      "increase": "Larger",
+      "reset": "Reset to defaults",
+      "kept": "These settings are kept in this browser only.",
+      "moreOptions": "More reading options",
+      "useDefault": "Show the default translations",
+      "fixed": "Showing {name}, chosen for this page.",
+      "juzSpan": "Juz {start}–{end}",
+      "arabicSource": "Tanzil Uthmani",
+      "actions": {
+        "group": "Ayah actions",
+        "copy": "Copy with citation",
+        "share": "Share",
+        "save": "Save to My Minhaj"
+      },
+      "status": {
+        "copied": "Copied with its citation.",
+        "linkCopied": "Link copied.",
+        "failed": "Copying is not available in this browser."
+      }
     }
   },
   "quranAdmin": {
@@ -3003,7 +3472,8 @@
     },
     "authority": {
       "fixture": "Test fixture — not authoritative",
-      "approved": "Approved source"
+      "approved": "Approved source",
+      "reference": "Reference text — not reviewed for this platform"
     },
     "revelation": {
       "meccan": "Meccan",
@@ -3062,6 +3532,7 @@
       "inactive": "No corpus is active. The public Quran pages say the corpus is not yet available.",
       "fixture": "Fixture mode. The active corpus is non-authoritative engineering fixture text: public pages carry a test-fixture banner, are not indexed and are left out of the sitemap.",
       "approved": "An approved source is active. The public Quran pages show its text.",
+      "reference": "Reference preview. The active corpus is a licensed external text reproduced verbatim and not reviewed by Minhaj-ul-Quran’s religious authority. Public pages name its source and say so, are never indexed and are left out of the sitemap — and only a deployment that enables the preview shows it at all; everywhere else the public Quran pages stay unavailable.",
       "activeSource": "Active source",
       "activatedAt": "Activated",
       "authorisedBy": "Authorised by",
@@ -3069,6 +3540,10 @@
       "ayat": "Ayat",
       "juz": "Juz",
       "operatorOnly": "Sources are registered, and a corpus accepted, by the operator on the host. Nothing on these screens can register a source, import text or change which source is active."
+    },
+    "acceptance": {
+      "title": "Corpus acceptance",
+      "intro": "No corpus has been accepted. Acceptance is an operator act on the host: confirm your identity here, then run the import command within five minutes. The command checks your permission and this confirmation again before anything is written."
     },
     "sources": {
       "title": "Registered sources",
@@ -3268,13 +3743,7 @@
     "unavailable": {
       "body": "Hadith collections are not yet available on this site.",
       "home": "Return to the home page",
-      "lede": "This section is for reading the published Hadith collections, each citation shown exactly as its source gives it.",
-      "structureHeading": "How this section is organised",
-      "structureIntro": "The collections and their study open once a collection is activated. Exploring and learning are already served elsewhere on the platform.",
-      "awaiting": "Opens when a collection is activated",
       "parts": {
-        "collections": "Published collections, read by book and chapter, with a permanent address for every citation.",
-        "study": "The original text with its source and edition, published translations, commentary and study material.",
         "explore": "Books, videos, research and topics from across the platform, connected through the topic hub.",
         "learn": "Structured courses and learning paths, taught through Learn."
       },
@@ -3418,6 +3887,17 @@
       "none": "No citation matches “{query}”.",
       "pages": "Hadith search result pages",
       "pageStatus": "Page {page} of {pages}"
+    },
+    "works": {
+      "lede": "The hadith — the reported sayings, actions and approvals of the Prophet Muhammad ﷺ — and the sciences by which their transmission is studied.",
+      "awaiting": "A reader for the hadith collections themselves will open here once an authorised source is in place.",
+      "aboutHeading": "Hadith at Minhaj-ul-Quran",
+      "about": "The sciences of hadith ask how each report was transmitted, by whom, and how its authenticity is weighed. Minhaj-ul-Quran publishes works in this field — collections, commentaries and studies — and those in the Library are gathered here, each with its own page.",
+      "shelf": "Hadith works in the Library",
+      "shelfAll": "All hadith works",
+      "showPrevious": "Show previous",
+      "showNext": "Show next",
+      "moreHeading": "Elsewhere on the platform"
     }
   },
   "fatwa": {
@@ -3428,7 +3908,27 @@
     "unavailable": {
       "body": "The Fatwa service is not available on this site yet.",
       "home": "Return to the home page",
-      "howItWorks": "How the Fatwa service works"
+      "howItWorks": "How the Fatwa service works",
+      "offerHeading": "What this service will offer",
+      "offer": {
+        "rulings": {
+          "title": "Published rulings",
+          "body": "Reviewed answers to questions of Islamic law and practice, each beside an anonymised statement of its question."
+        },
+        "browse": {
+          "title": "Browse by category and topic",
+          "body": "Rulings arranged by area — worship, transactions, family life and more — and linked to the platform’s topics."
+        },
+        "ask": {
+          "title": "Ask a question",
+          "body": "A private way to send a question and follow it until it is answered."
+        }
+      },
+      "askHeading": "How asking will work",
+      "askBody": "When the service opens you will ask from My Minhaj: sign in, write your question, and follow it there. Your question stays private — a ruling is published only beside a separately written, anonymised question.",
+      "officialHeading": "Minhaj-ul-Quran’s fatwa website",
+      "officialBody": "Minhaj-ul-Quran International’s established fatwa website publishes rulings in Urdu and accepts questions.",
+      "officialLink": "Visit thefatwa.com"
     },
     "previous": "Previous page",
     "next": "Next page",
@@ -4244,6 +4744,13 @@
     "accountInactive": "This account is not active.",
     "confirmRequired": "Tick the confirmation first."
   },
+  "exploreLanding": {
+    "lede": "Who Minhaj-ul-Quran is, the scholar who founded it, the people who lead it and the work it does around the world.",
+    "featured": "About Minhaj-ul-Quran",
+    "allLeadership": "All of the leadership",
+    "sections": "Every section",
+    "otherSections": "Explore other sections"
+  },
   "global": {
     "title": "Global Network",
     "intro": "Minhaj-ul-Quran's centres around the world, arranged by country, region and city.",
@@ -4265,7 +4772,6 @@
       "localBody": "Each centre's page lists its own news and events and its public contact details, where the centre has published them."
     },
     "emptyDirectory": "No centres have been published in the directory yet. Centres appear here as the organisation confirms their details.",
-    "dataNotice": "Directory details are published only once the organisation has confirmed them. Where nothing is listed, nothing has been confirmed yet.",
     "countriesEmpty": "No countries have been published yet.",
     "allCountries": "All countries",
     "countriesIntro": "Every country in the directory. Each lists its regions, cities and centres.",
@@ -4363,7 +4869,21 @@
       "viewCountry": "Pakistan country page",
       "empty": "No regions or cities have been published for Pakistan yet."
     },
-    "eyebrow": "Centres worldwide",
+    "presence": "Minhaj-ul-Quran is present in {countries, plural, one {# country} other {# countries}} across {regions, plural, one {# region} other {# regions}} of the world.",
+    "byRegion": "Countries by region",
+    "regionCount": "{count, plural, one {# country} other {# countries}}",
+    "regions": {
+      "south-asia": "South Asia",
+      "middle-east-north-africa": "Middle East & North Africa",
+      "europe-central-asia": "Europe & Central Asia",
+      "north-america": "North America",
+      "latin-america-caribbean": "Latin America & the Caribbean",
+      "sub-saharan-africa": "Sub-Saharan Africa",
+      "east-asia-pacific": "East Asia & Pacific",
+      "other": "Other countries"
+    },
+    "countryNews": "Latest news from centres in {country}",
+    "countryNeighbours": "Elsewhere in {region}",
     "presenceNotice": "The countries below are those the organisation states it is present in. No centre address has been published yet."
   },
   "personalIsland": {
@@ -5107,6 +5627,7 @@
       "ambiguousTime": "That local time happens twice in this time zone (the clocks go back). Open “Repeated hour” and choose which one you mean.",
       "invalidMeeting": "That is not a Google Meet address. Paste a link of the form https://meet.google.com/abc-defg-hij.",
       "notParticipant": "That person is not a participant of this class.",
+      "notStarted": "This class has not started yet. It can be marked as held, and attendance recorded, once it has begun.",
       "hasClasses": "This course has upcoming classes or confirmed trial bookings. Cancel or complete them before it leaves publication."
     },
     "lifecycle": {
@@ -5356,7 +5877,6 @@
   },
   "teacher": {
     "title": "Teacher area",
-    "description": "Your classes, students, courses and availability. Only you can see this.",
     "nav": {
       "label": "Teacher area",
       "overview": "Overview",
@@ -5376,12 +5896,12 @@
       "previous": "Previous page",
       "next": "Next page",
       "beyond": "There is nothing on this page. Go back to the first page.",
-      "course": "Course",
       "class": "Class",
       "when": "When",
       "state": "State",
       "openClass": "Open class",
-      "noTimeZone": "Your account has no time zone, so your own times are shown in UTC. You can set one in your account settings."
+      "noTimeZone": "Your account has no time zone, so your own times are shown in UTC. You can set one in your account settings.",
+      "close": "Close"
     },
     "notActivated": {
       "title": "Live learning is not switched on",
@@ -5407,6 +5927,7 @@
       "ambiguousTime": "A start or end time happens twice in that time zone, because the clocks go back then. Say whether you mean the first or the second time, below.",
       "invalidMeeting": "That is not a Google Meet address. Enter an https://meet.google.com/… link exactly as Google gave it, with nothing added.",
       "notParticipant": "That person is not a participant of this class.",
+      "notStarted": "This class hasn’t started yet. You can mark it as held and record attendance once it begins.",
       "booked": "This window is booked, so it can’t be withdrawn."
     },
     "state": {
@@ -5449,24 +5970,12 @@
       "clear": "Remove the meeting link",
       "cleared": "The meeting link was removed."
     },
-    "overview": {
-      "today": "Classes today",
-      "todayCount": "Classes today: {count}",
-      "todayNone": "No classes today.",
-      "todayLink": "See today’s classes",
-      "next": "Next class",
-      "nextNone": "No upcoming class in the next 62 days.",
-      "pending": "Needs a meeting link",
-      "pendingCount": "Upcoming classes without a meeting link: {count}",
-      "pendingNone": "Every upcoming class has a meeting link.",
-      "pendingHelp": "A learner can’t join a class until its meeting link is set.",
-      "sections": "Sections",
-      "unavailable": "This part can’t be shown right now."
-    },
     "today": {
       "title": "Today’s classes",
-      "description": "Your classes today, in your own time zone. Each shows the time it was scheduled in as well.",
-      "empty": "You have no classes today.",
+      "description": "Times are in your own time zone.",
+      "empty": "No classes today",
+      "emptyBody": "Your whole week — every class and open availability window — is on the calendar.",
+      "emptyAction": "Open the calendar",
       "list": "Today’s classes"
     },
     "session": {
@@ -5482,7 +5991,14 @@
       "marked": "Attendance was saved.",
       "markHelp": "A mark can be changed at any time; saving the same mark again changes nothing.",
       "changes": "Changes to this class",
-      "closed": "This class is {state}, so it can’t change any more."
+      "closed": "This class is {state}, so it can’t change any more.",
+      "guide": {
+        "upcoming": "This class hasn’t started. Attendance, and marking it held, open when it starts ({time}).",
+        "live": "This class is in progress. Mark who is present as they join.",
+        "ended": "This class has ended. Mark attendance, then mark it as held."
+      },
+      "attendanceOpens": "Attendance can be marked once the class starts ({time}).",
+      "courseLink": "Open the course"
     },
     "reschedule": {
       "heading": "Move this class",
@@ -5523,9 +6039,12 @@
     },
     "calendar": {
       "title": "Calendar",
-      "description": "Your classes over the next 62 days, grouped by day in your own time zone.",
-      "empty": "You have no classes in the next 62 days.",
-      "day": "Classes on {day}"
+      "description": "Your classes and open availability, one week at a time. Times are in {zone}.",
+      "empty": "Nothing this week",
+      "emptyBody": "You have no classes and no open availability windows this week.",
+      "nextWeekWith": "Go to the week of your next class",
+      "bounded": "This week has more classes than can be shown at once. Today’s classes and each course’s classes list them all.",
+      "windowsUnavailable": "Your availability can’t be shown right now; your classes are shown below."
     },
     "students": {
       "title": "Students",
@@ -5536,7 +6055,6 @@
       "filtered": "Showing learners on one course.",
       "empty": "Nobody is enrolled on your courses yet.",
       "list": "Students",
-      "courses": "Courses with you",
       "progress": "Lessons complete: {completed} of {total}",
       "enrolledAt": "Enrolled"
     },
@@ -5553,7 +6071,6 @@
     "courses": {
       "title": "Courses",
       "description": "The courses you currently teach. Each opens its syllabus, students, classes and materials.",
-      "empty": "You are not currently assigned to teach any course.",
       "list": "Your courses",
       "since": "Teaching since",
       "syllabusSize": "{modules} modules, {lessons} lessons",
@@ -5569,7 +6086,6 @@
       "back": "Back to courses",
       "sections": "This course",
       "studentsTitle": "Students on this course",
-      "sessionsTitle": "Classes for this course",
       "upcoming": "Upcoming classes",
       "upcomingHelp": "Your classes for this course in the next 62 days.",
       "upcomingEmpty": "No upcoming classes for this course.",
@@ -5580,7 +6096,6 @@
       "notLive": "This course is self-paced: it has no live classes."
     },
     "materials": {
-      "title": "Materials",
       "description": "The syllabus and lesson text of this course, as learners read it. Choose a lesson to read its text.",
       "lessons": "Lessons",
       "position": "Lesson {number} of {total}",
@@ -5591,7 +6106,6 @@
     "resources": {
       "title": "Resources",
       "description": "The materials of every course you teach: the syllabus and lesson text learners read. There is no file upload here; course materials are written in the course itself by the editorial team.",
-      "empty": "You are not currently assigned to teach any course, so there are no materials to show.",
       "open": "Open the materials for “{title}”"
     },
     "attendancePage": {
@@ -5601,7 +6115,10 @@
       "bounded": "Older classes are on the reports page.",
       "reports": "Attendance reports",
       "markTitle": "Mark attendance",
-      "markDescription": "Who was present at this class. A mark can be changed at any time."
+      "markDescription": "Who was present at this class. A mark can be changed at any time.",
+      "views": "Attendance views",
+      "pendingTab": "To mark",
+      "emptyBody": "When a class you teach has started, anyone not yet marked appears here."
     },
     "reports": {
       "title": "Attendance reports",
@@ -5632,7 +6149,8 @@
       "opened": "The window was offered.",
       "withdraw": "Withdraw this window",
       "withdrew": "The window was withdrawn.",
-      "cannotWithdraw": "A booked window can’t be withdrawn; cancel its class instead."
+      "cannotWithdraw": "A booked window can’t be withdrawn; cancel its class instead.",
+      "weekHelp": "Your classes and open windows this week, in {zone}. A booked window shows as its class."
     },
     "profile": {
       "title": "Profile",
@@ -5658,6 +6176,117 @@
       "accountName": "Account name",
       "accountSettings": "Change your account name",
       "unavailable": "Your profile can’t be shown right now."
+    },
+    "titles": {
+      "overview": "Overview",
+      "today": "Today’s classes",
+      "calendar": "Calendar",
+      "class": "Class",
+      "students": "Students",
+      "student": "Student",
+      "courses": "Courses",
+      "course": "Course",
+      "courseStudents": "Course students",
+      "courseSessions": "Course classes",
+      "materials": "Materials",
+      "resources": "Resources",
+      "attendance": "Attendance",
+      "markAttendance": "Mark attendance",
+      "reports": "Attendance reports",
+      "availability": "Availability",
+      "messages": "Messages",
+      "conversation": "Conversation",
+      "profile": "Profile"
+    },
+    "noScope": {
+      "title": "You aren’t teaching a course yet",
+      "body": "The learning team assigns courses to teachers. Once a course is yours, its classes, learners and materials appear here. In the meantime you can offer times when you are free for trial classes.",
+      "action": "Offer availability"
+    },
+    "stage": {
+      "live": "In progress",
+      "ended": "Ended — not yet marked held"
+    },
+    "meetingState": {
+      "set": "Meeting link set",
+      "missing": "No meeting link"
+    },
+    "agenda": {
+      "classTime": "Class time: {time} ({zone})",
+      "attendance": "Take attendance"
+    },
+    "week": {
+      "previous": "Previous week",
+      "next": "Next week",
+      "current": "This week",
+      "navLabel": "Weeks",
+      "legend": "Key",
+      "legendClass": "Class",
+      "legendWindow": "Open for trial bookings",
+      "window": "Open for trial bookings",
+      "today": "Today",
+      "dayEmpty": "Nothing scheduled"
+    },
+    "home": {
+      "title": "Overview",
+      "openCalendar": "Open the calendar",
+      "attention": {
+        "heading": "Needs your attention",
+        "none": "You’re up to date: nothing needs your attention.",
+        "attendance": "Classes with attendance still to mark: {count}",
+        "attendanceLink": "Mark attendance",
+        "held": "Classes that have ended but aren’t marked held: {count}",
+        "heldLink": "Open the class",
+        "meeting": "Upcoming classes without a meeting link: {count}",
+        "meetingLink": "Add a link",
+        "messages": "Unread messages: {count}",
+        "messagesLink": "Read messages"
+      },
+      "today": "Today",
+      "todayLink": "All of today’s classes",
+      "todayNone": "No classes today.",
+      "nextAt": "Your next class: {when} —",
+      "nextNone": "No classes are scheduled in the next 62 days.",
+      "week": "Later this week",
+      "weekLink": "The whole week",
+      "weekNone": "Nothing else this week.",
+      "messages": "Messages",
+      "messagesLink": "All messages",
+      "messagesNone": "No unread messages.",
+      "unread": "{count} unread",
+      "learners": "Learners yet to begin",
+      "learnersLink": "All students",
+      "learnersNone": "Every learner on the first page of your students has begun.",
+      "learnersHelp": "Enrolled, with no lesson completed yet — from the first page of your students.",
+      "aside": "More for you",
+      "shortcuts": "Shortcuts",
+      "shortcut": {
+        "availability": "Offer availability",
+        "reports": "Attendance reports",
+        "resources": "Course materials",
+        "profile": "Your profile"
+      },
+      "unavailable": "This part can’t be shown right now."
+    },
+    "courseList": {
+      "format": {
+        "self-paced": "Self-paced",
+        "live": "Live classes"
+      },
+      "sectionsOf": "Sections of {title}"
+    },
+    "directory": {
+      "search": "Search by name",
+      "stage": "Progress",
+      "allStages": "Any progress",
+      "shown": "Showing {shown} of {total} learners on this page",
+      "noMatch": "No learner on this page matches. Clear the search or choose another progress.",
+      "enrolledOn": "Enrolled {date}"
+    },
+    "progress": {
+      "notStarted": "Not started",
+      "inProgress": "In progress",
+      "completed": "Completed"
     }
   },
   "learnLive": {
@@ -6316,7 +6945,6 @@
     "beyond": "There is nothing on this page. Go back to the first page.",
     "previous": "Previous",
     "next": "Next",
-    "pageOf": "Page {page} of {pages}",
     "surface": {
       "types": "Types and members",
       "applications": "Applications"
@@ -6655,7 +7283,6 @@
     "pending": "Saving…",
     "previous": "Previous",
     "next": "Next",
-    "pageOf": "Page {page} of {pages}",
     "beyond": "There is nothing on this page. Go back to the first page.",
     "failure": {
       "denied": "You don’t have permission to do that.",
@@ -6897,7 +7524,6 @@
     "pending": "Saving…",
     "previous": "Previous",
     "next": "Next",
-    "pageOf": "Page {page} of {pages}",
     "beyond": "There is nothing on this page. Go back to the first page.",
     "none": "None",
     "failure": {
@@ -6921,6 +7547,7 @@
       "duplicate": "A source with that key is already registered.",
       "leaseLost": "Another process took over this run while the work was in progress.",
       "hostRefused": "The database refused a host outside this source’s scope: a fixture host outside *.fixture.invalid, or a *.fixture.invalid host on an authorised source.",
+      "duplicateOpen": "A possible duplicate of this record is awaiting a person’s decision, so it was not approved with the list. Decide the pair first.",
       "reviewOnlyKind": "This is religious material that migration preserves and reviews as evidence only. Migration never publishes it, so it can’t be part of a manifest.",
       "unavailable": "This couldn’t be completed right now. Nothing was assumed; please try again later.",
       "noSession": "Your session has ended. Sign in again.",
@@ -7631,6 +8258,70 @@
       "unbalanced": "{count, plural, one {# equation doesn’t balance.} other {# equations don’t balance.}}",
       "noCounts": "No counts were recorded for this run."
     },
+    "runBatch": {
+      "approveLink": "Approve this run’s valid revisions",
+      "back": "Back to the run",
+      "refused": "Left as they were",
+      "remaining": "Still awaiting a decision",
+      "conflict": "The list changed after you read it. Read it again, then confirm.",
+      "interrupted": "The work stopped part-way because a service did not answer. What was decided before that stands; reload the page to see what remains.",
+      "approve": {
+        "title": "Approve a run’s valid revisions",
+        "intro": "Every pending revision of this run that is valid, free of personal data, of a kind migration may publish and not awaiting a duplicate decision. Read the whole list first: the approval below covers exactly this list, and each revision is approved and audited on its own, in your name.",
+        "countsHeading": "Pending revisions of this run",
+        "count": {
+          "pending": "Pending in all",
+          "candidates": "Offered for approval",
+          "invalid": "Not valid — never offered",
+          "flagged": "Flagged for personal data — never offered",
+          "cleared": "Cleared of personal data — approved one by one, by someone who cleared none of it",
+          "reviewOnly": "Review-only religious material — never offered",
+          "awaitingDuplicate": "Awaiting a duplicate decision — offered once a person decides the pair"
+        },
+        "allPending": "Every pending revision of this run",
+        "heading": "Revisions offered for approval",
+        "caption": "{total, plural, one {# revision offered} other {# revisions offered}}",
+        "none": "No revision of this run is offered for approval.",
+        "pages": "Pages of revisions offered",
+        "actHeading": "Approve this list",
+        "actHelp": "{count, plural, one {# revision is} other {# revisions are}} in the list above. Each confirmation approves the next {slice, plural, one {#} other {#}}; the list then shows what remains.",
+        "unreconciled": "This run is not completed and balanced, so nothing in it can be approved as a list.",
+        "note": "Note (optional)",
+        "confirm": "I have read every revision in this list ({count, plural, one {#} other {#}}) and approve them in my own name.",
+        "submit": "Approve the next {count, plural, one {# revision} other {# revisions}}",
+        "decided": "Approved",
+        "unknownItem": "A revision not on this page",
+        "done": "This part of the list was approved. The list now shows what remains.",
+        "partial": "Not every revision could be approved. Those left as they were are listed below with the reason."
+      },
+      "rights": {
+        "hostsHeading": "Pictures by registered host",
+        "hostsHelp": "Only the hosts this run’s source is registered with are listed. Each count is the restricted pictures on that host whose source states it owns them, with a public copy to look at.",
+        "role": {
+          "page": "page host",
+          "asset": "image host"
+        },
+        "awaiting": "{count, plural, =0 {none awaiting} one {# awaiting} other {# awaiting}}",
+        "readerNote": "Only someone who decides image rights sees these pictures.",
+        "gridHeading": "Pictures on {host}",
+        "gridCaption": "{total, plural, one {# picture awaits a decision.} other {# pictures await a decision.}} Look at every one before you confirm.",
+        "gridNone": "No picture on this host awaits a decision.",
+        "gridPages": "Pages of pictures on this host",
+        "thumbnailAlt": "Picture acquired from {url}",
+        "openOriginal": "Open on its official host",
+        "actHelp": "{count, plural, one {# picture is} other {# pictures are}} in this list. Each confirmation clears the next {slice, plural, one {#} other {#}} for release, each one decided and audited on its own.",
+        "confirm": "I have looked at every picture in this list ({count, plural, one {#} other {#}}) and checked its rights, and I clear them for release in my own name.",
+        "submit": "Clear the next {count, plural, one {# picture} other {# pictures}}",
+        "done": "This part of the list was cleared for release. The list now shows what remains."
+      },
+      "manifest": {
+        "heading": "Prepare a manifest from the whole run",
+        "help": "This run has {count, plural, one {# approved revision} other {# approved revisions}} that no manifest holds yet. The draft takes the next {next, plural, one {#} other {#}}; publishing it still needs a verified publisher on the manifest’s own page.",
+        "confirm": "Create a draft manifest over the next {next, plural, one {# revision} other {# revisions}}.",
+        "submit": "Create the draft manifest ({next, plural, one {# revision} other {# revisions}})",
+        "nextOfRun": "Prepare the next manifest of this run"
+      }
+    },
     "rights": {
       "title": "Image rights review",
       "intro": "The images this run acquired that are still restricted. Nothing is shown publicly until a person clears it here; each acquisition is decided and audited on its own.",
@@ -7733,13 +8424,210 @@
     }
   },
   "workspace": {
-    "skip": "Skip to content",
-    "my": {
-      "overview": "Overview",
-      "history": "History",
-      "settings": "Account settings",
-      "accountHeading": "Account and security",
-      "questionsBody": "Questions you have asked, with their status and any published answer."
+    "skip": "Skip to content"
+  },
+  "my": {
+    "nav": {
+      "menu": "Sections",
+      "close": "Close",
+      "group": {
+        "library": "Library",
+        "learning": "Learning"
+      },
+      "section": {
+        "home": "Home",
+        "saved": "Saved",
+        "notes": "Notes",
+        "collections": "Collections",
+        "history": "History",
+        "quran": "Quran reading",
+        "courses": "Courses",
+        "classes": "Classes",
+        "teachers": "Teachers",
+        "messages": "Messages",
+        "questions": "Questions",
+        "membership": "Membership",
+        "giving": "Giving",
+        "notifications": "Notifications",
+        "settings": "Settings"
+      }
+    },
+    "titles": {
+      "saved": "Saved",
+      "bookmarks": "Bookmarks",
+      "notes": "Notes",
+      "collections": "My collections",
+      "collection": "Collection",
+      "reading": "Reading history",
+      "watch": "Watch history",
+      "quran": "Quran reading position",
+      "courses": "My learning",
+      "progress": "Course progress",
+      "course": "Course",
+      "path": "Learning path",
+      "classes": "My classes",
+      "class": "Class",
+      "teachers": "My teachers",
+      "messages": "Messages",
+      "conversation": "Conversation",
+      "support": "Support",
+      "notifications": "Notifications",
+      "questions": "My questions",
+      "ask": "Ask a question",
+      "question": "Your question",
+      "membership": "My Membership",
+      "giving": "My donations",
+      "profile": "Profile",
+      "security": "Security",
+      "language": "Language and time zone",
+      "interests": "Interests and goals",
+      "notificationSettings": "Notification settings",
+      "privacy": "Privacy"
+    },
+    "tabs": {
+      "label": {
+        "saved": "Saved views",
+        "history": "History views",
+        "learning": "Learning views",
+        "settings": "Settings pages"
+      },
+      "saved": "All saved",
+      "bookmarks": "Bookmarks",
+      "reading": "Reading",
+      "watch": "Watching",
+      "courses": "My courses",
+      "progress": "Progress",
+      "profile": "Profile",
+      "security": "Security",
+      "language": "Language and time zone",
+      "interests": "Interests",
+      "notifications": "Notifications",
+      "privacy": "Privacy"
+    },
+    "home": {
+      "greeting": "As-salamu alaykum, {name}",
+      "intro": {
+        "new": "This is your own space on One Minhaj. Here is how to begin.",
+        "returning": "Pick up where you left off."
+      },
+      "failed": "Some parts of this page can’t be shown right now: {parts}. Everything else is up to date.",
+      "parts": {
+        "learning": "your courses",
+        "classes": "your classes",
+        "personal": "your saved items, history and notifications",
+        "messages": "your messages",
+        "questions": "your questions",
+        "membership": "your membership",
+        "giving": "your donations"
+      },
+      "start": {
+        "heading": "Make My Minhaj yours",
+        "intro": "A few small steps make this page your own. Each one is optional.",
+        "done": "Done",
+        "interests": {
+          "title": "Choose what interests you",
+          "body": "Pick the parts of Minhaj you care about, and this page will link straight to them.",
+          "action": "Choose interests"
+        },
+        "save": {
+          "title": "Save something to come back to",
+          "body": "Use “Save” on any book, article, video or ayah, and it will appear here.",
+          "action": "Explore the library"
+        },
+        "history": {
+          "title": "Remember where you stopped",
+          "body": "Turn on reading history to continue where you left off. Only you can see it.",
+          "action": "Privacy settings"
+        }
+      },
+      "continue": {
+        "heading": "Continue",
+        "course": "Course",
+        "quran": "Quran reading position",
+        "set": "Set {date}",
+        "read": "Read {date}",
+        "watched": "Watched {date}"
+      },
+      "upcoming": {
+        "heading": "Your next class",
+        "today": "Today",
+        "tomorrow": "Tomorrow"
+      },
+      "shelf": {
+        "previous": "Previous",
+        "next": "Next"
+      },
+      "interests": {
+        "change": "Change interests"
+      },
+      "messages": {
+        "unread": "{count} unread"
+      },
+      "questions": {
+        "count": "{count, plural, one {You have asked # question.} other {You have asked # questions.}}",
+        "latest": "Latest:"
+      },
+      "membership": {
+        "since": "Member since {date}"
+      },
+      "rail": "Waiting for you",
+      "account": {
+        "signedInAs": "Signed in as",
+        "settings": "Account settings"
+      }
+    },
+    "saved": {
+      "when": "Saved {date}",
+      "emptyTitle": "Nothing saved yet",
+      "explore": "Explore the library"
+    },
+    "notes": {
+      "emptyTitle": "No notes yet",
+      "changed": "Changed {date}"
+    },
+    "collections": {
+      "emptyTitle": "No collections yet",
+      "changed": "Changed {date}"
+    },
+    "history": {
+      "emptyTitle": "Nothing here yet",
+      "read": "Read {date}",
+      "watched": "Watched {date}",
+      "watchExplore": "Go to Watch"
+    },
+    "notifications": {
+      "emptyTitle": "You’re all caught up"
+    },
+    "learning": {
+      "enrolled": "Enrolled {date}"
+    },
+    "membership": {
+      "stepsLabel": "What happens when you apply",
+      "steps": {
+        "apply": {
+          "title": "You apply",
+          "body": "Your account and the type you choose are recorded. Nothing else is asked."
+        },
+        "review": {
+          "title": "It is reviewed",
+          "body": "An administrator considers your application. You can withdraw it while it is in progress."
+        },
+        "decision": {
+          "title": "You see the decision",
+          "body": "The outcome appears on this page."
+        }
+      }
+    },
+    "giving": {
+      "export": "Download your donation record"
+    },
+    "settings": {
+      "timeZone": {
+        "help": "Class times, messages and dates across My Minhaj are shown in this time zone.",
+        "search": "Search time zones, for example Karachi",
+        "device": "Use this device’s time zone",
+        "matches": "Matching time zones: {count}"
+      }
     }
   }
 }

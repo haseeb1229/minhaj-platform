@@ -12,7 +12,7 @@ import localFont from 'next/font/local';
  * CSP's `font-src 'self'` has to widen for. Google-hosted font loading is
  * forbidden by test (`tests/config/fonts.test.ts`): it fetches at build time.
  *
- * FOUR FAMILIES, EACH WITH ONE JOB (the type roles in ARCHITECTURE.md §13.3):
+ * FIVE FAMILIES, EACH WITH ONE JOB (the type roles in ARCHITECTURE.md §13.3):
  *
  *   display  Newsreader — headings and English long-form reading
  *            (@fontsource-variable/newsreader 5.3.0, Production Type, OFL)
@@ -22,16 +22,23 @@ import localFont from 'next/font/local';
  *            (@fontsource/gulzar 5.3.0, googlefonts/gulzar, OFL)
  *   naskh    Noto Naskh Arabic — Arabic, and dense Urdu interface text where
  *            Nastaliq is unsuitable (@fontsource/noto-naskh-arabic 5.3.0, OFL)
+ *   quran    Scheherazade New — Quran text alone (below)
  *
- * NO QURAN FACE. Quran text keeps its own specialised typography and no corpus
- * is active; a Quran display face arrives with an approved corpus and is never
- * used for ordinary Arabic interface text. Jameel Noori Nastaleeq is not
- * shipped: its licence is unclear.
+ * ONE QURAN FACE, FOR QURAN TEXT ONLY (Rebaseline R2, the staging reference
+ * preview). Scheherazade New 4.500 — SIL Global's own release, the unmodified
+ * `web/ScheherazadeNew-Regular.woff2` from the release archive (OFL, Reserved
+ * Font Names "Scheherazade" and "SIL"; SHA-256 in TECH_STACK.md §18.9). It
+ * renders the Tanzil Uthmani text without the character rewriting a
+ * font-specific Quran face would need, so the stored text is shown exactly as
+ * stored. It applies only through `.quran-text` (the canonical Arabic of an
+ * Ayah), never to interface Arabic. Jameel Noori Nastaleeq is not shipped: its
+ * licence is unclear.
  *
  * LOADING. The two Latin faces are preloaded — every page renders them — with
  * metric-adjusted fallbacks so the swap does not move the layout. The Arabic-
  * script faces are NOT preloaded: an English page loads them only if it shows
- * Urdu or Arabic text, which the browser discovers itself.
+ * Urdu or Arabic text, which the browser discovers itself — and the Quran face
+ * only where Quran text is on the page.
  */
 
 export const displayFace = localFont({
@@ -86,10 +93,21 @@ export const naskhFace = localFont({
   adjustFontFallback: false,
 });
 
-/** The class names that define all four `--font-face-*` variables, for `<html>`. */
+export const quranFace = localFont({
+  src: './fonts/scheherazade-new/ScheherazadeNew-Regular.woff2',
+  weight: '400',
+  style: 'normal',
+  variable: '--font-face-quran',
+  display: 'swap',
+  preload: false,
+  adjustFontFallback: false,
+});
+
+/** The class names that define all five `--font-face-*` variables, for `<html>`. */
 export const FONT_VARIABLES = [
   displayFace.variable,
   uiFace.variable,
   urduFace.variable,
   naskhFace.variable,
+  quranFace.variable,
 ].join(' ');

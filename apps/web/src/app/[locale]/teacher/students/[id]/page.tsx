@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
@@ -26,6 +27,7 @@ import {
   SectionHeading,
   TextLink,
 } from '@/components/ui';
+import { teacherPageMetadata } from '@/components/teacher/metadata';
 import { learningRuntime } from '@/composition/learning';
 import { messagingRuntime } from '@/composition/messaging';
 import { requireLocale } from '@/config/route-locale';
@@ -49,7 +51,13 @@ import { startTeacherConversationAction } from '../../messages/actions';
  * teacher–student messaging is activated; the Messaging service re-decides
  * the relationship when it is pressed.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return teacherPageMetadata(params, 'student');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';

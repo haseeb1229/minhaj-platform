@@ -149,6 +149,19 @@ test.describe('the privileged administrator', () => {
     await page.goto('/admin');
     await expect(page.getByRole('main')).toContainText('Accounts');
 
+    // R2 (audit F28): the dashboard opens on its work — and says how the
+    // platform stands — before listing the areas.
+    await expect(page.getByRole('heading', { name: 'Platform status' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Recent activity' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'All areas' })).toBeVisible();
+
+    // R2 (audit F30): an area's root address opens its first surface
+    // instead of a 404.
+    await page.goto('/admin/identity');
+    await expect(page).toHaveURL(/\/admin\/identity\/users$/);
+    await page.goto('/admin/system');
+    await expect(page).toHaveURL(/\/admin\/system\/navigation$/);
+
     await page.goto('/admin/identity/permissions');
     await expect(page.getByRole('main')).toContainText('permissions.grant');
     await expect(page.getByRole('main')).toContainText('Read-only');
@@ -224,9 +237,9 @@ test.describe('the privileged administrator', () => {
     await expect(rowAt('/explore')).toContainText('Always promoted');
     // Only fixture corpora exist during a run, so the Quran is never promoted.
     await expect(rowAt('/quran')).toContainText('Waits for published quran');
-    await expect(rowAt('/contact')).toContainText(
-      'Not promoted — reachable by its address',
-    );
+    // R2: Contact is linked once its own organisational Page is published
+    // (no Pages are published during a run).
+    await expect(rowAt('/contact')).toContainText('Waits for its page to be published');
     await expect(rowAt('/donate')).toContainText(
       /Waits for published giving|Promoted now \(giving is published\)/,
     );
@@ -373,10 +386,10 @@ test.describe('a privileged mutation, end to end', () => {
 
     // WITH a step-up: accepted. TWO SEPARATE ROUND TRIPS — proving who you are
     // and making the change are different requests, and the second one checks
-    // the permission, the posture and the grant again on the server.
+    // the permission, the posture and the grant again on the server. Since R2
+    // (audit F35) the refused submission is HELD and sent again by the page as
+    // soon as the grant is earned, so the person does not retype the role.
     await stepUp(page);
-    await fillNewRole();
-    await page.getByRole('button', { name: ADMIN.createRole }).click();
     await expect(announced(page, 'role was created')).toBeVisible();
 
     // Grant it, and watch the other person's session end.

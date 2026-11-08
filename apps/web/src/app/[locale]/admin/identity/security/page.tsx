@@ -13,6 +13,7 @@ import {
   StatusBadge,
   TextLink,
 } from '@/components/ui';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * Identity security — READ-ONLY, and structurally so.
@@ -36,7 +37,7 @@ import {
  * bootstrapped administrator discovers what is missing; gating it on what it
  * reports would be circular.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('admin', 'security.title');
 export const dynamic = 'force-dynamic';
 
 export default async function IdentitySecurityPage({

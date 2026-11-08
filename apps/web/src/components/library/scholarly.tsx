@@ -23,24 +23,29 @@ import { directionOf } from '@/config/locale';
 import {
   Alert,
   Button,
-  CardGrid,
+  Cover,
   DetailRow,
   EmptyState,
   Field,
-  LinkCard,
-  MetaRow,
+  Icon,
+  ListRow,
   Select,
   TextInput,
   TextLink,
   TopicChips,
 } from '@/components/ui';
+import { Shelf } from '@/components/ui/shelf';
+import { contentLanguageBadge } from '@/components/content-language';
 import { isContentIndexable, serializeStructuredData } from '@/seo/metadata';
-import { CoverCard, CoverImage, issueCoverPath } from './cover';
+import { issueNumbering, PeriodicalCard } from './cards';
+import { issueCoverPath } from './cover';
 import { FilterPanel, ListingFrame, Pager, RecordFrame, RecordSection } from './frame';
 import { Reader } from './reader';
 import {
   doiHref,
   issuePath,
+  issuesByYear,
+  listingHref,
   paragraphsOf,
   readScholarlyQuery,
   scholarlyLabel,
@@ -99,111 +104,63 @@ function formatDate(value: string, locale: Locale): string {
   );
 }
 
-/** "Volume 3, issue 2" — only the numbers the issue genuinely has. */
-export function issueNumbering(
-  t: LibraryTranslator,
-  volume: number | null,
-  issueNumber: number | null,
-): string | null {
-  if (volume !== null && issueNumber !== null)
-    return t('scholarly.numbering.both', { volume, number: issueNumber });
-  if (volume !== null) return t('scholarly.numbering.volume', { volume });
-  if (issueNumber !== null)
-    return t('scholarly.numbering.number', { number: issueNumber });
-  return null;
-}
-
-/** The address of one listing row. */
-export function listingHref(locale: Locale, row: ListingRow): string {
-  return row.kind === 'magazine-issue' && row.issue !== null
-    ? issuePath(locale, row.issue.magazineSlug, row.slug)
-    : scholarlyPath(locale, row.kind as StandaloneScholarlyKind, row.slug);
-}
+/** Shared with the admin and the cross-domain related lists, which import them from here. */
+export { issueNumbering } from './cards';
+export { listingHref } from './scholarly-presentation';
 
 /* ===========================================================================
  * Listing
  * ========================================================================= */
 
 /**
- * One listing row, as one whole-card link. Title and summary in their own
- * language and direction, and the facts that distinguish one record from the
- * next — content language, year, and for an issue its numbering — each only
- * when genuinely known, in a metadata row of interface text.
+ * One listing row (R2): a periodical by its cover, anything else as a row of
+ * words under a hairline — title and summary in their own language and
+ * direction, then the facts that tell one record from the next (year, and the
+ * content language when it is not the interface's), each only when known.
  */
 function ScholarlyCard({
   locale,
   row,
-  languages,
   t,
   headingLevel = 'h2',
 }: {
   readonly locale: Locale;
   readonly row: ListingRow;
-  readonly languages: ReadonlyMap<string, ContentLanguage>;
   readonly t: LibraryTranslator;
   readonly headingLevel?: 'h2' | 'h3';
 }) {
+  if (row.kind === 'magazine' || row.kind === 'magazine-issue')
+    return (
+      <PeriodicalCard
+        locale={locale}
+        row={row}
+        t={t}
+        headingLevel={headingLevel}
+        sizes="(min-width: 64rem) 12rem, 45vw"
+      />
+    );
+
   const label = scholarlyLabel(row, locale);
-  const language = row.languageCode === null ? null : languages.get(row.languageCode);
-  const numbering =
-    row.issue === null
-      ? null
-      : issueNumbering(t, row.issue.volume, row.issue.issueNumber);
+  const language =
+    row.languageCode === null
+      ? undefined
+      : contentLanguageBadge(row.languageCode, locale);
   const date =
     row.publishedOn === null
       ? row.publicationYear === null
         ? null
         : String(row.publicationYear)
       : formatDate(row.publishedOn, locale);
-  const meta = (
-    <MetaRow
-      items={[
-        numbering,
-        date,
-        row.languageCode === null ? null : (
-          <span lang={row.languageCode} dir={language?.direction ?? 'auto'}>
-            {language?.name ?? row.languageCode}
-          </span>
-        ),
-      ]}
-    />
-  );
-
-  // Phase 30-R: an issue is shown by its own cover, a Magazine by its newest
-  // public issue's; a record with neither keeps the text-first card.
-  const cover =
-    row.issue !== null && row.issue.cover !== null
-      ? { issueId: row.id, cover: row.issue.cover }
-      : row.latestCover;
-  if (cover !== null)
-    return (
-      <CoverCard
-        href={listingHref(locale, row)}
-        title={label.title}
-        description={label.summary}
-        headingLevel={headingLevel}
-        lang={label.locale}
-        dir={directionOf(label.locale)}
-        meta={meta}
-        cover={
-          <CoverImage
-            path={issueCoverPath(cover.issueId, cover.cover.assetId)}
-            cover={cover.cover}
-            alt=""
-          />
-        }
-      />
-    );
-
   return (
-    <LinkCard
+    <ListRow
       href={listingHref(locale, row)}
       title={label.title}
       description={label.summary}
       headingLevel={headingLevel}
       lang={label.locale}
       dir={directionOf(label.locale)}
-      meta={meta}
+      meta={[date]}
+      {...(language === undefined ? {} : { language })}
     />
   );
 }
@@ -237,10 +194,14 @@ export async function ScholarlyListing({
   const dated = kind !== 'magazine';
   const base = scholarlyListPath(locale, kind);
 
-  const [page, languages, topics] = await Promise.all([
+  const [page, languages, topics, latestIssues] = await Promise.all([
     libraryReadRuntime().scholarlyList(kind, filters),
     libraryContentLanguages(),
     taxonomyRuntime().taxonomy.listTree({ locale, includeArchived: false }),
+    // The magazines' front page opens on their newest issues across every title.
+    kind === 'magazine' && filters.topic === null && filters.offset === 0
+      ? libraryReadRuntime().scholarlyList('magazine-issue', {})
+      : Promise.resolve(null),
   ]);
 
   const filtered =
@@ -260,6 +221,25 @@ export async function ScholarlyListing({
       title={title}
       lede={sectionBody(t, kind)}
     >
+      {latestIssues === null || latestIssues.items.length === 0 ? null : (
+        <section aria-labelledby="latest-issues">
+          <Shelf
+            label={t('landing.latestIssues')}
+            size="cover"
+            previousLabel={t('landing.showPrevious')}
+            nextLabel={t('landing.showNext')}
+            header={
+              <h2 id="latest-issues" className="text-heading font-semibold">
+                {t('landing.latestIssues')}
+              </h2>
+            }
+          >
+            {latestIssues.items.slice(0, 12).map((row) => (
+              <PeriodicalCard key={row.id} locale={locale} row={row} t={t} />
+            ))}
+          </Shelf>
+        </section>
+      )}
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-10">
         <div className="min-w-0">
           <FilterPanel id="scholarly-filters" heading={t('scholarly.filters')}>
@@ -353,17 +333,18 @@ export async function ScholarlyListing({
               )}
             </EmptyState>
           ) : (
-            <CardGrid label={title} columns={2}>
+            <ul
+              aria-label={title}
+              className={
+                kind === 'magazine'
+                  ? 'grid list-none grid-cols-2 gap-x-4 gap-y-8 p-0 sm:grid-cols-3 xl:grid-cols-4'
+                  : 'm-0 list-none border-t border-border p-0'
+              }
+            >
               {page.items.map((row) => (
-                <ScholarlyCard
-                  key={row.id}
-                  locale={locale}
-                  row={row}
-                  languages={languages}
-                  t={t}
-                />
+                <ScholarlyCard key={row.id} locale={locale} row={row} t={t} />
               ))}
-            </CardGrid>
+            </ul>
           )}
 
           <Pager
@@ -738,19 +719,24 @@ export async function ScholarlyDetail({
       dir={directionOf(label.locale)}
       summary={paragraphsOf(label.summary)}
       notice={t('scholarly.metadataNotice')}
+      // An issue opens on its own cover, described, at Library's address.
+      {...(record.kind === 'magazine-issue' && record.cover !== null
+        ? {
+            cover: (
+              <Cover
+                path={issueCoverPath(record.id, record.cover.assetId)}
+                width={record.cover.width}
+                height={record.cover.height}
+                alt={t('coverAlt', { title: label.title })}
+                shape="magazine"
+                priority
+                sizes="12rem"
+              />
+            ),
+          }
+        : {})}
       aside={
         <>
-          {/* Phase 30-R: an issue's own cover, described, at Library's address. */}
-          {record.kind === 'magazine-issue' && record.cover !== null ? (
-            <div className="mx-auto w-48 max-w-full lg:mx-0 lg:w-full">
-              <CoverImage
-                path={issueCoverPath(record.id, record.cover.assetId)}
-                cover={record.cover}
-                alt={t('coverAlt', { title: label.title })}
-                priority
-              />
-            </div>
-          ) : null}
           <RecordSection id="scholarly-facts" heading={t('scholarly.facts')}>
             <dl className="flex flex-col divide-y divide-border rounded-panel border border-border bg-surface-raised px-4 py-1">
               {record.kind === 'magazine-issue' && magazineLabel !== null ? (
@@ -922,15 +908,19 @@ function IssueNeighbour({
     >
       <span className="text-caption font-semibold text-accent">
         {direction === 'previous' ? (
-          <span aria-hidden="true" className="me-1 inline-block rtl:-scale-x-100">
-            ←
-          </span>
+          <Icon
+            name="arrow-start"
+            size={16}
+            className="me-1 inline-block align-[-0.15em]"
+          />
         ) : null}
         {label}
         {direction === 'next' ? (
-          <span aria-hidden="true" className="ms-1 inline-block rtl:-scale-x-100">
-            →
-          </span>
+          <Icon
+            name="arrow-end"
+            size={16}
+            className="ms-1 inline-block align-[-0.15em]"
+          />
         ) : null}
         <span className="sr-only">: </span>
       </span>
@@ -958,8 +948,10 @@ function pageOf(path: string, offset: number): string {
  * `/{locale}/library/magazines/{slug}` — the periodical and its issues.
  *
  * THE ISSUES ARE THE PAGE. Newest first by year, date, volume and number, with a
- * total tie-breaker, in bounded pages. A Magazine with no published issue says so
- * plainly: an honest empty state, never an invented issue list.
+ * total tie-breaker, in bounded pages — and grouped under their year, each as
+ * its cover (R2, audit F14). The page opens on the newest issue's cover. A
+ * Magazine with no published issue says so plainly: an honest empty state,
+ * never an invented issue list.
  */
 export async function MagazineDetail({
   locale,
@@ -974,9 +966,8 @@ export async function MagazineDetail({
   const shell = await getTranslations({ locale, namespace: 'shell' });
   const offset = readScholarlyQuery(query).offset;
 
-  const [issues, languages, references] = await Promise.all([
+  const [issues, references] = await Promise.all([
     libraryReadRuntime().magazineIssues(record.id, offset),
-    libraryContentLanguages(),
     libraryReferenceNames(
       {
         personIds: record.contributors.map((entry) => entry.personId),
@@ -995,6 +986,9 @@ export async function MagazineDetail({
     { name: label.title, path },
   ];
 
+  const newest = offset === 0 ? (issues.items[0] ?? null) : null;
+  const newestCover = newest?.issue?.cover ?? null;
+
   // The aside is only drawn when it has something to hold.
   const hasAside =
     contributorRows(record, references.people).length > 0 ||
@@ -1010,6 +1004,22 @@ export async function MagazineDetail({
       dir={directionOf(label.locale)}
       summary={paragraphsOf(label.summary)}
       notice={t('scholarly.metadataNotice')}
+      {...(newest === null || newestCover === null
+        ? {}
+        : {
+            // The periodical as it looks now: its newest issue's cover.
+            cover: (
+              <Cover
+                path={issueCoverPath(newest.id, newestCover.assetId)}
+                width={newestCover.width}
+                height={newestCover.height}
+                alt=""
+                shape="magazine"
+                priority
+                sizes="12rem"
+              />
+            ),
+          })}
       {...(hasAside
         ? {
             aside: (
@@ -1041,18 +1051,35 @@ export async function MagazineDetail({
         {issues.items.length === 0 ? (
           <EmptyState>{t('scholarly.noIssues')}</EmptyState>
         ) : (
-          <CardGrid label={t('scholarly.issues')} columns={hasAside ? 2 : 3}>
-            {issues.items.map((row) => (
-              <ScholarlyCard
-                key={row.id}
-                locale={locale}
-                row={row}
-                languages={languages}
-                t={t}
-                headingLevel="h3"
-              />
-            ))}
-          </CardGrid>
+          issuesByYear(issues.items).map((group) => {
+            const id = `issues-${group.year === null ? 'undated' : String(group.year)}`;
+            return (
+              <section key={id} aria-labelledby={id} className="flex flex-col gap-4">
+                <h3 id={id} className="text-subheading font-semibold tabular-nums">
+                  {group.year === null
+                    ? t('scholarly.undated')
+                    : new Intl.NumberFormat(locale, { useGrouping: false }).format(
+                        group.year,
+                      )}
+                </h3>
+                <ul
+                  aria-labelledby={id}
+                  className={`grid list-none grid-cols-2 gap-x-4 gap-y-8 p-0 sm:grid-cols-3 ${hasAside ? 'xl:grid-cols-4' : 'lg:grid-cols-4 xl:grid-cols-5'}`}
+                >
+                  {group.issues.map((row) => (
+                    <PeriodicalCard
+                      key={row.id}
+                      locale={locale}
+                      row={row}
+                      t={t}
+                      headingLevel="h4"
+                      sizes="(min-width: 64rem) 11rem, 45vw"
+                    />
+                  ))}
+                </ul>
+              </section>
+            );
+          })
         )}
         <Pager
           label={t('scholarly.issues')}

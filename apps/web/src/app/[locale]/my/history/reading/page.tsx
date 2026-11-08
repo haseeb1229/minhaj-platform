@@ -1,26 +1,23 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { PERSONAL_LIMITS, targetKey } from '@minhaj/contracts/personalisation';
 
 import { pageLinks } from '@/components/hadith/presentation';
-import { Pagination } from '@/components/media/parts';
-import { historyLinks } from '@/components/personal/nav';
-import {
-  KindBadge,
-  PersonalFrame,
-  PersonalLinks,
-  PersonalTime,
-  TargetTitle,
-  refusalMessages,
-} from '@/components/personal/parts';
+import { MyPage } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
+import { myTabs } from '@/components/my/sections';
+import { TargetItem } from '@/components/my/targets';
+import { shortDate } from '@/components/my/time';
+import { refusalMessages } from '@/components/personal/parts';
 import {
   encodeTarget,
   personalOffsetHref,
   readPersonalOffset,
 } from '@/components/personal/presentation';
 import { personalRead } from '@/components/personal/read';
-import { Alert, EmptyState, Panel } from '@/components/ui';
+import { Alert, EmptyState, Pager } from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
 import { resolvePersonalTargets } from '@/composition/personal-targets';
 import { requireLocale } from '@/config/route-locale';
@@ -37,7 +34,13 @@ import { ClearHistory, HistoryOffNotice } from '../shared';
  * read, kept only for the person themselves — and every entry, or all of them,
  * can be removed here.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'reading');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -53,19 +56,23 @@ export default async function ReadingHistoryPage({
   const path = localizedPath(locale, '/my/history/reading');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'personal' });
+  const my = await getTranslations({ locale, namespace: 'my' });
   const actor = { accountId: session.account.id };
   const offset = readPersonalOffset(await searchParams);
   const { history, settings } = personalisationRuntime();
   const read = await personalRead('personal-reading-history', () =>
     Promise.all([settings.settings(actor), history.reading(actor, offset)]),
   );
-  const back = <PersonalLinks label={t('nav.label')} links={historyLinks(locale, t)} />;
+  const tabs = {
+    label: my('tabs.label.history'),
+    items: myTabs(locale, 'history', 'reading', (key) => my(`tabs.${key}`)),
+  };
 
   if (!read.ok)
     return (
-      <PersonalFrame title={t('history.readingTitle')} back={back}>
+      <MyPage title={t('history.readingTitle')} tabs={tabs}>
         <Alert tone="error">{t('failure.load')}</Alert>
-      </PersonalFrame>
+      </MyPage>
     );
 
   const [current, page] = read.value;
@@ -74,38 +81,52 @@ export default async function ReadingHistoryPage({
     locale,
   );
   const links = pageLinks(page.offset, PERSONAL_LIMITS.page, page.total);
+  const timeZone = session.account.timezone;
 
   return (
-    <PersonalFrame
+    <MyPage
       title={t('history.readingTitle')}
       description={<p>{t('history.readingDescription')}</p>}
-      back={back}
+      tabs={tabs}
     >
       {current.historyEnabled ? null : <HistoryOffNotice locale={locale} t={t} />}
 
       {page.items.length === 0 ? (
-        <EmptyState>
-          {page.total === 0 ? t('history.readingEmpty') : t('list.beyond')}
-        </EmptyState>
+        page.total === 0 ? (
+          <EmptyState
+            icon="book"
+            title={my('history.emptyTitle')}
+            action={{
+              href: localizedPath(locale, '/library'),
+              text: my('saved.explore'),
+            }}
+          >
+            {t('history.readingEmpty')}
+          </EmptyState>
+        ) : (
+          <EmptyState>{t('list.beyond')}</EmptyState>
+        )
       ) : (
-        <ol aria-label={t('history.readingList')} className="flex flex-col gap-3">
+        <ol
+          aria-label={t('history.readingList')}
+          className="flex flex-col border-t border-border"
+        >
           {page.items.map((entry) => (
-            <Panel key={targetKey(entry.target)} as="li">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex min-w-0 flex-col gap-2">
-                  <TargetTitle resolved={titles.get(targetKey(entry.target))} t={t} />
-                  <div className="flex flex-wrap items-center gap-3 text-sm text-foreground-muted">
-                    <KindBadge kind={entry.target.kind} t={t} />
-                    <span>
-                      {t('history.lastRead')}{' '}
-                      <PersonalTime
-                        value={entry.lastReadAt}
-                        locale={locale}
-                        timeZone={session.account.timezone}
-                      />
-                    </span>
-                  </div>
-                </div>
+            <TargetItem
+              key={targetKey(entry.target)}
+              kind={entry.target.kind}
+              resolved={titles.get(targetKey(entry.target))}
+              words={{
+                kind: (kind) => t(`kinds.${kind}`),
+                unavailable: t('target.unavailable'),
+                unknown: t('target.unknown'),
+              }}
+              meta={[
+                my('history.read', {
+                  date: shortDate(new Date(entry.lastReadAt), locale, timeZone),
+                }),
+              ]}
+              actions={
                 <ActionForm
                   action={removeReadAction}
                   submitLabel={t('history.remove')}
@@ -116,13 +137,13 @@ export default async function ReadingHistoryPage({
                   <input type="hidden" name="locale" value={locale} />
                   <input type="hidden" name="target" value={encodeTarget(entry.target)} />
                 </ActionForm>
-              </div>
-            </Panel>
+              }
+            />
           ))}
         </ol>
       )}
 
-      <Pagination
+      <Pager
         label={t('history.readingList')}
         previous={
           links.previous === null ? null : personalOffsetHref(path, links.previous)
@@ -133,6 +154,6 @@ export default async function ReadingHistoryPage({
       />
 
       {page.total === 0 ? null : <ClearHistory locale={locale} t={t} />}
-    </PersonalFrame>
+    </MyPage>
   );
 }

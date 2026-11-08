@@ -1,8 +1,8 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 
-import { learningLinks } from '@/components/my-learning/nav';
 import {
   LearningTitle,
   ProgressStatus,
@@ -15,9 +15,11 @@ import {
   selectedLesson,
 } from '@/components/my-learning/presentation';
 import { learningRead } from '@/components/my-learning/read';
-import { ConfirmField, PersonalFrame, PersonalLinks } from '@/components/personal/parts';
+import { ConfirmField } from '@/components/personal/parts';
 import { Alert, Panel, SectionHeading, TextLink } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
+import { MyPage } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../../(identity)/form-state';
 import { requireActiveSession } from '../../../guard';
@@ -40,7 +42,13 @@ import { completeLessonAction, leaveCourseAction } from '../../actions';
  * catalogue shows an honest notice and no syllabus — a draft's outline may be
  * mid-edit — and the person's progress on it is kept.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'course');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -65,16 +73,15 @@ export default async function MyCoursePage({
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myLearning' });
   const actor = { accountId: session.account.id };
-  const back = <PersonalLinks label={t('nav.label')} links={learningLinks(locale, t)} />;
 
   const read = await learningRead('learning-my-course', () =>
     learningRuntime().learner.course(actor, slug),
   );
   if (!read.ok)
     return (
-      <PersonalFrame title={t('course.fallbackTitle')} back={back}>
+      <MyPage title={t('course.fallbackTitle')}>
         <Alert tone="error">{t('failure.load')}</Alert>
-      </PersonalFrame>
+      </MyPage>
     );
   if (read.value === null) notFound();
 
@@ -100,7 +107,7 @@ export default async function MyCoursePage({
   const next = position === -1 ? undefined : lessons[position + 1];
 
   return (
-    <PersonalFrame
+    <MyPage
       title={
         <span lang={label?.locale} dir="auto" className="wrap-anywhere">
           {label?.title}
@@ -130,7 +137,6 @@ export default async function MyCoursePage({
           </p>
         </>
       }
-      back={back}
     >
       {available ? null : <Alert tone="info">{t('course.unavailable')}</Alert>}
 
@@ -281,6 +287,6 @@ export default async function MyCoursePage({
           </ActionForm>
         </div>
       </section>
-    </PersonalFrame>
+    </MyPage>
   );
 }

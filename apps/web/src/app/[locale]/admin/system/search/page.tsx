@@ -22,6 +22,7 @@ import {
   reconcileSearchIndexAction,
   retrySearchIndexingAction,
 } from './actions';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/admin/system/search` — indexing lag and failures (ROUTE_MAP.md §5.1, §7;
@@ -36,7 +37,7 @@ import {
  * NOT A JOB DASHBOARD. It shows one thing — whether the derived index is keeping
  * up with its owners — and offers the three operations that repair it.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('admin', 'search.title');
 export const dynamic = 'force-dynamic';
 
 export default async function SearchOperationsPage({
@@ -181,6 +182,12 @@ export default async function SearchOperationsPage({
                 pendingLabel={t('common.pending')}
                 tone="secondary"
                 messages={{ ...copy.messages, success: t('search.rebuilt') }}
+                confirm={{
+                  title: t('confirm.rebuild.title'),
+                  body: t('confirm.rebuild.body'),
+                  confirmLabel: t('confirm.rebuild.confirm'),
+                  cancelLabel: t('confirm.cancel'),
+                }}
               >
                 <input type="hidden" name="locale" value={locale} />
               </ActionForm>

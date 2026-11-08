@@ -20,9 +20,9 @@ import {
   StatusBadge,
   TextArea,
   TextInput,
-  TextLink,
 } from '@/components/ui';
 import { ActionForm, type FormActionState } from '../../(identity)/form-state';
+import { AdminPager } from '../pager';
 import { pageOffset, queryValue } from '../shared';
 
 /**
@@ -86,6 +86,7 @@ export async function learningCopy(locale: Locale) {
       'ambiguous-time': t('failure.ambiguousTime'),
       'invalid-meeting': t('failure.invalidMeeting'),
       'not-participant': t('failure.notParticipant'),
+      'not-started': t('failure.notStarted'),
       'has-classes': t('failure.hasClasses'),
       unavailable: t('unknown'),
       unknown: t('unknown'),
@@ -157,15 +158,16 @@ export function Pager({
   readonly label: string;
   readonly copy: Copy;
 }) {
-  if (offset === 0 && !hasMore) return null;
-  const current = offset / LEARNING_PAGE + 1;
   return (
-    <nav className="flex gap-6" aria-label={label}>
-      {offset > 0 ? (
-        <TextLink href={hrefFor(current - 1)}>{copy.t('previous')}</TextLink>
-      ) : null}
-      {hasMore ? <TextLink href={hrefFor(current + 1)}>{copy.t('next')}</TextLink> : null}
-    </nav>
+    <AdminPager
+      label={label}
+      offset={offset}
+      pageSize={LEARNING_PAGE}
+      more={hasMore}
+      href={hrefFor}
+      previousLabel={copy.t('previous')}
+      nextLabel={copy.t('next')}
+    />
   );
 }
 

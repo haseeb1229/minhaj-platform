@@ -253,10 +253,31 @@ async function tabTo(page: Page, target: Locator): Promise<void> {
 }
 
 /** Horizontal overflow of the document, in CSS pixels (≤ 0 means none). */
-function overflowOf(page: Page): Promise<number> {
-  return page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
+/** Horizontal overflow, naming the innermost elements beyond the viewport. */
+async function overflowOf(
+  page: Page,
+): Promise<{ overflow: number; offenders: string[] }> {
+  return page.evaluate(() => {
+    const root = document.documentElement;
+    const overflow = root.scrollWidth - root.clientWidth;
+    if (overflow <= 0) return { overflow, offenders: [] };
+    const beyond = [...document.body.querySelectorAll('*')].filter((element) => {
+      const box = element.getBoundingClientRect();
+      return box.width > 0 && (box.right > root.clientWidth + 0.5 || box.left < -0.5);
+    });
+    const innermost = beyond.filter(
+      (element) => !beyond.some((other) => other !== element && element.contains(other)),
+    );
+    return {
+      overflow,
+      offenders: innermost
+        .slice(0, 5)
+        .map(
+          (element) =>
+            `${element.tagName.toLowerCase()}.${[...element.classList].join('.')} ${String(Math.round(element.getBoundingClientRect().width))}px`,
+        ),
+    };
+  });
 }
 
 /* ===========================================================================
@@ -662,9 +683,10 @@ test.describe('a fixture corpus', () => {
         `/ar/quran/surah/1/1?translation=${slug.translation}`,
       ]) {
         await page.goto(target);
+        const { overflow, offenders } = await overflowOf(page);
         expect(
-          await overflowOf(page),
-          `${String(width)}px ${target}`,
+          overflow,
+          `${String(width)}px ${target} — beyond the viewport: ${offenders.join(', ')}`,
         ).toBeLessThanOrEqual(0);
       }
     }
@@ -691,6 +713,69 @@ test.describe('a fixture corpus', () => {
       for (const part of style.transition.split(', '))
         expect(Number.parseFloat(part), style.transition).toBe(0);
     }
+  });
+
+  test('R2 reader: quick jump, a presentational end mark, settings kept in this browser, and Copy carries the exact Arabic', async ({
+    page,
+    request,
+  }) => {
+    // The quick jump without script: the GET form's server path redirects to
+    // an address built from confirmed numbers, and says so when nothing matches.
+    const jump = await request.get('/quran/read?q=2:3', { maxRedirects: 0 });
+    expect(jump.status()).toBeGreaterThanOrEqual(300);
+    expect(jump.status()).toBeLessThan(400);
+    expect(new URL(jump.headers()['location'] ?? '', baseUrl()).pathname).toBe(
+      '/quran/surah/2/3',
+    );
+    for (const missing of ['2:99', '9', 'zzzz', 'https://example.invalid/']) {
+      const response = await request.get(`/quran/read?q=${encodeURIComponent(missing)}`, {
+        maxRedirects: 0,
+      });
+      expect(response.status(), missing).toBe(200);
+    }
+
+    // …and with script, from the landing, straight to the citation.
+    await visitFixture(page, '/quran');
+    await page.getByLabel('Go to a Surah, Ayah or Juz').fill('1:2');
+    await page.keyboard.press('Enter');
+    await page.waitForURL(/\/quran\/surah\/1\/2$/);
+
+    // The end-of-Ayah mark is a separate, hidden element: the Arabic text node
+    // is still exactly the stored text.
+    await visitFixture(page, '/quran/surah/1');
+    const article = page.getByRole('article', { name: 'Surah 1, Ayah 2' });
+    await expect(article.locator('p[lang="ar"]')).toHaveText(canonicalText(1, 2));
+    await expect(article.locator('.quran-ayah-end')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
+    // The default translation for an English interface is shown without asking.
+    await expect(article.locator('[data-translation-language="en"]')).toBeVisible();
+
+    // Settings: no translation, kept across a reload in this browser only.
+    await page.getByRole('button', { name: 'Settings' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Reading settings' });
+    await expect(sheet).toBeVisible();
+    await sheet.locator('input[type="radio"][value="none"]').check();
+    await expect(article.locator('[data-translation-language="en"]')).toBeHidden();
+    await page.keyboard.press('Escape');
+    await page.reload();
+    await expect(
+      page
+        .getByRole('article', { name: 'Surah 1, Ayah 2' })
+        .locator('[data-translation-language="en"]'),
+    ).toBeHidden();
+
+    // Copy: the clipboard begins with the stored Arabic, byte for byte.
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page
+      .getByRole('article', { name: 'Surah 1, Ayah 2' })
+      .getByRole('button', { name: 'Copy with citation' })
+      .click();
+    await expect(page.getByText('Copied with its citation.')).toBeVisible();
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied.startsWith(canonicalText(1, 2))).toBe(true);
+    expect(copied).toContain('1:2');
   });
 
   test('a Juz lists its ayat, each linking to its citation', async ({ page }) => {
@@ -902,9 +987,15 @@ test.describe('a reader’s own reading position', () => {
   ).personalIsland;
   const PROGRESS = (
     JSON.parse(readFileSync(path.join(MESSAGES, 'en.json'), 'utf8')) as {
-      personal: { progress: Record<string, string>; home: Record<string, string> };
+      personal: { progress: Record<string, string> };
     }
   ).personal;
+  /** R2: the My Minhaj home page's "Continue" module heading. */
+  const CONTINUE = (
+    JSON.parse(readFileSync(path.join(MESSAGES, 'en.json'), 'utf8')) as {
+      my: { home: { continue: { heading: string } } };
+    }
+  ).my.home.continue.heading;
 
   const AYAH = '/quran/surah/2/3';
   let reader: Page;
@@ -999,12 +1090,12 @@ test.describe('a reader’s own reading position', () => {
     await expect(
       reader.getByRole('link', { name: PROGRESS.progress['continue'] }),
     ).toHaveAttribute('href', AYAH);
+    // R2: the home page offers the position under "Continue", linked to the ayah.
     await reader.goto('/my');
-    const main = reader.getByRole('main');
-    await expect(main).not.toContainText(PROGRESS.home['quranNone'] ?? '');
-    await expect(
-      main.getByRole('link', { name: PROGRESS.progress['continue'] }),
-    ).toHaveAttribute('href', AYAH);
+    const continuing = reader
+      .getByRole('main')
+      .getByRole('region', { name: CONTINUE, exact: true });
+    await expect(continuing.locator(`a[href="${AYAH}"]`)).toHaveCount(1);
 
     // A STALE PAGE. One tab read the position's version before another moved
     // it; its own attempt is a conflict, not an overwrite — and, refreshed,
@@ -1030,10 +1121,15 @@ test.describe('a reader’s own reading position', () => {
       PROGRESS.progress['empty'] ?? '',
     );
     expect(await position()).toBeNull();
+    // Cleared: the home page no longer offers it (a module renders only with
+    // something in it).
     await reader.goto('/my');
-    await expect(reader.getByRole('main')).toContainText(
-      PROGRESS.home['quranNone'] ?? '',
-    );
+    await expect(
+      reader
+        .getByRole('main')
+        .getByRole('region', { name: CONTINUE, exact: true })
+        .locator(`a[href="${AYAH}"]`),
+    ).toHaveCount(0);
   });
 });
 

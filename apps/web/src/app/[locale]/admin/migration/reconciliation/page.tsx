@@ -27,6 +27,7 @@ import {
   type Query,
 } from '../shared';
 import { ReconciliationBadge } from '../status';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/migration/reconciliation` — every completed run with the
@@ -38,7 +39,10 @@ import { ReconciliationBadge } from '../status';
  * does not balance blocks every manifest of it; this screen says which runs
  * those are and by how much they disagree.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata(
+  'adminMigration',
+  'reconciliation.title',
+);
 
 export const dynamic = 'force-dynamic';
 

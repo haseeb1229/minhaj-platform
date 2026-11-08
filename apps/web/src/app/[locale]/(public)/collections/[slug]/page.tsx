@@ -9,12 +9,14 @@ import { requireLocale } from '@/config/route-locale';
  * `/{locale}/collections/{slug}` — one published Collection at its current
  * slug. A former slug never reaches here: the request proxy answers it with one
  * 301 to the current address (ROUTE_MAP.md §9.7). An unpublished, archived or
- * unknown slug is a 404, signed in or not.
+ * unknown slug is a 404, signed in or not. `?order=newest|oldest` reads its
+ * members by date (R2); every order is canonical to the bare address.
  */
 export const dynamic = 'force-dynamic';
 
 interface CollectionParams {
   readonly params: Promise<{ readonly locale: string; readonly slug: string }>;
+  readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export async function generateMetadata({ params }: CollectionParams): Promise<Metadata> {
@@ -26,10 +28,15 @@ export async function generateMetadata({ params }: CollectionParams): Promise<Me
     : collectionMetadata(record, locale);
 }
 
-export default async function CollectionRoute({ params }: CollectionParams) {
+export default async function CollectionRoute({
+  params,
+  searchParams,
+}: CollectionParams) {
   const locale = await requireLocale(params);
   const { slug } = await params;
   const record = await readCollection(slug);
   if (record === null) notFound();
-  return <CollectionDetailPage locale={locale} record={record} />;
+  return (
+    <CollectionDetailPage locale={locale} record={record} query={await searchParams} />
+  );
 }

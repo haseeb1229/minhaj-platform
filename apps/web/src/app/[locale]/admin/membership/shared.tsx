@@ -1,9 +1,7 @@
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
-import { MEMBERSHIP_PAGE } from '@minhaj/contracts/membership';
 
-import { TextLink } from '@/components/ui';
 import { identityRuntime } from '@/composition/identity';
 import { appLogger } from '@/composition/logging';
 
@@ -113,37 +111,5 @@ export function RecordIdentity({
       <input type="hidden" name="id" value={record.id} />
       <input type="hidden" name="version" value={String(record.version)} />
     </>
-  );
-}
-
-/** Previous and next pages of a bounded listing, with where the reader is. */
-export function Pager({
-  offset,
-  total,
-  hrefFor,
-  label,
-  copy,
-}: {
-  readonly offset: number;
-  readonly total: number;
-  readonly hrefFor: (page: number) => string;
-  readonly label: string;
-  readonly copy: AdminMembershipCopy;
-}) {
-  const pages = Math.max(1, Math.ceil(total / MEMBERSHIP_PAGE));
-  const current = Math.floor(offset / MEMBERSHIP_PAGE) + 1;
-  if (pages <= 1 && current === 1) return null;
-  return (
-    <nav className="flex flex-wrap items-center gap-x-6 gap-y-2" aria-label={label}>
-      {current > 1 ? (
-        <TextLink href={hrefFor(current - 1)}>{copy.t('previous')}</TextLink>
-      ) : null}
-      <span className="text-sm">
-        {copy.t('pageOf', { page: current, pages: Math.max(pages, current) })}
-      </span>
-      {current < pages ? (
-        <TextLink href={hrefFor(current + 1)}>{copy.t('next')}</TextLink>
-      ) : null}
-    </nav>
   );
 }

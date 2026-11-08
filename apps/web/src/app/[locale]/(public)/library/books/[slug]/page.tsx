@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
-import type { EditionRecord, WorkDetail } from '@minhaj/contracts/library';
+import type { EditionRecord, WorkDetail, WorkRecord } from '@minhaj/contracts/library';
 import { readerPosition } from '@minhaj/contracts/library';
 
 import {
@@ -18,15 +18,19 @@ import { requireLocale } from '@/config/route-locale';
 import {
   ActionLink,
   Alert,
+  Cover,
   DetailRow,
   EmptyState,
   MetaRow,
   Panel,
+  SectionHeader,
   StatusBadge,
   TextLink,
   TopicChips,
 } from '@/components/ui';
-import { CoverImage, editionCoverPath } from '@/components/library/cover';
+import { Shelf } from '@/components/ui/shelf';
+import { WorkCard } from '@/components/library/cards';
+import { editionCoverPath } from '@/components/library/cover';
 import { RecordFrame, RecordSection } from '@/components/library/frame';
 import { absoluteUrl } from '@/config/origin';
 import {
@@ -151,7 +155,10 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
   const label = labelFor(record, locale);
   const interfaceDirection = directionOf(locale);
 
-  const [languages, references] = await Promise.all([
+  // RELATED: the Library's own A–Z listing under this Work's first topic — one
+  // bounded read, this Work left out. No topic, no related shelf.
+  const relatedTopic = record.topicIds[0] ?? null;
+  const [languages, references, related] = await Promise.all([
     libraryContentLanguages(),
     libraryReferenceNames(
       {
@@ -165,6 +172,13 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
       },
       locale,
     ),
+    relatedTopic === null
+      ? Promise.resolve(null)
+      : libraryReadRuntime().works({
+          topic: relatedTopic,
+          sort: 'title',
+          titleLocale: locale,
+        }),
   ]);
 
   const selected = selectEdition(
@@ -249,19 +263,22 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
        * Edition exists. The Editions below are where translation is a fact.
        */
       notice={t('metadataNotice')}
-      aside={
-        <>
-          {shownCover === null || coverSrc === null ? null : (
-            <div className="mx-auto w-48 max-w-full lg:mx-0 lg:w-full">
-              <CoverImage
+      {...(shownCover === null || coverSrc === null
+        ? {}
+        : {
+            cover: (
+              <Cover
                 path={coverSrc}
-                cover={shownCover}
+                width={shownCover.width}
+                height={shownCover.height}
                 alt={t('coverAlt', { title: label.title })}
                 priority
+                sizes="(min-width: 64rem) 14rem, 11rem"
               />
-            </div>
-          )}
-
+            ),
+          })}
+      aside={
+        <>
           <PersonalControls locale={locale} target={{ kind: 'work', id: record.id }} />
 
           <Contributors work={record} people={references.people} locale={locale} t={t} />
@@ -310,6 +327,18 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
       )}
 
       <SalePoints record={record} t={t} />
+
+      <RelatedWorks
+        locale={locale}
+        works={(related?.items ?? [])
+          .filter((work) => work.id !== record.id)
+          .slice(0, 12)}
+        topic={
+          relatedTopic === null ? null : (references.topics.get(relatedTopic) ?? null)
+        }
+        topicId={relatedTopic}
+        t={t}
+      />
 
       <BookStructuredData
         record={record}
@@ -446,8 +475,10 @@ function Editions({
           return (
             <li
               key={edition.id}
-              className={`flex min-w-0 flex-col gap-3 rounded-panel border bg-surface-raised p-5 shadow-panel ${
-                isSelected ? 'border-accent border-s-4' : 'border-border'
+              className={`flex min-w-0 flex-col gap-3 rounded-panel border p-5 ${
+                isSelected
+                  ? 'border-accent-rule bg-accent-surface'
+                  : 'border-border bg-surface-raised'
               }`}
             >
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -648,6 +679,55 @@ function EditionAccessPanel({
           }}
         />
       ) : null}
+    </section>
+  );
+}
+
+/**
+ * MORE ON THIS WORK'S TOPIC (R2): the Library's own A–Z listing under the
+ * Work's first topic, as a shelf of covers, with the way to the whole topic.
+ * Absent when the Work has no topic or the topic holds nothing else.
+ */
+function RelatedWorks({
+  locale,
+  works,
+  topic,
+  topicId,
+  t,
+}: {
+  readonly locale: Locale;
+  readonly works: readonly WorkRecord[];
+  readonly topic: { readonly name: string } | null;
+  readonly topicId: string | null;
+  readonly t: LibraryTranslator;
+}) {
+  if (works.length === 0 || topic === null || topicId === null) return null;
+  const heading = t('related.heading', { topic: topic.name });
+  return (
+    <section aria-labelledby="work-related">
+      <Shelf
+        label={heading}
+        size="cover"
+        previousLabel={t('landing.showPrevious')}
+        nextLabel={t('landing.showNext')}
+        header={
+          <SectionHeader
+            id="work-related"
+            heading={heading}
+            action={{
+              href: localizedPath(
+                locale,
+                `/library/books?topic=${encodeURIComponent(topicId)}`,
+              ),
+              text: t('related.all', { topic: topic.name }),
+            }}
+          />
+        }
+      >
+        {works.map((work) => (
+          <WorkCard key={work.id} locale={locale} work={work} />
+        ))}
+      </Shelf>
     </section>
   );
 }

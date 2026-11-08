@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
@@ -11,9 +12,16 @@ import {
   readFatwaOffset,
 } from '@/components/fatwa/presentation';
 import { pageLinks } from '@/components/hadith/presentation';
-import { Pagination } from '@/components/media/parts';
-import { ActionLink, EmptyState, Panel, StatusBadge, TextLink } from '@/components/ui';
-import { WorkspacePage } from '@/components/workspace/parts';
+import {
+  ActionLink,
+  EmptyState,
+  Pager,
+  Panel,
+  StatusBadge,
+  TextLink,
+} from '@/components/ui';
+import { MyPage } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
 import { requireLocale } from '@/config/route-locale';
 import { requireActiveSession } from '../guard';
 
@@ -29,7 +37,13 @@ import { requireActiveSession } from '../guard';
  * question's opaque id; the words are shown only on the question's own page,
  * to its asker.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'questions');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -55,7 +69,7 @@ export default async function MyQuestionsPage({
   const links = pageLinks(page.offset, FATWA_PAGE_SIZE, page.total);
 
   return (
-    <WorkspacePage
+    <MyPage
       title={t('my.title')}
       description={<p>{t('my.description')}</p>}
       action={
@@ -87,7 +101,7 @@ export default async function MyQuestionsPage({
         </ol>
       )}
 
-      <Pagination
+      <Pager
         label={t('my.list')}
         previous={links.previous === null ? null : offsetHref(path, links.previous)}
         next={links.next === null ? null : offsetHref(path, links.next)}
@@ -98,6 +112,6 @@ export default async function MyQuestionsPage({
       <p>
         <TextLink href={localizedPath(locale, '/my')}>{t('my.account')}</TextLink>
       </p>
-    </WorkspacePage>
+    </MyPage>
   );
 }

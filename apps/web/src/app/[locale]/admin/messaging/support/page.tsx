@@ -29,6 +29,7 @@ import {
   adminMessagingCopy,
   type Query,
 } from '../shared';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * The support queue (ROUTE_MAP.md §7; DELIVERY_PLAN.md Phase 24) — under
@@ -39,7 +40,7 @@ import {
  * and no message text appear here; opening a conversation is a separate,
  * AUDITED act on its own page.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminMessaging', 'support.title');
 
 export const dynamic = 'force-dynamic';
 

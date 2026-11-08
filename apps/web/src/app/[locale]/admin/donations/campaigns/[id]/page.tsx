@@ -46,6 +46,7 @@ import {
   adminDonationsCopy,
   type AdminDonationsCopy,
 } from '../../shared';
+import { adminPageMetadata } from '../../../metadata';
 
 /**
  * One campaign's editor (DELIVERY_PLAN.md Phase 27) — under `donations.read`;
@@ -66,7 +67,7 @@ import {
  * draft. Archiving stops new gifts at once; a donation begun before it stands.
  * A malformed or unknown id is the administrative 404.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminDonations', 'editor.title');
 
 export const dynamic = 'force-dynamic';
 

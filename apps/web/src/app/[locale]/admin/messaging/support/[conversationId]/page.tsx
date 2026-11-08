@@ -36,6 +36,7 @@ import {
   supportReplyAction,
 } from '../../actions';
 import { adminMessagingCopy, type Query } from '../../shared';
+import { adminPageMetadata } from '../../../metadata';
 
 /**
  * One support conversation, as support staff read it (ROUTE_MAP.md §7;
@@ -51,7 +52,10 @@ import { adminMessagingCopy, type Query } from '../../shared';
  * answer it; anyone holding the key may read it and claim it while nobody
  * has. Claiming and resolving carry the version the operator was shown.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata(
+  'adminMessaging',
+  'conversation.fallbackTitle',
+);
 
 export const dynamic = 'force-dynamic';
 

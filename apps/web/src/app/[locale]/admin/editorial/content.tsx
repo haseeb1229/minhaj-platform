@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getMessages, getTranslations } from 'next-intl/server';
+import { getFormatter, getMessages, getTranslations } from 'next-intl/server';
 import type { Locale } from '@minhaj/contracts';
 import { localeSchema, localizedPath } from '@minhaj/contracts';
 import {
@@ -19,6 +19,7 @@ import {
   type CollectionMember,
   type CollectionMemberTarget,
   type EditorialKind,
+  type EditorialSummary,
   type WorkflowAction,
 } from '@minhaj/contracts/editorial';
 import { labelFor } from '@minhaj/contracts/global';
@@ -36,12 +37,16 @@ import {
   resolveCollectionMembers,
 } from '@/composition/collection-members';
 import {
+  ActionLink,
   Alert,
   EmptyState,
   Field,
+  FilterLink,
+  PageHeading,
   Panel,
   SectionHeading,
   Select,
+  StatusBadge,
   Button,
   TextInput,
   TextLink,
@@ -53,7 +58,13 @@ import {
 } from '@/components/editorial/collection-members-island';
 import { ActionForm } from '../../(identity)/form-state';
 import { saveEditorial, transitionEditorial } from './actions';
+import { QueueBatchForm } from './queue-batch-form';
 import { EDITORIAL_SEGMENTS } from './segments';
+import { AdminPager } from '../pager';
+import { RevisionDiff } from '@/components/editorial/revision-diff-view';
+
+/** The directory's page size — the Editorial service's own (`directory`). */
+const EDITORIAL_PAGE = 25;
 
 const blank = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] });
 export async function ContentDirectory({
@@ -80,73 +91,204 @@ export async function ContentDirectory({
     offset,
     queue ? 'in-review' : state,
   );
-  return (
-    <Panel>
-      <SectionHeading>{t(segment)}</SectionHeading>
-      {!queue && context.authorization.can('content.author') ? (
-        <TextLink href={`${path}/new`}>{t('create')}</TextLink>
-      ) : null}
-      {!queue ? (
-        <form className="flex flex-wrap gap-3">
-          <label htmlFor="state-filter">{t('state')}</label>
-          <Select id="state-filter" name="state" defaultValue={state ?? ''}>
-            <option value="">—</option>
-            {editorialStateSchema.options.map((s) => (
-              <option key={s} value={s}>
-                {t(s)}
-              </option>
-            ))}
-          </Select>
-          <Button>{t('reload')}</Button>
-        </form>
-      ) : null}
-      {data.items.length === 0 ? (
-        <EmptyState>{t('empty')}</EmptyState>
-      ) : (
-        <ul className="flex flex-col gap-4">
-          {data.items.map((row) => (
-            <li key={row.id} className="flex flex-wrap gap-3">
+  const format = await getFormatter({ locale });
+  const adminT = await getTranslations({ locale, namespace: 'admin' });
+  const timeZone = context.session.account.timezone ?? undefined;
+  const stateHref = (value: string | null) =>
+    value === null ? path : `${path}?state=${value}`;
+  const list =
+    data.items.length === 0 ? (
+      <EmptyState>{t('empty')}</EmptyState>
+    ) : queue &&
+      context.authorization.can('content.review') &&
+      context.authorization.can('content.publish') ? (
+      <QueueBatch locale={locale} kind={kind} segment={segment} items={data.items} />
+    ) : (
+      <ul className="flex list-none flex-col divide-y divide-border p-0">
+        {data.items.map((row) => (
+          <li key={row.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3">
+            <span className="min-w-0 grow">
               <TextLink
                 href={localizedPath(locale, `/admin/editorial/${segment}/${row.id}`)}
               >
                 {row.title}
               </TextLink>
+            </span>
+            <StatusBadge tone={row.state === 'published' ? 'positive' : 'neutral'}>
+              {t(row.state)}
+            </StatusBadge>
+            <span className="text-sm text-foreground-muted tabular-nums">
+              {t('version')} {format.number(row.version)}
+            </span>
+            {row.scheduledAt ? (
+              <time
+                dateTime={row.scheduledAt.toISOString()}
+                className="text-sm text-foreground-muted"
+              >
+                {format.dateTime(row.scheduledAt, {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                  ...(timeZone === undefined ? {} : { timeZone }),
+                })}
+              </time>
+            ) : null}
+            {row.scheduleStatus &&
+            ['authority-revoked', 'execution-failed'].includes(row.scheduleStatus) ? (
+              <Alert tone="error">
+                {t(row.scheduleStatus as 'authority-revoked' | 'execution-failed')}
+              </Alert>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    );
+  const pager = (
+    <AdminPager
+      label={adminT('pager.labelOf', { section: t(segment) })}
+      offset={offset}
+      pageSize={EDITORIAL_PAGE}
+      more={data.more}
+      href={(page) => {
+        const search = new URLSearchParams();
+        if (page > 1) search.set('offset', String((page - 1) * EDITORIAL_PAGE));
+        if (state) search.set('state', state);
+        const encoded = search.toString();
+        return encoded === '' ? path : `${path}?${encoded}`;
+      }}
+      previousLabel={t('previous')}
+      nextLabel={t('next')}
+    />
+  );
+
+  // The review queue shows every kind on one page, each as a section of it;
+  // the queue page owns that page's `main` and `h1`.
+  if (queue) {
+    return (
+      <Panel>
+        <div className="flex flex-col gap-3">
+          <SectionHeading>{t(segment)}</SectionHeading>
+          {list}
+          {pager}
+        </div>
+      </Panel>
+    );
+  }
+
+  return (
+    <main className="flex min-w-0 flex-col gap-4">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <PageHeading>{t(segment)}</PageHeading>
+        {context.authorization.can('content.author') ? (
+          <ActionLink href={`${path}/new`}>{t('create')}</ActionLink>
+        ) : null}
+      </header>
+      {/* The state filter: links, so choosing one IS the submit (audit F31). */}
+      <nav aria-label={t('state')} className="flex flex-wrap gap-2">
+        <FilterLink href={stateHref(null)} current={state === null}>
+          {adminT('common.all')}
+        </FilterLink>
+        {editorialStateSchema.options.map((value) => (
+          <FilterLink key={value} href={stateHref(value)} current={state === value}>
+            {t(value)}
+          </FilterLink>
+        ))}
+      </nav>
+      <Panel>
+        <div className="flex flex-col gap-3">
+          {list}
+          {pager}
+        </div>
+      </Panel>
+    </main>
+  );
+}
+
+/**
+ * R2. One kind's in-review queue page for a second administrator holding both
+ * `content.review` and `content.publish`: each row carries a labelled checkbox
+ * and the version shown, inside the bulk "approve and publish" form. Whether
+ * to show the form is all this decides — the action and the service re-check
+ * every permission and every record.
+ */
+async function QueueBatch({
+  locale,
+  kind,
+  segment,
+  items,
+}: {
+  locale: Locale;
+  kind: EditorialKind;
+  segment: string;
+  items: readonly EditorialSummary[];
+}) {
+  const t = await getTranslations({ locale, namespace: 'editorial' });
+  const reasons = [
+    'conflict',
+    'denied',
+    'invalid',
+    'invalid-state',
+    'self-approval',
+    'approval-required',
+    'unknown',
+  ] as const;
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-sm text-foreground-muted">{t('batchHelp')}</p>
+      <QueueBatchForm
+        locale={locale}
+        kind={kind}
+        titles={Object.fromEntries(items.map((row) => [row.id, row.title]))}
+        labels={{
+          selectAll: t('batchSelectAll'),
+          confirm: t('batchConfirm'),
+          submit: t('batchSubmit'),
+          pending: t('batchPending'),
+          decided: t('batchDecided'),
+          refused: t('batchRefused'),
+          unknownRecord: t('batchUnknownRecord'),
+        }}
+        messages={{
+          ...Object.fromEntries(reasons.map((reason) => [reason, t(reason)])),
+          'not-found': t('batchNotFound'),
+          success: t('batchDone'),
+          'items-refused': t('batchPartial'),
+          'none-selected': t('batchNoneSelected'),
+          'confirm-required': t('batchConfirmRequired'),
+          'batch-interrupted': t('batchInterrupted'),
+        }}
+      >
+        <ul className="flex flex-col gap-4">
+          {items.map((row) => (
+            <li key={row.id} className="flex flex-wrap items-center gap-3">
+              <input
+                id={`queue-batch-${row.id}`}
+                type="checkbox"
+                name="id"
+                value={row.id}
+                className="size-5"
+              />
+              <label htmlFor={`queue-batch-${row.id}`} className="sr-only">
+                {t('batchSelect', { title: row.title })}
+              </label>
+              <input
+                type="hidden"
+                name={`version-${row.id}`}
+                value={String(row.version)}
+              />
+              <TextLink
+                href={localizedPath(locale, `/admin/editorial/${segment}/${row.id}`)}
+              >
+                <bdi>{row.title}</bdi>
+              </TextLink>
               <span>{t(row.state)}</span>
               <span>
                 {t('version')}: {row.version}
               </span>
-              {row.scheduledAt ? (
-                <time dateTime={row.scheduledAt.toISOString()}>
-                  {row.scheduledAt.toISOString()}
-                </time>
-              ) : null}
-              {row.scheduleStatus &&
-              ['authority-revoked', 'execution-failed'].includes(row.scheduleStatus) ? (
-                <Alert tone="error">
-                  {t(row.scheduleStatus as 'authority-revoked' | 'execution-failed')}
-                </Alert>
-              ) : null}
             </li>
           ))}
         </ul>
-      )}
-      <nav className="flex gap-4" aria-label={t('title')}>
-        {offset > 0 ? (
-          <TextLink
-            href={`${path}?offset=${Math.max(0, offset - 25)}${state ? `&state=${state}` : ''}`}
-          >
-            {t('previous')}
-          </TextLink>
-        ) : null}
-        {data.more ? (
-          <TextLink
-            href={`${path}?offset=${offset + 25}${state ? `&state=${state}` : ''}`}
-          >
-            {t('next')}
-          </TextLink>
-        ) : null}
-      </nav>
-    </Panel>
+      </QueueBatchForm>
+    </div>
   );
 }
 
@@ -325,6 +467,11 @@ export async function ContentEditor({
   const history = record
     ? await editorialRuntime().editorial.revisions(actor, kind, record.id, revisionOffset)
     : null;
+  const confirmCopy = await getTranslations({ locale, namespace: 'admin.confirm' });
+  const diffCopy = await getTranslations({ locale, namespace: 'admin.revisionDiff' });
+  const format = await getFormatter({ locale });
+  const timeZone = context.session.account.timezone ?? undefined;
+  const languageNames = new Intl.DisplayNames([locale], { type: 'language' });
   const actions: WorkflowAction[] = record
     ? [
         ...(record.state === 'draft' ? ['submit' as const] : []),
@@ -338,8 +485,8 @@ export async function ContentEditor({
       ]
     : [];
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeading>{record?.title ?? t('create')}</SectionHeading>
+    <main className="flex min-w-0 flex-col gap-6">
+      <PageHeading>{record?.title ?? t('create')}</PageHeading>
       {record ? (
         <p role="status">
           {t(record.state)} · {t('version')} {record.version}
@@ -834,6 +981,17 @@ export async function ContentEditor({
               submitLabel={t(action)}
               pendingLabel={t('pending')}
               messages={messages}
+              {...(action === 'archive'
+                ? {
+                    tone: 'destructive' as const,
+                    confirm: {
+                      title: confirmCopy('archive.title'),
+                      body: confirmCopy('archive.body'),
+                      confirmLabel: confirmCopy('archive.confirm'),
+                      cancelLabel: confirmCopy('cancel'),
+                    },
+                  }
+                : {})}
             >
               {hidden}
               <input type="hidden" name="action" value={action} />
@@ -856,84 +1014,116 @@ export async function ContentEditor({
       {history ? (
         <Panel>
           <SectionHeading>{t('revisions')}</SectionHeading>
-          {history.items.map((item) => (
-            <details key={item.number}>
-              <summary className="min-h-11 cursor-pointer py-2">
-                {t('version')} {item.number} · {item.createdAt.toISOString()}
-              </summary>
-              {item.schedule ? (
-                <dl className="text-sm">
-                  <dt>{t('eventTimezone')}</dt>
-                  <dd dir="ltr">{item.schedule.timezone}</dd>
-                  {item.schedule.occurrences.map((occurrence, index) => (
-                    <div key={index}>
-                      <dt>{t('occurrence', { number: index + 1 })}</dt>
-                      <dd dir="ltr">
-                        {occurrence.startsLocal.replace('T', ' ')} (
-                        {occurrence.startsAt.toISOString()})
-                        {occurrence.endsLocal === null || occurrence.endsAt === null
-                          ? ''
-                          : ` – ${occurrence.endsLocal.replace('T', ' ')} (${occurrence.endsAt.toISOString()})`}
-                      </dd>
-                    </div>
-                  ))}
-                  <dt>{t('eventGalleries')}</dt>
-                  <dd>{item.galleryIds?.length ?? 0}</dd>
-                </dl>
-              ) : null}
-              {item.members ? (
-                <dl className="text-sm">
-                  <dt>{t('collectionMembers')}</dt>
-                  <dd>
-                    {item.members.length}
-                    <ol className="list-decimal ps-6">
-                      {item.members.map((member, index) => (
-                        <li key={index}>{t(`memberType-${member.kind}`)}</li>
-                      ))}
-                    </ol>
-                  </dd>
-                </dl>
-              ) : null}
-              {item.coverage ? (
-                <dl className="text-sm">
-                  <dt>{t('outlet')}</dt>
-                  <dd dir="auto">{item.coverage.outlet}</dd>
-                  {item.coverage.sourceUrl ? (
-                    <>
-                      <dt>{t('sourceUrl')}</dt>
-                      <dd dir="ltr" className="break-all">
-                        {item.coverage.sourceUrl}
-                      </dd>
-                    </>
-                  ) : null}
-                  {item.coverage.sourceDate ? (
-                    <>
-                      <dt>{t('sourceDate')}</dt>
-                      <dd>{item.coverage.sourceDate}</dd>
-                    </>
-                  ) : null}
-                </dl>
-              ) : null}
-              {item.translations.map((translation) => (
-                <article
-                  key={translation.languageCode}
-                  lang={translation.languageCode}
-                  dir={translation.languageCode === 'en' ? 'ltr' : 'rtl'}
-                >
-                  <h3>{translation.title}</h3>
-                  {translation.issuer ? (
-                    <p>
-                      {t('issuer')}: {translation.issuer}
-                    </p>
-                  ) : null}
-                  <div
-                    className="editorial-prose"
-                    dangerouslySetInnerHTML={{ __html: translation.html }}
+          {history.items.map((item, index) => {
+            const previous = history.items[index + 1];
+            return (
+              <details key={item.number}>
+                <summary className="min-h-11 cursor-pointer py-2">
+                  {t('version')} {format.number(item.number)} ·{' '}
+                  <time dateTime={item.createdAt.toISOString()}>
+                    {format.dateTime(item.createdAt, {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                      ...(timeZone === undefined ? {} : { timeZone }),
+                    })}
+                  </time>
+                </summary>
+                {previous !== undefined && previous.number === item.number - 1 ? (
+                  <RevisionDiff
+                    before={previous.translations}
+                    after={item.translations}
+                    languageName={(code) => languageNames.of(code) ?? code}
+                    labels={{
+                      heading: diffCopy('heading', {
+                        number: format.number(previous.number),
+                      }),
+                      title: diffCopy('title'),
+                      body: diffCopy('body'),
+                      added: diffCopy('added'),
+                      removed: diffCopy('removed'),
+                      unchanged: diffCopy('unchanged'),
+                      truncated: diffCopy('truncated'),
+                      languageAdded: (language) =>
+                        diffCopy('languageAdded', { language }),
+                      languageRemoved: (language) =>
+                        diffCopy('languageRemoved', { language }),
+                    }}
                   />
-                </article>
-              ))}
-            </details>
-          ))}
+                ) : null}
+                {item.schedule ? (
+                  <dl className="text-sm">
+                    <dt>{t('eventTimezone')}</dt>
+                    <dd dir="ltr">{item.schedule.timezone}</dd>
+                    {item.schedule.occurrences.map((occurrence, index) => (
+                      <div key={index}>
+                        <dt>{t('occurrence', { number: index + 1 })}</dt>
+                        <dd dir="ltr">
+                          {occurrence.startsLocal.replace('T', ' ')} (
+                          {occurrence.startsAt.toISOString()})
+                          {occurrence.endsLocal === null || occurrence.endsAt === null
+                            ? ''
+                            : ` – ${occurrence.endsLocal.replace('T', ' ')} (${occurrence.endsAt.toISOString()})`}
+                        </dd>
+                      </div>
+                    ))}
+                    <dt>{t('eventGalleries')}</dt>
+                    <dd>{item.galleryIds?.length ?? 0}</dd>
+                  </dl>
+                ) : null}
+                {item.members ? (
+                  <dl className="text-sm">
+                    <dt>{t('collectionMembers')}</dt>
+                    <dd>
+                      {item.members.length}
+                      <ol className="list-decimal ps-6">
+                        {item.members.map((member, index) => (
+                          <li key={index}>{t(`memberType-${member.kind}`)}</li>
+                        ))}
+                      </ol>
+                    </dd>
+                  </dl>
+                ) : null}
+                {item.coverage ? (
+                  <dl className="text-sm">
+                    <dt>{t('outlet')}</dt>
+                    <dd dir="auto">{item.coverage.outlet}</dd>
+                    {item.coverage.sourceUrl ? (
+                      <>
+                        <dt>{t('sourceUrl')}</dt>
+                        <dd dir="ltr" className="break-all">
+                          {item.coverage.sourceUrl}
+                        </dd>
+                      </>
+                    ) : null}
+                    {item.coverage.sourceDate ? (
+                      <>
+                        <dt>{t('sourceDate')}</dt>
+                        <dd>{item.coverage.sourceDate}</dd>
+                      </>
+                    ) : null}
+                  </dl>
+                ) : null}
+                {item.translations.map((translation) => (
+                  <article
+                    key={translation.languageCode}
+                    lang={translation.languageCode}
+                    dir={translation.languageCode === 'en' ? 'ltr' : 'rtl'}
+                  >
+                    <h3>{translation.title}</h3>
+                    {translation.issuer ? (
+                      <p>
+                        {t('issuer')}: {translation.issuer}
+                      </p>
+                    ) : null}
+                    <div
+                      className="editorial-prose"
+                      dangerouslySetInnerHTML={{ __html: translation.html }}
+                    />
+                  </article>
+                ))}
+              </details>
+            );
+          })}
           <nav className="flex gap-4" aria-label={t('revisions')}>
             {revisionOffset > 0 ? (
               <TextLink
@@ -950,6 +1140,6 @@ export async function ContentEditor({
           </nav>
         </Panel>
       ) : null}
-    </div>
+    </main>
   );
 }

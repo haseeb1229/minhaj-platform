@@ -23,6 +23,7 @@ import { ActionForm } from '../../../(identity)/form-state';
 import { PAGE_SIZE, pageOffset, queryValue } from '../../shared';
 import { createTagAction, relabelTagAction, setTagStatusAction } from '../actions';
 import { taxonomyCopy } from '../copy';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * Editorial tags.
@@ -44,7 +45,7 @@ import { taxonomyCopy } from '../copy';
  * it is not a mutation and carries no CSRF concern; every mutation on this page
  * is a Server Action (SECURITY_BASELINE.md §7.1).
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('admin', 'taxonomy.tags.title');
 export const dynamic = 'force-dynamic';
 
 type Search = Record<string, string | string[] | undefined>;

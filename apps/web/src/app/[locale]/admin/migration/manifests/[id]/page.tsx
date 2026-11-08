@@ -49,6 +49,7 @@ import {
   ManifestStateBadge,
   TargetStageBadge,
 } from '../../status';
+import { adminPageMetadata } from '../../../metadata';
 
 /**
  * `/{locale}/admin/migration/manifests/{id}` — one publish manifest and its
@@ -71,7 +72,7 @@ import {
  * Under `migration.administer`: discarding a draft, and creating a promotion
  * from published entries (carried by the command line once approved).
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminMigration', 'manifest.title');
 
 export const dynamic = 'force-dynamic';
 
@@ -133,6 +134,13 @@ export default async function MigrationManifestPage({
             >
               <Code>{manifest.runId}</Code>
             </TextLink>
+            <span className="block text-sm">
+              <TextLink
+                href={`${migrationPath(locale, '/manifests')}?run=${encodeURIComponent(manifest.runId)}`}
+              >
+                {t('runBatch.manifest.nextOfRun')}
+              </TextLink>
+            </span>
           </DetailRow>
           <DetailRow term={t('manifest.created')}>
             <MigrationTime
@@ -242,7 +250,7 @@ export default async function MigrationManifestPage({
             <span id="manifest-publication">{t('publication.heading')}</span>
           </SectionHeading>
           <p className="text-sm">{t('publication.help')}</p>
-          <MigrationPublicationStepUp locale={locale} />
+          <MigrationPublicationStepUp locale={locale} returnTo={base} />
           {publishable ? (
             <PublishForm manifest={manifest} copy={copy} locale={locale} />
           ) : null}

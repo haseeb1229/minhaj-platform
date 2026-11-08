@@ -43,8 +43,10 @@ import {
 import { requireAdminPage } from '@/composition/authorization';
 import { donationsRuntime } from '@/composition/donations';
 import { requireLocale } from '@/config/route-locale';
+import { AdminPager } from '../pager';
 import { pageOffset } from '../shared';
-import { Pager, adminDonationsCopy, type AdminDonationsCopy, type Query } from './shared';
+import { adminDonationsCopy, type AdminDonationsCopy, type Query } from './shared';
+import { adminPageMetadata } from '../metadata';
 
 /**
  * `/{locale}/admin/donations` — the donation records (DELIVERY_PLAN.md
@@ -65,7 +67,7 @@ import { Pager, adminDonationsCopy, type AdminDonationsCopy, type Query } from '
  *
  * THE CSV EXPORT carries the same filters, from its own private route.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminDonations', 'records.title');
 
 export const dynamic = 'force-dynamic';
 
@@ -180,12 +182,14 @@ export default async function DonationsAdminPage({
           </DataTable>
         )}
         {listing.ok ? (
-          <Pager
-            offset={offset}
-            total={listing.value.total}
-            hrefFor={pageHref}
+          <AdminPager
             label={t('records.pages')}
-            copy={copy}
+            offset={offset}
+            pageSize={DONATION_PAGE}
+            total={listing.value.total}
+            href={pageHref}
+            previousLabel={t('previous')}
+            nextLabel={t('next')}
           />
         ) : null}
       </section>

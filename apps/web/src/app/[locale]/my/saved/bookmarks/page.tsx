@@ -1,26 +1,23 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { PERSONAL_LIMITS, targetKey } from '@minhaj/contracts/personalisation';
 
 import { pageLinks } from '@/components/hadith/presentation';
-import { Pagination } from '@/components/media/parts';
-import { savedLinks } from '@/components/personal/nav';
-import {
-  KindBadge,
-  PersonalFrame,
-  PersonalLinks,
-  PersonalTime,
-  TargetTitle,
-  refusalMessages,
-} from '@/components/personal/parts';
+import { MyPage } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
+import { myTabs } from '@/components/my/sections';
+import { TargetItem } from '@/components/my/targets';
+import { shortDate } from '@/components/my/time';
+import { refusalMessages } from '@/components/personal/parts';
 import {
   encodeTarget,
   personalOffsetHref,
   readPersonalOffset,
 } from '@/components/personal/presentation';
 import { personalRead } from '@/components/personal/read';
-import { Alert, EmptyState, Panel } from '@/components/ui';
+import { Alert, EmptyState, Pager } from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
 import { resolvePersonalTargets } from '@/composition/personal-targets';
 import { requireLocale } from '@/config/route-locale';
@@ -36,7 +33,13 @@ import { unbookmarkAction } from '../actions';
  * the public page, or the honest "no longer available" when the owner no
  * longer shows it to anybody — and a removal that works either way.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'bookmarks');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -52,17 +55,21 @@ export default async function BookmarksPage({
   const path = localizedPath(locale, '/my/saved/bookmarks');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'personal' });
+  const my = await getTranslations({ locale, namespace: 'my' });
   const offset = readPersonalOffset(await searchParams);
   const read = await personalRead('personal-bookmarks', () =>
     personalisationRuntime().saved.bookmarks({ accountId: session.account.id }, offset),
   );
-  const back = <PersonalLinks label={t('nav.label')} links={savedLinks(locale, t)} />;
+  const tabs = {
+    label: my('tabs.label.saved'),
+    items: myTabs(locale, 'saved', 'bookmarks', (key) => my(`tabs.${key}`)),
+  };
 
   if (!read.ok)
     return (
-      <PersonalFrame title={t('bookmarks.title')} back={back}>
+      <MyPage title={t('bookmarks.title')} tabs={tabs}>
         <Alert tone="error">{t('failure.load')}</Alert>
-      </PersonalFrame>
+      </MyPage>
     );
 
   const page = read.value;
@@ -71,36 +78,50 @@ export default async function BookmarksPage({
     locale,
   );
   const links = pageLinks(page.offset, PERSONAL_LIMITS.page, page.total);
+  const timeZone = session.account.timezone;
 
   return (
-    <PersonalFrame
+    <MyPage
       title={t('bookmarks.title')}
       description={<p>{t('bookmarks.description')}</p>}
-      back={back}
+      tabs={tabs}
     >
       {page.items.length === 0 ? (
-        <EmptyState>
-          {page.total === 0 ? t('bookmarks.empty') : t('list.beyond')}
-        </EmptyState>
+        page.total === 0 ? (
+          <EmptyState
+            icon="bookmark"
+            title={my('saved.emptyTitle')}
+            action={{
+              href: localizedPath(locale, '/library'),
+              text: my('saved.explore'),
+            }}
+          >
+            {t('bookmarks.empty')}
+          </EmptyState>
+        ) : (
+          <EmptyState>{t('list.beyond')}</EmptyState>
+        )
       ) : (
-        <ol aria-label={t('bookmarks.list')} className="flex flex-col gap-3">
+        <ol
+          aria-label={t('bookmarks.list')}
+          className="flex flex-col border-t border-border"
+        >
           {page.items.map((entry) => (
-            <Panel key={entry.savedItemId} as="li">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex min-w-0 flex-col gap-2">
-                  <TargetTitle resolved={titles.get(targetKey(entry.target))} t={t} />
-                  <div className="flex flex-wrap items-center gap-3 text-sm text-foreground-muted">
-                    <KindBadge kind={entry.target.kind} t={t} />
-                    <span>
-                      {t('target.savedAt')}{' '}
-                      <PersonalTime
-                        value={entry.bookmarkedAt}
-                        locale={locale}
-                        timeZone={session.account.timezone}
-                      />
-                    </span>
-                  </div>
-                </div>
+            <TargetItem
+              key={entry.savedItemId}
+              kind={entry.target.kind}
+              resolved={titles.get(targetKey(entry.target))}
+              words={{
+                kind: (kind) => t(`kinds.${kind}`),
+                unavailable: t('target.unavailable'),
+                unknown: t('target.unknown'),
+              }}
+              meta={[
+                my('saved.when', {
+                  date: shortDate(new Date(entry.bookmarkedAt), locale, timeZone),
+                }),
+              ]}
+              actions={
                 <ActionForm
                   action={unbookmarkAction}
                   submitLabel={t('bookmarks.remove')}
@@ -111,13 +132,13 @@ export default async function BookmarksPage({
                   <input type="hidden" name="locale" value={locale} />
                   <input type="hidden" name="target" value={encodeTarget(entry.target)} />
                 </ActionForm>
-              </div>
-            </Panel>
+              }
+            />
           ))}
         </ol>
       )}
 
-      <Pagination
+      <Pager
         label={t('bookmarks.list')}
         previous={
           links.previous === null ? null : personalOffsetHref(path, links.previous)
@@ -126,6 +147,6 @@ export default async function BookmarksPage({
         previousLabel={t('list.previous')}
         nextLabel={t('list.next')}
       />
-    </PersonalFrame>
+    </MyPage>
   );
 }

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import type { LibraryCover } from '@minhaj/contracts/library';
 
-import { descriptionDirection } from '@/config/locale';
+import { derivativeSrcSet } from '@/components/ui/image-derivatives';
 
 /**
  * Library covers (Phase 30-R) — an Edition's or a magazine issue's own image.
@@ -41,9 +41,14 @@ export function CoverImage({
   readonly priority?: boolean;
   readonly className?: string;
 }) {
+  const srcSet = derivativeSrcSet(path, cover.width);
   return (
     <img
       src={path}
+      // A shelf tile or a detail page's cover column: never wider than 20rem.
+      {...(srcSet === undefined
+        ? {}
+        : { srcSet, sizes: '(min-width: 48rem) 20rem, 50vw' })}
       width={cover.width}
       height={cover.height}
       alt={alt}
@@ -52,68 +57,6 @@ export function CoverImage({
       {...(priority ? { fetchPriority: 'high' as const } : {})}
       className={`block h-auto w-full rounded-control border border-border bg-surface-sunken object-contain shadow-panel ${className}`}
     />
-  );
-}
-
-/**
- * A card that is ONE link, with a cover at its start.
- *
- * The same whole-card-link contract as `LinkCard`: the heading holds the only
- * anchor and the `card-link` rule stretches it over the card. The cover sits
- * at the inline START (left in English, right in Urdu and Arabic, by logical
- * layout) beside the words, so a page of books reads as a shelf. A record
- * WITHOUT a cover is rendered by the caller's text-first card — never by an
- * empty grey box standing in for a picture.
- */
-export function CoverCard({
-  href,
-  title,
-  description,
-  meta,
-  cover,
-  headingLevel = 'h2',
-  lang,
-  dir,
-}: {
-  readonly href: string;
-  readonly title: ReactNode;
-  readonly description?: ReactNode;
-  readonly meta?: ReactNode;
-  readonly cover: ReactNode;
-  readonly headingLevel?: 'h2' | 'h3';
-  readonly lang?: string;
-  readonly dir?: 'ltr' | 'rtl';
-}) {
-  const Heading = headingLevel;
-  const content = {
-    ...(lang === undefined ? {} : { lang }),
-    ...(dir === undefined ? {} : { dir }),
-  };
-
-  return (
-    <li className="card-surface relative flex h-full min-w-0 gap-4 rounded-panel border border-border bg-surface-raised p-4 shadow-panel transition-[border-color,box-shadow] duration-[var(--duration-fast)] hover:border-border-strong hover:shadow-raised">
-      <div className="w-24 shrink-0 sm:w-28">{cover}</div>
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <Heading className="text-subheading font-semibold wrap-anywhere" {...content}>
-          <a
-            href={href}
-            className="card-link text-foreground no-underline decoration-accent-rule underline-offset-4 hover:underline active:text-action"
-          >
-            {title}
-          </a>
-        </Heading>
-        {description === undefined || description === '' ? null : (
-          <p
-            className="line-clamp-4 text-sm wrap-anywhere text-foreground-muted"
-            {...content}
-            {...(dir === undefined ? {} : { dir: descriptionDirection(dir) })}
-          >
-            {description}
-          </p>
-        )}
-        {meta === undefined ? null : <div className="mt-auto pt-1">{meta}</div>}
-      </div>
-    </li>
   );
 }
 

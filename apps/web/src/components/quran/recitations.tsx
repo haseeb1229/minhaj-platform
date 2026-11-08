@@ -25,7 +25,7 @@ import {
   TextLink,
 } from '@/components/ui';
 import {
-  FixtureNotice,
+  CorpusNotice,
   QuranFrame,
   SegmentPlayer,
   quranTrail,
@@ -214,7 +214,7 @@ export async function ListenRecitationsPage({
   return (
     <Container>
       <div className="flex flex-col gap-8 pt-6 pb-[var(--space-section)]">
-        <FixtureNotice locale={locale} availability={availability} />
+        <CorpusNotice locale={locale} availability={availability} />
         <Breadcrumbs
           label={shell('nav.breadcrumbs')}
           trail={[

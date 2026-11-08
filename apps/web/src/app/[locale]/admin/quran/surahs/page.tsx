@@ -1,3 +1,4 @@
+import { adminPageMetadata } from '../../metadata';
 import { SurahsScreen } from '../canonical-surfaces';
 
 /**
@@ -5,6 +6,7 @@ import { SurahsScreen } from '../canonical-surfaces';
  * sources, recent verification runs — evidence only), the Surahs, and their
  * localised display names.
  */
+export const generateMetadata = adminPageMetadata('quranAdmin', 'surface.surahs');
 export const dynamic = 'force-dynamic';
 
 export default SurahsScreen;

@@ -4,18 +4,24 @@ import type { ReactNode } from 'react';
 
 import type { Locale } from '@minhaj/contracts';
 import {
+  GLOBAL_CHOICES,
   GLOBAL_PAGE,
   globalPaths,
   type PublicCentrePage,
   type PublicCentreSummary,
   type PublicCity,
   type PublicCountry,
+  type PublicCountryChoice,
   type PublicPlace,
   type PublicRegion,
 } from '@minhaj/contracts/global';
 
+import type { NewsSummary } from '@minhaj/contracts/editorial';
+
+import { editorialReadRuntime } from '@/composition/editorial-read';
 import { globalReadRuntime } from '@/composition/global-read';
-import { BreadcrumbData, Pagination } from '@/components/media/parts';
+import { NewsGrid } from '@/components/editorial/news';
+import { BreadcrumbData } from '@/components/media/parts';
 import {
   ActionLink,
   Alert,
@@ -26,8 +32,10 @@ import {
   EmptyState,
   Field,
   FilterLink,
+  Icon,
   LinkCard,
   PageHero,
+  Pager as Pagination,
   Panel,
   SectionHeader,
   Select,
@@ -37,12 +45,14 @@ import { directionOf } from '@/config/locale';
 import {
   centreWords,
   finderPath,
+  latestAcross,
   placeLocales,
   placeName,
   readFinderQuery,
   readOffsetOf,
   withQuery,
 } from './presentation';
+import { groupByWorldRegion, worldRegionOf } from './world-region';
 
 /**
  * The public Global Network directory (ROUTE_MAP.md §3.9) — Phase 16.
@@ -116,12 +126,16 @@ export function DirectoryCrumbs({
  * English (WCAG 3.1.2) without flipping the page around it.
  */
 export function RecordHeader({
-  eyebrow,
+  kind,
+  where,
   name,
   nameLocale,
   children,
 }: {
-  readonly eyebrow: string;
+  /** What the record is ("Country", "Centre"), said after its name. */
+  readonly kind: string;
+  /** Where it sits in the world, when the page knows ("Europe & Central Asia"). */
+  readonly where?: string;
   readonly name: string;
   readonly nameLocale: Locale;
   readonly children?: ReactNode;
@@ -129,10 +143,7 @@ export function RecordHeader({
   return (
     <div className="border-b border-border">
       <Container>
-        <div className="flex max-w-3xl flex-col gap-4 py-[var(--space-section)]">
-          <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
-            {eyebrow}
-          </p>
+        <div className="flex max-w-3xl flex-col gap-3 py-[var(--space-section)]">
           <h1
             className="text-title font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere"
             lang={nameLocale}
@@ -140,6 +151,18 @@ export function RecordHeader({
           >
             {name}
           </h1>
+          <p className="flex flex-wrap items-center gap-x-2 text-sm text-foreground-muted">
+            <Icon name="map-pin" size={16} className="text-accent" />
+            <span>{kind}</span>
+            {where === undefined ? null : (
+              <>
+                <span aria-hidden="true" className="text-border-strong">
+                  ·
+                </span>
+                <span>{where}</span>
+              </>
+            )}
+          </p>
           {children}
         </div>
       </Container>
@@ -347,12 +370,7 @@ function PlaceList({
             className="flex min-h-11 items-center justify-between gap-3 rounded-control border border-border bg-surface-raised px-4 py-2 text-sm font-medium wrap-anywhere text-foreground no-underline transition-colors duration-[var(--duration-fast)] hover:border-accent hover:bg-accent-surface active:bg-accent-rule"
           >
             <Name record={place} locale={locale} />
-            <span
-              aria-hidden="true"
-              className="inline-block shrink-0 text-accent rtl:-scale-x-100"
-            >
-              →
-            </span>
+            <Icon name="chevron-end" size={16} className="text-accent" />
           </a>
         </li>
       ))}
@@ -384,95 +402,222 @@ function Section({
   );
 }
 
+/** How many Centres a Country page asks for News, and how many items it shows. */
+const COUNTRY_NEWS_CENTRES = 6;
+const COUNTRY_NEWS = 3;
+
+/**
+ * R2 — the newest News from a Country's Centres, composed at Layer 4 from
+ * Editorial's own bounded per-Centre read: each Centre's newest few, merged.
+ * News names a Centre, never a Country, so this is the only true sense of "a
+ * Country's news". `null` — and no section — when the Country has no Centre,
+ * more Centres than one page holds (the merge would not be the newest), or
+ * Editorial's read failed; the Country page is still true without it.
+ */
+async function countryNews(
+  centres: PublicCentrePage,
+): Promise<readonly NewsSummary[] | null> {
+  if (
+    centres.items.length === 0 ||
+    centres.hasMore ||
+    centres.items.length > COUNTRY_NEWS_CENTRES
+  )
+    return null;
+  try {
+    const pages = await Promise.all(
+      centres.items.map((centre) =>
+        editorialReadRuntime().centreNews(centre.id, 0, COUNTRY_NEWS),
+      ),
+    );
+    return latestAcross(
+      pages.map((page) => page.items),
+      COUNTRY_NEWS,
+    );
+  } catch {
+    return null;
+  }
+}
+
 /* ===========================================================================
  * /global
  * ========================================================================= */
 
 /**
- * The World Network landing: Find a Centre first, the genuine entry points,
- * and the public Countries as a rail of tiles — and, where the directory is
- * still empty, a plain statement that it is, never a map, a count or a picture
- * standing in for data. Local Events are each Centre's own and are not linked.
+ * Every public Country, grouped by world region (R2): one block per region —
+ * its name and how many Countries it holds — then the Countries as tiles. The
+ * regions and the counts are the published Countries themselves, nothing more.
+ */
+function CountriesByRegion({
+  countries,
+  locale,
+  t,
+  headingLevel = 'h3',
+}: {
+  readonly countries: readonly PublicCountryChoice[];
+  readonly locale: Locale;
+  readonly t: GlobalTranslator;
+  readonly headingLevel?: 'h2' | 'h3';
+}) {
+  const Heading = headingLevel;
+  return (
+    <div className="flex flex-col gap-8">
+      {groupByWorldRegion(countries).map(({ region, countries: members }) => {
+        const id = `world-region-${region}`;
+        return (
+          <section key={region} aria-labelledby={id} className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <Heading id={id} className="text-subheading font-semibold text-balance">
+                {t(`regions.${region}`)}
+              </Heading>
+              <span className="text-sm text-foreground-muted tabular-nums">
+                {t('regionCount', { count: members.length })}
+              </span>
+            </div>
+            <PlaceList
+              places={members}
+              href={(country) => globalPaths.country(locale, country.slug)}
+              label={t(`regions.${region}`)}
+              empty={t('countriesEmpty')}
+              locale={locale}
+            />
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * The presence sentence — "present in 39 countries across 6 regions" — or
+ * `null` when it could not be stated exactly: no Countries yet, or a list cut
+ * at the selector's bound, whose length is not the whole count.
+ */
+function presenceLine(
+  countries: readonly PublicCountryChoice[],
+  t: GlobalTranslator,
+): string | null {
+  if (countries.length === 0 || countries.length >= GLOBAL_CHOICES) return null;
+  return t('presence', {
+    countries: countries.length,
+    regions: groupByWorldRegion(countries).filter((group) => group.region !== 'other')
+      .length,
+  });
+}
+
+/**
+ * The World Network landing (R2): the organisation's presence told from the
+ * published Countries — how many, across which regions of the world — then the
+ * ways into the directory and every Country by region.
+ *
+ * NOTHING IS INVENTED, AND NOTHING EMPTY IS OFFERED. The count is the published
+ * Countries; no map, flag wall or photograph stands in for data. Until a
+ * Centre is published the Centre finder and the Centre list are not offered
+ * (they could only come back empty), and the one line above the Countries says
+ * plainly that no centre address is published yet. Local Events are each
+ * Centre's own and are not linked here.
  */
 export async function GlobalLandingPage({ locale }: { readonly locale: Locale }) {
   const t = await getTranslations({ locale, namespace: 'global' });
   const trail = await globalTrail(locale);
   const [hasCentres, countries] = await Promise.all([
     globalReadRuntime().hasPublicCentres(),
-    globalReadRuntime().countries(0),
+    globalReadRuntime().countryChoices(),
   ]);
   const entries = [
-    { key: 'finder', href: globalPaths.finder(locale) },
-    { key: 'countries', href: globalPaths.countries(locale) },
-    { key: 'centres', href: globalPaths.centres(locale) },
-    { key: 'pakistan', href: globalPaths.pakistan(locale) },
+    ...(hasCentres
+      ? ([{ key: 'finder', icon: 'search', href: globalPaths.finder(locale) }] as const)
+      : []),
+    { key: 'countries', icon: 'globe', href: globalPaths.countries(locale) },
+    ...(hasCentres
+      ? ([
+          { key: 'centres', icon: 'map-pin', href: globalPaths.centres(locale) },
+        ] as const)
+      : []),
+    { key: 'pakistan', icon: 'grid', href: globalPaths.pakistan(locale) },
   ] as const;
+  const presence = presenceLine(countries, t);
 
   return (
     <>
       <DirectoryCrumbs label={trail.label} trail={[trail.home, { text: t('title') }]} />
       <PageHero
-        eyebrow={t('eyebrow')}
         title={t('title')}
-        lede={t('intro')}
-        actions={
-          <ActionLink href={globalPaths.finder(locale)}>
-            {t('sections.finder')}
-          </ActionLink>
-        }
+        lede={presence ?? t('intro')}
+        {...(hasCentres
+          ? {
+              actions: (
+                <ActionLink href={globalPaths.finder(locale)}>
+                  {t('sections.finder')}
+                </ActionLink>
+              ),
+            }
+          : countries.length === 0
+            ? {}
+            : {
+                actions: (
+                  <ActionLink href={globalPaths.countries(locale)}>
+                    {t('allCountries')}
+                  </ActionLink>
+                ),
+              })}
       >
-        {hasCentres ? null : (
-          <Alert tone="info">
-            {countries.items.length > 0 ? t('presenceNotice') : t('emptyDirectory')}
-          </Alert>
+        {hasCentres || countries.length > 0 ? null : (
+          <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
+            {t('emptyDirectory')}
+          </p>
         )}
       </PageHero>
 
       <DirectoryBody>
-        <section aria-labelledby="global-entry" className="flex flex-col gap-5">
-          <SectionHeader id="global-entry" heading={t('entryPoints')} />
-          <CardGrid label={t('entryPoints')} columns={4}>
+        <section aria-labelledby="global-entry" className="flex flex-col gap-2">
+          <h2 id="global-entry" className="sr-only">
+            {t('entryPoints')}
+          </h2>
+          <ul
+            aria-label={t('entryPoints')}
+            className="grid list-none grid-cols-1 gap-x-8 p-0 *:min-w-0 sm:grid-cols-2"
+          >
             {entries.map((entry) => (
-              <LinkCard
+              <li
                 key={entry.key}
-                href={entry.href}
-                title={t(`sections.${entry.key}`)}
-                description={t(`landing.${entry.key}`)}
-              />
+                className="group card-surface relative flex items-start gap-3 border-b border-border py-4"
+              >
+                <Icon name={entry.icon} size={24} className="mt-0.5 text-accent" />
+                <div className="flex min-w-0 flex-col gap-1">
+                  <h3 className="text-base font-semibold">
+                    <a
+                      href={entry.href}
+                      className="card-link text-foreground no-underline decoration-accent-rule underline-offset-4 group-hover:underline"
+                    >
+                      {t(`sections.${entry.key}`)}
+                    </a>
+                  </h3>
+                  <p className="text-sm text-foreground-muted">
+                    {t(`landing.${entry.key}`)}
+                  </p>
+                </div>
+              </li>
             ))}
-          </CardGrid>
-          <div className="flex max-w-[var(--measure-prose)] flex-col gap-1 border-s-4 border-accent-rule ps-4">
-            <h3 className="text-subheading font-semibold">{t('landing.localTitle')}</h3>
-            <p className="text-sm text-foreground-muted">{t('landing.localBody')}</p>
-          </div>
+          </ul>
+          {hasCentres ? (
+            <p className="max-w-[var(--measure-prose)] pt-2 text-sm text-foreground-muted">
+              {t('landing.localBody')}
+            </p>
+          ) : null}
         </section>
 
-        <section aria-labelledby="global-countries" className="flex flex-col gap-5">
+        <section aria-labelledby="global-countries" className="flex flex-col gap-6">
           <SectionHeader
             id="global-countries"
-            heading={t('sections.countries')}
-            intro={t('countriesIntro')}
-            {...(countries.items.length === 0
-              ? {}
-              : {
-                  action: {
-                    href: globalPaths.countries(locale),
-                    text: t('allCountries'),
-                  },
-                })}
+            heading={t('byRegion')}
+            intro={hasCentres ? t('countriesIntro') : t('presenceNotice')}
           />
-          <PlaceList
-            places={countries.items}
-            href={(country) => globalPaths.country(locale, country.slug)}
-            label={t('sections.countries')}
-            empty={t('countriesEmpty')}
-            locale={locale}
-          />
+          {countries.length === 0 ? (
+            <EmptyState>{t('countriesEmpty')}</EmptyState>
+          ) : (
+            <CountriesByRegion countries={countries} locale={locale} t={t} />
+          )}
         </section>
-
-        <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
-          {t('dataNotice')}
-        </p>
       </DirectoryBody>
     </>
   );
@@ -525,7 +670,7 @@ export async function FinderPage({
         label={trail.label}
         trail={[trail.home, trail.global, { text: title }]}
       />
-      <PageHero eyebrow={t('title')} title={title} lede={t('finder.intro')}>
+      <PageHero title={title} lede={t('finder.intro')}>
         <GlobalSections locale={locale} current="finder" t={t} />
       </PageHero>
 
@@ -656,18 +801,14 @@ export async function FinderPage({
  * /global/countries and /global/centres
  * ========================================================================= */
 
-export async function CountriesPage({
-  locale,
-  query,
-}: {
-  readonly locale: Locale;
-  readonly query: Query;
-}) {
+/**
+ * Every public Country, by world region (R2) — one page, because the whole
+ * list is short enough to scan and a region is how a visitor looks for one.
+ */
+export async function CountriesPage({ locale }: { readonly locale: Locale }) {
   const t = await getTranslations({ locale, namespace: 'global' });
   const trail = await globalTrail(locale);
-  const offset = readOffsetOf(query, 'offset');
-  const page = await globalReadRuntime().countries(offset);
-  const base = globalPaths.countries(locale);
+  const countries = await globalReadRuntime().countryChoices();
   const title = t('sections.countries');
 
   return (
@@ -676,29 +817,20 @@ export async function CountriesPage({
         label={trail.label}
         trail={[trail.home, trail.global, { text: title }]}
       />
-      <PageHero eyebrow={t('title')} title={title} lede={t('countriesIntro')}>
+      <PageHero title={title} lede={presenceLine(countries, t) ?? t('countriesIntro')}>
         <GlobalSections locale={locale} current="countries" t={t} />
       </PageHero>
       <DirectoryBody>
-        <div className="flex flex-col gap-6">
-          <PlaceList
-            places={page.items}
-            href={(country) => globalPaths.country(locale, country.slug)}
-            label={title}
-            empty={offset > 0 ? t('pageEmpty') : t('countriesEmpty')}
+        {countries.length === 0 ? (
+          <EmptyState>{t('countriesEmpty')}</EmptyState>
+        ) : (
+          <CountriesByRegion
+            countries={countries}
             locale={locale}
+            t={t}
+            headingLevel="h2"
           />
-          <Pagination
-            label={title}
-            previous={
-              offset > 0
-                ? withQuery(base, { offset: Math.max(0, offset - GLOBAL_PAGE) })
-                : null
-            }
-            next={page.hasMore ? withQuery(base, { offset: offset + GLOBAL_PAGE }) : null}
-            {...pages(t)}
-          />
-        </div>
+        )}
       </DirectoryBody>
     </>
   );
@@ -727,7 +859,7 @@ export async function CentresPage({
         label={trail.label}
         trail={[trail.home, trail.global, { text: title }]}
       />
-      <PageHero eyebrow={t('title')} title={title} lede={t('centresIntro')}>
+      <PageHero title={title} lede={t('centresIntro')}>
         <GlobalSections locale={locale} current="centres" t={t} />
       </PageHero>
       <DirectoryBody>
@@ -770,12 +902,18 @@ export async function CountryPage({
   const offset = readOffsetOf(query, 'offset');
   const cityOffset = readOffsetOf(query, 'cities');
   const read = globalReadRuntime();
-  const [regions, cities, centres] = await Promise.all([
+  const [regions, cities, centres, everyCountry] = await Promise.all([
     read.countryRegions(country.id),
     read.countryCities(country.id, 'none', cityOffset),
     read.centresIn({ countryId: country.id, regionId: null, cityId: null }, offset),
+    read.countryChoices(),
   ]);
   const name = placeName(country, locale);
+  const region = worldRegionOf(country.code);
+  const neighbours = everyCountry.filter(
+    (entry) => entry.id !== country.id && worldRegionOf(entry.code) === region,
+  );
+  const news = offset === 0 ? await countryNews(centres) : null;
   const path = globalPaths.country(locale, country.slug);
   // Phase 30-R: a Country of PRESENCE — published, with nothing yet listed
   // beneath it — says so once, plainly, instead of three empty lists, and does
@@ -799,10 +937,16 @@ export async function CountryPage({
         ]}
       />
       <RecordHeader
-        eyebrow={t('centre.country')}
+        kind={t('centre.country')}
+        {...(region === 'other' ? {} : { where: t(`regions.${region}`) })}
         name={name.text}
         nameLocale={name.locale}
       >
+        {bare ? (
+          <p className="text-lede max-w-[var(--measure-prose)] text-foreground-muted">
+            {t('country.presenceOnly')}
+          </p>
+        ) : null}
         <div className="flex flex-wrap items-center gap-3 pt-1">
           {bare ? (
             <ActionLink href={globalPaths.countries(locale)} tone="secondary">
@@ -816,12 +960,21 @@ export async function CountryPage({
         </div>
       </RecordHeader>
 
-      {bare ? (
+      {bare ? null : (
         <DirectoryBody>
-          <Alert tone="info">{t('country.presenceOnly')}</Alert>
-        </DirectoryBody>
-      ) : (
-        <DirectoryBody>
+          {news === null || news.length === 0 ? null : (
+            <Section id="country-news" heading={t('countryNews', { country: name.text })}>
+              <NewsGrid
+                locale={locale}
+                items={news}
+                label={t('countryNews', { country: name.text })}
+                showType
+                headingLevel="h3"
+                columns={3}
+              />
+            </Section>
+          )}
+
           {regions.length === 0 ? null : (
             <Section id="country-regions" heading={t('country.regions')}>
               <PlaceList
@@ -880,6 +1033,23 @@ export async function CountryPage({
         </DirectoryBody>
       )}
 
+      {neighbours.length === 0 || region === 'other' ? null : (
+        <DirectoryBody>
+          <Section
+            id="country-neighbours"
+            heading={t('countryNeighbours', { region: t(`regions.${region}`) })}
+          >
+            <PlaceList
+              places={neighbours}
+              href={(entry) => globalPaths.country(locale, entry.slug)}
+              label={t('countryNeighbours', { region: t(`regions.${region}`) })}
+              empty={t('countriesEmpty')}
+              locale={locale}
+            />
+          </Section>
+        </DirectoryBody>
+      )}
+
       <BreadcrumbData
         contentLocales={placeLocales(country)}
         trail={[
@@ -933,11 +1103,7 @@ export async function RegionPage({
           { text: name.text },
         ]}
       />
-      <RecordHeader
-        eyebrow={t('centre.region')}
-        name={name.text}
-        nameLocale={name.locale}
-      >
+      <RecordHeader kind={t('centre.region')} name={name.text} nameLocale={name.locale}>
         <div className="flex flex-wrap items-center gap-3 pt-1">
           <ActionLink href={finderPath(locale, { country: region.country, region })}>
             {t('region.findIn', { region: name.text })}
@@ -1049,7 +1215,7 @@ export async function CityPage({
           { text: name.text },
         ]}
       />
-      <RecordHeader eyebrow={t('centre.city')} name={name.text} nameLocale={name.locale}>
+      <RecordHeader kind={t('centre.city')} name={name.text} nameLocale={name.locale}>
         <div className="flex flex-wrap items-center gap-3 pt-1">
           <ActionLink href={finderPath(locale, { country: city.country, city })}>
             {t('city.findIn', { city: name.text })}
@@ -1132,7 +1298,6 @@ export async function PakistanPage({
         trail={[trail.home, trail.global, { text: title }]}
       />
       <PageHero
-        eyebrow={t('title')}
         title={title}
         lede={t('pakistan.intro')}
         {...(country === null
@@ -1167,7 +1332,7 @@ export async function PakistanPage({
                   return (
                     <section
                       key={region.id}
-                      className="flex flex-col gap-3 rounded-panel border border-border border-t-4 border-t-accent-rule bg-surface-raised p-5 shadow-panel"
+                      className="flex flex-col gap-3 rounded-panel border border-border bg-surface-raised p-5"
                       aria-labelledby={`pakistan-${region.id}`}
                     >
                       <h2

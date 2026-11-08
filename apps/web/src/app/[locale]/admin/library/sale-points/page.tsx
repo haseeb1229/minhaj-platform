@@ -11,6 +11,7 @@ import {
 } from '@/components/ui';
 import { pageOffset, PAGE_SIZE } from '../../shared';
 import { libraryCopy, SalePointForm } from '../forms';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/library/sale-points` — printed-book availability records
@@ -29,6 +30,7 @@ import { libraryCopy, SalePointForm } from '../forms';
  * Work form. That is an operator convenience on a private, `noindex`, `no-store`
  * screen; it grants nothing.
  */
+export const generateMetadata = adminPageMetadata('library', 'admin.sale-points');
 export const dynamic = 'force-dynamic';
 
 export default async function SalePointsDirectory({

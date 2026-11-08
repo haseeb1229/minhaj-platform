@@ -7,7 +7,6 @@ import { requireAdminPage } from '@/composition/authorization';
 import { identityRuntime } from '@/composition/identity';
 import { requireLocale } from '@/config/route-locale';
 import {
-  Alert,
   Button,
   DataCell,
   DataRow,
@@ -23,7 +22,10 @@ import {
 } from '@/components/ui';
 import { ActionForm } from '../../../(identity)/form-state';
 import { retryDeliveryAction } from '../../actions';
+import { AdminPager } from '../../pager';
+import { adminPageHref } from '../../paging';
 import { PAGE_SIZE, adminCopy, pageOffset, queryValue } from '../../shared';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * Outbound mail operation — pending, failed and suppressed.
@@ -48,7 +50,7 @@ import { PAGE_SIZE, adminCopy, pageOffset, queryValue } from '../../shared';
  * the people who bounced or complained is personal data nobody asked this
  * surface to display.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('admin', 'delivery.title');
 export const dynamic = 'force-dynamic';
 
 const STATUSES: readonly DeliveryStatus[] = [
@@ -80,6 +82,7 @@ export default async function DeliveryPage({
 
   const requested = queryValue(query, 'status');
   const status = STATUSES.find((entry) => entry === requested) ?? null;
+  const offset = pageOffset(query, PAGE_SIZE);
 
   const { deliveries, suppression } = identityRuntime();
   const [summary, listed, suppressions] = await Promise.all([
@@ -87,7 +90,7 @@ export default async function DeliveryPage({
     deliveries.listForOperator({
       status,
       limit: PAGE_SIZE,
-      offset: pageOffset(query, PAGE_SIZE),
+      offset,
     }),
     suppression.summarise(),
   ]);
@@ -222,7 +225,17 @@ export default async function DeliveryPage({
         </Panel>
       )}
 
-      {listed.more ? <Alert tone="info">{t('common.more')}</Alert> : null}
+      <AdminPager
+        label={t('pager.label')}
+        offset={offset}
+        pageSize={PAGE_SIZE}
+        more={listed.more}
+        href={adminPageHref(localizedPath(locale, '/admin/communications/delivery'), {
+          status,
+        })}
+        previousLabel={t('pager.previous')}
+        nextLabel={t('pager.next')}
+      />
 
       <Panel>
         <div className="flex flex-col gap-3">

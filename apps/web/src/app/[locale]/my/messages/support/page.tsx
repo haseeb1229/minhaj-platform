@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
@@ -6,14 +7,14 @@ import {
   ConversationList,
   MessagingTime,
   UnreadBadge,
-  messagingLinks,
   messagingMessages,
 } from '@/components/messaging/parts';
 import { conversationPath } from '@/components/messaging/presentation';
 import { messagingRead } from '@/components/messaging/read';
-import { PersonalFrame, PersonalLinks } from '@/components/personal/parts';
 import { Alert, EmptyState, Panel, SectionHeading, TextLink } from '@/components/ui';
 import { messagingRuntime } from '@/composition/messaging';
+import { MyPage } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../(identity)/form-state';
 import { requireActiveSession } from '../../guard';
@@ -36,7 +37,13 @@ import { openSupportAction } from '../actions';
  * This is distinct from the public `/contact` and `/feedback` forms, which are
  * Editorial correspondence and need no account.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'support');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -55,7 +62,6 @@ export default async function MySupportPage({
   const actor = { accountId: session.account.id };
   const { service } = messagingRuntime();
   const timeZone = session.account.timezone;
-  const back = <PersonalLinks label={t('nav.label')} links={messagingLinks(locale, t)} />;
   const description = <p>{t('support.description')}</p>;
 
   const read = await messagingRead('messaging-my-support', async () => {
@@ -67,7 +73,7 @@ export default async function MySupportPage({
 
   if (!read.ok || !read.value.active)
     return (
-      <PersonalFrame title={t('support.title')} description={description} back={back}>
+      <MyPage title={t('support.title')} description={description}>
         {read.ok || read.failure === 'not-found' ? (
           <Alert tone="info">{t('support.notActivated')}</Alert>
         ) : (
@@ -79,13 +85,13 @@ export default async function MySupportPage({
             {t('support.contactLink')}
           </TextLink>
         </p>
-      </PersonalFrame>
+      </MyPage>
     );
 
   const { open, earlier } = read.value.overview;
 
   return (
-    <PersonalFrame title={t('support.title')} description={description} back={back}>
+    <MyPage title={t('support.title')} description={description}>
       <Panel>
         <div className="flex min-w-0 flex-col gap-3">
           <SectionHeading>{t('support.openHeading')}</SectionHeading>
@@ -147,6 +153,6 @@ export default async function MySupportPage({
           />
         )}
       </section>
-    </PersonalFrame>
+    </MyPage>
   );
 }

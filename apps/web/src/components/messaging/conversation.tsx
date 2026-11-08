@@ -8,7 +8,7 @@ import type { Locale } from '@minhaj/contracts';
 import type { MessagingSurface } from '@minhaj/contracts/messaging';
 
 import { ActionForm, type FormActionState } from '@/app/[locale]/(identity)/form-state';
-import { PersonalFrame, PersonalLinks } from '@/components/personal/parts';
+import { MyPage } from '@/components/my/frame';
 import { displayTimeZone } from '@/components/personal/presentation';
 import { TeacherFrame } from '@/components/teacher/parts';
 import { Alert, EmptyState, TextLink } from '@/components/ui';
@@ -28,7 +28,6 @@ import {
   ThreadItems,
   UnreadBadge,
   counterpartName,
-  messagingLinks,
   messagingMessages,
   threadLabels,
   type MessagingTranslator,
@@ -126,13 +125,16 @@ function Frame({
       </TeacherFrame>
     );
   return (
-    <PersonalFrame
+    <MyPage
       title={title}
+      measure="reading"
       {...(description === undefined ? {} : { description })}
-      back={<PersonalLinks label={t('nav.label')} links={messagingLinks(locale, t)} />}
     >
       {children}
-    </PersonalFrame>
+      <p>
+        <TextLink href={conversationsPath('my', locale)}>{t('thread.back')}</TextLink>
+      </p>
+    </MyPage>
   );
 }
 

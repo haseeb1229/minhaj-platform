@@ -30,6 +30,7 @@ import { ActionForm } from '../../../(identity)/form-state';
 import {
   approvePromotionAction,
   createManifestAction,
+  createRunManifestAction,
   withdrawPromotionAction,
 } from '../actions';
 import {
@@ -51,6 +52,7 @@ import {
   type Query,
 } from '../shared';
 import { ContentKindLabel, ManifestStateBadge, PromotionStateBadge } from '../status';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/migration/manifests` — publish manifests and promotions,
@@ -70,7 +72,7 @@ import { ContentKindLabel, ManifestStateBadge, PromotionStateBadge } from '../st
  * step-up — and CARRIED BY THE COMMAND LINE, never from this browser. This
  * screen shows where each one stands.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminMigration', 'manifests.title');
 
 export const dynamic = 'force-dynamic';
 
@@ -104,7 +106,7 @@ export default async function MigrationManifestsPage({
   const publisher = context.authorization.can('migration.publish');
   const { read } = migrationRuntime();
 
-  const [manifests, promotions, completed, approved] = await Promise.all([
+  const [manifests, promotions, completed, approved, runWide] = await Promise.all([
     migrationRead('migration-admin-manifests', () =>
       read.manifests(actor, { state, offset }),
     ),
@@ -124,6 +126,11 @@ export default async function MigrationManifestsPage({
             unmanifested: true,
             offset: 0,
           }),
+        )
+      : Promise.resolve(null),
+    administer && runId !== null
+      ? migrationRead('migration-admin-run-manifest', () =>
+          read.runManifest(actor, { runId }),
         )
       : Promise.resolve(null),
   ]);
@@ -315,6 +322,44 @@ export default async function MigrationManifestsPage({
                 {t('manifests.create.reviewOnlyWithheld', { count: withheld })}
               </p>
             ) : null}
+            {runId === null || runWide === null ? null : !runWide.ok ? (
+              <Alert tone="error">{copy.refusals[runWide.failure]}</Alert>
+            ) : runWide.value.confirmation.count === 0 ? null : (
+              <div className="flex flex-col gap-3 border-t border-border pt-4">
+                <h3 className="font-semibold">{t('runBatch.manifest.heading')}</h3>
+                <p className="text-sm">
+                  {t('runBatch.manifest.help', {
+                    count: runWide.value.confirmation.count,
+                    next: runWide.value.next,
+                  })}
+                </p>
+                <ActionForm
+                  action={createRunManifestAction}
+                  submitLabel={t('runBatch.manifest.submit', {
+                    next: runWide.value.next,
+                  })}
+                  pendingLabel={t('pending')}
+                  messages={{ ...copy.messages, conflict: t('runBatch.conflict') }}
+                >
+                  <input type="hidden" name="locale" value={locale} />
+                  <input type="hidden" name="runId" value={runId} />
+                  <input
+                    type="hidden"
+                    name="expectedCount"
+                    value={String(runWide.value.confirmation.count)}
+                  />
+                  <input
+                    type="hidden"
+                    name="fingerprint"
+                    value={runWide.value.confirmation.fingerprint}
+                  />
+                  <ConfirmField
+                    id="run-manifest-confirm"
+                    label={t('runBatch.manifest.confirm', { next: runWide.value.next })}
+                  />
+                </ActionForm>
+              </div>
+            )}
           </div>
         </Panel>
       ) : null}
@@ -325,7 +370,9 @@ export default async function MigrationManifestsPage({
         </SectionHeading>
         <p className="text-sm text-foreground-muted">{t('promotions.help')}</p>
         <Alert tone="info">{t('promotions.commandLine')}</Alert>
-        {publisher ? <MigrationPublicationStepUp locale={locale} /> : null}
+        {publisher ? (
+          <MigrationPublicationStepUp locale={locale} returnTo={base} />
+        ) : null}
         {!promotions.ok ? (
           <Alert tone="error">{t('failure.load')}</Alert>
         ) : promotions.value.rows.length === 0 ? (

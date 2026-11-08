@@ -1,14 +1,17 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getFormatter, getTranslations } from 'next-intl/server';
 
 import { identityRuntime } from '@/composition/identity';
 import { requestContext } from '@/composition/request';
+import { MyPage } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
+import { myTabs } from '@/components/my/sections';
 import { requireLocale } from '@/config/route-locale';
 import { MIN_PASSWORD_LENGTH } from '@minhaj/contracts/identity';
 import {
   Alert,
   Field,
-  PageHeading,
   Panel,
   SectionHeading,
   SessionList,
@@ -46,7 +49,13 @@ import { SecondFactorSection } from './second-factor';
  * privileged administration: those are the `/admin` surfaces, behind the
  * permission checks that give them meaning (§3.4).
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'security');
+}
 
 /**
  * PER REQUEST, always. This surface reads a session or a one-time token, so
@@ -61,6 +70,11 @@ export default async function SecurityPage({
 }) {
   const locale = await requireLocale(params);
   const t = await getTranslations({ locale, namespace: 'identity' });
+  const my = await getTranslations({ locale, namespace: 'my' });
+  const tabs = {
+    label: my('tabs.label.settings'),
+    items: myTabs(locale, 'settings', 'security', (tab) => my(`tabs.${tab}`)),
+  };
   const format = await getFormatter({ locale });
 
   const session = await requireActiveSession(
@@ -80,12 +94,12 @@ export default async function SecurityPage({
   const others = sessions.filter((entry) => !entry.current);
 
   return (
-    <main className="flex w-full max-w-3xl min-w-0 flex-col gap-8">
-      <header className="flex flex-col gap-2">
-        <PageHeading>{t('security.title')}</PageHeading>
-        <p className="text-foreground-muted">{t('security.description')}</p>
-      </header>
-
+    <MyPage
+      title={t('security.title')}
+      description={<p>{t('security.description')}</p>}
+      tabs={tabs}
+      measure="reading"
+    >
       {/* ---- Password ---------------------------------------------------- */}
 
       <section className="flex flex-col gap-3" aria-labelledby="password-heading">
@@ -377,6 +391,6 @@ export default async function SecurityPage({
           </ActionForm>
         </Panel>
       </section>
-    </main>
+    </MyPage>
   );
 }

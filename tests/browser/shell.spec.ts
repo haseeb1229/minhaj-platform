@@ -63,21 +63,30 @@ const ORGANISATION = 'Minhaj-ul-Quran International';
 const PRE_ADOPTION = 'not currently commissioned';
 
 /**
- * The destinations the presentation policy may ever put in the bar, in its
- * display order (apps/web/src/shell/presence.ts). About is always present and
- * always last; the rest need evidence.
+ * R2 — the six header groups the presentation policy may show, in its fixed
+ * display order (apps/web/src/shell/presence.ts). About MQI is always present
+ * and always last; a group with no present destination is omitted.
  */
-const PRIMARY_ORDER: readonly string[] = [
-  '/quran',
-  '/hadith',
-  '/library',
-  '/watch',
-  '/learn',
-  '/fatwa',
-  '/news',
-  '/collections',
-  '/explore',
+const GROUP_ORDER: readonly string[] = [
+  'Quran',
+  'Knowledge',
+  'Watch & Listen',
+  'Learn',
+  'News & Events',
+  'About MQI',
 ];
+
+/** The organisation's official channels, the only links that leave the app. */
+const OFFICIAL_CHANNELS: readonly string[] = [
+  'https://www.youtube.com/DrQadri',
+  'https://www.facebook.com/MinhajulQuran',
+  'https://twitter.com/TahirulQadri',
+  'https://apps.apple.com/us/developer/minhaj-publications/id998868018',
+  'https://play.google.com/store/apps/dev?id=6490820456874948658',
+];
+
+/** Only the app's own addresses are fetched by a link check. */
+const internal = (href: string) => href.startsWith('/');
 
 /**
  * Destinations that need an APPROVED corpus or service. The suite only ever
@@ -651,7 +660,7 @@ test.describe('the anonymous public tree is the same for everybody', () => {
  * ========================================================================= */
 
 test.describe('the public header', () => {
-  test('is one quiet row: wordmark, content-aware destinations, search, account', async ({
+  test('is a utility strip and one row: wordmark, grouped navigation, search', async ({
     page,
   }) => {
     await page.goto('/explore');
@@ -662,82 +671,91 @@ test.describe('the public header', () => {
     await expect(wordmark).toHaveCount(1);
     await expect(wordmark).toHaveAttribute('href', '/');
 
-    // THE PRIMARY NAVIGATION — bounded, in the policy's order, About always
-    // present and always last, and marked current on its own section.
+    // THE GROUPED NAVIGATION (R2) — disclosure buttons in the policy's fixed
+    // order, About MQI always present and always last.
     const nav = banner.getByRole('navigation', { name: NAV });
     await expect(nav).toBeVisible();
-    const bar = await hrefsOf(nav);
-    expect(bar.length).toBeGreaterThanOrEqual(1);
-    expect(bar.length).toBeLessThanOrEqual(6);
-    expect(bar.at(-1)).toBe('/explore');
-    const about = nav.getByRole('link', { name: 'About', exact: true });
-    await expect(about).toHaveAttribute('href', '/explore');
-    await expect(about).toHaveAttribute('aria-current', 'page');
-    const positions = bar.map((href) => PRIMARY_ORDER.indexOf(href));
-    expect(positions, `bar ${bar.join(' ')}`).not.toContain(-1);
+    const buttons = nav.getByRole('button');
+    // The group the visitor is inside also carries a visually hidden marker.
+    const names = (await buttons.allInnerTexts()).map((text) =>
+      text.replace('(current section)', '').trim(),
+    );
+    expect(names.length).toBeGreaterThanOrEqual(1);
+    expect(names.length).toBeLessThanOrEqual(GROUP_ORDER.length);
+    expect(names.at(-1)).toBe('About MQI');
+    const positions = names.map((name) => GROUP_ORDER.indexOf(name));
+    expect(positions, `groups ${names.join(' | ')}`).not.toContain(-1);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
 
     // FIXTURE CORPORA ARE NEVER ADVERTISED. Every Quran, Hadith or Fatwa
     // activation in this suite is a fixture, so none of them is a destination
-    // — not in the bar, not under More, not in the drawer, not anywhere in the
-    // header (hidden markup included).
+    // anywhere in the header, closed panels included.
     const header = await anchorsOf(banner);
     for (const absent of NEVER_PROMOTED_WITH_FIXTURES)
       expect(header, `header promotes ${absent}`).not.toContain(absent);
+    expect(header, 'header links the sitemap').not.toContain('/sitemap');
 
-    // Every destination it does promote is a working page.
-    for (const href of bar)
-      expect((await page.request.get(href)).status(), href).toBe(200);
+    // Each group is a DISCLOSURE: keyboard-operable, never a trap, one open at a
+    // time, every link in its panel a working page.
+    for (let index = 0; index < names.length; index += 1) {
+      const trigger = buttons.nth(index);
+      await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      await trigger.focus();
+      await page.keyboard.press('Enter');
+      await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      await expect(page.locator('[aria-modal="true"]:visible')).toHaveCount(0);
+      await expect(nav.locator('[aria-expanded="true"]')).toHaveCount(1);
+      const panel = page.locator(`#${await trigger.getAttribute('aria-controls')}`);
+      await expect(panel).toBeVisible();
+      for (const href of await hrefsOf(panel))
+        expect((await page.request.get(href)).status(), href).toBe(200);
+      await page.keyboard.press('Escape');
+      await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      await expect(trigger).toBeFocused();
+    }
 
-    // NO UTILITY WALL, NO MEGA MENUS, NO PRE-ADOPTION MARKER in the header.
-    for (const removed of ['/membership', '/contact', '/sitemap'])
-      expect(header, `header links ${removed}`).not.toContain(removed);
-    // Find a Centre is no utility link any more: it is never in the bar. The
-    // drawer's organisation group may list it, but only while Centres are
-    // published — the same rule as the footer.
-    expect(bar).not.toContain('/global/find-a-centre');
-    for (const name of ['Explore', 'Library', 'Watch', 'News and Events'])
-      await expect(banner.getByRole('button', { name, exact: true }), name).toHaveCount(
-        0,
-      );
+    // ArrowDown opens a group and moves into its first link.
+    await buttons.last().focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(buttons.last()).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator(':focus')).toHaveAttribute('href', '/explore');
+    await page.keyboard.press('Escape');
+
+    // The About group marks itself as the visitor's current section here.
+    await expect(
+      nav.getByRole('button', { name: /About MQI.*current section/ }),
+    ).toHaveCount(1);
+
+    // NO PRE-ADOPTION MARKER in the header, and the organisation's mark only in
+    // the footer.
     await expect(banner).not.toContainText(PRE_ADOPTION);
     await expect(banner.getByRole('img', { name: ORGANISATION })).toHaveCount(0);
-
-    // A "More" disclosure exists only for destinations beyond the six, and it
-    // is a disclosure: keyboard-operable, never a trap.
-    const more = nav.getByRole('button', { name: 'More', exact: true });
-    if ((await more.count()) > 0) {
-      expect(bar).toHaveLength(6);
-      await expect(more).toHaveAttribute('aria-expanded', 'false');
-      await more.focus();
-      await page.keyboard.press('Enter');
-      await expect(more).toHaveAttribute('aria-expanded', 'true');
-      await expect(page.locator('[aria-modal="true"]:visible')).toHaveCount(0);
-      const panel = page.locator(`#${await more.getAttribute('aria-controls')}`);
-      for (const href of await hrefsOf(panel))
-        expect(PRIMARY_ORDER, href).toContain(href);
-      await page.keyboard.press('Escape');
-      await expect(more).toHaveAttribute('aria-expanded', 'false');
-      await expect(more).toBeFocused();
-    }
   });
 
-  test('searches with a real form that submits q by GET', async ({ page }) => {
+  test('searches from a palette with a real form that submits q by GET', async ({
+    page,
+  }) => {
     for (const locale of ['en', 'ur'] as const) {
       await page.goto(localizedPath(locale, '/explore'));
-      const form = page.getByRole('banner').getByRole('search');
-      await expect(form, locale).toHaveCount(1);
+      const banner = page.getByRole('banner');
+      await banner
+        .getByRole('button', { name: locale === 'en' ? 'Search' : 'تلاش' })
+        .click();
+      const palette = page.getByRole('dialog');
+      await expect(palette, locale).toBeVisible();
+      const form = palette.getByRole('search');
       await expect(form, locale).toHaveAttribute('method', 'get');
       await expect(form, locale).toHaveAttribute(
         'action',
         localizedPath(locale, '/search'),
       );
 
-      // A labelled field — found through its accessible name, not a selector.
+      // A labelled field, focused on open — found through its accessible name.
       const field =
         locale === 'en'
           ? form.getByRole('searchbox', { name: SEARCH_LABEL })
           : form.getByRole('searchbox', { name: /.+/ });
+      await expect(field, locale).toBeFocused();
       await expect(field, locale).toHaveAttribute('name', 'q');
 
       await field.fill('vision');
@@ -748,25 +766,34 @@ test.describe('the public header', () => {
     }
   });
 
-  test('reaches search from the keyboard straight after the destinations', async ({
+  test('reaches search from the keyboard straight after the groups, and by Ctrl+K', async ({
     page,
   }) => {
     await page.goto('/');
     const banner = page.getByRole('banner');
     const nav = banner.getByRole('navigation', { name: NAV });
-    const stops =
-      (await nav.getByRole('link').count()) + (await nav.getByRole('button').count());
+    const stops = await nav.getByRole('button').count();
 
-    // From the wordmark, Tab walks the destinations in order and then lands in
-    // the search field — no hidden duplicate, no stop that goes nowhere.
+    // From the wordmark, Tab walks the group buttons in order (closed panels
+    // hold no stop) and then lands on Search — no hidden duplicate.
     await banner.getByRole('link', { name: WORDMARK }).focus();
     for (let index = 0; index < stops; index += 1) {
       await page.keyboard.press('Tab');
       await expect(nav.locator(':focus'), `stop ${String(index)}`).toHaveCount(1);
     }
     await page.keyboard.press('Tab');
-    await expect(banner.getByRole('searchbox', { name: SEARCH_LABEL })).toBeFocused();
+    const search = banner.getByRole('button', { name: 'Search' });
+    await expect(search).toBeFocused();
 
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('searchbox', { name: SEARCH_LABEL })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(search).toBeFocused();
+
+    // The shortcut opens the same palette from anywhere on the page.
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press('Control+k');
     await page.keyboard.type('mission');
     await page.keyboard.press('Enter');
     await page.waitForURL((url) => url.pathname === '/search');
@@ -842,9 +869,10 @@ test.describe('the mobile navigation', () => {
 
     await trigger.click();
 
+    // R2: the shared Sheet primitive — the browser's own modal `<dialog>`.
     const drawer = page.getByRole('dialog', { name: NAV });
     await expect(drawer).toBeVisible();
-    await expect(drawer).toHaveAttribute('aria-modal', 'true');
+    expect(await drawer.evaluate((element) => element.matches(':modal'))).toBe(true);
 
     // Focus moves INTO the drawer when it opens.
     await expect(drawer.getByRole('button', { name: 'Close' })).toBeFocused();
@@ -858,8 +886,8 @@ test.describe('the mobile navigation', () => {
 
     // The trap holds, both ways: tabbing past the last focusable returns to the
     // first, and Shift+Tab from the first wraps to the last, rather than
-    // escaping to the page underneath.
-    const focusables = await drawer.locator('a[href], button, input').count();
+    // escaping to the page underneath or the browser.
+    const focusables = await drawer.locator('a[href], button, input, summary').count();
     for (let index = 0; index < focusables + 1; index += 1) {
       await page.keyboard.press('Tab');
       expect(
@@ -885,27 +913,37 @@ test.describe('the mobile navigation', () => {
     ).not.toBe('hidden');
   });
 
-  test('holds search, the destinations, the account entry and the organisation', async ({
+  test('holds search, one accordion per group, the organisation and the language', async ({
     page,
   }) => {
     await page.goto('/');
+
+    // The account entry sits in the phone header itself, relabelled for this
+    // signed-out browser.
+    await expect(
+      page.getByRole('banner').getByRole('link', { name: 'Sign in', exact: true }),
+    ).toHaveAttribute('href', '/signin');
+
     await page.getByRole('button', { name: 'Menu' }).click();
     const drawer = page.getByRole('dialog', { name: NAV });
     await expect(drawer).toBeVisible();
 
-    // The destinations, About always among them, fixture corpora never.
+    // One accordion per group; opened, each lists its present destinations —
+    // About always among them, fixture corpora never.
+    const groups = drawer.getByRole('navigation', { name: NAV }).locator('summary');
+    const count = await groups.count();
+    expect(count).toBeGreaterThanOrEqual(1);
+    for (let index = 0; index < count; index += 1) await groups.nth(index).click();
     const hrefs = await hrefsOf(drawer.getByRole('navigation', { name: NAV }));
     expect(hrefs).toContain('/explore');
     for (const absent of NEVER_PROMOTED_WITH_FIXTURES)
       expect(hrefs).not.toContain(absent);
 
-    // The account entry, relabelled for this signed-out browser.
-    await expect(
-      drawer.getByRole('link', { name: 'Sign in', exact: true }),
-    ).toHaveAttribute('href', '/signin');
-
-    // The organisation group, About among its links.
-    await expect(drawer).toContainText('The organisation');
+    // The organisation's own links, About among them, and the language switcher.
+    expect(
+      await hrefsOf(drawer.getByRole('navigation', { name: 'The organisation' })),
+    ).toContain('/explore');
+    await expect(drawer.getByRole('navigation', { name: SWITCHER })).toBeVisible();
 
     // Every link the drawer offers is a working page.
     for (const href of new Set(await hrefsOf(drawer)))
@@ -925,16 +963,16 @@ test.describe('the mobile navigation', () => {
     await page.goto('/');
     const banner = page.getByRole('banner');
 
-    // Before the drawer opens, nothing inside it is focusable — a hidden
-    // duplicate of every link is a tab order a keyboard visitor walks through
-    // for no reason — and the desktop bar and search form are gone at this
-    // width, leaving one labelled search action.
+    // Before the drawer opens, nothing inside it is focusable, and the desktop
+    // groups and utility strip are gone at this width, leaving one labelled
+    // Search action that opens the palette.
     await expect(page.getByRole('dialog')).toBeHidden();
     await expect(banner.getByRole('navigation', { name: NAV })).toHaveCount(0);
     await expect(banner.getByRole('search')).toHaveCount(0);
-    const search = banner.getByRole('link', { name: 'Search', exact: true });
+    const search = banner.getByRole('button', { name: 'Search', exact: true });
     await expect(search).toBeVisible();
-    await expect(search).toHaveAttribute('href', '/search');
+    await search.click();
+    await expect(page.getByRole('searchbox', { name: SEARCH_LABEL })).toBeFocused();
   });
 });
 
@@ -943,7 +981,9 @@ test.describe('the mobile navigation', () => {
  * ========================================================================= */
 
 test.describe('the public footer', () => {
-  test('is three deliberate groups, every link working', async ({ page }) => {
+  test('is curated columns and the official channels, every link working', async ({
+    page,
+  }) => {
     await page.goto('/');
     const footer = page.getByRole('contentinfo');
 
@@ -952,26 +992,40 @@ test.describe('the public footer', () => {
       '/',
     );
 
-    // Each group is a labelled navigation holding at least the destination
-    // that needs no evidence: Topics, About and My Minhaj.
+    // R2: up to six columns, each a labelled navigation; the three that hold a
+    // destination needing no evidence are always there.
     for (const [group, always] of [
-      ['Discover', '/topics'],
-      ['The organisation', '/explore'],
-      ['Take part', '/my'],
+      ['Quran & Knowledge', '/topics'],
+      ['About MQI', '/explore'],
+      ['Learn & take part', '/my'],
     ] as const) {
       const nav = footer.getByRole('navigation', { name: group, exact: true });
       await expect(nav, group).toBeVisible();
       expect(await hrefsOf(nav), group).toContain(always);
     }
-    // Not a sitemap: three groups and nothing else while no legal page is
-    // published.
-    await expect(footer.getByRole('navigation')).toHaveCount(3);
+
+    // The official channels: exactly minhaj.org's own addresses, outbound.
+    const channels = footer.getByRole('navigation', { name: 'Official channels' });
+    expect(await hrefsOf(channels)).toEqual([...OFFICIAL_CHANNELS]);
+    for (const link of await channels.getByRole('link').all())
+      await expect(link).toHaveAttribute('rel', 'external noopener noreferrer');
+
+    // Not a sitemap: the columns, the channels, and no legal navigation while
+    // no legal page is published.
+    const navigations = await footer.getByRole('navigation').count();
+    expect(navigations).toBeGreaterThanOrEqual(4);
+    expect(navigations).toBeLessThanOrEqual(7);
 
     const seen = new Set(await hrefsOf(footer));
     for (const absent of NEVER_PROMOTED_WITH_FIXTURES)
       expect([...seen], `footer promotes ${absent}`).not.toContain(absent);
-    for (const href of seen)
+    for (const href of seen) {
+      if (!internal(href)) {
+        expect(OFFICIAL_CHANNELS, href).toContain(href);
+        continue;
+      }
       expect((await page.request.get(href)).status(), href).toBe(200);
+    }
   });
 
   test('links a legal document only once it is published', async ({ page }) => {
@@ -1292,6 +1346,12 @@ test.describe('navigation is honest about what exists', () => {
 
       for (const href of await hrefsOf(page.locator('body'))) {
         if (href === '' || href.startsWith('#') || seen.has(href)) continue;
+        // R2: the footer's official channels are the only links that leave the
+        // app; they are checked by name, never fetched.
+        if (!internal(href)) {
+          expect(OFFICIAL_CHANNELS, `${path} -> ${href}`).toContain(href);
+          continue;
+        }
         seen.add(href);
 
         const response = await page.request.get(href);

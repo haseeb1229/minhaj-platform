@@ -25,6 +25,7 @@ import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../../(identity)/form-state';
 import { decideReportAction } from '../../actions';
 import { ReportStateBadge, adminMessagingCopy, reportTarget } from '../../shared';
+import { adminPageMetadata } from '../../../metadata';
 
 /**
  * One report and the evidence it authorises (ROUTE_MAP.md §7;
@@ -42,7 +43,10 @@ import { ReportStateBadge, adminMessagingCopy, reportTarget } from '../../shared
  * moderator was shown and after an explicit confirmation. No strike, ban or
  * escalation exists (OPEN_DECISIONS.md §6.6).
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata(
+  'adminMessaging',
+  'evidence.fallbackTitle',
+);
 
 export const dynamic = 'force-dynamic';
 

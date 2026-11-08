@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -5,7 +6,9 @@ import { getTranslations } from 'next-intl/server';
 import { fatwaRuntime } from '@/composition/fatwa';
 import { FatwaDate } from '@/components/fatwa/parts';
 import { readQuestionId, rulingHref } from '@/components/fatwa/presentation';
-import { DetailRow, PageHeading, Panel, StatusBadge, TextLink } from '@/components/ui';
+import { DetailRow, Panel, StatusBadge, TextLink } from '@/components/ui';
+import { MyPage } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
 import { requireLocale } from '@/config/route-locale';
 import { requireActiveSession } from '../../guard';
 
@@ -19,7 +22,13 @@ import { requireActiveSession } from '../../guard';
  * and — once it is public — the published ruling, whose question is a
  * separately written, anonymised statement rather than these words.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'question');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -47,11 +56,7 @@ export default async function MyQuestionPage({
   const t = await getTranslations({ locale, namespace: 'fatwa' });
 
   return (
-    <main className="flex w-full max-w-3xl min-w-0 flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <PageHeading>{t('my.questionTitle')}</PageHeading>
-      </header>
-
+    <MyPage title={t('my.questionTitle')} measure="reading">
       <Panel>
         <dl className="divide-y divide-border">
           <DetailRow term={t('my.statusLabel')}>
@@ -89,7 +94,10 @@ export default async function MyQuestionPage({
         {question.body === null ? (
           <p className="text-sm text-foreground-muted">{t('my.erased')}</p>
         ) : (
-          <p className="whitespace-pre-wrap wrap-anywhere" dir="auto">
+          <p
+            className="rounded-panel bg-surface-sunken px-5 py-4 whitespace-pre-wrap wrap-anywhere"
+            dir="auto"
+          >
             {question.body}
           </p>
         )}
@@ -98,6 +106,6 @@ export default async function MyQuestionPage({
       <p>
         <TextLink href={localizedPath(locale, '/my/questions')}>{t('my.back')}</TextLink>
       </p>
-    </main>
+    </MyPage>
   );
 }

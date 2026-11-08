@@ -1,211 +1,189 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
+
 import { useCanonicalPathname } from '@/components/shell/canonical-pathname';
+import { Icon } from '@/components/ui/icon';
+import { rovingIndex, type Direction } from '@/components/ui/interaction';
 
 /**
- * THE mega-menu framework (ROUTE_MAP.md §3.2, INFORMATION_ARCHITECTURE.md §3).
+ * THE MEGA-NAVIGATION (R2) — the header's six grouped disclosures.
  *
- * ONE framework, nine menus. Every primary domain with a mega menu renders its
- * own panel inside this component rather than writing a second disclosure with
- * its own keyboard bugs.
+ * DISCLOSURES, NOT A MENU AND NOT A DIALOG. Each group is a real `<button>`
+ * with `aria-expanded`/`aria-controls` and its panel follows it in the DOM, so
+ * Tab goes from the button straight into its open panel and on out of it. No
+ * `role="menu"` (the links are ordinary links), no focus trap and no
+ * `aria-modal`: the drawer on a phone is the modal surface, not this.
  *
- * TWO TRIGGER SHAPES, one behaviour.
+ * KEYBOARD. Enter/Space toggles a group; ArrowDown opens it and moves into its
+ * first link; ArrowLeft/ArrowRight (as the visitor sees them, so mirrored in
+ * Urdu and Arabic), Home and End move between the group buttons; Escape closes
+ * and returns focus to the group's button. ONE PANEL AT A TIME: opening a
+ * group closes the other, and a press outside or focus leaving the navigation
+ * closes it. Never hover-only — activation is always a press.
  *
- *   - BUTTON ONLY (`link` absent): the visible label IS the button. Explore is
- *     shaped this way — it is a gateway, and its landing is the panel's
- *     overview link.
- *   - LINK AND BUTTON (`link` present): the domain's name is an ordinary link to
- *     its landing, and a separate, compact button beside it discloses the panel
- *     (the "disclosure navigation with top-level links" pattern). The landing
- *     stays one Tab stop and one click away, and the panel never has to be
- *     opened to reach it; `label` is then the button's accessible name.
+ * THE PANELS ARE SERVER-RENDERED, handed in as nodes. The browser receives
+ * the open/closed behaviour and nothing else: no route registry, no presence
+ * policy, no message catalogue (ARCHITECTURE.md §13.8).
  *
- * WHY THE PANEL IS `children` RATHER THAN DATA. Everything inside it — every
- * column heading, every link, every translated label — is rendered on the
- * SERVER and handed here as already-rendered markup. This component ships the
- * open/closed behaviour and nothing else, so the browser never receives the
- * route registry, the menu grouping or the message catalogue
- * (ARCHITECTURE.md §13.8: minimal client JavaScript).
- *
- * WHY IT IS NOT A DIALOG. A mega menu is a disclosure attached to the page: it
- * does not trap focus, Tab moves through it and then out of it, and closing it
- * on focus leaving is what makes that predictable. Marking it `aria-modal`
- * would promise a trap that must not exist here — the mobile drawer is the
- * surface that genuinely is modal, and it lives in its own component.
- *
- * ONE AT A TIME, IN PRACTICE. Opening another menu means pressing somewhere
- * outside this one, or tabbing out of it — and both close it. So the panels
- * never stack, without the menus having to know about one another.
- *
- * NOT HOVER-ONLY. It opens on activation — pointer, Enter or Space, all through
- * a real `<button>`. A menu that opened on hover alone is unusable by keyboard
- * and unreliable by touch.
- *
- * POSITIONED AGAINST THE NAVIGATION BAR, not against its own trigger: the
- * wrapper is deliberately not a containing block, so the panel spans the bar
- * beneath it at any trigger position and in either direction, and can never be
- * pushed past the viewport's edge by a trigger near the end of the row.
+ * POSITIONED AGAINST THE HEADER, not the button: nothing between the panel and
+ * the `<header>` is a containing block, so every panel spans the header's full
+ * width at any trigger position and in either direction.
  */
-export function DisclosureMenu({
-  label,
-  link,
-  currentPrefix,
-  children,
-}: {
-  /**
-   * The trigger's visible text when there is no `link`; otherwise the
-   * disclosure button's accessible name. Translated on the server.
-   */
+export interface MegaNavGroup {
+  readonly id: string;
   readonly label: string;
-  /** The domain's landing, rendered as a link beside the button. */
-  readonly link?: { readonly href: string; readonly text: string };
   /**
-   * The locale-prefixed path this domain owns. While the visitor is on it or
-   * beneath it, the trigger is marked as the current section.
+   * The locale-prefixed addresses this group owns. While the visitor is on or
+   * beneath one, the group's button carries the current-section marker.
    */
-  readonly currentPrefix: string;
+  readonly prefixes: readonly string[];
   /** The panel, rendered on the server. */
-  readonly children: ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const panelId = `${useId()}-panel`;
-  // The canonical address: an English page's internal `/en/…` path is
-  // normalised to the unprefixed one its links are built with (R1).
-  const pathname = useCanonicalPathname();
-  const here = pathname === currentPrefix;
-  const within = here || pathname.startsWith(`${currentPrefix}/`);
-
-  /** Closes, and puts focus back where the person left it. */
-  const closeAndRestore = useCallback(() => {
-    setOpen(false);
-    triggerRef.current?.focus();
-  }, []);
-
-  /**
-   * A pointer press anywhere else closes the menu.
-   *
-   * `pointerdown` rather than `click`, so the menu is already closed by the
-   * time the press lands on whatever was underneath it.
-   */
-  useEffect(() => {
-    if (!open) return undefined;
-
-    function onPointerDown(event: PointerEvent) {
-      const container = containerRef.current;
-      if (container !== null && !container.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [open]);
-
-  /*
-   * THE CURRENT-SECTION MARKER. A thin accent rule under the trigger, plus the
-   * weight change, so the state is never colour alone. It is decorative: the
-   * link's `aria-current` is what assistive technology hears.
-   */
-  const marker = within
-    ? 'after:absolute after:start-3 after:end-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-accent'
-    : '';
-
-  return (
-    <div
-      ref={containerRef}
-      className="flex items-stretch"
-      onKeyDown={(event) => {
-        if (event.key === 'Escape' && open) {
-          event.stopPropagation();
-          closeAndRestore();
-        }
-      }}
-      /*
-       * TAB OUT CLOSES IT.
-       *
-       * `onBlur` is React's delegated `focusout`, so it fires for anything
-       * inside the panel too. If focus has moved somewhere outside this
-       * container, the menu has been left behind and closes — which is what
-       * makes tabbing through the panel and onward feel ordinary rather than
-       * leaving an open panel floating over the page.
-       */
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          setOpen(false);
-        }
-      }}
-    >
-      {link === undefined ? (
-        <button
-          ref={triggerRef}
-          type="button"
-          aria-expanded={open}
-          aria-controls={panelId}
-          onClick={() => setOpen((current) => !current)}
-          className={`relative inline-flex min-h-11 items-center gap-1.5 rounded-control px-3 py-2 text-sm transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border aria-expanded:bg-surface-sunken ${within ? 'font-semibold' : 'font-medium'} ${marker}`}
-        >
-          {label}
-          <Chevron open={open} />
-        </button>
-      ) : (
-        <>
-          <a
-            href={link.href}
-            {...(within
-              ? { 'aria-current': here ? ('page' as const) : ('true' as const) }
-              : {})}
-            className={`relative inline-flex min-h-11 items-center rounded-s-control ps-3 pe-1.5 py-2 text-sm no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border ${within ? 'font-semibold' : 'font-medium'} ${marker}`}
-          >
-            {link.text}
-          </a>
-          <button
-            ref={triggerRef}
-            type="button"
-            aria-expanded={open}
-            aria-controls={panelId}
-            aria-label={label}
-            onClick={() => setOpen((current) => !current)}
-            className="inline-flex min-h-11 min-w-7 items-center justify-center rounded-e-control pe-2 ps-0.5 text-foreground-muted transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken hover:text-foreground active:bg-border aria-expanded:bg-surface-sunken aria-expanded:text-foreground"
-          >
-            <Chevron open={open} />
-          </button>
-        </>
-      )}
-
-      <div
-        id={panelId}
-        /*
-         * `hidden` rather than a class that merely moves it off-screen: a
-         * closed panel must be out of the tab order and out of the
-         * accessibility tree, not invisible but still focusable.
-         */
-        hidden={!open}
-        className="absolute start-0 end-0 top-full z-[var(--layer-header)] mt-px rounded-b-panel border border-t-2 border-border border-t-accent-rule bg-surface-raised p-6 shadow-raised"
-      >
-        {children}
-      </div>
-    </div>
-  );
+  readonly panel: ReactNode;
 }
 
-/** Decorative: the state it hints at is already announced by `aria-expanded`. */
-function Chevron({ open }: { readonly open: boolean }) {
+export function MegaNav({
+  label,
+  currentLabel,
+  groups,
+}: {
+  /** The navigation's accessible name. */
+  readonly label: string;
+  /** Announced after the button of the group the visitor is inside. */
+  readonly currentLabel: string;
+  readonly groups: readonly MegaNavGroup[];
+}) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const navRef = useRef<HTMLElement | null>(null);
+  const triggers = useRef<(HTMLButtonElement | null)[]>([]);
+  const enterPanel = useRef<string | null>(null);
+  const base = useId();
+  const pathname = useCanonicalPathname();
+  const current = groups.find((group) =>
+    group.prefixes.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    ),
+  )?.id;
+
+  const panelId = (id: string) => `${base}-panel-${id}`;
+
+  const closeAndReturn = useCallback(
+    (id: string) => {
+      setOpenId(null);
+      triggers.current[groups.findIndex((group) => group.id === id)]?.focus();
+    },
+    [groups],
+  );
+
+  /** A press anywhere outside the navigation closes the open panel. */
+  useEffect(() => {
+    if (openId === null) return undefined;
+    function onPointerDown(event: PointerEvent) {
+      const nav = navRef.current;
+      if (nav !== null && !nav.contains(event.target as Node)) setOpenId(null);
+    }
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [openId]);
+
+  /** ArrowDown opened a panel: move into its first link once it is shown. */
+  useEffect(() => {
+    if (openId === null || enterPanel.current !== openId) return;
+    enterPanel.current = null;
+    document
+      .getElementById(panelId(openId))
+      ?.querySelector<HTMLElement>('a[href]')
+      ?.focus();
+  });
+
+  function onTriggerKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const group = groups[index];
+    if (group === undefined) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      enterPanel.current = group.id;
+      setOpenId(group.id);
+      return;
+    }
+    const direction: Direction =
+      getComputedStyle(event.currentTarget).direction === 'rtl' ? 'rtl' : 'ltr';
+    const next = rovingIndex(event.key, index, groups.length, direction);
+    if (next === null) return;
+    event.preventDefault();
+    triggers.current[next]?.focus();
+  }
+
   return (
-    <svg
-      aria-hidden="true"
-      focusable="false"
-      viewBox="0 0 12 12"
-      className={`size-3 shrink-0 transition-transform duration-[var(--duration-fast)] ${open ? 'rotate-180' : ''}`}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+    <nav
+      ref={navRef}
+      aria-label={label}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && openId !== null) {
+          event.stopPropagation();
+          closeAndReturn(openId);
+        }
+      }}
+      // Focus leaving the whole navigation closes it, so tabbing past the last
+      // link of a panel never leaves it open over the page.
+      // A press on a panel's own background moves focus nowhere
+      // (`relatedTarget` is null) and must not close it; a press outside is
+      // the pointer handler's to answer.
+      onBlur={(event) => {
+        const next = event.relatedTarget as Node | null;
+        if (next !== null && !event.currentTarget.contains(next)) setOpenId(null);
+      }}
     >
-      <path d="M2.5 4.5 6 8l3.5-3.5" />
-    </svg>
+      {/* Wraps rather than overflows if a translation ever outgrows the row. */}
+      <ul className="flex list-none flex-wrap items-center gap-0.5 p-0">
+        {groups.map((group, index) => {
+          const open = openId === group.id;
+          const inside = current === group.id;
+          return (
+            <li key={group.id}>
+              <button
+                ref={(element) => {
+                  triggers.current[index] = element;
+                }}
+                type="button"
+                aria-expanded={open}
+                aria-controls={panelId(group.id)}
+                onClick={() => setOpenId(open ? null : group.id)}
+                onKeyDown={(event) => onTriggerKeyDown(event, index)}
+                className={`relative inline-flex min-h-11 items-center gap-1 rounded-control px-2.5 text-[0.9375rem] whitespace-nowrap text-foreground transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border aria-expanded:bg-surface-sunken xl:px-3 ${
+                  inside
+                    ? 'font-semibold after:absolute after:start-3 after:end-3 after:bottom-1 after:h-0.5 after:rounded-full after:bg-accent'
+                    : 'font-medium'
+                }`}
+              >
+                {group.label}
+                {inside ? <span className="sr-only">{currentLabel}</span> : null}
+                <Icon
+                  name="chevron-down"
+                  size={16}
+                  className={`text-foreground-muted transition-transform duration-[var(--duration-fast)] ${open ? 'rotate-180' : ''}`}
+                />
+              </button>
+              <div
+                id={panelId(group.id)}
+                // `hidden`, not merely off-screen: a closed panel is out of the
+                // tab order and the accessibility tree.
+                hidden={!open}
+                className="absolute inset-x-0 top-full z-[var(--layer-header)] border-t-2 border-b border-t-accent-rule border-b-border bg-surface-raised shadow-raised"
+              >
+                {group.panel}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }

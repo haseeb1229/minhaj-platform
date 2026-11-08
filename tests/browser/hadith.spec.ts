@@ -172,17 +172,23 @@ const MESSAGES = path.resolve(
 type UiLocale = 'en' | 'ur' | 'ar';
 const LOCALES: readonly UiLocale[] = ['en', 'ur', 'ar'];
 
+interface HadithCopy {
+  readonly fixture: string;
+  readonly unavailable: { readonly body: string };
+  readonly works: { readonly awaiting: string };
+}
+
 /** The shipped catalogue's Hadith copy in each interface locale. */
 const COPY = Object.fromEntries(
   LOCALES.map((locale) => [
     locale,
     (
       JSON.parse(readFileSync(path.join(MESSAGES, `${locale}.json`), 'utf8')) as {
-        hadith: { fixture: string; unavailable: { body: string } };
+        hadith: HadithCopy;
       }
     ).hadith,
   ]),
-) as Record<UiLocale, { fixture: string; unavailable: { body: string } }>;
+) as Record<UiLocale, HadithCopy>;
 
 /** A SQL Server Unicode literal. Values are this file's own constants. */
 const n = (value: string) => `N'${value.replaceAll("'", "''")}'`;
@@ -508,14 +514,18 @@ test.afterAll(async () => {
  * ========================================================================= */
 
 test.describe('while no collection is activated', () => {
-  test('the landing says so honestly in every locale — no counts, no banner, no cookie', async ({
+  test('the landing presents MQI’s hadith works and says, once, that the collections await a source', async ({
     page,
   }) => {
     for (const locale of LOCALES) {
       const response = await page.goto(localizedPath(locale, '/hadith'));
       expect(response?.status(), locale).toBe(200);
       expect(response?.headers()['set-cookie'], locale).toBeUndefined();
-      await expect(page.getByText(COPY[locale].unavailable.body)).toBeVisible();
+      // R2 owner decision: no external hadith corpus. The landing is the
+      // Library's hadith works (none are published in this suite's database,
+      // so no shelf) and ONE calm sentence about the collections reader.
+      await expect(page.getByText(COPY[locale].works.awaiting)).toBeVisible();
+      await expect(page.getByText(COPY[locale].works.awaiting)).toHaveCount(1);
       await expect(page.getByRole('note')).toHaveCount(0);
       await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
         'content',

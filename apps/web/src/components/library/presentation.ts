@@ -2,7 +2,7 @@ import { localizedPath } from '@minhaj/contracts';
 import { z } from 'zod';
 
 import type { Locale } from '@minhaj/contracts';
-import type { EditionRecord, WorkRecord } from '@minhaj/contracts/library';
+import type { EditionRecord, LibrarySort, WorkRecord } from '@minhaj/contracts/library';
 
 /**
  * Presentation decisions the Library surfaces share.
@@ -50,6 +50,7 @@ export function readLibraryQuery(query: Record<string, string | string[] | undef
   from: number | null;
   to: number | null;
   downloads: boolean;
+  sort: LibrarySort;
 } {
   const text = (key: string, max: number): string | null => {
     const raw = query[key];
@@ -82,6 +83,8 @@ export function readLibraryQuery(query: Record<string, string | string[] | undef
       ? { from: null, to: null }
       : { from, to }),
     downloads: text('downloads', 8) === '1',
+    // A–Z is the reader's default; anything but a known order is that default.
+    sort: text('sort', 8) === 'newest' ? 'newest' : 'title',
   };
 }
 
@@ -114,6 +117,8 @@ export function booksPath(
   if (merged.from !== null) search.set('from', String(merged.from));
   if (merged.to !== null) search.set('to', String(merged.to));
   if (merged.downloads) search.set('downloads', '1');
+  // The default order is the bare address; only another order is written.
+  if (merged.sort !== 'title') search.set('sort', merged.sort);
 
   const query = search.toString();
   return localizedPath(locale, `/library/books${query === '' ? '' : `?${query}`}`);

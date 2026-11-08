@@ -14,9 +14,9 @@ import { absoluteUrl } from '@/config/origin';
 import { requireLocale } from '@/config/route-locale';
 import {
   Alert,
+  Badge,
   Breadcrumbs,
   Container,
-  MetaRow,
   Prose,
   SectionHeader,
 } from '@/components/ui';
@@ -159,19 +159,16 @@ export default async function ContributorProfilePage({ params }: ProfileParams) 
                 nameLocale={profile.label.resolvedLocale}
                 creditLabel={t('portraitCredit')}
                 priority
-                className="w-40 shrink-0 sm:w-48 lg:w-56"
+                className="w-44 shrink-0 sm:w-52 lg:w-64"
               />
             )}
-            <div className="flex min-w-0 max-w-3xl flex-col gap-4">
-              <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
-                {t('eyebrow')}
-              </p>
+            <div className="flex min-w-0 max-w-3xl flex-col gap-4 sm:self-center">
               {/* The name is rendered in its OWN language and direction. `lang`
                 and `dir` are on the element rather than on the page, so an
                 Arabic name inside an English page renders right-to-left
                 without flipping the page around it. */}
               <h1
-                className="text-title font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere"
+                className="text-display font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere"
                 lang={profile.label.resolvedLocale}
                 dir="auto"
               >
@@ -185,7 +182,18 @@ export default async function ContributorProfilePage({ params }: ProfileParams) 
                 </p>
               )}
 
-              <MetaRow items={facetNames} />
+              {facetNames.length === 0 ? null : (
+                <ul
+                  aria-label={t('facets')}
+                  className="flex list-none flex-wrap gap-2 p-0"
+                >
+                  {facetNames.map((name) => (
+                    <li key={name}>
+                      <Badge>{name}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </Container>
@@ -300,7 +308,7 @@ function FacetPanel({
   readonly t: ProfileTranslator;
 }) {
   return (
-    <li className="flex min-w-0 flex-col gap-4 rounded-panel border border-border border-t-4 border-t-accent-rule bg-surface-raised p-5 shadow-panel">
+    <li className="flex min-w-0 flex-col gap-4 rounded-panel border border-border bg-surface-raised p-5">
       <h3 className="text-subheading font-semibold">
         {t(`kind.${facet.kind}` as 'kind.author')}
       </h3>

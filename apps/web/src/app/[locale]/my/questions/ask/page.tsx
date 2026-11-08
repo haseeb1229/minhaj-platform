@@ -1,10 +1,13 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { FATWA_LIMITS } from '@minhaj/contracts/fatwa';
 
 import { fatwaRuntime } from '@/composition/fatwa';
-import { Alert, Field, PageHeading, Panel, TextArea, TextLink } from '@/components/ui';
+import { Alert, Field, Panel, TextArea, TextLink } from '@/components/ui';
+import { MyPage } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../(identity)/form-state';
 import { requireActiveSession } from '../../guard';
@@ -22,7 +25,13 @@ import { submitFatwaQuestion } from './actions';
  * all, so no sensitive text can be typed into a service nobody is authorised
  * to answer; the action and the database refuse it again regardless.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'ask');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -39,12 +48,11 @@ export default async function AskQuestionPage({
   const limits = { min: FATWA_LIMITS.questionMin, max: FATWA_LIMITS.questionMax };
 
   return (
-    <main className="flex w-full max-w-3xl min-w-0 flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <PageHeading>{t('ask.title')}</PageHeading>
-        <p className="text-foreground-muted">{t('ask.intro')}</p>
-      </header>
-
+    <MyPage
+      title={t('ask.title')}
+      description={<p>{t('ask.intro')}</p>}
+      measure="reading"
+    >
       {availability.active ? (
         <>
           <section className="flex flex-col gap-2" aria-labelledby="ask-privacy">
@@ -105,6 +113,6 @@ export default async function AskQuestionPage({
           {t('sections.howItWorks')}
         </TextLink>
       </nav>
-    </main>
+    </MyPage>
   );
 }

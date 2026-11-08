@@ -1,5 +1,7 @@
 import type { PersonPortrait } from '@minhaj/contracts/people';
 
+import { derivativeSrcSet } from '@/components/ui/image-derivatives';
+
 /**
  * A contributor's portrait (Phase 30-R).
  *
@@ -38,10 +40,16 @@ export function PersonPortraitFigure({
   readonly priority?: boolean;
   readonly className?: string;
 }) {
+  const path = portraitPath(personId, portrait.assetId);
+  const srcSet = derivativeSrcSet(path, portrait.width);
   return (
     <figure className={`m-0 flex flex-col gap-2 ${className}`}>
       <img
-        src={portraitPath(personId, portrait.assetId)}
+        src={path}
+        // A profile's portrait column: never wider than 20rem.
+        {...(srcSet === undefined
+          ? {}
+          : { srcSet, sizes: '(min-width: 48rem) 20rem, 100vw' })}
         width={portrait.width}
         height={portrait.height}
         alt={name}

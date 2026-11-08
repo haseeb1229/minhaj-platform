@@ -1,8 +1,12 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
+import { MyPage } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
+import { myTabs } from '@/components/my/sections';
 import { requireLocale } from '@/config/route-locale';
-import { Field, PageHeading, Panel, TextInput } from '@/components/ui';
+import { Field, Panel, TextInput } from '@/components/ui';
 import { ActionForm } from '../../../(identity)/form-state';
 import { updateProfileAction } from '../../../(identity)/actions';
 import { requireActiveSession } from '../../guard';
@@ -14,7 +18,13 @@ import { requireActiveSession } from '../../guard';
  * Person profile, and nothing here creates or implies one — contributor
  * profiles belong to People & Contributors in Phase 5 (§5.2).
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'profile');
+}
 
 /**
  * PER REQUEST, always. This surface reads a session or a one-time token, so
@@ -29,18 +39,23 @@ export default async function ProfilePage({
 }) {
   const locale = await requireLocale(params);
   const t = await getTranslations({ locale, namespace: 'identity' });
+  const my = await getTranslations({ locale, namespace: 'my' });
+  const tabs = {
+    label: my('tabs.label.settings'),
+    items: myTabs(locale, 'settings', 'profile', (tab) => my(`tabs.${tab}`)),
+  };
   const session = await requireActiveSession(
     locale,
     localizedPath(locale, '/my/settings/profile'),
   );
 
   return (
-    <main className="flex w-full max-w-3xl min-w-0 flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <PageHeading>{t('profile.title')}</PageHeading>
-        <p className="text-foreground-muted">{t('profile.description')}</p>
-      </header>
-
+    <MyPage
+      title={t('profile.title')}
+      description={<p>{t('profile.description')}</p>}
+      tabs={tabs}
+      measure="reading"
+    >
       <Panel>
         <ActionForm
           action={updateProfileAction}
@@ -66,6 +81,6 @@ export default async function ProfilePage({
           </Field>
         </ActionForm>
       </Panel>
-    </main>
+    </MyPage>
   );
 }

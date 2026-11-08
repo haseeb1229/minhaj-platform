@@ -29,61 +29,21 @@ export function Duration({ seconds }: { readonly seconds: number }) {
   );
 }
 
-const PAGE_LINK =
-  'inline-flex min-h-11 items-center gap-2 rounded-control border border-border-strong bg-surface-raised px-4 text-sm font-semibold no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border';
-
 /**
- * Previous and next page links, or nothing when there is one page.
- *
- * Each link is a 44-pixel target, and its arrow is decorative — hidden from
- * assistive technology and mirrored in a right-to-left page, so "previous"
- * always points back along the reading direction. "Next" keeps to the end side
- * even when there is no "previous".
+ * Previous and next page links — the platform's ONE pager, kept under its
+ * Phase-10 name for the many listings that import it from here. New code
+ * imports `Pager` from `@/components/ui`.
  */
-export function Pagination({
-  label,
-  previous,
-  next,
-  previousLabel,
-  nextLabel,
-}: {
-  readonly label: string;
-  readonly previous: string | null;
-  readonly next: string | null;
-  readonly previousLabel: string;
-  readonly nextLabel: string;
-}) {
-  if (previous === null && next === null) return null;
-  return (
-    <nav
-      className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-5"
-      aria-label={label}
-    >
-      {previous === null ? (
-        <span />
-      ) : (
-        <a href={previous} className={PAGE_LINK}>
-          <span aria-hidden="true" className="rtl:-scale-x-100">
-            ←
-          </span>
-          {previousLabel}
-        </a>
-      )}
-      {next === null ? null : (
-        <a href={next} className={PAGE_LINK}>
-          {nextLabel}
-          <span aria-hidden="true" className="rtl:-scale-x-100">
-            →
-          </span>
-        </a>
-      )}
-    </nav>
-  );
-}
+export { Pager as Pagination } from '@/components/ui/pager';
 
 /**
- * The opening of a Media page that is not a section landing: the trail, an
- * optional eyebrow, the page's ONE `h1`, a lede and a line of metadata.
+ * The opening of a Media page that is not a section landing: the trail, the
+ * page's ONE `h1`, then what kind of record it is (`eyebrow`), a lede and a
+ * line of metadata.
+ *
+ * R2: THE HEADING LEADS. What was an upper-case label above the title now sits
+ * under it as a quiet line of badges and words, so the title is the first
+ * thing read and nothing competes with it.
  *
  * `lang` and `dir` mark the TITLE, which is content and may be in another
  * language from the page; the eyebrow and the metadata are interface text.
@@ -115,11 +75,6 @@ export function MediaPageHeader({
     <header className="flex flex-col gap-6 border-b border-border pb-8">
       <Breadcrumbs label={crumbs.label} trail={crumbs.trail} />
       <div className="flex max-w-3xl min-w-0 flex-col gap-3">
-        {eyebrow === undefined ? null : (
-          <div className="text-caption flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
-            {eyebrow}
-          </div>
-        )}
         <h1
           className="text-title font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere"
           {...(lang === undefined ? {} : { lang })}
@@ -127,6 +82,11 @@ export function MediaPageHeader({
         >
           {title}
         </h1>
+        {eyebrow === undefined ? null : (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-foreground-muted">
+            {eyebrow}
+          </div>
+        )}
         {lede === undefined ? null : (
           <div className="text-lede max-w-[var(--measure-prose)] text-foreground-muted">
             {lede}

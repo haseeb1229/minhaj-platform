@@ -31,6 +31,7 @@ import {
   type Query,
 } from '../shared';
 import { ReconciliationBadge, RunStateBadge } from '../status';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/migration/runs` — import runs, newest first, under
@@ -39,7 +40,7 @@ import { ReconciliationBadge, RunStateBadge } from '../status';
  * says what each run did. A source filter the address names that does not
  * parse is a 404, never a quietly broadened list.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminMigration', 'runs.title');
 
 export const dynamic = 'force-dynamic';
 

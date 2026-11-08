@@ -47,6 +47,7 @@ import {
   participantNameMap,
   scopeOptionText,
 } from '../parts';
+import { adminPageMetadata } from '../../../metadata';
 
 /**
  * `/{locale}/admin/learning/classes/{id}` — one class: its facts, its
@@ -67,6 +68,7 @@ import {
  * and only for a class that has not started; a finished or cancelled class
  * offers no act but the attendance correction.
  */
+export const generateMetadata = adminPageMetadata('admin', 'titles.learning.class');
 export const dynamic = 'force-dynamic';
 
 export default async function ClassDetailPage({ params }: EditorParams) {

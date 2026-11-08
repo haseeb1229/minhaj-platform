@@ -5,6 +5,7 @@ import { requireAdminPage } from '@/composition/authorization';
 import { identityRuntime } from '@/composition/identity';
 import { requireLocale } from '@/config/route-locale';
 import { Alert, DataCell, DataRow, DataTable, PageHeading, Panel } from '@/components/ui';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * The permission catalogue — READ-ONLY, and structurally so.
@@ -19,7 +20,7 @@ import { Alert, DataCell, DataRow, DataTable, PageHeading, Panel } from '@/compo
  * BUNDLING BELONGS TO ROLES. Which permissions an account holds is decided by
  * role membership, on the roles surface, under `permissions.grant`.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('admin', 'permissions.title');
 export const dynamic = 'force-dynamic';
 
 export default async function PermissionsPage({

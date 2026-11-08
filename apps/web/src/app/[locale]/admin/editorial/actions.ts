@@ -185,6 +185,74 @@ export async function transitionEditorial(
     return rejected(error);
   }
 }
+/**
+ * What a second administrator's selection came to: how many records were
+ * approved and published, and each one left with the reason word that says
+ * why. Identifiers and reason words only — never a title.
+ */
+export interface EditorialBatchState extends FormActionState {
+  readonly decided?: number;
+  readonly refused?: readonly { readonly id: string; readonly reason: string }[];
+}
+
+/**
+ * R2. APPROVE AND PUBLISH a selection of one kind's in-review records from one
+ * queue page, each at the version shown (`version-<id>`), after an explicit
+ * confirmation. A Class-A Server Action: the session is re-resolved and BOTH
+ * `content.review` and `content.publish` re-checked live here; the service
+ * checks both again and runs every record through the single-record workflow,
+ * so each approval and each publication is refused (self-approval, a stale
+ * version, a record no longer in review) and audited on its own.
+ */
+export async function approveAndPublishSelected(
+  _state: EditorialBatchState,
+  form: FormData,
+): Promise<EditorialBatchState> {
+  const locale = localeSchema.safeParse(form.get('locale'));
+  if (!locale.success) return { status: 'error', failure: 'invalid' };
+  const ids = form
+    .getAll('id')
+    .filter((value): value is string => typeof value === 'string');
+  if (ids.length === 0) return { status: 'error', failure: 'none-selected' };
+  if (form.get('confirm') !== 'on')
+    return { status: 'error', failure: 'confirm-required' };
+  const permitted = await requirePermittedAction(locale.data, 'content.review');
+  if (permitted.state === 'denied' || !permitted.authorization.can('content.publish'))
+    return { status: 'error', failure: 'denied' };
+  let outcome: Awaited<
+    ReturnType<ReturnType<typeof editorialRuntime>['editorial']['approveAndPublishMany']>
+  >;
+  try {
+    outcome = await editorialRuntime().editorial.approveAndPublishMany(
+      { accountId: permitted.session.account.id },
+      {
+        kind: form.get('kind'),
+        items: ids.map((id) => ({
+          id,
+          expectedVersion: Number(form.get(`version-${id}`)),
+        })),
+      },
+    );
+  } catch (error) {
+    const state = rejected(error);
+    if (state.failure !== 'unavailable') return state;
+    // An outage stops the batch part-way: what was done before it stands.
+    revalidatePath(localizedPath(locale.data, '/admin/editorial'), 'layout');
+    indexAfterResponse();
+    return { status: 'error', failure: 'batch-interrupted' };
+  }
+  revalidatePath(localizedPath(locale.data, '/admin/editorial'), 'layout');
+  indexAfterResponse();
+  return outcome.refused.length === 0
+    ? { status: 'success', decided: outcome.decided, refused: [] }
+    : {
+        status: 'error',
+        failure: 'items-refused',
+        decided: outcome.decided,
+        refused: outcome.refused,
+      };
+}
+
 export async function triageCorrespondence(
   _state: FormActionState,
   form: FormData,

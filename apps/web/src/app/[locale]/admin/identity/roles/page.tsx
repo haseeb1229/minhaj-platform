@@ -22,6 +22,7 @@ import {
 } from '../../actions';
 import { StepUpPrompt } from '../../step-up';
 import { adminCopy } from '../../shared';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * Role administration.
@@ -38,7 +39,7 @@ import { adminCopy } from '../../shared';
  * for changing what an account may do. An operator can be trusted to tidy names
  * without being trusted to widen privilege.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('admin', 'roles.title');
 export const dynamic = 'force-dynamic';
 
 export default async function RolesPage({
@@ -77,6 +78,7 @@ export default async function RolesPage({
           locale={locale}
           purpose="privilege-administration"
           labels={copy.stepUp}
+          returnTo={localizedPath(locale, '/admin/identity/roles')}
         />
       ) : null}
 
@@ -275,6 +277,12 @@ export default async function RolesPage({
                       pendingLabel={t('common.saving')}
                       tone="destructive"
                       messages={{ ...copy.messages, success: t('roles.deactivated2') }}
+                      confirm={{
+                        title: t('confirm.deactivateRole.title'),
+                        body: t('confirm.deactivateRole.body'),
+                        confirmLabel: t('confirm.deactivateRole.confirm'),
+                        cancelLabel: t('confirm.cancel'),
+                      }}
                     >
                       <input type="hidden" name="locale" value={locale} />
                       <input type="hidden" name="roleId" value={role.id} />

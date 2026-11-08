@@ -1,8 +1,7 @@
 import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
-import type { ReactNode } from 'react';
-import { cache } from 'react';
+import { cache, type ReactNode } from 'react';
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
@@ -26,45 +25,44 @@ import {
 } from '@/composition/public-references';
 import {
   newsArchivePath,
+  newsListingPath,
   newsStructuredData,
   readNewsArchiveQuery,
+  readNewsFilters,
   readNewsOffset,
   translationFor,
 } from '@/components/editorial/presentation';
+import { withContents, revisedAfterPublication } from '@/components/editorial/long-form';
+import { RecordSection } from '@/components/editorial/frame';
+import { AuthorChips, Contents, ReadingDates } from '@/components/editorial/reading';
+import { BreadcrumbData } from '@/components/media/parts';
+import { LeadFigure, leadCardImage } from '@/components/editorial/lead-image';
 import {
-  CARD_RAISED,
-  CARD_SURFACE,
-  CARD_TITLE_LINK,
-  LandingFrame,
-  ListingIntro,
-  RecordSection,
-} from '@/components/editorial/frame';
-import { BreadcrumbData, Pagination } from '@/components/media/parts';
-import { LeadFigure, LeadThumbnail } from '@/components/editorial/lead-image';
-import {
-  ActionLink,
-  Alert,
+  Badge,
   Breadcrumbs,
-  CardGrid,
   Container,
   DetailRow,
+  EditorialCard,
   EmptyState,
   FilterLink,
-  LinkCard,
-  MetaRow,
-  Panel,
-  Prose,
+  Icon,
+  LanguageBadge,
+  LinkTabs,
+  ListRow,
+  MediaCard,
+  PageHeading,
+  Pager,
   SectionHeader,
   TextLink,
   TopicChips,
 } from '@/components/ui';
-import { directionOf } from '@/config/locale';
+import { directionOf, endonymOf } from '@/config/locale';
 import { isContentIndexable, serializeStructuredData } from '@/seo/metadata';
 import { pathFor, requireRoute } from '@/shell/registry';
 
 /**
  * The public News surfaces — `/news`, the three family listings, every detail
- * page and the News archive (ROUTE_MAP.md §3.9). Phase 13.
+ * page and the News archive (ROUTE_MAP.md §3.9). Phase 13; redesigned in R2.
  *
  * SERVER COMPONENTS, SESSION-FREE BY CONSTRUCTION. Every read goes through
  * `@/composition/editorial-read` and `@/composition/public-references`, which
@@ -72,12 +70,19 @@ import { pathFor, requireRoute } from '@/shell/registry';
  * else — no session, no identity service, no cookie — so a signed-in visitor
  * and an anonymous one receive the same page (ARCHITECTURE.md §8.1).
  *
- * A LEAD IMAGE WHERE THE RECORD HAS ONE, TEXT WHERE IT DOES NOT (Phase 30-R).
- * A NewsArticle or PressRelease may carry ONE first-party lead image, served
- * by Editorial's own route; a card shows it above its words, and a card
- * without one is a deliberate text-first card — never a placeholder picture or
- * a stock image. A card is otherwise its type, its date, its headline, its own
- * summary, its byline and its topics, each shown only where genuinely present.
+ * AN EDITORIAL PUBLICATION, NOT A GRID OF BOXES (R2). A listing opens with the
+ * newest story as its lead and the next three beside it, then reads as a
+ * chronological list with a thumbnail per story. A position is earned by date
+ * alone — never a "featured" claim the data does not make.
+ *
+ * THE READER'S LANGUAGE FIRST, EVERY LANGUAGE VISIBLE (audit F10). A listing
+ * puts the records published in the interface language first and the rest
+ * after them; a visitor may narrow it to one content language with `?lang=`.
+ * Any card whose words are not in the interface language says which language
+ * they are in.
+ *
+ * A LEAD IMAGE WHERE THE RECORD HAS ONE, TEXT WHERE IT DOES NOT (Phase 30-R):
+ * Editorial's own first-party route, never a placeholder or a stock picture.
  *
  * THE DATE IS THE RECORD'S CHRONOLOGY: the source's own publication date where
  * a migrated record states one, else its first publication here — never the
@@ -92,10 +97,7 @@ type EditorialTranslator = Awaited<ReturnType<typeof getTranslations<'editorial'
 type Names = Awaited<ReturnType<typeof referenceNames>>;
 type Query = Record<string, string | string[] | undefined>;
 
-/** A page address at an offset; the first page is the bare address. */
-function offsetPath(path: string, offset: number): string {
-  return offset === 0 ? path : `${path}?offset=${String(offset)}`;
-}
+const LANGUAGES: readonly Locale[] = ['en', 'ur', 'ar'];
 
 /* ===========================================================================
  * Shared parts
@@ -157,7 +159,192 @@ function namesFor(items: readonly NewsSummary[], locale: Locale): Promise<Names>
   );
 }
 
-/** The News sections, as a small navigation of their own. */
+/** The content language of words shown on a page, said in words when it differs. */
+function languageOf(code: Locale, locale: Locale, t: NewsTranslator) {
+  return code === locale ? undefined : { label: t(`languages.${code}`), code };
+}
+
+/**
+ * What every card says about one record, whatever its shape: its address, its
+ * headline and summary in their own language, its date and its byline, its
+ * family when the list mixes them, and its language when it is not the page's.
+ */
+function cardWords(
+  locale: Locale,
+  item: NewsSummary,
+  names: Names,
+  t: NewsTranslator,
+  showType: boolean,
+) {
+  const translation = translationFor(item, locale);
+  const date = publishedDate(item.chronologyAt, locale);
+  const authors = item.contributors.flatMap((credit) => {
+    const person =
+      credit.role === 'author' ? names.people.get(credit.personId) : undefined;
+    return person === undefined ? [] : [person.name];
+  });
+  const meta: ReactNode[] = [
+    <time key="date" dateTime={date.machine}>
+      {date.text}
+    </time>,
+    translation.issuer ? (
+      <span key="issuer" lang={translation.languageCode}>
+        {t('issuedBy', { issuer: translation.issuer })}
+      </span>
+    ) : null,
+    item.coverage === null ? null : (
+      <span key="outlet">{t('coverageOf', { outlet: item.coverage.outlet })}</span>
+    ),
+    authors.length === 0 ? null : <span key="by">{authors.join(' · ')}</span>,
+  ];
+  const language = languageOf(translation.languageCode, locale, t);
+  return {
+    href: localizedPath(locale, newsPathOf(item.kind, item.slug)),
+    title: translation.title,
+    description: translation.excerpt,
+    meta,
+    lang: translation.languageCode,
+    dir: directionOf(translation.languageCode),
+    ...(showType ? { type: t(`type.${item.kind}`) } : {}),
+    ...(language === undefined ? {} : { language }),
+    picture:
+      item.leadImage === null
+        ? null
+        : leadCardImage(item.leadImage, translation.leadAlt ?? ''),
+  };
+}
+
+/**
+ * A grid of image-led cards, with its names resolved once. Composed by the
+ * family previews on `/news`, a Centre page and the topic hub.
+ */
+export async function NewsGrid({
+  locale,
+  items,
+  label,
+  showType,
+  headingLevel = 'h2',
+  columns = 3,
+}: {
+  readonly locale: Locale;
+  readonly items: readonly NewsSummary[];
+  readonly label: string;
+  readonly showType: boolean;
+  readonly headingLevel?: 'h2' | 'h3';
+  readonly columns?: 2 | 3;
+}) {
+  const t = await getTranslations({ locale, namespace: 'news' });
+  const names = await namesFor(items, locale);
+  return (
+    <ul
+      className={`grid list-none grid-cols-1 gap-x-6 gap-y-10 p-0 sm:grid-cols-2 ${
+        columns === 3 ? 'lg:grid-cols-3' : ''
+      }`}
+      aria-label={label}
+    >
+      {items.map((item) => {
+        const { picture, ...words } = cardWords(locale, item, names, t, showType);
+        return (
+          <MediaCard
+            key={`${item.kind}:${item.slug}`}
+            {...words}
+            image={picture}
+            aspect="wide"
+            headingLevel={headingLevel}
+            sizes="(min-width: 64rem) 22rem, (min-width: 40rem) 45vw, 100vw"
+          />
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
+ * A CHRONICLE: on a listing's first page the newest story leads, wide, with
+ * the next three beside it; every other story follows as a row with its
+ * thumbnail. Later pages are rows only.
+ */
+async function NewsChronicle({
+  locale,
+  items,
+  label,
+  showType,
+  opening,
+  headingLevel,
+}: {
+  readonly locale: Locale;
+  readonly items: readonly NewsSummary[];
+  readonly label: string;
+  readonly showType: boolean;
+  /** The first page: open with the lead story. */
+  readonly opening: boolean;
+  /** Every story's heading level: `h2` under the page title, `h3` under a section. */
+  readonly headingLevel: 'h2' | 'h3';
+}) {
+  const t = await getTranslations({ locale, namespace: 'news' });
+  const names = await namesFor(items, locale);
+  const led = opening && items.length >= 4;
+  const top = led ? items.slice(0, 4) : [];
+  const rest = led ? items.slice(4) : items;
+  return (
+    <div className="flex flex-col gap-10">
+      {top.length === 0 ? null : (
+        <ul
+          aria-label={label}
+          className="grid list-none grid-cols-1 gap-x-10 gap-y-8 p-0 lg:grid-cols-12"
+        >
+          {top.map((item, index) => {
+            const { picture, ...words } = cardWords(locale, item, names, t, showType);
+            return (
+              <li
+                key={`${item.kind}:${item.slug}`}
+                className={
+                  index === 0
+                    ? 'min-w-0 lg:col-span-7 lg:row-span-3'
+                    : 'min-w-0 border-border lg:col-span-5 max-lg:border-t max-lg:pt-6'
+                }
+              >
+                <EditorialCard
+                  {...words}
+                  as="article"
+                  variant={index === 0 ? 'lead' : 'secondary'}
+                  image={picture}
+                  priority={index === 0}
+                  headingLevel={headingLevel}
+                  sizes={
+                    index === 0
+                      ? '(min-width: 64rem) 40rem, 100vw'
+                      : '(min-width: 64rem) 11rem, (min-width: 30rem) 40vw, 100vw'
+                  }
+                />
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {rest.length === 0 ? null : (
+        <ul
+          aria-label={led ? t('moreNews') : label}
+          className="flex list-none flex-col border-t border-border p-0"
+        >
+          {rest.map((item) => {
+            const { picture, ...words } = cardWords(locale, item, names, t, showType);
+            return (
+              <ListRow
+                key={`${item.kind}:${item.slug}`}
+                {...words}
+                image={picture}
+                headingLevel={headingLevel}
+              />
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** The News sections as route tabs: each family's listing and the archive. */
 function NewsSections({
   locale,
   current,
@@ -167,25 +354,52 @@ function NewsSections({
   readonly current: NewsKind | 'archive';
   readonly t: NewsTranslator;
 }) {
-  const entries = [
-    ...NEWS_KINDS.map((kind) => ({
-      key: kind as NewsKind | 'archive',
-      href: localizedPath(locale, `${newsListPathOf(kind)}`),
-      text: t(`families.${kind}`),
-    })),
-    {
-      key: 'archive' as const,
-      href: localizedPath(locale, '/news/archive'),
-      text: t('archive'),
-    },
-  ];
   return (
-    <nav aria-label={t('sectionsLabel')}>
-      <ul className="flex list-none flex-wrap gap-2 p-0">
-        {entries.map((entry) => (
-          <li key={entry.key}>
-            <FilterLink href={entry.href} current={entry.key === current}>
-              {entry.text}
+    <LinkTabs
+      label={t('sectionsLabel')}
+      tabs={[
+        ...NEWS_KINDS.map((kind) => ({
+          href: localizedPath(locale, newsListPathOf(kind)),
+          text: t(`families.${kind}`),
+          current: kind === current,
+        })),
+        {
+          href: localizedPath(locale, '/news/archive'),
+          text: t('archive'),
+          current: current === 'archive',
+        },
+      ]}
+    />
+  );
+}
+
+/**
+ * The content-language choice: every language a record may be written in, in
+ * its own name, and "all languages" — the default, with the reader's own
+ * language first. A choice is a link, so it is shareable and works without
+ * script.
+ */
+function LanguageFilter({
+  current,
+  hrefFor,
+  t,
+}: {
+  readonly current: Locale | null;
+  readonly hrefFor: (language: Locale | null) => string;
+  readonly t: NewsTranslator;
+}) {
+  return (
+    <nav aria-label={t('languageFilter')}>
+      <ul className="flex list-none flex-wrap items-center gap-2 p-0">
+        <li>
+          <FilterLink href={hrefFor(null)} current={current === null}>
+            {t('allLanguages')}
+          </FilterLink>
+        </li>
+        {LANGUAGES.map((code) => (
+          <li key={code}>
+            <FilterLink href={hrefFor(code)} current={current === code}>
+              <span lang={code}>{endonymOf(code)}</span>
             </FilterLink>
           </li>
         ))}
@@ -194,218 +408,54 @@ function NewsSections({
   );
 }
 
-/** The type of a record, in words — never a colour alone. */
-function TypeLabel({ children }: { readonly children: ReactNode }) {
+/** A listing's opening: the trail, its one `h1`, its lede and its controls. */
+function ListingHead({
+  trailLabel,
+  trail,
+  title,
+  lede,
+  children,
+}: {
+  readonly trailLabel: string;
+  readonly trail: readonly { readonly href?: string; readonly text: string }[];
+  readonly title: string;
+  readonly lede: string;
+  readonly children: ReactNode;
+}) {
   return (
-    <span className="font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
-      {children}
-    </span>
+    <Container>
+      <div className="flex flex-col gap-6 pt-6 pb-8">
+        <Breadcrumbs label={trailLabel} trail={trail} />
+        <div className="flex max-w-3xl flex-col gap-3">
+          <PageHeading>{title}</PageHeading>
+          <p className="text-lede max-w-[var(--measure-prose)] text-foreground-muted">
+            {lede}
+          </p>
+        </div>
+        <div className="flex flex-col gap-4">{children}</div>
+      </div>
+    </Container>
   );
 }
 
-/**
- * How a card sits in its list: an ordinary `card`; the `lead` story that opens
- * the first page of `/news`; or a `compact` one beside it, headline and date
- * only. The record and its links are the same in every variant.
- */
-type NewsCardVariant = 'card' | 'lead' | 'compact';
-
-const HEADLINE_SIZE: Record<NewsCardVariant, string> = {
-  card: 'text-subheading',
-  lead: 'text-heading',
-  compact: 'text-base',
-};
-
-/**
- * ONE CARD. The headline in its own language and direction, a type label, the
- * record's chronology date, the record's own summary, and — only where the
- * record has them — the lead image, the issuing authority, the outlet, the
- * byline and the topics. No body text, and no picture it does not have.
- *
- * The headline is the card's one stretched link; the byline and the topics sit
- * above it as links of their own (see `CARD_SURFACE`).
- */
-function NewsCard({
-  locale,
-  item,
-  names,
+/** "Nothing here": the first page of an empty listing, or a page past its end. */
+function ListingEmpty({
+  firstPage,
+  message,
+  back,
   t,
-  showType,
-  headingLevel,
-  variant = 'card',
-  className = '',
 }: {
-  readonly locale: Locale;
-  readonly item: NewsSummary;
-  readonly names: Names;
+  readonly firstPage: boolean;
+  readonly message: string;
+  readonly back: string;
   readonly t: NewsTranslator;
-  readonly showType: boolean;
-  readonly headingLevel: 'h2' | 'h3';
-  readonly variant?: NewsCardVariant;
-  readonly className?: string;
 }) {
-  const translation = translationFor(item, locale);
-  const direction = directionOf(translation.languageCode);
-  const Heading = headingLevel;
-  const date = publishedDate(item.chronologyAt, locale);
-  const compact = variant === 'compact';
-  const lead = variant === 'lead';
-  const image = compact ? null : item.leadImage;
-  const authors = item.contributors.flatMap((credit) => {
-    const person =
-      credit.role === 'author' ? names.people.get(credit.personId) : undefined;
-    return person === undefined ? [] : [person];
-  });
-  const topics = item.topicIds.flatMap((id) => {
-    const topic = names.topics.get(id);
-    return topic === undefined ? [] : [topic];
-  });
-  return (
-    <li
-      className={`${CARD_SURFACE} ${
-        lead ? 'gap-4 border-t-4 border-t-accent sm:p-7' : ''
-      } ${className}`}
-    >
-      {image === null ? null : (
-        <LeadThumbnail
-          image={image}
-          alt={translation.leadAlt ?? ''}
-          lang={translation.languageCode}
-          className={`-mx-5 -mt-5 mb-1 w-[calc(100%+2.5rem)] max-w-none rounded-t-panel ${
-            lead ? 'sm:-mx-7 sm:-mt-7 sm:w-[calc(100%+3.5rem)]' : ''
-          }`}
-        />
-      )}
-      <article className="flex min-w-0 flex-1 flex-col gap-3">
-        <MetaRow
-          items={[
-            showType ? <TypeLabel key="type">{t(`type.${item.kind}`)}</TypeLabel> : null,
-            <time key="date" dateTime={date.machine}>
-              {date.text}
-            </time>,
-          ]}
-        />
-        <Heading
-          className={`${HEADLINE_SIZE[variant]} leading-snug font-semibold text-balance wrap-anywhere`}
-          lang={translation.languageCode}
-          dir={direction}
-        >
-          <a
-            href={localizedPath(locale, `${newsPathOf(item.kind, item.slug)}`)}
-            className={CARD_TITLE_LINK}
-          >
-            {translation.title}
-          </a>
-        </Heading>
-        {translation.issuer ? (
-          <p
-            className="text-sm font-medium"
-            lang={translation.languageCode}
-            dir={direction}
-          >
-            {t('issuedBy', { issuer: translation.issuer })}
-          </p>
-        ) : null}
-        {item.coverage === null ? null : (
-          <p className="text-sm wrap-anywhere" dir="auto">
-            {t('coverageOf', { outlet: item.coverage.outlet })}
-          </p>
-        )}
-        {compact || translation.excerpt === '' ? null : (
-          <p
-            className={`wrap-anywhere text-foreground-muted ${
-              lead ? 'text-lede line-clamp-5' : 'line-clamp-3 text-sm'
-            }`}
-            lang={translation.languageCode}
-            dir={direction}
-          >
-            {translation.excerpt}
-          </p>
-        )}
-        {compact || authors.length === 0 ? null : (
-          <p className={`${CARD_RAISED} mt-auto text-sm`} dir="auto">
-            {authors.map((person, index) => (
-              <span key={person.slug}>
-                {index === 0 ? null : ' · '}
-                <TextLink
-                  href={localizedPath(
-                    locale,
-                    `/people/${encodeURIComponent(person.slug)}`,
-                  )}
-                >
-                  {person.name}
-                </TextLink>
-              </span>
-            ))}
-          </p>
-        )}
-        {compact || topics.length === 0 ? null : (
-          <div className={CARD_RAISED}>
-            <TopicChips
-              label={t('topics')}
-              topics={topics.map((topic) => ({
-                href: localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`),
-                text: topic.name,
-              }))}
-            />
-          </div>
-        )}
-      </article>
-    </li>
-  );
-}
-
-const GRID_COLUMNS = {
-  2: 'sm:grid-cols-2',
-  3: 'sm:grid-cols-2 lg:grid-cols-3',
-} as const;
-
-/**
- * A grid of cards, with its names resolved once. Also composed by the home
- * page, a Centre page and the topic hub. `chronicle` opens the grid with a lead
- * story and two compact ones beside it — the first page of `/news`.
- */
-export async function NewsGrid({
-  locale,
-  items,
-  label,
-  showType,
-  headingLevel = 'h2',
-  columns = 2,
-  chronicle = false,
-}: {
-  readonly locale: Locale;
-  readonly items: readonly NewsSummary[];
-  readonly label: string;
-  readonly showType: boolean;
-  readonly headingLevel?: 'h2' | 'h3';
-  readonly columns?: 2 | 3;
-  readonly chronicle?: boolean;
-}) {
-  const t = await getTranslations({ locale, namespace: 'news' });
-  const names = await namesFor(items, locale);
-  const lead = chronicle && items.length >= 3;
-  return (
-    <ul
-      className={`grid list-none grid-cols-1 gap-4 p-0 ${GRID_COLUMNS[lead ? 3 : columns]}`}
-      aria-label={label}
-    >
-      {items.map((item, index) => (
-        <NewsCard
-          key={`${item.kind}:${item.slug}`}
-          locale={locale}
-          item={item}
-          names={names}
-          t={t}
-          showType={showType}
-          headingLevel={headingLevel}
-          variant={
-            !lead ? 'card' : index === 0 ? 'lead' : index <= 2 ? 'compact' : 'card'
-          }
-          className={lead && index === 0 ? 'sm:col-span-2 lg:row-span-2' : ''}
-        />
-      ))}
-    </ul>
+  return firstPage ? (
+    <EmptyState icon="news">{message}</EmptyState>
+  ) : (
+    <EmptyState action={{ href: back, text: t('firstPage') }}>
+      {t('pageEmpty')}
+    </EmptyState>
   );
 }
 
@@ -415,24 +465,19 @@ export async function NewsGrid({
 
 /** How many of each other family the landing previews. */
 const FAMILY_PREVIEW = 3;
+/** How many recent years the landing offers as archive shortcuts. */
+const LANDING_YEARS = 8;
 
 /**
  * `/news` — the News and Events entry point, `?sort=latest` (ROUTE_MAP.md §3.9).
  *
- * THE LATEST NEWSARTICLES FIRST, paginated, because `/news` is the NewsArticle
- * collection. `?sort=latest` is the only order that exists — there is no
- * popularity, no view count and no featured flag — so the query names the
- * default and both are canonical to `/news`. The first page reads as an
- * editorial chronology: the newest report leads, the next two sit beside it,
- * and the rest follow in order — a position earned by date alone, never an
- * editorial "featured" claim the data does not make.
- *
- * On the first page, each other family previews its latest records, and the
- * photograph surfaces Phase 12 delivered are linked; a family with nothing
- * published says so in its own listing rather than rendering an empty frame
- * here. Events (Phase 14) are linked as the other half of News and Events, and
- * Collections (Phase 15) beside the archive; the newsletter is not linked from
- * News.
+ * THE LATEST NEWSARTICLES, paginated, because `/news` is the NewsArticle
+ * collection; `?sort=latest` names the only order that exists, so both are
+ * canonical to `/news`. `?lang=` narrows to one content language; without it
+ * the interface language leads. On the first page each other family previews
+ * its latest records, recent years link into the archive, and Events,
+ * Collections and the photograph surfaces are linked as the rest of News and
+ * Events.
  */
 export async function NewsLandingPage({
   locale,
@@ -445,104 +490,85 @@ export async function NewsLandingPage({
   const photos = await getTranslations({ locale, namespace: 'photos' });
   const trail = await newsTrail(locale);
   const offset = readNewsOffset(query);
+  const { language } = readNewsFilters(query);
   const reads = editorialReadRuntime();
-  const [latest, ...families] = await Promise.all([
-    reads.newsList('news-article', offset),
-    ...(offset === 0
-      ? (['press-release', 'statement', 'media-coverage'] as const).map((kind) =>
-          reads.newsList(kind, 0),
-        )
-      : []),
+  const order = { only: language, prefer: language === null ? locale : null };
+  const others = ['press-release', 'statement', 'media-coverage'] as const;
+  const [latest, periods, ...families] = await Promise.all([
+    reads.newsList('news-article', offset, order),
+    offset === 0 ? reads.newsArchivePeriods() : Promise.resolve([]),
+    ...(offset === 0 ? others.map((kind) => reads.newsList(kind, 0, order)) : []),
   ]);
-  const base = localizedPath(locale, '/news');
-  const others = (['press-release', 'statement', 'media-coverage'] as const).flatMap(
-    (kind, index) => {
-      const page = families[index];
-      return page === undefined || page.items.length === 0
-        ? []
-        : [{ kind, items: page.items.slice(0, FAMILY_PREVIEW) }];
-    },
+  const listing = (lang: Locale | null, at = 0) =>
+    newsListingPath(locale, '/news', { language: lang }, at);
+  const previews = others.flatMap((kind, index) => {
+    const page = families[index];
+    return page === undefined || page.items.length === 0
+      ? []
+      : [{ kind, items: page.items.slice(0, FAMILY_PREVIEW) }];
+  });
+  const years = [...new Set(periods.map((period) => period.year))].slice(
+    0,
+    LANDING_YEARS,
   );
 
   return (
     <>
-      <LandingFrame
-        tone="ink"
+      <ListingHead
         trailLabel={trail.label}
         trail={[trail.home, { text: t('title') }]}
         title={t('title')}
         lede={t('description')}
-        actions={
-          <>
-            <ActionLink href={pathFor(locale, requireRoute('events'))} onInk>
-              {t('events')}
-            </ActionLink>
-            <ActionLink
-              href={localizedPath(locale, '/news/archive')}
-              tone="secondary"
-              onInk
-            >
-              {t('archive')}
-            </ActionLink>
-          </>
-        }
-      />
+      >
+        <NewsSections locale={locale} current="news-article" t={t} />
+        <LanguageFilter current={language} hrefFor={(lang) => listing(lang)} t={t} />
+      </ListingHead>
 
       <Container>
-        <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-page)]">
-          <NewsSections locale={locale} current="news-article" t={t} />
-
-          <section className="flex flex-col gap-5" aria-labelledby="news-latest">
-            <SectionHeader
-              id="news-latest"
-              heading={t('latest')}
-              intro={t('familyBody.news-article')}
-            />
+        <div className="flex flex-col gap-[var(--space-section)] pb-[var(--space-section)]">
+          <section className="flex flex-col gap-6" aria-labelledby="news-latest">
+            <h2 id="news-latest" className="sr-only">
+              {t('latest')}
+            </h2>
             {latest.items.length === 0 ? (
-              <EmptyState>
-                {offset === 0 ? (
-                  t('empty.news-article')
-                ) : (
-                  <span className="flex flex-col gap-2">
-                    <span>{t('pageEmpty')}</span>
-                    <TextLink href={base}>{t('firstPage')}</TextLink>
-                  </span>
-                )}
-              </EmptyState>
+              <ListingEmpty
+                firstPage={offset === 0}
+                message={language === null ? t('empty.news-article') : t('languageEmpty')}
+                back={listing(language)}
+                t={t}
+              />
             ) : (
-              <NewsGrid
+              <NewsChronicle
                 locale={locale}
                 items={latest.items}
                 label={t('latest')}
                 showType={false}
+                opening={offset === 0}
                 headingLevel="h3"
-                columns={3}
-                chronicle={offset === 0}
               />
             )}
-            <Pagination
+            <Pager
               label={t('latest')}
               previous={
-                offset > 0 ? offsetPath(base, Math.max(0, offset - NEWS_PAGE)) : null
+                offset > 0 ? listing(language, Math.max(0, offset - NEWS_PAGE)) : null
               }
-              next={latest.more ? offsetPath(base, offset + NEWS_PAGE) : null}
+              next={latest.more ? listing(language, offset + NEWS_PAGE) : null}
               previousLabel={t('previous')}
               nextLabel={t('next')}
             />
           </section>
 
-          {others.map(({ kind, items }) => (
+          {previews.map(({ kind, items }) => (
             <section
               key={kind}
-              className="flex flex-col gap-5"
+              className="flex flex-col gap-6"
               aria-labelledby={`news-${kind}`}
             >
               <SectionHeader
                 id={`news-${kind}`}
                 heading={t(`families.${kind}`)}
-                intro={t(`familyBody.${kind}`)}
                 action={{
-                  href: localizedPath(locale, `${newsListPathOf(kind)}`),
+                  href: localizedPath(locale, newsListPathOf(kind)),
                   text: t(`all.${kind}`),
                 }}
               />
@@ -552,63 +578,73 @@ export async function NewsLandingPage({
                 label={t(`families.${kind}`)}
                 showType={false}
                 headingLevel="h3"
-                columns={3}
               />
             </section>
           ))}
 
           {offset === 0 ? (
-            <section className="flex flex-col gap-5" aria-labelledby="news-browse">
-              <SectionHeader id="news-browse" heading={t('browse')} />
-              <CardGrid>
-                {(['press-release', 'statement', 'media-coverage'] as const).map(
-                  (kind) => (
-                    <LinkCard
-                      key={kind}
-                      href={localizedPath(locale, `${newsListPathOf(kind)}`)}
-                      title={t(`families.${kind}`)}
-                      description={t(`familyBody.${kind}`)}
+            <section
+              className="grid gap-10 border-t border-border pt-[var(--space-page)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-16"
+              aria-labelledby="news-browse"
+            >
+              <div className="flex flex-col gap-4">
+                <h2 id="news-browse" className="text-heading font-semibold">
+                  {t('browse')}
+                </h2>
+                <ul className="flex list-none flex-col p-0">
+                  {[
+                    {
+                      href: pathFor(locale, requireRoute('events')),
+                      title: t('events'),
+                      body: t('eventsBody'),
+                    },
+                    {
+                      href: pathFor(locale, requireRoute('collections')),
+                      title: t('collections'),
+                      body: t('collectionsBody'),
+                    },
+                    ...(['photos', 'galleries', 'archive'] as const).map((surface) => ({
+                      href: pathFor(locale, requireRoute(`media.${surface}`)),
+                      title: photos(`sections.${surface}`),
+                      body: t(`mediaSurface.${surface}`),
+                    })),
+                  ].map((entry) => (
+                    <ListRow
+                      key={entry.href}
+                      href={entry.href}
+                      title={entry.title}
+                      description={entry.body}
                     />
-                  ),
-                )}
-                <LinkCard
-                  href={pathFor(locale, requireRoute('events'))}
-                  title={t('events')}
-                  description={t('eventsBody')}
-                />
-                <LinkCard
-                  href={pathFor(locale, requireRoute('collections'))}
-                  title={t('collections')}
-                  description={t('collectionsBody')}
-                />
-                <LinkCard
-                  href={localizedPath(locale, '/news/archive')}
-                  title={t('archive')}
-                  description={t('archiveBody')}
-                />
-              </CardGrid>
-              <Panel>
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-8">
-                  <div className="flex min-w-0 flex-col gap-1.5">
-                    <h3 className="text-subheading font-semibold">{t('media')}</h3>
-                    <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
-                      {t('mediaBody')}
-                    </p>
-                  </div>
-                  <ul className="flex shrink-0 list-none flex-wrap gap-2 p-0">
-                    {(['photos', 'galleries', 'archive'] as const).map((surface) => (
-                      <li key={surface}>
-                        <ActionLink
-                          href={pathFor(locale, requireRoute(`media.${surface}`))}
-                          tone="secondary"
+                  ))}
+                </ul>
+              </div>
+              {years.length === 0 ? null : (
+                <nav aria-labelledby="news-years" className="flex flex-col gap-4">
+                  <h2 id="news-years" className="text-heading font-semibold">
+                    {t('byYear')}
+                  </h2>
+                  <ul className="flex list-none flex-wrap gap-2 p-0">
+                    {years.map((year) => (
+                      <li key={year}>
+                        <FilterLink
+                          href={newsArchivePath(locale, { year, month: null })}
+                          current={false}
                         >
-                          {photos(`sections.${surface}`)}
-                        </ActionLink>
+                          <span className="tabular-nums">{yearText(year, locale)}</span>
+                        </FilterLink>
                       </li>
                     ))}
+                    <li>
+                      <FilterLink
+                        href={newsArchivePath(locale, { year: null, month: null })}
+                        current={false}
+                      >
+                        {t('archiveEveryYear')}
+                      </FilterLink>
+                    </li>
                   </ul>
-                </div>
-              </Panel>
+                </nav>
+              )}
             </section>
           ) : null}
         </div>
@@ -633,49 +669,51 @@ export async function NewsFamilyPage({
   const t = await getTranslations({ locale, namespace: 'news' });
   const trail = await newsTrail(locale);
   const offset = readNewsOffset(query);
-  const page = await editorialReadRuntime().newsList(kind, offset);
+  const { language } = readNewsFilters(query);
+  const page = await editorialReadRuntime().newsList(kind, offset, {
+    only: language,
+    prefer: language === null ? locale : null,
+  });
   const title = t(`families.${kind}`);
-  const base = localizedPath(locale, `${newsListPathOf(kind)}`);
+  const listing = (lang: Locale | null, at = 0) =>
+    newsListingPath(locale, newsListPathOf(kind), { language: lang }, at);
 
   return (
     <>
-      <ListingIntro
+      <ListingHead
         trailLabel={trail.label}
         trail={[trail.home, trail.news, { text: title }]}
-        eyebrow={t('title')}
         title={title}
         lede={t(`familyBody.${kind}`)}
       >
         <NewsSections locale={locale} current={kind} t={t} />
-      </ListingIntro>
+        <LanguageFilter current={language} hrefFor={(lang) => listing(lang)} t={t} />
+      </ListingHead>
       <Container>
-        <div className="flex flex-col gap-6 py-[var(--space-page)]">
+        <div className="flex flex-col gap-6 pb-[var(--space-section)]">
           {page.items.length === 0 ? (
-            <EmptyState>
-              {offset === 0 ? (
-                t(`empty.${kind}`)
-              ) : (
-                <span className="flex flex-col gap-2">
-                  <span>{t('pageEmpty')}</span>
-                  <TextLink href={base}>{t('firstPage')}</TextLink>
-                </span>
-              )}
-            </EmptyState>
+            <ListingEmpty
+              firstPage={offset === 0}
+              message={language === null ? t(`empty.${kind}`) : t('languageEmpty')}
+              back={listing(language)}
+              t={t}
+            />
           ) : (
-            <NewsGrid
+            <NewsChronicle
               locale={locale}
               items={page.items}
               label={title}
               showType={false}
-              columns={3}
+              opening={offset === 0}
+              headingLevel="h2"
             />
           )}
-          <Pagination
+          <Pager
             label={title}
             previous={
-              offset > 0 ? offsetPath(base, Math.max(0, offset - NEWS_PAGE)) : null
+              offset > 0 ? listing(language, Math.max(0, offset - NEWS_PAGE)) : null
             }
-            next={page.more ? offsetPath(base, offset + NEWS_PAGE) : null}
+            next={page.more ? listing(language, offset + NEWS_PAGE) : null}
             previousLabel={t('previous')}
             nextLabel={t('next')}
           />
@@ -704,14 +742,31 @@ async function publicCentre(centreId: string | null): Promise<CentreReference | 
   }
 }
 
-/** The locales the record genuinely exists in — never widened by a fallback. */
-function newsLocales(record: PublicNews): Locale[] {
-  return record.translations.map((row) => row.languageCode);
+/** How many related records a detail page closes with. */
+const RELATED = 3;
+
+/**
+ * Related reading: the latest published News on the record's first topic,
+ * else the latest of its own family — the record itself excluded. A position
+ * earned by topic and date, never a recommendation.
+ */
+async function relatedNews(record: PublicNews): Promise<readonly NewsSummary[]> {
+  const reads = editorialReadRuntime();
+  const [topicId] = record.topicIds;
+  const page =
+    topicId === undefined
+      ? await reads.newsList(record.kind, 0)
+      : await reads.newsOnTopic(topicId);
+  return page.items
+    .filter((item) => !(item.kind === record.kind && item.slug === record.slug))
+    .slice(0, RELATED);
 }
 
 /**
- * A record page: the story's own column at a reading measure, and beside it on
- * a wide screen (beneath it on a phone) the record's facts and provenance.
+ * A record page, set for reading: the header (type, headline, standfirst,
+ * byline, dates), the lead picture, then the story at a reading measure with
+ * its contents beside it when it has sections, then what it is about, where
+ * it came from, and related reading.
  */
 export async function NewsDetailPage({
   locale,
@@ -729,7 +784,7 @@ export async function NewsDetailPage({
   const trail = await newsTrail(locale);
   const translation = translationFor(record, locale);
   const direction = directionOf(translation.languageCode);
-  const [names, languages, centre] = await Promise.all([
+  const [names, languages, centre, related] = await Promise.all([
     referenceNames(
       {
         personIds: record.contributors.map((c) => c.personId),
@@ -741,10 +796,14 @@ export async function NewsDetailPage({
       ? Promise.resolve(new Map<string, ContentLanguage>())
       : contentLanguages(),
     publicCentre(record.centreId),
+    relatedNews(record),
   ]);
   const centreLabel = centre === null ? null : labelFor(centre, locale);
   // The record's chronology: its source's own date where it states one.
   const date = publishedDate(record.chronologyAt ?? record.publishedAt, locale);
+  const updated = revisedAfterPublication(record.publishedAt, record.updatedAt)
+    ? publishedDate(record.updatedAt, locale)
+    : null;
   const image = record.leadImage ?? null;
   const familyTitle = t(`families.${record.kind}`);
   const familyPath = newsListPathOf(record.kind);
@@ -753,12 +812,14 @@ export async function NewsDetailPage({
     return person === undefined ? [] : [{ person, role: credit.role }];
   });
   const authors = credits.filter((credit) => credit.role === 'author');
+  const others = credits.filter((credit) => credit.role !== 'author');
   const topics = record.topicIds.flatMap((id) => {
     const topic = names.topics.get(id);
     return topic === undefined ? [] : [topic];
   });
   const coverage = record.coverage;
-  const contentLocales = newsLocales(record);
+  const contentLocales = record.translations.map((row) => row.languageCode);
+  const body = withContents(translation.html);
   const structured = newsStructuredData(
     record,
     locale,
@@ -771,36 +832,25 @@ export async function NewsDetailPage({
     trail.news,
     ...(record.kind === 'news-article'
       ? []
-      : [{ href: localizedPath(locale, `${familyPath}`), text: familyTitle }]),
+      : [{ href: localizedPath(locale, familyPath), text: familyTitle }]),
     { text: translation.title },
   ];
 
   return (
     <Container>
-      <article className="flex flex-col gap-8 pt-6 pb-[var(--space-section)]">
+      <article className="flex flex-col gap-10 pt-6 pb-[var(--space-section)]">
         <Breadcrumbs label={trail.label} trail={crumbs} />
 
-        {/* THE HEADER: what it is and when, the headline, its standfirst. */}
-        <header className="flex max-w-3xl flex-col gap-4 border-b border-border pb-8">
-          <div className="text-caption">
-            <MetaRow
-              items={[
-                <TypeLabel key="type">{t(`type.${record.kind}`)}</TypeLabel>,
-                <time key="date" dateTime={date.machine}>
-                  {date.text}
-                </time>,
-              ]}
-            />
-          </div>
-          {translation.languageCode === locale ? null : (
-            <Alert tone="info">
-              {t('fallback', {
-                language:
-                  languages.get(translation.languageCode)?.name ??
-                  translation.languageCode,
-              })}
-            </Alert>
-          )}
+        <header className="flex max-w-3xl flex-col gap-5">
+          <p className="flex flex-wrap items-center gap-2">
+            <Badge>{t(`type.${record.kind}`)}</Badge>
+            {translation.languageCode === locale ? null : (
+              <LanguageBadge
+                label={t(`languages.${translation.languageCode}`)}
+                code={translation.languageCode}
+              />
+            )}
+          </p>
           <div
             className="flex flex-col gap-4"
             lang={translation.languageCode}
@@ -815,28 +865,39 @@ export async function NewsDetailPage({
               </p>
             ) : null}
             {translation.excerpt === '' ? null : (
-              <p className="text-lede max-w-[var(--measure-prose)] text-foreground-muted">
+              <p className="reading-face text-lede max-w-[var(--measure-prose)] text-foreground-muted">
                 {translation.excerpt}
               </p>
             )}
           </div>
-          {authors.length === 0 ? null : (
-            <p className="text-sm" dir="auto">
-              {authors.map(({ person }, index) => (
-                <span key={person.slug}>
-                  {index === 0 ? null : ' · '}
-                  <TextLink
-                    href={localizedPath(
-                      locale,
-                      `/people/${encodeURIComponent(person.slug)}`,
-                    )}
-                  >
-                    {person.name}
-                  </TextLink>
-                </span>
-              ))}
+          {translation.languageCode === locale ? null : (
+            <p
+              role="status"
+              className="flex items-start gap-2 text-sm text-foreground-muted"
+            >
+              <Icon name="globe" size={16} className="mt-1 shrink-0" />
+              <span>
+                {t('fallback', {
+                  language:
+                    languages.get(translation.languageCode)?.name ??
+                    translation.languageCode,
+                })}
+              </span>
             </p>
           )}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-border pt-4">
+            <AuthorChips
+              locale={locale}
+              label={t('authors')}
+              people={authors.map((credit) => credit.person)}
+            />
+            <ReadingDates
+              dates={[
+                { term: t('published'), ...date },
+                ...(updated === null ? [] : [{ term: t('updated'), ...updated }]),
+              ]}
+            />
+          </div>
         </header>
 
         {image === null ? null : (
@@ -852,128 +913,151 @@ export async function NewsDetailPage({
           />
         )}
 
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-14">
-          <div className="flex min-w-0 flex-col gap-6">
+        <div
+          className={
+            body.entries.length === 0
+              ? 'flex min-w-0 flex-col gap-10'
+              : 'grid gap-10 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-14'
+          }
+        >
+          {body.entries.length === 0 ? null : (
+            <Contents entries={body.entries} label={t('contents')} />
+          )}
+          <div className="flex min-w-0 flex-col gap-10">
             {coverage === null ? null : (
               <p
-                className="max-w-[var(--measure-prose)] rounded-control border-s-4 border-accent-rule bg-accent-surface px-4 py-3 text-sm"
+                className="max-w-[var(--measure-prose)] text-sm text-foreground-muted"
                 dir="auto"
               >
                 {t('coverageNotice', { outlet: coverage.outlet })}
               </p>
             )}
-            <Prose>
-              <div
-                className="editorial-prose"
-                lang={translation.languageCode}
-                dir={direction}
-                dangerouslySetInnerHTML={{ __html: translation.html }}
-              />
-            </Prose>
-          </div>
+            <div
+              className="editorial-prose long-form"
+              lang={translation.languageCode}
+              dir={direction}
+              dangerouslySetInnerHTML={{ __html: body.html }}
+            />
 
-          <aside className="flex min-w-0 flex-col gap-8">
-            {coverage === null ? null : (
-              <RecordSection id="news-source" heading={t('source')}>
-                <dl className="flex flex-col">
-                  <DetailRow term={t('outlet')}>
-                    <span dir="auto">{coverage.outlet}</span>
-                  </DetailRow>
-                  {coverage.sourceDate === null ? null : (
-                    <DetailRow term={t('coverageDate')}>
-                      <time dateTime={coverage.sourceDate}>
-                        {calendarDate(coverage.sourceDate, locale)}
-                      </time>
+            <div className="flex max-w-[70ch] flex-col gap-8">
+              {coverage === null ? null : (
+                <RecordSection id="news-source" heading={t('source')}>
+                  <dl className="flex flex-col">
+                    <DetailRow term={t('outlet')}>
+                      <span dir="auto">{coverage.outlet}</span>
                     </DetailRow>
-                  )}
-                </dl>
-                {coverage.sourceUrl === null ? (
-                  <p className="text-sm">{t('sourceUnknown')}</p>
-                ) : (
-                  <p className="text-sm">
-                    <a
-                      href={coverage.sourceUrl}
-                      rel="external noopener noreferrer"
-                      className="inline-flex min-h-11 flex-wrap items-center gap-x-1 font-medium wrap-anywhere text-action underline underline-offset-2"
-                    >
-                      <span dir="auto">
-                        {t('sourceLink', { outlet: coverage.outlet })}
-                      </span>{' '}
-                      <span className="text-foreground-muted">{t('sourceExternal')}</span>
-                    </a>
-                  </p>
-                )}
-              </RecordSection>
-            )}
-
-            <RecordSection id="news-facts" heading={t('facts')}>
-              <dl className="flex flex-col">
-                <DetailRow term={t('published')}>
-                  <time dateTime={date.machine}>{date.text}</time>
-                </DetailRow>
-                {translation.issuer ? (
-                  <DetailRow term={t('issuer')}>
-                    <span lang={translation.languageCode} dir={direction}>
-                      {translation.issuer}
-                    </span>
-                  </DetailRow>
-                ) : null}
-                {credits.length === 0 ? null : (
-                  <DetailRow term={t('contributors')}>
-                    <ul className="flex flex-col gap-1">
-                      {credits.map(({ person, role }) => (
-                        <li key={`${person.slug}:${role}`} dir="auto">
-                          <TextLink
-                            href={localizedPath(
-                              locale,
-                              `/people/${encodeURIComponent(person.slug)}`,
-                            )}
-                          >
-                            {person.name}
-                          </TextLink>{' '}
-                          — {editorial(role as 'author')}
-                        </li>
-                      ))}
-                    </ul>
-                  </DetailRow>
-                )}
-                {centre === null || centreLabel === null ? null : (
-                  <DetailRow term={t('centre')}>
-                    <TextLink href={globalPaths.centre(locale, centre.slug)}>
-                      <span
-                        lang={centreLabel.locale}
-                        dir={directionOf(centreLabel.locale)}
+                    {coverage.sourceDate === null ? null : (
+                      <DetailRow term={t('coverageDate')}>
+                        <time dateTime={coverage.sourceDate}>
+                          {calendarDate(coverage.sourceDate, locale)}
+                        </time>
+                      </DetailRow>
+                    )}
+                  </dl>
+                  {coverage.sourceUrl === null ? (
+                    <p className="text-sm">{t('sourceUnknown')}</p>
+                  ) : (
+                    <p className="text-sm">
+                      <a
+                        href={coverage.sourceUrl}
+                        rel="external noopener noreferrer"
+                        className="inline-flex min-h-11 flex-wrap items-center gap-x-1 font-medium wrap-anywhere text-action underline underline-offset-2"
                       >
-                        {centreLabel.name}
-                      </span>
-                    </TextLink>
-                  </DetailRow>
-                )}
-              </dl>
-              {topics.length === 0 ? null : (
-                <div className="flex flex-col gap-2">
-                  <p className="text-xs text-foreground-muted">{t('topics')}</p>
-                  <TopicChips
-                    label={t('topics')}
-                    topics={topics.map((topic) => ({
-                      href: localizedPath(
-                        locale,
-                        `/topics/${encodeURIComponent(topic.slug)}`,
-                      ),
-                      text: topic.name,
-                    }))}
-                  />
-                </div>
+                        <span dir="auto">
+                          {t('sourceLink', { outlet: coverage.outlet })}
+                        </span>{' '}
+                        <span className="text-foreground-muted">
+                          {t('sourceExternal')}
+                        </span>
+                      </a>
+                    </p>
+                  )}
+                </RecordSection>
               )}
-            </RecordSection>
 
-            <p>
-              <ActionLink href={localizedPath(locale, `${familyPath}`)} tone="secondary">
-                {t(`all.${record.kind}`)}
-              </ActionLink>
-            </p>
-          </aside>
+              {topics.length === 0 &&
+              others.length === 0 &&
+              (centre === null || centreLabel === null) ? null : (
+                <RecordSection id="news-facts" heading={t('facts')}>
+                  {topics.length === 0 ? null : (
+                    <TopicChips
+                      label={t('topics')}
+                      topics={topics.map((topic) => ({
+                        href: localizedPath(
+                          locale,
+                          `/topics/${encodeURIComponent(topic.slug)}`,
+                        ),
+                        text: topic.name,
+                      }))}
+                    />
+                  )}
+                  <dl className="flex flex-col">
+                    {others.length === 0 ? null : (
+                      <DetailRow term={t('contributors')}>
+                        <ul className="flex flex-col gap-1">
+                          {others.map(({ person, role }) => (
+                            <li key={`${person.slug}:${role}`} dir="auto">
+                              <TextLink
+                                href={localizedPath(
+                                  locale,
+                                  `/people/${encodeURIComponent(person.slug)}`,
+                                )}
+                              >
+                                {person.name}
+                              </TextLink>{' '}
+                              — {editorial(role as 'author')}
+                            </li>
+                          ))}
+                        </ul>
+                      </DetailRow>
+                    )}
+                    {centre === null || centreLabel === null ? null : (
+                      <DetailRow term={t('centre')}>
+                        <TextLink href={globalPaths.centre(locale, centre.slug)}>
+                          <span
+                            lang={centreLabel.locale}
+                            dir={directionOf(centreLabel.locale)}
+                          >
+                            {centreLabel.name}
+                          </span>
+                        </TextLink>
+                      </DetailRow>
+                    )}
+                  </dl>
+                </RecordSection>
+              )}
+            </div>
+          </div>
         </div>
+
+        {related.length === 0 ? (
+          <p>
+            <TextLink href={localizedPath(locale, familyPath)}>
+              {t(`all.${record.kind}`)}
+            </TextLink>
+          </p>
+        ) : (
+          <section
+            className="flex flex-col gap-6 border-t border-border pt-[var(--space-page)]"
+            aria-labelledby="news-related"
+          >
+            <SectionHeader
+              id="news-related"
+              heading={t('related')}
+              action={{
+                href: localizedPath(locale, familyPath),
+                text: t(`all.${record.kind}`),
+              }}
+            />
+            <NewsGrid
+              locale={locale}
+              items={related}
+              label={t('related')}
+              showType
+              headingLevel="h3"
+            />
+          </section>
+        )}
 
         <BreadcrumbData
           contentLocales={contentLocales}
@@ -988,14 +1072,14 @@ export async function NewsDetailPage({
               : [
                   {
                     name: familyTitle,
-                    path: localizedPath(translation.languageCode, `${familyPath}`),
+                    path: localizedPath(translation.languageCode, familyPath),
                   },
                 ]),
             {
               name: translation.title,
               path: localizedPath(
                 translation.languageCode,
-                `${newsPathOf(record.kind, record.slug)}`,
+                newsPathOf(record.kind, record.slug),
               ),
             },
           ]}
@@ -1021,9 +1105,11 @@ export async function NewsDetailPage({
  * The News archive: every published record of the four families, newest
  * first, browsed by the UTC year and month of its CHRONOLOGY — its source's own
  * publication date where a migrated record states one, else its genuine
- * publication instant — never a record's creation, migration or approval time. Each card says which family it is. On a wide
- * screen the years and months sit beside the results as an index; on a phone
- * they come first.
+ * publication instant — never a record's creation, migration or approval time.
+ * R2: narrowed by family (`?type=`) and content language (`?lang=`) as well,
+ * and the periods are counted over the same narrowing. On a wide screen the
+ * years and months sit beside the results as an index; on a phone they come
+ * first.
  */
 export async function NewsArchivePage({
   locale,
@@ -1034,20 +1120,22 @@ export async function NewsArchivePage({
 }) {
   const t = await getTranslations({ locale, namespace: 'news' });
   const trail = await newsTrail(locale);
-  const filter = readNewsArchiveQuery(query);
+  const period = readNewsArchiveQuery(query);
+  const { kind, language } = readNewsFilters(query);
+  const filter = { ...period, kind, language };
   const reads = editorialReadRuntime();
   const [periods, page] = await Promise.all([
-    reads.newsArchivePeriods(),
+    reads.newsArchivePeriods({ kind, language }),
     reads.newsArchive(filter),
   ]);
-  const years = [...new Set(periods.map((period) => period.year))].map((year) => ({
+  const years = [...new Set(periods.map((entry) => entry.year))].map((year) => ({
     year,
     count: periods
-      .filter((period) => period.year === year)
-      .reduce((total, period) => total + period.count, 0),
+      .filter((entry) => entry.year === year)
+      .reduce((total, entry) => total + entry.count, 0),
   }));
   const months =
-    filter.year === null ? [] : periods.filter((period) => period.year === filter.year);
+    filter.year === null ? [] : periods.filter((entry) => entry.year === filter.year);
   const heading =
     filter.year === null
       ? t('archiveAll')
@@ -1057,34 +1145,79 @@ export async function NewsArchivePage({
             month: monthName(filter.month, locale),
             year: yearText(filter.year, locale),
           });
+  const narrowed = kind !== null || language !== null;
 
   return (
     <>
-      <ListingIntro
+      <ListingHead
         trailLabel={trail.label}
         trail={[trail.home, trail.news, { text: t('archive') }]}
-        eyebrow={t('title')}
         title={t('archive')}
         lede={t('archiveBody')}
       >
         <NewsSections locale={locale} current="archive" t={t} />
-      </ListingIntro>
+        <nav aria-label={t('typeFilter')}>
+          <ul className="flex list-none flex-wrap items-center gap-2 p-0">
+            <li>
+              <FilterLink
+                href={newsArchivePath(locale, { ...filter, kind: null })}
+                current={kind === null}
+              >
+                {t('allTypes')}
+              </FilterLink>
+            </li>
+            {NEWS_KINDS.map((family) => (
+              <li key={family}>
+                <FilterLink
+                  href={newsArchivePath(locale, { ...filter, kind: family })}
+                  current={kind === family}
+                >
+                  {t(`families.${family}`)}
+                </FilterLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        <LanguageFilter
+          current={language}
+          hrefFor={(lang) => newsArchivePath(locale, { ...filter, language: lang })}
+          t={t}
+        />
+      </ListingHead>
 
       <Container>
-        <div className="py-[var(--space-page)]">
+        <div className="pb-[var(--space-section)]">
           {years.length === 0 ? (
-            <EmptyState>{t('archiveEmpty')}</EmptyState>
+            narrowed ? (
+              <EmptyState
+                action={{
+                  href: newsArchivePath(locale, { year: null, month: null }),
+                  text: t('archiveEverything'),
+                }}
+              >
+                {t('archiveFilteredEmpty')}
+              </EmptyState>
+            ) : (
+              <EmptyState icon="news">{t('archiveEmpty')}</EmptyState>
+            )
           ) : (
-            <div className="grid gap-10 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-12">
+            <div className="grid gap-10 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-12">
               <div className="flex min-w-0 flex-col gap-8">
-                <nav aria-label={t('archiveYears')} className="flex flex-col gap-3">
-                  <h2 className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-foreground-muted uppercase">
+                <nav aria-labelledby="news-archive-years" className="flex flex-col gap-3">
+                  <h2
+                    id="news-archive-years"
+                    className="text-sm font-semibold text-foreground-muted"
+                  >
                     {t('archiveYears')}
                   </h2>
                   <ul className="flex list-none flex-wrap gap-2 p-0 lg:flex-col">
                     <li>
                       <FilterLink
-                        href={newsArchivePath(locale, { year: null, month: null })}
+                        href={newsArchivePath(locale, {
+                          ...filter,
+                          year: null,
+                          month: null,
+                        })}
                         current={filter.year === null}
                       >
                         {t('archiveEveryYear')}
@@ -1094,15 +1227,18 @@ export async function NewsArchivePage({
                       <li key={entry.year}>
                         <FilterLink
                           href={newsArchivePath(locale, {
+                            ...filter,
                             year: entry.year,
                             month: null,
                           })}
                           current={filter.year === entry.year && filter.month === null}
                           partial={filter.year === entry.year && filter.month !== null}
                         >
-                          {yearText(entry.year, locale)}
-                          <span className="ms-1 text-foreground-muted">
-                            ({t('countShort', { count: entry.count })})
+                          <span className="tabular-nums">
+                            {yearText(entry.year, locale)}
+                          </span>
+                          <span className="ms-1.5 text-foreground-muted tabular-nums">
+                            {t('countShort', { count: entry.count })}
                           </span>
                         </FilterLink>
                       </li>
@@ -1111,8 +1247,14 @@ export async function NewsArchivePage({
                 </nav>
 
                 {months.length === 0 ? null : (
-                  <nav aria-label={t('archiveMonths')} className="flex flex-col gap-3">
-                    <h2 className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-foreground-muted uppercase">
+                  <nav
+                    aria-labelledby="news-archive-months"
+                    className="flex flex-col gap-3"
+                  >
+                    <h2
+                      id="news-archive-months"
+                      className="text-sm font-semibold text-foreground-muted"
+                    >
                       {t('archiveMonths')}
                     </h2>
                     <ul className="flex list-none flex-wrap gap-2 p-0 lg:flex-col">
@@ -1120,14 +1262,14 @@ export async function NewsArchivePage({
                         <li key={entry.month}>
                           <FilterLink
                             href={newsArchivePath(locale, {
-                              year: filter.year,
+                              ...filter,
                               month: entry.month,
                             })}
                             current={filter.month === entry.month}
                           >
                             {monthName(entry.month, locale)}
-                            <span className="ms-1 text-foreground-muted">
-                              ({t('countShort', { count: entry.count })})
+                            <span className="ms-1.5 text-foreground-muted tabular-nums">
+                              {t('countShort', { count: entry.count })}
                             </span>
                           </FilterLink>
                         </li>
@@ -1143,26 +1285,29 @@ export async function NewsArchivePage({
               >
                 <SectionHeader id="news-archive-items" heading={heading} />
                 {page.items.length === 0 ? (
-                  <EmptyState>
-                    <span className="flex flex-col gap-2">
-                      <span>{t('archiveFilteredEmpty')}</span>
-                      <TextLink
-                        href={newsArchivePath(locale, { year: null, month: null })}
-                      >
-                        {t('archiveEveryYear')}
-                      </TextLink>
-                    </span>
+                  <EmptyState
+                    action={{
+                      href: newsArchivePath(locale, {
+                        ...filter,
+                        year: null,
+                        month: null,
+                      }),
+                      text: t('archiveEveryYear'),
+                    }}
+                  >
+                    {t('archiveFilteredEmpty')}
                   </EmptyState>
                 ) : (
-                  <NewsGrid
+                  <NewsChronicle
                     locale={locale}
                     items={page.items}
                     label={heading}
-                    showType
+                    showType={kind === null}
+                    opening={false}
                     headingLevel="h3"
                   />
                 )}
-                <Pagination
+                <Pager
                   label={heading}
                   previous={
                     filter.offset > 0

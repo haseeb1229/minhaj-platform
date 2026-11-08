@@ -11,12 +11,13 @@ import {
 } from '@minhaj/contracts/migration';
 
 import { displayTimeZone } from '@/components/personal/presentation';
-import { StatusBadge, TextLink } from '@/components/ui';
+import { StatusBadge } from '@/components/ui';
 import { appLogger } from '@/composition/logging';
 import {
   migrationFailure,
   type MigrationRefusalReason,
 } from '@/contexts/migration-provenance';
+import { AdminPager } from '../pager';
 import { adminCopy } from '../shared';
 import { StepUpPrompt } from '../step-up';
 
@@ -157,6 +158,7 @@ export async function adminMigrationCopy(locale: Locale) {
     'lease-lost': t('failure.leaseLost'),
     'host-refused': t('failure.hostRefused'),
     'review-only-kind': t('failure.reviewOnlyKind'),
+    'duplicate-open': t('failure.duplicateOpen'),
     unavailable: t('failure.unavailable'),
   };
   return {
@@ -200,7 +202,7 @@ export function RowIdentity({
   );
 }
 
-/** Previous and next pages of a bounded listing, with where the reader is. */
+/** The shared administrative pager at Migration's page size and wording. */
 export function Pager({
   offset,
   total,
@@ -214,21 +216,16 @@ export function Pager({
   readonly label: string;
   readonly copy: AdminMigrationCopy;
 }) {
-  const pages = Math.max(1, Math.ceil(total / MIGRATION_PAGE));
-  const current = Math.floor(offset / MIGRATION_PAGE) + 1;
-  if (pages <= 1 && current === 1) return null;
   return (
-    <nav className="flex flex-wrap items-center gap-x-6 gap-y-2" aria-label={label}>
-      {current > 1 ? (
-        <TextLink href={hrefFor(current - 1)}>{copy.t('previous')}</TextLink>
-      ) : null}
-      <span className="text-sm">
-        {copy.t('pageOf', { page: current, pages: Math.max(pages, current) })}
-      </span>
-      {current < pages ? (
-        <TextLink href={hrefFor(current + 1)}>{copy.t('next')}</TextLink>
-      ) : null}
-    </nav>
+    <AdminPager
+      label={label}
+      offset={offset}
+      pageSize={MIGRATION_PAGE}
+      total={total}
+      href={hrefFor}
+      previousLabel={copy.t('previous')}
+      nextLabel={copy.t('next')}
+    />
   );
 }
 
@@ -287,8 +284,11 @@ export function StateBadge({
  */
 export async function MigrationPersonalDataStepUp({
   locale,
+  returnTo,
 }: {
   readonly locale: Locale;
+  /** This page's own address, to resume at once confirmed (R2). */
+  readonly returnTo?: string;
 }) {
   const [admin, stepUp] = await Promise.all([
     adminCopy(locale),
@@ -298,6 +298,7 @@ export async function MigrationPersonalDataStepUp({
     <StepUpPrompt
       locale={locale}
       purpose="migration-personal-data"
+      {...(returnTo === undefined ? {} : { returnTo })}
       labels={{ ...admin.stepUp, description: stepUp('migrationPersonalData') }}
     />
   );
@@ -310,8 +311,11 @@ export async function MigrationPersonalDataStepUp({
  */
 export async function MigrationPublicationStepUp({
   locale,
+  returnTo,
 }: {
   readonly locale: Locale;
+  /** This page's own address, to resume at once confirmed (R2). */
+  readonly returnTo?: string;
 }) {
   const [admin, stepUp] = await Promise.all([
     adminCopy(locale),
@@ -321,6 +325,7 @@ export async function MigrationPublicationStepUp({
     <StepUpPrompt
       locale={locale}
       purpose="migration-publication"
+      {...(returnTo === undefined ? {} : { returnTo })}
       labels={{ ...admin.stepUp, description: stepUp('migrationPublication') }}
     />
   );

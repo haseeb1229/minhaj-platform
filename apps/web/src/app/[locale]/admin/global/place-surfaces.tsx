@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import {
+  GLOBAL_ADMIN_PAGE,
   globalIdSchema,
   type CityRecord,
   type CountryRecord,
@@ -26,6 +27,7 @@ import {
 } from '@/components/ui';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
+import { AdminPager } from '../pager';
 import { queryValue } from '../shared';
 import { saveCity, saveCountry, saveRegion } from './actions';
 import {
@@ -43,7 +45,6 @@ import {
   EditorHeading,
   editorTarget,
   globalCopy,
-  Pager,
   PlaceNameFields,
   withSelected,
   type Copy,
@@ -124,12 +125,14 @@ async function Directory(level: Level, { params, searchParams }: ListParams) {
         countries={countries?.byId ?? null}
         copy={copy}
       />
-      <Pager
-        offset={filter.offset}
-        hasMore={page.hasMore}
-        hrefFor={directoryHref(base, filter)}
+      <AdminPager
         label={t(`surface.${level}`)}
-        copy={copy}
+        offset={filter.offset}
+        pageSize={GLOBAL_ADMIN_PAGE}
+        more={page.hasMore}
+        href={directoryHref(base, filter)}
+        previousLabel={t('previous')}
+        nextLabel={t('next')}
       />
     </main>
   );

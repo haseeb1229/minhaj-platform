@@ -5,6 +5,7 @@ import type { Locale } from '@minhaj/contracts';
 import type {
   ScholarlyKind,
   ScholarlyLabel,
+  ScholarlyListing,
   ScholarlyQuery,
   StandaloneScholarlyKind,
 } from '@minhaj/contracts/library';
@@ -79,6 +80,34 @@ export function issuePath(
     locale,
     `${scholarlyPathOf('magazine-issue', issueSlug, magazineSlug)}`,
   );
+}
+
+/** The address of one listing row: an issue beneath its Magazine, else its own. */
+export function listingHref(
+  locale: Locale,
+  row: Pick<ScholarlyListing, 'kind' | 'slug' | 'issue'>,
+): string {
+  return row.kind === 'magazine-issue' && row.issue !== null
+    ? issuePath(locale, row.issue.magazineSlug, row.slug)
+    : scholarlyPath(locale, row.kind as StandaloneScholarlyKind, row.slug);
+}
+
+/**
+ * A Magazine's issues grouped by year (R2, audit F14), from a list already in
+ * the periodical's order — newest year first, an undated issue last. Groups
+ * keep that order and so do the issues within them; nothing is re-sorted.
+ */
+export function issuesByYear<T extends { readonly publicationYear: number | null }>(
+  issues: readonly T[],
+): { readonly year: number | null; readonly issues: readonly T[] }[] {
+  const groups: { year: number | null; issues: T[] }[] = [];
+  for (const issue of issues) {
+    const last = groups.at(-1);
+    if (last !== undefined && last.year === issue.publicationYear)
+      last.issues.push(issue);
+    else groups.push({ year: issue.publicationYear, issues: [issue] });
+  }
+  return groups;
 }
 
 /** The listing address of one standalone kind. */

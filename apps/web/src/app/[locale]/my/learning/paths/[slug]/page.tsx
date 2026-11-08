@@ -1,14 +1,15 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 
-import { learningLinks } from '@/components/my-learning/nav';
 import { LearningTitle, ProgressStatus } from '@/components/my-learning/parts';
 import { pickLabel } from '@/components/my-learning/presentation';
 import { learningRead } from '@/components/my-learning/read';
-import { PersonalFrame, PersonalLinks } from '@/components/personal/parts';
 import { Alert, EmptyState, Panel, TextLink } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
+import { MyPage } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
 import { requireLocale } from '@/config/route-locale';
 import { requireActiveSession } from '../../../guard';
 
@@ -22,7 +23,13 @@ import { requireActiveSession } from '../../../guard';
  * so this page offers no path-level act. A Course they are not on links to its
  * public page, where enrolling is offered.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'path');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -39,16 +46,15 @@ export default async function MyLearningPathPage({
     localizedPath(locale, `/my/learning/paths/${encodeURIComponent(slug)}`),
   );
   const t = await getTranslations({ locale, namespace: 'myLearning' });
-  const back = <PersonalLinks label={t('nav.label')} links={learningLinks(locale, t)} />;
 
   const read = await learningRead('learning-my-path', () =>
     learningRuntime().learner.path({ accountId: session.account.id }, slug),
   );
   if (!read.ok)
     return (
-      <PersonalFrame title={t('path.fallbackTitle')} back={back}>
+      <MyPage title={t('path.fallbackTitle')}>
         <Alert tone="error">{t('failure.load')}</Alert>
-      </PersonalFrame>
+      </MyPage>
     );
   if (read.value === null) notFound();
 
@@ -57,7 +63,7 @@ export default async function MyLearningPathPage({
   const enrolled = courses.filter((entry) => entry.enrolled).length;
 
   return (
-    <PersonalFrame
+    <MyPage
       title={
         <span lang={label?.locale} dir="auto" className="wrap-anywhere">
           {label?.title}
@@ -88,7 +94,6 @@ export default async function MyLearningPathPage({
           </p>
         </>
       }
-      back={back}
     >
       {courses.length === 0 ? (
         <EmptyState>{t('path.empty')}</EmptyState>
@@ -147,6 +152,6 @@ export default async function MyLearningPathPage({
           })}
         </ol>
       )}
-    </PersonalFrame>
+    </MyPage>
   );
 }

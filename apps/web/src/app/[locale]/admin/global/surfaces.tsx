@@ -278,31 +278,6 @@ export function directoryHref(
   };
 }
 
-export function Pager({
-  offset,
-  hasMore,
-  hrefFor,
-  label,
-  copy,
-}: {
-  readonly offset: number;
-  readonly hasMore: boolean;
-  readonly hrefFor: (page: number) => string;
-  readonly label: string;
-  readonly copy: Copy;
-}) {
-  if (offset === 0 && !hasMore) return null;
-  const current = offset / GLOBAL_ADMIN_PAGE + 1;
-  return (
-    <nav className="flex gap-6" aria-label={label}>
-      {offset > 0 ? (
-        <TextLink href={hrefFor(current - 1)}>{copy.t('previous')}</TextLink>
-      ) : null}
-      {hasMore ? <TextLink href={hrefFor(current + 1)}>{copy.t('next')}</TextLink> : null}
-    </nav>
-  );
-}
-
 const SUBMIT_CLASSES =
   'inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-medium';
 

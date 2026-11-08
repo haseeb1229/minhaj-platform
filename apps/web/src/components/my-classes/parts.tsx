@@ -1,4 +1,3 @@
-import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import type { getTranslations } from 'next-intl/server';
@@ -33,22 +32,6 @@ import { StatusBadge } from '@/components/ui';
  */
 
 export type ClassesTranslator = Awaited<ReturnType<typeof getTranslations<'myClasses'>>>;
-
-interface Link {
-  readonly href: string;
-  readonly text: string;
-}
-
-/** The neighbouring pages each My Classes page links to. */
-export function classLinks(locale: Locale, t: ClassesTranslator): readonly Link[] {
-  return [
-    { href: localizedPath(locale, '/my/classes'), text: t('nav.classes') },
-    { href: localizedPath(locale, '/my/teachers'), text: t('nav.teachers') },
-    { href: localizedPath(locale, '/my/learning'), text: t('nav.learning') },
-    { href: localizedPath(locale, '/learn/live'), text: t('nav.schedule') },
-    { href: localizedPath(locale, '/my'), text: t('nav.account') },
-  ];
-}
 
 /**
  * The words for every refusal a My Classes action can return — a category,

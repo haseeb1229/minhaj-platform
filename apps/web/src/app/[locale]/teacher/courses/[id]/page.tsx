@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
@@ -10,6 +11,7 @@ import {
 } from '@/components/teacher/course-frame';
 import { NotActivated } from '@/components/teacher/parts';
 import { EmptyState, Panel, SectionHeading, TextLink } from '@/components/ui';
+import { teacherPageMetadata } from '@/components/teacher/metadata';
 import { requireLocale } from '@/config/route-locale';
 import { requireTeacher } from '../../guard';
 
@@ -19,7 +21,13 @@ import { requireTeacher } from '../../guard';
  * materials page. Read-only: the syllabus is the catalogue's, edited by the
  * Learning administration, never by a teacher.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return teacherPageMetadata(params, 'course');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -50,7 +58,7 @@ export default async function TeacherCoursePage({
   return (
     <CourseFrame
       course={course}
-      heading={t('course.syllabus')}
+      view="syllabus"
       description={
         <>
           {label === null || label.summary === '' ? null : (

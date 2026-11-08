@@ -44,6 +44,7 @@ import {
   type Query,
 } from '../shared';
 import { ErrorResolutionBadge } from '../status';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/migration/errors` — import errors and missing records,
@@ -59,7 +60,7 @@ import { ErrorResolutionBadge } from '../status';
  * marked missing — an observation. Classifying it records why, and deletes,
  * unpublishes and redirects nothing.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminMigration', 'errors.title');
 
 export const dynamic = 'force-dynamic';
 

@@ -15,6 +15,7 @@ import { publicIndexingEnabled } from '@/config/indexing';
 import { readPresence } from '@/composition/presence';
 import { promotionRuleOf } from '@/shell/presence';
 import { SHELL_ROUTES, isAvailable, type ShellRoute } from '@/shell/registry';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/system/navigation` — READ-ONLY, and only what is promised.
@@ -42,7 +43,7 @@ import { SHELL_ROUTES, isAvailable, type ShellRoute } from '@/shell/registry';
  * (SECURITY_BASELINE.md §3.1). A signed-in visitor without the key gets a 404,
  * not a 403, for the same reason every other admin route does.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('admin', 'navigation.title');
 export const dynamic = 'force-dynamic';
 
 /** How each availability is badged. Text, never colour alone. */
@@ -121,12 +122,19 @@ export default async function NavigationStatusPage({
 
             <DataCell wrap>
               {(() => {
-                const rule = promotionRuleOf(route.key);
+                const rule = promotionRuleOf(
+                  route.key,
+                  isAvailable(route) ? route.path : undefined,
+                );
                 if (rule === undefined) return t('navigation.promotion.never');
-                if (rule === null) return t('navigation.promotion.always');
-                return presence.signals.has(rule)
-                  ? t('navigation.promotion.live', { signal: rule })
-                  : t('navigation.promotion.waiting', { signal: rule });
+                if (rule.kind === 'always') return t('navigation.promotion.always');
+                if (rule.kind === 'page')
+                  return presence.publishedPages.has(rule.binding)
+                    ? t('navigation.promotion.pageLive')
+                    : t('navigation.promotion.pageWaiting');
+                return presence.signals.has(rule.signal)
+                  ? t('navigation.promotion.live', { signal: rule.signal })
+                  : t('navigation.promotion.waiting', { signal: rule.signal });
               })()}
             </DataCell>
 

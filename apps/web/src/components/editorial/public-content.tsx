@@ -13,17 +13,23 @@ import {
   editorialPublicReferences,
 } from '@/composition/editorial-read';
 import {
-  Alert,
+  Badge,
   Breadcrumbs,
+  CardGrid,
   Container,
-  MetaRow,
-  Prose,
+  Icon,
+  LanguageBadge,
+  SectionHeader,
   TextLink,
   TopicChips,
 } from '@/components/ui';
+import { directionOf } from '@/config/locale';
+import { ArticleCard } from './article-card';
 import { RecordSection } from './frame';
 import { translationFor } from './presentation';
 import { LeadFigure } from './lead-image';
+import { revisedAfterPublication, withContents } from './long-form';
+import { AuthorChips, Contents, ReadingDates } from './reading';
 import { absoluteUrl } from '@/config/origin';
 import {
   contentMetadata,
@@ -58,6 +64,17 @@ export async function publishedPageMetadata(
     ? editorialMetadata(record, locale, pagePath(record.routeBinding, record.slug))
     : null;
 }
+
+/** How many other Articles an Article page closes with. */
+const RELATED_ARTICLES = 3;
+
+/**
+ * An Article or a Page, set for reading (R2): the header — for an Article its
+ * type, headline, standfirst, byline and dates; for a Page its title and
+ * standfirst alone — the lead picture, then the body at a reading measure
+ * with its contents beside it when it has sections, then its other credits
+ * and topics, and, for an Article, more Articles.
+ */
 export async function PublicContent({
   record,
   locale,
@@ -73,9 +90,13 @@ export async function PublicContent({
   const news = await getTranslations({ locale, namespace: 'news' });
   const shell = await getTranslations({ locale, namespace: 'shell' });
   const translation = translationFor(record, locale);
-  const references = await editorialPublicReferences(record, locale);
+  const article = kind === 'Article';
+  const [references, latest] = await Promise.all([
+    editorialPublicReferences(record, locale),
+    article ? editorialReadRuntime().articles(0) : Promise.resolve([]),
+  ]);
   const contentLocales = record.translations.map((row) => row.languageCode);
-  const direction = translation.languageCode === 'en' ? 'ltr' : 'rtl';
+  const direction = directionOf(translation.languageCode);
   // A date-only fact in the interface locale, never shifted by the reader's zone.
   // An Article's date is its CHRONOLOGY (Phase 30-R): its source's own
   // publication date where it states one — never the day it was migrated.
@@ -85,24 +106,41 @@ export async function PublicContent({
   // platform published it, which on a migrated page (a 2009 profile) reads as
   // if the content were new. It shows no dateline and states no publication
   // date; its structured data keeps the true `dateModified`.
-  const showsDate = kind === 'Article';
-  const published = new Intl.DateTimeFormat(locale, {
-    dateStyle: 'long',
-    timeZone: 'UTC',
-  }).format(dated);
+  const showsDate = article;
+  const format = (value: Date) => ({
+    text: new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }).format(
+      value,
+    ),
+    machine: value.toISOString().slice(0, 10),
+  });
   const image = record.leadImage ?? null;
   const credits = record.contributors.flatMap((credit) => {
     const person = references.people.find((row) => row.id === credit.personId);
     return person === undefined ? [] : [{ credit, person }];
   });
+  const authors = credits.filter(({ credit }) => credit.role === 'author');
+  const others = credits.filter(({ credit }) => credit.role !== 'author');
+  const body = withContents(translation.html);
+  const related = latest
+    .filter((row) => row.slug !== record.slug)
+    .slice(0, RELATED_ARTICLES);
+  const dates = showsDate
+    ? [
+        { term: news('published'), ...format(dated) },
+        ...(revisedAfterPublication(record.publishedAt, record.updatedAt)
+          ? [{ term: news('updated'), ...format(record.updatedAt) }]
+          : []),
+      ]
+    : [];
+
   return (
     <Container>
-      <article className="flex flex-col gap-8 pt-6 pb-[var(--space-section)]">
+      <article className="flex flex-col gap-10 pt-6 pb-[var(--space-section)]">
         <Breadcrumbs
           label={shell('nav.breadcrumbs')}
           trail={[
             { href: localizedPath(locale, ''), text: shell('nav.home') },
-            ...(kind === 'Article'
+            ...(article
               ? [
                   {
                     href: localizedPath(locale, '/library/articles'),
@@ -114,29 +152,17 @@ export async function PublicContent({
           ]}
         />
 
-        {/* THE HEADER: what it is and when, the title, its standfirst, its byline. */}
-        <header className="flex max-w-3xl flex-col gap-4 border-b border-border pb-8">
-          <MetaRow
-            items={[
-              kind === 'Article' ? (
-                <span
-                  key="type"
-                  className="font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase"
-                >
-                  {t('articles')}
-                </span>
-              ) : null,
-              showsDate ? (
-                <time key="date" dateTime={dated.toISOString().slice(0, 10)}>
-                  {news('published')} {published}
-                </time>
-              ) : null,
-            ]}
-          />
-          {translation.languageCode !== locale ? (
-            <Alert tone="info">
-              {t('fallback', { language: translation.languageCode })}
-            </Alert>
+        <header className="flex max-w-3xl flex-col gap-5">
+          {article || translation.languageCode !== locale ? (
+            <p className="flex flex-wrap items-center gap-2">
+              {article ? <Badge>{news('type.article')}</Badge> : null}
+              {translation.languageCode === locale ? null : (
+                <LanguageBadge
+                  label={news(`languages.${translation.languageCode}`)}
+                  code={translation.languageCode}
+                />
+              )}
+            </p>
           ) : null}
           <div
             className="flex flex-col gap-4"
@@ -147,11 +173,30 @@ export async function PublicContent({
               {translation.title}
             </h1>
             {translation.excerpt ? (
-              <p className="text-lede max-w-[var(--measure-prose)] text-foreground-muted">
+              <p className="reading-face text-lede max-w-[var(--measure-prose)] text-foreground-muted">
                 {translation.excerpt}
               </p>
             ) : null}
           </div>
+          {translation.languageCode !== locale ? (
+            <p
+              role="status"
+              className="flex items-start gap-2 text-sm text-foreground-muted"
+            >
+              <Icon name="globe" size={16} className="mt-1 shrink-0" />
+              <span>{t('fallback', { language: translation.languageCode })}</span>
+            </p>
+          ) : null}
+          {authors.length === 0 && dates.length === 0 ? null : (
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-border pt-4">
+              <AuthorChips
+                locale={locale}
+                label={news('authors')}
+                people={authors.map(({ person }) => person)}
+              />
+              <ReadingDates dates={dates} />
+            </div>
+          )}
         </header>
 
         {image === null ? null : (
@@ -167,61 +212,89 @@ export async function PublicContent({
 
         <div
           className={
-            credits.length === 0 && references.topics.length === 0
-              ? 'flex min-w-0 flex-col'
-              : 'grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-14'
+            body.entries.length === 0
+              ? 'flex min-w-0 flex-col gap-10'
+              : 'grid gap-10 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-14'
           }
         >
-          <Prose>
+          <Contents entries={body.entries} label={news('contents')} />
+          <div className="flex min-w-0 flex-col gap-10">
             <div
-              className="editorial-prose"
+              className="editorial-prose long-form"
               lang={translation.languageCode}
               dir={direction}
-              dangerouslySetInnerHTML={{ __html: translation.html }}
+              dangerouslySetInnerHTML={{ __html: body.html }}
             />
-          </Prose>
 
-          {credits.length === 0 && references.topics.length === 0 ? null : (
-            <aside className="flex min-w-0 flex-col gap-8">
-              {credits.length === 0 ? null : (
-                <RecordSection id="content-contributors" heading={news('contributors')}>
-                  <ul className="flex flex-col gap-2 text-sm">
-                    {credits.map(({ credit, person }) => (
-                      <li key={credit.personId + ':' + credit.role} className="min-w-0">
-                        <TextLink
-                          href={localizedPath(
-                            locale,
-                            '/people/' + encodeURIComponent(person.slug),
-                          )}
-                        >
-                          {person.name}
-                        </TextLink>
-                        <span className="text-foreground-muted">
-                          {' '}
-                          — {t(credit.role as 'author')}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </RecordSection>
-              )}
-              {references.topics.length === 0 ? null : (
-                <RecordSection id="content-topics" heading={news('topics')}>
-                  <TopicChips
-                    label={news('topics')}
-                    topics={references.topics.map((topic) => ({
-                      href: localizedPath(
-                        locale,
-                        '/topics/' + encodeURIComponent(topic.slug),
-                      ),
-                      text: topic.name,
-                    }))}
-                  />
-                </RecordSection>
-              )}
-            </aside>
-          )}
+            {others.length === 0 && references.topics.length === 0 ? null : (
+              <div className="flex max-w-[70ch] flex-col gap-8">
+                {others.length === 0 ? null : (
+                  <RecordSection id="content-contributors" heading={news('contributors')}>
+                    <ul className="flex flex-col gap-2 text-sm">
+                      {others.map(({ credit, person }) => (
+                        <li key={credit.personId + ':' + credit.role} className="min-w-0">
+                          <TextLink
+                            href={localizedPath(
+                              locale,
+                              '/people/' + encodeURIComponent(person.slug),
+                            )}
+                          >
+                            {person.name}
+                          </TextLink>
+                          <span className="text-foreground-muted">
+                            {' '}
+                            — {t(credit.role as 'author')}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </RecordSection>
+                )}
+                {references.topics.length === 0 ? null : (
+                  <RecordSection id="content-topics" heading={news('topics')}>
+                    <TopicChips
+                      label={news('topics')}
+                      topics={references.topics.map((topic) => ({
+                        href: localizedPath(
+                          locale,
+                          '/topics/' + encodeURIComponent(topic.slug),
+                        ),
+                        text: topic.name,
+                      }))}
+                    />
+                  </RecordSection>
+                )}
+              </div>
+            )}
+          </div>
         </div>
+
+        {related.length === 0 ? null : (
+          <section
+            className="flex flex-col gap-6 border-t border-border pt-[var(--space-page)]"
+            aria-labelledby="content-related"
+          >
+            <SectionHeader
+              id="content-related"
+              heading={news('moreArticles')}
+              action={{
+                href: localizedPath(locale, '/library/articles'),
+                text: news('allArticles'),
+              }}
+            />
+            <CardGrid label={news('moreArticles')}>
+              {related.map((row) => (
+                <ArticleCard
+                  key={row.slug}
+                  locale={locale}
+                  record={row}
+                  headingLevel="h3"
+                />
+              ))}
+            </CardGrid>
+          </section>
+        )}
+
         {isContentIndexable({ contentLocales }) ? (
           <script
             type="application/ld+json"

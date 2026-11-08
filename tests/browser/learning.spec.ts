@@ -2049,7 +2049,7 @@ test.describe('Phase 23 — switched on, and who may enter', () => {
     const teacher = teacherOne.page;
     const response = await teacher.goto('/teacher');
     expect(response?.status()).toBe(200);
-    await expect(mainHeading(teacher)).toHaveText(copy('teacher.title'));
+    await expect(mainHeading(teacher)).toHaveText(copy('teacher.home.title'));
     const nav = teacher.getByRole('navigation', { name: copy('teacher.nav.label') });
     const sections = [
       'overview',
@@ -2100,13 +2100,17 @@ test.describe('Phase 23 — switched on, and who may enter', () => {
     // `teaching.perform` with no scope: the area, and nothing in it.
     const two = teacherTwo.page;
     expect((await two.goto('/teacher'))?.status()).toBe(200);
-    await expect(mainHeading(two)).toHaveText(copy('teacher.title'));
-    await expect(two.getByRole('main')).toContainText(copy('teacher.overview.todayNone'));
-    await expect(two.getByRole('main')).toContainText(copy('teacher.overview.nextNone'));
+    // R2: a teacher with no Course is told what happens next, not shown a
+    // wall of empty panels — and offered the one thing they can do now.
+    await expect(mainHeading(two)).toHaveText(copy('teacher.home.title'));
+    await expect(two.getByRole('main')).toContainText(copy('teacher.noScope.title'));
+    await expect(
+      two.getByRole('main').getByRole('link', { name: copy('teacher.noScope.action') }),
+    ).toHaveAttribute('href', '/teacher/availability');
     for (const [target, empty] of [
-      ['/teacher/courses', copy('teacher.courses.empty')],
-      ['/teacher/students', copy('teacher.students.empty')],
-      ['/teacher/resources', copy('teacher.resources.empty')],
+      ['/teacher/courses', copy('teacher.noScope.title')],
+      ['/teacher/students', copy('teacher.noScope.title')],
+      ['/teacher/resources', copy('teacher.noScope.title')],
       ['/teacher/calendar', copy('teacher.calendar.empty')],
     ] as const) {
       await two.goto(target);
@@ -2481,7 +2485,7 @@ test.describe('Phase 23 — nobody else reaches a class', () => {
       for (const secret of secrets) expect(html, target).not.toContain(secret);
     }
     await two.goto('/teacher/students');
-    await expect(two.getByRole('main')).toContainText(copy('teacher.students.empty'));
+    await expect(two.getByRole('main')).toContainText(copy('teacher.noScope.title'));
     await expect(two.getByRole('main')).not.toContainText(student.name);
   });
 
@@ -2658,7 +2662,12 @@ test.describe('Phase 23 — a class’s life', () => {
     await stale.goto(target);
     await expect(mainHeading(stale)).toHaveText(TEXT.live);
 
+    // R2: a move tells every learner by email, so it is made in a dialog the
+    // class page opens — the same form, with focus held on the one decision.
     const move = async (page: Page, [starts, ends]: readonly [string, string]) => {
+      await page
+        .getByRole('button', { name: copy('teacher.reschedule.heading'), exact: true })
+        .click();
       await page
         .getByLabel(copy('teacher.reschedule.timeZone'), { exact: true })
         .selectOption('UTC');
@@ -2690,6 +2699,12 @@ test.describe('Phase 23 — a class’s life', () => {
   });
 
   test('the teacher marks the learner present, then absent — one mark, the latest', async () => {
+    // Attendance is recorded, and a class marked held, only once it has begun:
+    // the class scheduled for later in the week is moved to have started half
+    // an hour ago (a reminder, if any, stays before the start).
+    await sql.query(
+      `UPDATE [dbo].[ClassSession] SET [startsAt]=DATEADD(minute,-30,SYSUTCDATETIME()), [endsAt]=DATEADD(minute,30,SYSUTCDATETIME()), [reminderAt]=CASE WHEN [reminderAt] IS NULL THEN NULL ELSE DATEADD(minute,-90,SYSUTCDATETIME()) END WHERE [id]=N'${regularSessionId}';`,
+    );
     const teacher = teacherOne.page;
     await teacher.goto(`/teacher/classes/today/${regularSessionId}`);
     await expect(mainHeading(teacher)).toHaveText(TEXT.live);
@@ -2889,7 +2904,9 @@ test.describe('Phase 23 — a class’s life', () => {
     const response = await two.goto(`/teacher/classes/today/${laterSessionId}`);
     expect(response?.status()).toBe(200);
     await expect(mainHeading(two)).toHaveText(TEXT.live);
-    await two.goto('/teacher/calendar');
+    // The calendar is a week at a time (R2); the class is in the week of
+    // its date, which may be next week.
+    await two.goto(`/teacher/calendar?week=${dateIn(5)}`);
     await expect(two.getByRole('main')).toContainText(TEXT.live);
   });
 });
@@ -2959,11 +2976,22 @@ test.describe('Phase 23 — every locale, every width, the keyboard', () => {
     const address = teacher.getByLabel(copy('teacher.meeting.url'), { exact: true });
     await tabTo(teacher, address);
     await expectVisibleFocus(address, 'the meeting address');
-    const present = teacher.getByRole('button', {
-      name: copy('teacher.session.markPresent', { name: student.name }),
+    // The class has not started (audit F38): neither attendance nor "held" is
+    // offered at all — no control the service would refuse.
+    await expect(
+      teacher.getByRole('button', {
+        name: copy('teacher.session.markPresent', { name: student.name }),
+      }),
+    ).toHaveCount(0);
+    await expect(
+      teacher.getByRole('button', { name: copy('teacher.complete.submit') }),
+    ).toHaveCount(0);
+    const move = teacher.getByRole('button', {
+      name: copy('teacher.reschedule.heading'),
+      exact: true,
     });
-    await tabTo(teacher, present);
-    await expectVisibleFocus(present, 'Mark present');
+    await tabTo(teacher, move);
+    await expectVisibleFocus(move, 'Move this class');
 
     // States in words, not colour: the class and each participant's mark.
     const main = teacher.getByRole('main');

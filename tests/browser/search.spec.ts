@@ -135,7 +135,12 @@ test.describe('operating the index', () => {
     await expect(page.getByText('Waiting to be indexed')).toBeVisible();
     await expect(page.getByText('Searchable documents')).toBeVisible();
 
+    // R2: a rebuild asks first; only the dialog's own button submits.
     await page.getByRole('button', { name: 'Rebuild the index' }).click();
+    await page
+      .getByRole('dialog', { name: 'Rebuild the search index?' })
+      .getByRole('button', { name: 'Rebuild the index' })
+      .click();
     await expect(
       statusIn(page).filter({ hasText: 'A full rebuild has started' }),
     ).toBeVisible();

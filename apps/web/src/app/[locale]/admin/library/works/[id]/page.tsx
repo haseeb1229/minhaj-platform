@@ -16,6 +16,7 @@ import {
 } from '@/components/ui';
 import { queryValue } from '../../../shared';
 import { libraryCopy, WorkForm } from '../../forms';
+import { adminPageMetadata } from '../../../metadata';
 
 /**
  * `/{locale}/admin/library/works/{id}` — editing one Work.
@@ -38,6 +39,7 @@ import { libraryCopy, WorkForm } from '../../forms';
  * Work's form would make two records share one expected version, and a conflict on
  * either would look like a conflict on both.
  */
+export const generateMetadata = adminPageMetadata('admin', 'titles.library.work');
 export const dynamic = 'force-dynamic';
 
 export default async function WorkEditor({

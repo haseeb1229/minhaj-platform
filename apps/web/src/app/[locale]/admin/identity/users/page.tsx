@@ -8,7 +8,6 @@ import { requireAdminPage } from '@/composition/authorization';
 import { identityRuntime } from '@/composition/identity';
 import { requireLocale } from '@/config/route-locale';
 import {
-  Alert,
   Button,
   DataCell,
   DataRow,
@@ -24,7 +23,10 @@ import {
 import { ActionForm } from '../../../(identity)/form-state';
 import { changeAccountStatusAction } from '../../actions';
 import { StepUpPrompt } from '../../step-up';
+import { AdminPager } from '../../pager';
+import { adminPageHref } from '../../paging';
 import { PAGE_SIZE, adminCopy, pageOffset, queryValue } from '../../shared';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * Identity account administration.
@@ -41,7 +43,7 @@ import { PAGE_SIZE, adminCopy, pageOffset, queryValue } from '../../shared';
  * platform with a real membership is both a performance problem and a bulk
  * disclosure of everyone's address at once (§28, §41).
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('admin', 'users.title');
 export const dynamic = 'force-dynamic';
 
 const STATUS_TONE: Record<AccountStatus, 'neutral' | 'positive' | 'caution'> = {
@@ -73,12 +75,15 @@ export default async function UsersPage({
   const search = queryValue(query, 'q');
   const statusFilter = accountStatusSchema.safeParse(queryValue(query, 'status'));
 
+  const offset = pageOffset(query, PAGE_SIZE);
+  const pageNumber = offset / PAGE_SIZE + 1;
+
   const { administration } = identityRuntime();
   const results = await administration.searchAccounts({
     query: search,
     status: statusFilter.success ? statusFilter.data : null,
     limit: PAGE_SIZE,
-    offset: pageOffset(query, PAGE_SIZE),
+    offset,
   });
 
   // UI hiding is defence in depth, never the control: the action re-checks.
@@ -148,6 +153,10 @@ export default async function UsersPage({
           locale={locale}
           purpose="account-administration"
           labels={copy.stepUp}
+          returnTo={adminPageHref(localizedPath(locale, '/admin/identity/users'), {
+            q: search,
+            status: statusFilter.success ? statusFilter.data : null,
+          })(pageNumber)}
         />
       ) : null}
 
@@ -216,6 +225,12 @@ export default async function UsersPage({
                       pendingLabel={t('common.pending')}
                       tone="secondary"
                       messages={{ ...copy.messages, success: t('users.changed') }}
+                      confirm={{
+                        title: t('confirm.accountStatus.title'),
+                        body: t('confirm.accountStatus.body'),
+                        confirmLabel: t('confirm.accountStatus.confirm'),
+                        cancelLabel: t('confirm.cancel'),
+                      }}
                     >
                       <input type="hidden" name="locale" value={locale} />
                       <input type="hidden" name="accountId" value={account.id} />
@@ -240,7 +255,18 @@ export default async function UsersPage({
         </Panel>
       )}
 
-      {results.more ? <Alert tone="info">{t('common.more')}</Alert> : null}
+      <AdminPager
+        label={t('pager.label')}
+        offset={offset}
+        pageSize={PAGE_SIZE}
+        more={results.more}
+        href={adminPageHref(localizedPath(locale, '/admin/identity/users'), {
+          q: search,
+          status: statusFilter.success ? statusFilter.data : null,
+        })}
+        previousLabel={t('pager.previous')}
+        nextLabel={t('pager.next')}
+      />
     </main>
   );
 }

@@ -163,10 +163,12 @@ export async function SurahsScreen({ params, searchParams }: ListParams) {
           </SectionHeading>
           {status.activation === null ? (
             <Alert tone="info">{t('corpus.inactive')}</Alert>
-          ) : status.activation.authority === 'fixture' ? (
-            <Alert tone="warning">{t('corpus.fixture')}</Alert>
           ) : (
-            <Alert tone="success">{t('corpus.approved')}</Alert>
+            {
+              fixture: <Alert tone="warning">{t('corpus.fixture')}</Alert>,
+              reference: <Alert tone="warning">{t('corpus.reference')}</Alert>,
+              approved: <Alert tone="success">{t('corpus.approved')}</Alert>,
+            }[status.activation.authority]
           )}
           <dl className="flex flex-col">
             {status.activation === null ? null : (
@@ -192,6 +194,10 @@ export async function SurahsScreen({ params, searchParams }: ListParams) {
           <p className="text-sm text-foreground-muted">{t('corpus.operatorOnly')}</p>
         </section>
       </Panel>
+
+      {status.ayat === 0 && context.authorization.can('quran.editCanonical') ? (
+        <AcceptanceStepUp locale={locale} copy={copy} />
+      ) : null}
 
       {/* ---- Registered sources ------------------------------------------ */}
       <section className="flex flex-col gap-4" aria-labelledby="sources">
@@ -731,6 +737,41 @@ function TopicIdentity({
       <input type="hidden" name="surah" value={String(surah)} />
       <input type="hidden" name="ayah" value={String(ayah)} />
     </>
+  );
+}
+
+/**
+ * The step-up a corpus acceptance needs, while no corpus exists (Rebaseline
+ * R2). Acceptance itself stays an operator act on the host — the import
+ * command re-verifies this account's `quran.editCanonical`, its second-factor
+ * posture and THIS grant, live, and the database procedure checks the grant
+ * again — but the proof that a person just authenticated can only be given
+ * here. Nothing on this screen imports or accepts anything.
+ */
+async function AcceptanceStepUp({
+  locale,
+  copy,
+}: {
+  readonly locale: Locale;
+  readonly copy: Copy;
+}) {
+  const { t } = copy;
+  const [admin, stepUp] = await Promise.all([
+    adminCopy(locale),
+    getTranslations({ locale, namespace: 'admin.stepUp' }),
+  ]);
+  return (
+    <section className="flex flex-col gap-4" aria-labelledby="corpus-acceptance">
+      <SectionHeading>
+        <span id="corpus-acceptance">{t('acceptance.title')}</span>
+      </SectionHeading>
+      <p className="text-sm">{t('acceptance.intro')}</p>
+      <StepUpPrompt
+        locale={locale}
+        purpose="quran-canonical-edit"
+        labels={{ ...admin.stepUp, description: stepUp('quranCanonicalEdit') }}
+      />
+    </section>
   );
 }
 

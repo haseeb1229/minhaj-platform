@@ -27,6 +27,7 @@ import {
   updateLanguageAction,
 } from '../actions';
 import { taxonomyCopy } from '../copy';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * Content-language reference data.
@@ -47,7 +48,7 @@ import { taxonomyCopy } from '../copy';
  * organisation stops publishing in it, and the runtime principal holds no
  * DELETE on the table.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('admin', 'taxonomy.languages.title');
 export const dynamic = 'force-dynamic';
 
 type Search = Record<string, string | string[] | undefined>;

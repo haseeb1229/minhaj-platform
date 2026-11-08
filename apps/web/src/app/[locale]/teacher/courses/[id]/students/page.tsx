@@ -1,7 +1,7 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
-import { Pagination } from '@/components/media/parts';
 import { learningRead } from '@/components/my-learning/read';
 import {
   CourseFrame,
@@ -9,10 +9,11 @@ import {
   readTeacherCourse,
 } from '@/components/teacher/course-frame';
 import { participantNames } from '@/components/teacher/names';
-import { NotActivated, OwnTime } from '@/components/teacher/parts';
+import { NotActivated } from '@/components/teacher/parts';
 import { pager, readOffset } from '@/components/teacher/presentation';
 import { StudentList } from '@/components/teacher/student-list';
-import { Alert, EmptyState } from '@/components/ui';
+import { Alert, EmptyState, Pager } from '@/components/ui';
+import { teacherPageMetadata } from '@/components/teacher/metadata';
 import { learningRuntime } from '@/composition/learning';
 import { requireLocale } from '@/config/route-locale';
 import { requireTeacher } from '../../../guard';
@@ -22,7 +23,13 @@ import { requireTeacher } from '../../../guard';
  * time, with their progress. Learning facts only; listing is audited by the
  * service as identifiers only.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return teacherPageMetadata(params, 'courseStudents');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -59,7 +66,7 @@ export default async function CourseStudentsPage({
   return (
     <CourseFrame
       course={course.course}
-      heading={t('course.studentsTitle')}
+      view="students"
       description={<p>{t('students.description')}</p>}
       locale={locale}
       t={t}
@@ -75,17 +82,11 @@ export default async function CourseStudentsPage({
           names={names}
           locale={locale}
           t={t}
-          enrolledAt={(at) => (
-            <OwnTime
-              value={at}
-              locale={locale}
-              accountZone={gate.session.account.timezone}
-            />
-          )}
+          accountZone={gate.session.account.timezone}
         />
       )}
       {page === null ? null : (
-        <Pagination
+        <Pager
           label={t('course.studentsTitle')}
           previous={page.previous}
           next={page.next}

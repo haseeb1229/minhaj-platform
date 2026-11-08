@@ -7,6 +7,9 @@ import {
 } from '@minhaj/contracts/editorial';
 import { requireLocale } from '@/config/route-locale';
 import { ContentEditor } from '../../content';
+import { adminPageMetadata } from '../../../metadata';
+
+export const generateMetadata = adminPageMetadata('admin', 'titles.editorial.collection');
 
 /**
  * The editor's unsaved member list, carried through the reference search so

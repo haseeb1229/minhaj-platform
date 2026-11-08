@@ -129,7 +129,9 @@ test.describe('the three interface locales', () => {
 
     await page.goto('/my/settings/language');
     await page.getByLabel(LABEL.accountLanguage).selectOption('ur');
-    await page.getByLabel(LABEL.timezone).fill('Asia/Karachi');
+    // R2 (audit F37): the time zone is chosen from the runtime's IANA list, not
+    // typed; the search box beside it is labelled separately.
+    await page.getByLabel(LABEL.timezone, { exact: true }).selectOption('Asia/Karachi');
     await page.getByRole('button', { name: BUTTON.save, exact: true }).click();
 
     await expect(statusIn(page).filter({ hasText: 'Saved' })).toBeVisible();

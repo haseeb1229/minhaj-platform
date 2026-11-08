@@ -4,87 +4,46 @@ import 'server-only';
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
-import { SEARCH_QUERY_MAX_LENGTH } from '@minhaj/contracts/search';
 import type { QuranAvailability } from '@minhaj/contracts/quran';
 
 import { quranReadRuntime } from '@/composition/quran-read';
+import { LibraryDirectory } from '@/components/library/landing';
 import {
   ActionLink,
   Alert,
   Breadcrumbs,
-  Button,
-  CardGrid,
   Container,
-  LinkCard,
-  PageHero,
+  EmptyState,
+  Hero,
   SectionHeader,
-  TextInput,
   TextLink,
 } from '@/components/ui';
+import { Tabs } from '@/components/ui/tabs';
 import { pathFor, requireRoute } from '@/shell/registry';
-import { FixtureNotice, quranTrail } from './parts';
+import { ContinueReading, QuickJumpForm } from './landing-islands';
+import { AboutThisText, CorpusNotice, quranTrail } from './parts';
 import { quranPath } from './presentation';
-import { readQuranTopic } from './read';
+import { readQuranTopic, readSurahs } from './read';
+import { JuzIndexList, SurahIndexList, jumpIndex, quickJumpLabels } from './reader';
 import { RELATED_KINDS } from './related';
 
 /**
- * `/quran` — the Quran landing (ROUTE_MAP.md §3.3).
+ * `/quran` — the Quran landing (ROUTE_MAP.md §3.3; R2).
  *
- * A KNOWLEDGE LANDING, NOT A SHOWCASE. It opens with the way in — start
- * reading, or search the text — and then lays the section out the way a
- * reader uses it: READ (by Surah, by Juz), STUDY (the published works beside
- * the text), EXPLORE (what the rest of the platform classifies under the
- * Quran) and LEARN (courses). A study aid, the recitations or a related view
- * is listed ONLY when there is something public behind it. No statistics, no
- * sample verse, no "coming soon", and nothing moves.
+ * THE WAY IN FIRST. It opens with where a reader wants to go — type a place
+ * ("18:10", a Surah's name, "juz 15"), continue where this browser last read,
+ * or start at the beginning — and then lays the whole text out as an index:
+ * every Surah (number, title, ayat, revelation and its Arabic name in the
+ * Quran face) and, in the second tab, every Juz. Below it a quiet directory
+ * of the rest of the section — reading, the published works beside the text,
+ * what the platform classifies under the Quran, and courses — each listed ONLY
+ * when there is something public behind it. On the reference preview it ends
+ * with "About this text". No statistics, no sample verse, nothing moves.
  */
 
-interface Entry {
+interface Link {
   readonly key: string;
   readonly href: string;
-}
-
-/** One part of the section: its header and a rail of whole-card links. */
-function EntryRail({
-  id,
-  heading,
-  intro,
-  entries,
-  columns,
-  title,
-  body,
-  action,
-}: {
-  readonly id: string;
-  readonly heading: string;
-  readonly intro: string;
-  readonly entries: readonly Entry[];
-  readonly columns: 2 | 3 | 4;
-  readonly title: (key: string) => string;
-  readonly body: (key: string) => string;
-  readonly action?: { readonly href: string; readonly text: string };
-}) {
-  if (entries.length === 0) return null;
-  return (
-    <section className="flex flex-col gap-5" aria-labelledby={id}>
-      <SectionHeader
-        id={id}
-        heading={heading}
-        intro={intro}
-        {...(action === undefined ? {} : { action })}
-      />
-      <CardGrid columns={columns}>
-        {entries.map((entry) => (
-          <LinkCard
-            key={entry.key}
-            href={entry.href}
-            title={title(entry.key)}
-            description={body(entry.key)}
-          />
-        ))}
-      </CardGrid>
-    </section>
-  );
 }
 
 export async function QuranLandingPage({
@@ -97,18 +56,28 @@ export async function QuranLandingPage({
   const t = await getTranslations({ locale, namespace: 'quran' });
   const parts = await quranTrail(locale);
   const reader = quranReadRuntime().reader;
-  const [translations, tafsirs, transliterations, tajweed, recitations, topic] =
-    await Promise.all([
-      reader.translations(),
-      reader.tafsirs(),
-      reader.transliterations(),
-      reader.tajweedRules(),
-      reader.recitations(),
-      readQuranTopic(locale),
-    ]);
+  const [
+    surahs,
+    juzList,
+    translations,
+    tafsirs,
+    transliterations,
+    tajweed,
+    recitations,
+    topic,
+  ] = await Promise.all([
+    readSurahs(),
+    reader.juzList(),
+    reader.translations(),
+    reader.tafsirs(),
+    reader.transliterations(),
+    reader.tajweedRules(),
+    reader.recitations(),
+    readQuranTopic(locale),
+  ]);
 
-  const section = (key: string): Entry => ({ key, href: quranPath(locale, key) });
-  const read = ['surah', 'juz'].map(section);
+  const section = (key: string): Link => ({ key, href: quranPath(locale, key) });
+  const read = ['read', 'surah', 'juz', 'search'].map(section);
   const study = [
     ...(translations.length > 0 ? [section('translations')] : []),
     ...(tafsirs.length > 0 ? [section('tafsir')] : []),
@@ -126,93 +95,124 @@ export async function QuranLandingPage({
             href: localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`),
           },
         ];
-  const learn = topic === null ? [] : [section('courses')];
-  const title = (key: string) => t(`sections.${key}` as 'sections.read');
-  const body = (key: string) => t(`sectionBody.${key}` as 'sectionBody.read');
+  const learn =
+    topic === null
+      ? []
+      : [
+          section('courses'),
+          { key: 'learnAll', href: pathFor(locale, requireRoute('learn')) },
+        ];
+  const linksOf = (links: readonly Link[]) =>
+    links.map((link) => ({
+      href: link.href,
+      title:
+        link.key === 'learnAll'
+          ? t('landing.learnAll')
+          : t(`sections.${link.key}` as 'sections.read'),
+      description:
+        link.key === 'learnAll'
+          ? t('landing.learnIntro')
+          : t(`sectionBody.${link.key}` as 'sectionBody.read'),
+    }));
+  const directory = [
+    { id: 'quran-read', heading: t('landing.read'), links: linksOf(read) },
+    { id: 'quran-study', heading: t('landing.study'), links: linksOf(study) },
+    { id: 'quran-explore', heading: t('landing.explore'), links: linksOf(explore) },
+    { id: 'quran-learn', heading: t('landing.learn'), links: linksOf(learn) },
+  ].filter((group) => group.links.length > 0);
 
   return (
     <>
       <Container>
         <div className="flex flex-col gap-4 pt-6">
-          <FixtureNotice locale={locale} availability={availability} />
+          <CorpusNotice locale={locale} availability={availability} />
           <Breadcrumbs label={parts.label} trail={[parts.home, { text: t('title') }]} />
         </div>
       </Container>
 
-      <PageHero
-        eyebrow={t('landing.eyebrow')}
+      <Hero
         title={t('title')}
         lede={t('intro')}
         actions={
-          <ActionLink href={quranPath(locale, 'read')}>{t('sections.read')}</ActionLink>
+          <>
+            <ContinueReading
+              locale={locale}
+              ayahCounts={surahs.map((surah) => [surah.number, surah.ayahCount] as const)}
+              labels={{
+                heading: t('continue.heading'),
+                place: t.raw('ayahName') as string,
+              }}
+            />
+            <ActionLink href={quranPath(locale, 'read')} tone="secondary">
+              {t('sections.read')}
+            </ActionLink>
+          </>
         }
       >
-        <form
-          method="get"
-          action={quranPath(locale, 'search')}
-          role="search"
-          aria-label={t('sections.search')}
-          className="flex w-full max-w-2xl flex-col gap-2 pt-2"
-        >
-          <label htmlFor="quran-landing-search" className="text-sm font-medium">
-            {t('search.label')}
-          </label>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <div className="min-w-0 flex-1">
-              <TextInput
-                id="quran-landing-search"
-                type="search"
-                name="q"
-                maxLength={SEARCH_QUERY_MAX_LENGTH}
-                autoComplete="off"
-              />
-            </div>
-            <Button tone="secondary">{t('search.submit')}</Button>
-          </div>
-        </form>
-      </PageHero>
+        {surahs.length === 0 ? null : (
+          <QuickJumpForm
+            locale={locale}
+            action={quranPath(locale, 'read')}
+            index={jumpIndex(surahs)}
+            labels={await quickJumpLabels(locale)}
+          />
+        )}
+      </Hero>
 
       <Container>
         <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
-          <EntryRail
-            id="quran-read"
-            heading={t('landing.read')}
-            intro={t('landing.readIntro')}
-            entries={read}
-            columns={2}
-            title={title}
-            body={body}
-          />
-          <EntryRail
-            id="quran-study"
-            heading={t('landing.study')}
-            intro={t('landing.studyIntro')}
-            entries={study}
-            columns={3}
-            title={title}
-            body={body}
-          />
-          <EntryRail
-            id="quran-explore"
-            heading={t('landing.explore')}
-            intro={t('landing.exploreIntro')}
-            entries={explore}
-            columns={4}
-            title={title}
-            body={body}
-          />
-          <EntryRail
-            id="quran-learn"
-            heading={t('landing.learn')}
-            intro={t('landing.learnIntro')}
-            entries={learn}
-            columns={2}
-            title={title}
-            body={body}
-            action={{
-              href: pathFor(locale, requireRoute('learn')),
-              text: t('landing.learnAll'),
-            }}
+          <section className="flex flex-col gap-5" aria-labelledby="quran-index">
+            <SectionHeader
+              id="quran-index"
+              heading={t('index.heading')}
+              intro={t('index.intro')}
+            />
+            {surahs.length === 0 ? (
+              <EmptyState>{t('empty')}</EmptyState>
+            ) : (
+              <Tabs
+                label={t('index.tabs')}
+                tabs={[
+                  {
+                    id: 'surahs',
+                    label: t('sections.surah'),
+                    panel: (
+                      <SurahIndexList
+                        locale={locale}
+                        surahs={surahs}
+                        label={t('sections.surah')}
+                        t={t}
+                        headingLevel="h3"
+                      />
+                    ),
+                  },
+                  {
+                    id: 'juz',
+                    label: t('sections.juz'),
+                    panel: (
+                      <JuzIndexList
+                        locale={locale}
+                        list={juzList}
+                        label={t('sections.juz')}
+                        t={t}
+                        headingLevel="h3"
+                      />
+                    ),
+                  },
+                ]}
+              />
+            )}
+          </section>
+
+          <section className="flex flex-col gap-6" aria-labelledby="quran-more">
+            <SectionHeader id="quran-more" heading={t('landing.more')} />
+            <LibraryDirectory groups={directory} />
+          </section>
+
+          <AboutThisText
+            locale={locale}
+            availability={availability}
+            translation={translations.length > 0}
           />
         </div>
       </Container>
@@ -247,15 +247,11 @@ export async function QuranLandingUnavailable({ locale }: { readonly locale: Loc
         </div>
       </Container>
 
-      <PageHero
-        eyebrow={t('landing.eyebrow')}
-        title={t('title')}
-        lede={t('unavailable.lede')}
-      >
+      <Hero title={t('title')} lede={t('unavailable.lede')}>
         <div className="max-w-[var(--measure-prose)]">
           <Alert tone="info">{t('unavailable.body')}</Alert>
         </div>
-      </PageHero>
+      </Hero>
 
       <Container>
         <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
@@ -265,13 +261,10 @@ export async function QuranLandingUnavailable({ locale }: { readonly locale: Loc
               heading={t('unavailable.structureHeading')}
               intro={t('unavailable.structureIntro')}
             />
-            <ul className="grid list-none grid-cols-1 gap-4 p-0 *:min-w-0 sm:grid-cols-2 lg:grid-cols-4">
+            <ul className="grid list-none grid-cols-1 gap-x-10 gap-y-8 p-0 *:min-w-0 sm:grid-cols-2 lg:grid-cols-4">
               {parts4.map((part) => (
-                <li
-                  key={part.key}
-                  className="flex h-full min-w-0 flex-col gap-2.5 rounded-panel border border-border bg-surface-raised p-5 shadow-panel"
-                >
-                  <h3 className="text-subheading font-semibold">
+                <li key={part.key} className="flex h-full min-w-0 flex-col gap-2.5">
+                  <h3 className="border-b border-border pb-2 text-subheading font-semibold">
                     {t(`landing.${part.key}`)}
                   </h3>
                   <p className="text-sm text-foreground-muted">

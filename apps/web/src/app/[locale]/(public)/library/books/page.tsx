@@ -2,33 +2,18 @@ import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
-import type { Locale } from '@minhaj/contracts';
-import type { WorkRecord } from '@minhaj/contracts/library';
-
 import {
   libraryContentLanguages,
   libraryReadRuntime,
   libraryReferenceNames,
 } from '@/composition/library-read';
-import { directionOf } from '@/config/locale';
 import { requireLocale } from '@/config/route-locale';
-import {
-  Button,
-  CardGrid,
-  EmptyState,
-  Field,
-  LinkCard,
-  Select,
-  TextInput,
-  TextLink,
-} from '@/components/ui';
-import { CoverCard, CoverImage, editionCoverPath } from '@/components/library/cover';
+import { Button, EmptyState, Field, Select, TextInput, TextLink } from '@/components/ui';
+import { WorkCard } from '@/components/library/cards';
 import { FilterPanel, ListingFrame, Pager } from '@/components/library/frame';
 import {
   booksPath,
-  labelFor,
   readLibraryQuery,
-  workPath,
   WORK_PAGE,
 } from '@/components/library/presentation';
 import { requireRoute } from '@/shell/registry';
@@ -50,6 +35,11 @@ import { shellMetadata } from '@/seo/metadata';
  * crawler may reach, which is why the metadata below canonicalises a filtered
  * view to the BASE listing and keeps filtered combinations out of the sitemap
  * (ROUTE_MAP.md §2.3, §9.4, and §35).
+ *
+ * A READER'S ORDER (R2, audit F14). A–Z by the title the reader is shown is
+ * the default, and "newest publication first" is the other choice — both
+ * ordered in SQL with a total tie-breaker. The legacy slug order is no longer
+ * what a visitor meets.
  *
  * THE INTERFACE LOCALE DOES NOT FILTER CONTENT. `/ur/library/books` is the
  * Library in Urdu listing books in EVERY content language — "`/ur/library/books`
@@ -93,7 +83,7 @@ export default async function BooksPage({ params, searchParams }: ListingParams)
   const filters = readLibraryQuery(query);
 
   const [page, languageFacets, topicFacets, languages] = await Promise.all([
-    libraryReadRuntime().works(filters),
+    libraryReadRuntime().works({ ...filters, titleLocale: locale }),
     libraryReadRuntime().languageFacets(0),
     libraryReadRuntime().topicFacets(0),
     libraryContentLanguages(),
@@ -119,7 +109,6 @@ export default async function BooksPage({ params, searchParams }: ListingParams)
       ]}
       title={t('books')}
       lede={t('booksDescription')}
-      notice={t('metadataNotice')}
     >
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-10">
         {/*
@@ -137,6 +126,15 @@ export default async function BooksPage({ params, searchParams }: ListingParams)
               className="flex flex-col gap-4"
               aria-label={t('filters')}
             >
+              <Field id="filter-sort" label={t('sort.label')}>
+                {(props) => (
+                  <Select {...props} name="sort" defaultValue={filters.sort}>
+                    <option value="title">{t('sort.title')}</option>
+                    <option value="newest">{t('sort.newest')}</option>
+                  </Select>
+                )}
+              </Field>
+
               <Field id="filter-language" label={t('filterLanguage')}>
                 {(props) => (
                   <Select
@@ -253,11 +251,20 @@ export default async function BooksPage({ params, searchParams }: ListingParams)
           {page.items.length === 0 ? (
             <EmptyState>{t('empty')}</EmptyState>
           ) : (
-            <CardGrid label={t('books')} columns={2}>
+            <ul
+              aria-label={t('books')}
+              className="grid list-none grid-cols-2 gap-x-4 gap-y-8 p-0 sm:grid-cols-3 xl:grid-cols-4"
+            >
               {page.items.map((record) => (
-                <WorkSummary key={record.id} record={record} locale={locale} />
+                <WorkCard
+                  key={record.id}
+                  locale={locale}
+                  work={record}
+                  headingLevel="h2"
+                  sizes="(min-width: 80rem) 12rem, (min-width: 40rem) 30vw, 45vw"
+                />
               ))}
-            </CardGrid>
+            </ul>
           )}
 
           <Pager
@@ -280,55 +287,5 @@ export default async function BooksPage({ params, searchParams }: ListingParams)
         </div>
       </div>
     </ListingFrame>
-  );
-}
-
-/**
- * One Work in a listing — one whole-card link.
- *
- * THE TITLE CARRIES ITS OWN LANGUAGE. A listing that mixes English, Urdu and
- * Arabic titles is the ordinary case for this corpus, and each one is marked so it
- * is announced and shaped correctly rather than inheriting the page's language
- * (WCAG 3.1.2, and this phase's §48 mixed-direction requirement). The card's
- * heading is an `h2`, the listing's own level beneath the page title.
- */
-function WorkSummary({
-  record,
-  locale,
-}: {
-  readonly record: WorkRecord;
-  readonly locale: Locale;
-}) {
-  const label = labelFor(record, locale);
-
-  // Cover-first where the Work has one (Phase 30-R); the text-first card
-  // otherwise — never a grey placeholder pretending to be a picture.
-  if (record.cover !== null)
-    return (
-      <CoverCard
-        href={workPath(locale, record.slug)}
-        title={label.title}
-        description={label.description}
-        lang={label.locale}
-        dir={directionOf(label.locale)}
-        cover={
-          <CoverImage
-            path={editionCoverPath(record.cover.editionId, record.cover.assetId)}
-            cover={record.cover}
-            alt=""
-          />
-        }
-      />
-    );
-
-  return (
-    <LinkCard
-      href={workPath(locale, record.slug)}
-      title={label.title}
-      description={label.description}
-      headingLevel="h2"
-      lang={label.locale}
-      dir={directionOf(label.locale)}
-    />
   );
 }

@@ -47,6 +47,7 @@ import {
 } from '@/components/ui';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
+import { AdminPager } from '../pager';
 import { pageOffset, queryValue } from '../shared';
 import { changePlaylist, savePlaylist, saveSeries, saveVideo } from './actions';
 import { MEDIA_FORM_ROWS } from './rows';
@@ -143,15 +144,16 @@ export function Pager({
   readonly label: string;
   readonly copy: Copy;
 }) {
-  if (offset === 0 && !hasMore) return null;
-  const current = offset / MEDIA_PAGE + 1;
   return (
-    <nav className="flex gap-6" aria-label={label}>
-      {offset > 0 ? (
-        <TextLink href={hrefFor(current - 1)}>{copy.t('previous')}</TextLink>
-      ) : null}
-      {hasMore ? <TextLink href={hrefFor(current + 1)}>{copy.t('next')}</TextLink> : null}
-    </nav>
+    <AdminPager
+      label={label}
+      offset={offset}
+      pageSize={MEDIA_PAGE}
+      more={hasMore}
+      href={hrefFor}
+      previousLabel={copy.t('previous')}
+      nextLabel={copy.t('next')}
+    />
   );
 }
 
@@ -597,8 +599,8 @@ export async function VideoEditor({ params, searchParams }: EditorParams) {
             provider={record.provider}
             providerVideoId={record.providerVideoId}
             labels={{
-              notice: watch('player.notice', { provider }),
-              load: watch('player.load', { provider }),
+              play: watch('player.play', { provider, title: label.title }),
+              disclosure: watch('player.disclosure', { provider }),
               fallback: watch('player.fallback', { provider, title: label.title }),
               frameTitle: watch('player.frameTitle', { provider, title: label.title }),
             }}

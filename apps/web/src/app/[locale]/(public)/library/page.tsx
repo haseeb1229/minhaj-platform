@@ -2,40 +2,35 @@ import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
+import { libraryReadRuntime, libraryReferenceNames } from '@/composition/library-read';
+import { PeriodicalCard, WorkCard } from '@/components/library/cards';
+import { CoverStack, LibraryDirectory, LibraryShelf } from '@/components/library/landing';
+import { ActionLink, Breadcrumbs, Container, Hero } from '@/components/ui';
 import { requireLocale } from '@/config/route-locale';
-import {
-  ActionLink,
-  Breadcrumbs,
-  CardGrid,
-  Container,
-  LinkCard,
-  PageHero,
-  SectionHeader,
-} from '@/components/ui';
 import { shellMetadata } from '@/seo/metadata';
 import { requireRoute } from '@/shell/registry';
 
 /**
  * `/{locale}/library` — the Library landing page (ROUTE_MAP.md §5).
  *
- * IT LISTS WHAT EXISTS AND NOTHING ELSE. Phase 9 delivered research, research
- * papers, publications, magazines and encyclopedias, so they are listed. ROUTE_MAP.md
- * §5 also gives the Library area collections, which belong to Phase 15; they do not
- * appear here, not even as a greyed-out heading or a "coming soon" line, because
- * "a deferred capability is never linked as dead navigation" (§5.2).
+ * COVER-LED (R2, audit F12). The front door shows the books: the newest
+ * publications as a shelf, a shelf for each of the Library's largest topics,
+ * and the latest magazine issues — then a quiet directory of every other way
+ * in (research, reference, periodicals, authors, languages, availability). It
+ * lists what exists and nothing else: a shelf with nothing on it is absent,
+ * and a deferred capability is never linked (§5.2).
  *
  * THE ONE ENTRY THIS PAGE DOES NOT OWN is Articles. `/library/articles` is
- * Editorial's content at a Library address, delivered by Phase 6; this page links
- * to it and knows nothing else about it. Library does not absorb Editorial's
- * tables, its workflow or its read model (§10, and the Phase-6 regression
- * contract).
+ * Editorial's content at a Library address; this page links to it and knows
+ * nothing else about it.
  *
- * STATIC-ELIGIBLE AND SESSION-FREE. There is no data read here at all: the page is
- * navigation over a set of routes that is code. `force-dynamic` would buy nothing
- * and cost a render per visit. The front door is therefore organised by WHAT A
- * READER IS LOOKING FOR — books, research, periodicals, and what is available —
- * rather than by showing records, which would make it a data-driven route.
+ * DATA-BACKED, SESSION-FREE AND DYNAMIC. Every read is the Library's public
+ * reader (`@/composition/library-read`) — the first page of its own listings,
+ * bounded — so the page renders per request and a withdrawn book leaves it at
+ * once. Nothing here can reach Identity, a session or a cookie.
  */
+export const dynamic = 'force-dynamic';
+
 export async function generateMetadata({
   params,
 }: {
@@ -52,73 +47,37 @@ export async function generateMetadata({
   });
 }
 
-type SectionKey =
-  | 'books'
-  | 'resources'
-  | 'articles'
+/** How many topic shelves the landing offers, largest topic first. */
+const TOPIC_SHELVES = 3;
+/** How many records one shelf holds before linking to the whole set. */
+const SHELF = 12;
+
+type DirectoryKey =
   | 'research'
   | 'research-papers'
   | 'publications'
   | 'encyclopedias'
   | 'magazines'
+  | 'articles'
   | 'authors'
   | 'topics'
   | 'languages'
+  | 'resources'
   | 'downloads'
   | 'sale-points';
 
-/**
- * The surfaces this landing page offers, grouped, and the ONE ordering of them.
- *
- * `articles` carries its own path because it is not a Library registry route —
- * it is Editorial's, and giving it a Library registry entry would be Library
- * claiming a resource it does not own.
- *
- * The contributor, topic and language browses sit with Books because that is
- * what they are: three ways into the same published Works.
- */
-const GROUPS: readonly {
+/** Every other way in, grouped by what a reader is looking for. */
+const DIRECTORY: readonly {
   readonly key: 'books' | 'scholarly' | 'periodicals' | 'access';
-  readonly columns: 2 | 3 | 4;
-  readonly sections: readonly { readonly key: SectionKey; readonly path: string }[];
+  readonly sections: readonly DirectoryKey[];
 }[] = [
-  {
-    key: 'books',
-    columns: 4,
-    sections: [
-      { key: 'books', path: '/library/books' },
-      { key: 'authors', path: '/library/authors' },
-      { key: 'topics', path: '/library/topics' },
-      { key: 'languages', path: '/library/languages' },
-    ],
-  },
+  { key: 'books', sections: ['authors', 'topics', 'languages'] },
   {
     key: 'scholarly',
-    columns: 4,
-    sections: [
-      { key: 'research', path: '/library/research' },
-      { key: 'research-papers', path: '/library/research-papers' },
-      { key: 'publications', path: '/library/publications' },
-      { key: 'encyclopedias', path: '/library/encyclopedias' },
-    ],
+    sections: ['research', 'research-papers', 'publications', 'encyclopedias'],
   },
-  {
-    key: 'periodicals',
-    columns: 2,
-    sections: [
-      { key: 'magazines', path: '/library/magazines' },
-      { key: 'articles', path: '/library/articles' },
-    ],
-  },
-  {
-    key: 'access',
-    columns: 3,
-    sections: [
-      { key: 'resources', path: '/library/resources' },
-      { key: 'downloads', path: '/library/downloads' },
-      { key: 'sale-points', path: '/library/sale-points' },
-    ],
-  },
+  { key: 'periodicals', sections: ['magazines', 'articles'] },
+  { key: 'access', sections: ['resources', 'downloads', 'sale-points'] },
 ];
 
 export default async function LibraryLandingPage({
@@ -127,13 +86,45 @@ export default async function LibraryLandingPage({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const t = await getTranslations({ locale, namespace: 'library' });
-  const shell = await getTranslations({ locale, namespace: 'shell' });
+  const [t, shell] = await Promise.all([
+    getTranslations({ locale, namespace: 'library' }),
+    getTranslations({ locale, namespace: 'shell' }),
+  ]);
+
+  const reads = libraryReadRuntime();
+  const [newest, facets, issues] = await Promise.all([
+    reads.works({ sort: 'newest', titleLocale: locale }),
+    reads.topicFacets(0),
+    reads.scholarlyList('magazine-issue', {}),
+  ]);
+  const topicIds = facets.items.slice(0, TOPIC_SHELVES).map((facet) => facet.id);
+  const [references, ...byTopic] = await Promise.all([
+    libraryReferenceNames({ personIds: [], topicIds }, locale),
+    ...topicIds.map((topic) =>
+      reads.works({ topic, sort: 'title', titleLocale: locale }),
+    ),
+  ]);
+  const topicShelves = topicIds.flatMap((id, index) => {
+    const topic = references.topics.get(id);
+    const works = byTopic[index]?.items ?? [];
+    return topic === undefined || works.length === 0 ? [] : [{ id, topic, works }];
+  });
+
+  // Covers first on every shelf, each group in the listing's own order.
+  const coversFirst = <T extends { readonly cover: unknown }>(items: readonly T[]) => [
+    ...items.filter((item) => item.cover !== null),
+    ...items.filter((item) => item.cover === null),
+  ];
+  const books = coversFirst(newest.items).slice(0, SHELF);
+  const shelfLabels = {
+    previousLabel: t('landing.showPrevious'),
+    nextLabel: t('landing.showNext'),
+  };
 
   return (
     <>
       <Container>
-        <div className="py-4">
+        <div className="pt-5">
           <Breadcrumbs
             label={shell('nav.breadcrumbs')}
             trail={[
@@ -144,65 +135,98 @@ export default async function LibraryLandingPage({
         </div>
       </Container>
 
-      <PageHero
-        tone="ink"
+      <Hero
+        variant="split"
         title={t('title')}
         lede={t('description')}
         actions={
           <>
-            <ActionLink href={localizedPath(locale, '/library/books')} onInk>
+            <ActionLink href={localizedPath(locale, '/library/books')}>
               {t('landing.browseBooks')}
             </ActionLink>
             <ActionLink
-              href={localizedPath(locale, '/library/resources')}
+              href={localizedPath(locale, '/library/magazines')}
               tone="secondary"
-              onInk
             >
-              {t('landing.allResources')}
+              {t('scholarly.viewAll.magazine')}
             </ActionLink>
           </>
         }
-      >
-        {/*
-         * SAID ON THE PAGE, not only in a document. Titles and descriptions are
-         * this platform's descriptive metadata; a translated EDITION is domain
-         * data recorded against a Work. Conflating them is the mistake
-         * DOMAIN_MODEL.md §10.1 exists to correct, and a reader has no way to
-         * know that unless the page says so.
-         */}
-        <p className="max-w-[var(--measure-prose)] border-s-2 border-ink-border ps-3 text-sm text-ink-muted">
-          {t('metadataNotice')}
-        </p>
-      </PageHero>
+        aside={<CoverStack works={books} />}
+      />
 
       <Container>
         <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-page)]">
-          {GROUPS.map((group) => {
-            const id = `library-${group.key}`;
-            return (
-              <section
-                key={group.key}
-                aria-labelledby={id}
-                className="flex flex-col gap-5"
-              >
-                <SectionHeader
-                  id={id}
-                  heading={t(`landing.groups.${group.key}.heading`)}
-                  intro={t(`landing.groups.${group.key}.intro`)}
-                />
-                <CardGrid columns={group.columns}>
-                  {group.sections.map((section) => (
-                    <LinkCard
-                      key={section.key}
-                      href={localizedPath(locale, `${section.path}`)}
-                      title={t(`section.${section.key}`)}
-                      description={t(`sectionBody.${section.key}`)}
-                    />
-                  ))}
-                </CardGrid>
-              </section>
-            );
-          })}
+          {books.length === 0 ? null : (
+            <LibraryShelf
+              id="library-newest"
+              heading={t('landing.newest')}
+              action={{
+                href: localizedPath(locale, '/library/books?sort=newest'),
+                text: t('allBooks'),
+              }}
+              {...shelfLabels}
+            >
+              {books.map((work) => (
+                <WorkCard key={work.id} locale={locale} work={work} />
+              ))}
+            </LibraryShelf>
+          )}
+
+          {topicShelves.map(({ id, topic, works }) => (
+            <LibraryShelf
+              key={id}
+              id={`library-topic-${id}`}
+              heading={topic.name}
+              action={{
+                href: localizedPath(
+                  locale,
+                  `/library/books?topic=${encodeURIComponent(id)}`,
+                ),
+                text: t('related.all', { topic: topic.name }),
+              }}
+              {...shelfLabels}
+            >
+              {coversFirst(works)
+                .slice(0, SHELF)
+                .map((work) => (
+                  <WorkCard key={work.id} locale={locale} work={work} />
+                ))}
+            </LibraryShelf>
+          ))}
+
+          {issues.items.length === 0 ? null : (
+            <LibraryShelf
+              id="library-issues"
+              heading={t('landing.latestIssues')}
+              action={{
+                href: localizedPath(locale, '/library/magazines'),
+                text: t('scholarly.viewAll.magazine'),
+              }}
+              {...shelfLabels}
+            >
+              {issues.items.slice(0, SHELF).map((row) => (
+                <PeriodicalCard key={row.id} locale={locale} row={row} t={t} />
+              ))}
+            </LibraryShelf>
+          )}
+
+          <section aria-labelledby="library-directory" className="flex flex-col gap-6">
+            <h2 id="library-directory" className="text-heading font-semibold">
+              {t('landing.directory')}
+            </h2>
+            <LibraryDirectory
+              groups={DIRECTORY.map((group) => ({
+                id: `library-${group.key}`,
+                heading: t(`landing.groups.${group.key}.heading`),
+                links: group.sections.map((section) => ({
+                  href: localizedPath(locale, `/library/${section}`),
+                  title: t(`section.${section}`),
+                  description: t(`sectionBody.${section}`),
+                })),
+              }))}
+            />
+          </section>
         </div>
       </Container>
     </>

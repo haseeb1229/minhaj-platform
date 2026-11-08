@@ -21,6 +21,7 @@ import {
   SectionHeader,
   TextLink,
 } from '@/components/ui';
+import { derivativeSrcSet } from '@/components/ui/image-derivatives';
 import { directionOf } from '@/config/locale';
 import {
   BreadcrumbData,
@@ -119,6 +120,21 @@ function PhotoSections({
 }
 
 /** The first-party picture mark, decorative, where no picture can be shown. */
+/**
+ * R2. A tile's WebP derivatives — a grid column of a third to a half of the
+ * page — or nothing when the Photo's width is unknown. The lightbox keeps the
+ * original: a visitor who enlarges a picture asked for every pixel.
+ */
+function photoSrcSet(
+  path: string,
+  width: number | null,
+): { srcSet?: string; sizes?: string } {
+  const srcSet = derivativeSrcSet(path, width);
+  return srcSet === undefined
+    ? {}
+    : { srcSet, sizes: '(min-width: 64rem) 33vw, (min-width: 40rem) 50vw, 100vw' };
+}
+
 function PictureMark() {
   return (
     <svg
@@ -227,6 +243,10 @@ async function PhotoGrid({
                   >
                     <img
                       src={photoAssetPath(photo.id, photo.assetId)}
+                      {...photoSrcSet(
+                        photoAssetPath(photo.id, photo.assetId),
+                        photo.width,
+                      )}
                       alt={words.altText?.text ?? t('altMissing')}
                       {...(words.altText === null ? {} : { lang: words.altText.locale })}
                       width={photo.width ?? undefined}
@@ -345,6 +365,7 @@ function GalleryCard({
       {cover && photo !== null && photo.assetId !== null ? (
         <img
           src={photoAssetPath(photo.id, photo.assetId)}
+          {...photoSrcSet(photoAssetPath(photo.id, photo.assetId), photo.width)}
           alt={words?.altText?.text ?? t('altMissing')}
           {...(words?.altText == null ? {} : { lang: words.altText.locale })}
           width={photo.width ?? undefined}

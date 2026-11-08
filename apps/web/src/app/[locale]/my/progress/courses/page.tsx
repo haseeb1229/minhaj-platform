@@ -1,13 +1,15 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { LEARNING_PAGE } from '@minhaj/contracts/learning';
 
-import { Pagination } from '@/components/media/parts';
-import { learningLinks } from '@/components/my-learning/nav';
 import { LearningTitle, ProgressStatus } from '@/components/my-learning/parts';
 import { learningRead } from '@/components/my-learning/read';
-import { PersonalFrame, PersonalLinks } from '@/components/personal/parts';
+import { MyPage, ProgressMeter } from '@/components/my/frame';
+import { lessonPercent } from '@/components/my/dashboard';
+import { myPageMetadata } from '@/components/my/metadata';
+import { myTabs } from '@/components/my/sections';
 import {
   personalOffsetHref,
   readPersonalOffset,
@@ -18,6 +20,7 @@ import {
   DataRow,
   DataTable,
   EmptyState,
+  Pager,
   TextLink,
 } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
@@ -35,7 +38,13 @@ import { requireActiveSession } from '../../guard';
  * counts as completed when every lesson it has now is complete — derived, not
  * stored, and no certificate, grade or streak is attached to it.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'progress');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -55,33 +64,38 @@ export default async function CourseProgressPage({
   const read = await learningRead('learning-course-progress', () =>
     learningRuntime().learner.courses({ accountId: session.account.id }, offset),
   );
-  const back = <PersonalLinks label={t('nav.label')} links={learningLinks(locale, t)} />;
+  const my = await getTranslations({ locale, namespace: 'my' });
+  const tabs = {
+    label: my('tabs.label.learning'),
+    items: myTabs(locale, 'learning', 'progress', (key) => my(`tabs.${key}`)),
+  };
   const description = <p>{t('progressPage.description')}</p>;
 
   if (!read.ok)
     return (
-      <PersonalFrame
-        title={t('progressPage.title')}
-        description={description}
-        back={back}
-      >
+      <MyPage title={t('progressPage.title')} description={description} tabs={tabs}>
         <Alert tone="error">{t('failure.load')}</Alert>
-      </PersonalFrame>
+      </MyPage>
     );
 
   const page = read.value;
 
   return (
-    <PersonalFrame title={t('progressPage.title')} description={description} back={back}>
+    <MyPage title={t('progressPage.title')} description={description} tabs={tabs}>
       {page.items.length === 0 ? (
-        <>
-          <EmptyState>{offset === 0 ? t('courses.empty') : t('list.beyond')}</EmptyState>
-          <p>
-            <TextLink href={localizedPath(locale, '/learn/courses')}>
-              {t('courses.browse')}
-            </TextLink>
-          </p>
-        </>
+        offset === 0 ? (
+          <EmptyState
+            icon="book"
+            action={{
+              href: localizedPath(locale, '/learn/courses'),
+              text: t('courses.browse'),
+            }}
+          >
+            {t('courses.empty')}
+          </EmptyState>
+        ) : (
+          <EmptyState>{t('list.beyond')}</EmptyState>
+        )
       ) : (
         <DataTable
           caption={t('progressPage.caption')}
@@ -109,17 +123,21 @@ export default async function CourseProgressPage({
                 </span>
               </DataCell>
               <DataCell wrap>
-                <ProgressStatus
-                  completed={entry.completedLessons}
-                  lessons={entry.course.lessons}
-                  t={t}
-                />
+                <ProgressMeter
+                  percent={lessonPercent(entry.completedLessons, entry.course.lessons)}
+                >
+                  <ProgressStatus
+                    completed={entry.completedLessons}
+                    lessons={entry.course.lessons}
+                    t={t}
+                  />
+                </ProgressMeter>
               </DataCell>
             </DataRow>
           ))}
         </DataTable>
       )}
-      <Pagination
+      <Pager
         label={t('progressPage.caption')}
         previous={
           offset === 0
@@ -130,6 +148,6 @@ export default async function CourseProgressPage({
         previousLabel={t('list.previous')}
         nextLabel={t('list.next')}
       />
-    </PersonalFrame>
+    </MyPage>
   );
 }

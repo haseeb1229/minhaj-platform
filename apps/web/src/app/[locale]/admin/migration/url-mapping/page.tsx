@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
 import {
@@ -27,6 +28,7 @@ import { migrationRuntime } from '@/composition/migration';
 import { taxonomyRuntime } from '@/composition/taxonomy';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../(identity)/form-state';
+import type { ConfirmSpec } from '@/components/ui/confirm-action';
 import { legacyMappingAction, topicMappingAction } from '../actions';
 import {
   Code,
@@ -45,6 +47,7 @@ import {
   type Query,
 } from '../shared';
 import { LegacyMappingBadge, TopicMappingBadge } from '../status';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/migration/url-mapping` — where legacy addresses and legacy
@@ -58,7 +61,7 @@ import { LegacyMappingBadge, TopicMappingBadge } from '../status';
  * confirms one to a Topic Taxonomy lists now, excludes it, or reopens it —
  * never by similarity alone); and the links staging could not resolve.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminMigration', 'mapping.title');
 
 export const dynamic = 'force-dynamic';
 
@@ -107,6 +110,13 @@ export default async function MigrationUrlMappingPage({
     notFound();
   const copy = await adminMigrationCopy(locale);
   const { t } = copy;
+  const confirmCopy = await getTranslations({ locale, namespace: 'admin.confirm' });
+  const confirmExclude: ConfirmSpec = {
+    title: confirmCopy('exclude.title'),
+    body: confirmCopy('exclude.body'),
+    confirmLabel: confirmCopy('exclude.confirm'),
+    cancelLabel: confirmCopy('cancel'),
+  };
   const actor = actorOf(context);
   const timeZone = context.session.account.timezone;
   const administer = context.authorization.can('migration.administer');
@@ -293,6 +303,7 @@ export default async function MigrationUrlMappingPage({
                 choices={choices}
                 names={names}
                 copy={copy}
+                confirmExclude={confirmExclude}
               />
             ))}
           </ul>
@@ -365,6 +376,7 @@ function TopicMapping({
   choices,
   names,
   copy,
+  confirmExclude,
 }: {
   readonly row: TopicMappingRow;
   readonly locale: Locale;
@@ -372,6 +384,8 @@ function TopicMapping({
   readonly choices: readonly { readonly id: string; readonly name: string }[] | null;
   readonly names: ReadonlyMap<string, string>;
   readonly copy: AdminMigrationCopy;
+  /** R2: excluding a category asks first. */
+  readonly confirmExclude: ConfirmSpec;
 }) {
   const { t } = copy;
   const topicName = (id: string | null) =>
@@ -436,6 +450,7 @@ function TopicMapping({
               pendingLabel={t('pending')}
               tone="secondary"
               messages={copy.messages}
+              confirm={confirmExclude}
             >
               <RowIdentity locale={locale} row={row} />
               <input type="hidden" name="decision" value="exclude" />

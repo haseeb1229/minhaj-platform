@@ -9,7 +9,7 @@ import {
   localizedPath,
   UNPREFIXED_LOCALE,
 } from '@minhaj/contracts';
-import type { QuranAvailability } from '@minhaj/contracts/quran';
+import { QURAN_MODE_POSTURE, type QuranAvailability } from '@minhaj/contracts/quran';
 
 import { quranReadRuntime } from '@/composition/quran-read';
 import { taxonomyRuntime } from '@/composition/taxonomy';
@@ -47,6 +47,15 @@ export const readSurah = cache((number: number) =>
 export const readSurahs = cache(() => quranReadRuntime().reader.surahs());
 
 export const readJuz = cache((number: number) => quranReadRuntime().reader.juz(number));
+
+/**
+ * The first Ayah of the corpus as stored — the Bismillah a reader shows at the
+ * head of a Surah where the corpus's convention calls for it (R2, `./reader`).
+ * Read once per request and shown exactly as stored, never edited.
+ */
+export const readOpening = cache(() =>
+  quranReadRuntime().reader.ayah({ surah: 1, ayah: 1 }),
+);
 
 /** Taxonomy's foundation slug for the Quran subject — a vocabulary key, not content. */
 export const QURAN_TOPIC_SLUG = 'quran';
@@ -121,9 +130,14 @@ export async function readingContext(request: ReadingRequest) {
 
 export type ReadingContext = Awaited<ReturnType<typeof readingContext>>;
 
-/** Is this deployment's corpus showing non-authoritative fixture text? */
-export function isFixture(availability: QuranAvailability): boolean {
-  return availability.active && availability.mode === 'fixture';
+/**
+ * What every Quran page must say first about the active corpus: the fixture
+ * warning, the reference-preview attribution, or nothing (`QURAN_MODE_POSTURE`).
+ */
+export function corpusNotice(
+  availability: QuranAvailability,
+): 'fixture' | 'reference' | null {
+  return availability.active ? QURAN_MODE_POSTURE[availability.mode].notice : null;
 }
 
 /**
@@ -131,12 +145,15 @@ export function isFixture(availability: QuranAvailability): boolean {
  *
  * THREE CONDITIONS, ALL REQUIRED: the deployment may be indexed at all (the
  * pre-adoption origin may not, and the control fails closed); the corpus is
- * ACTIVE; and it is APPROVED. A fixture corpus is engineering proof text and is
- * never indexable, whatever the deployment says (Phase 18 §6).
+ * ACTIVE; and its mode is indexable — APPROVED text only. A fixture corpus is
+ * engineering proof text and a reference corpus a staging preview; neither is
+ * ever indexable, whatever the deployment says (Phase 18 §6; R2).
  */
 export function quranIndexable(availability: QuranAvailability): boolean {
   return (
-    publicIndexingEnabled() && availability.active && availability.mode === 'approved'
+    publicIndexingEnabled() &&
+    availability.active &&
+    QURAN_MODE_POSTURE[availability.mode].indexable
   );
 }
 

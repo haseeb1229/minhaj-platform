@@ -1,4 +1,4 @@
-import { SESSION_KINDS, SESSION_STATES } from '@minhaj/contracts/learning';
+import { CLASS_PAGE, SESSION_KINDS, SESSION_STATES } from '@minhaj/contracts/learning';
 
 import {
   Button,
@@ -14,10 +14,10 @@ import {
 import { requireAdminPage } from '@/composition/authorization';
 import { learningRuntime } from '@/composition/learning';
 import { requireLocale } from '@/config/route-locale';
+import { AdminPager } from '../../pager';
 import { Title, learningCopy, type ListParams } from '../shared';
 import {
   ActivationNotice,
-  ClassPager,
   PersonName,
   SessionKindBadge,
   SessionStateBadge,
@@ -27,6 +27,7 @@ import {
   sessionsHref,
   sessionsQuery,
 } from './parts';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/learning/classes` — every class, by state, kind and Course
@@ -41,6 +42,7 @@ import {
  * is switched on, but no class can be scheduled until it is; the banner says
  * which state the platform is in rather than leaving a refusal to explain it.
  */
+export const generateMetadata = adminPageMetadata('adminLearning', 'surface.classes');
 export const dynamic = 'force-dynamic';
 
 export default async function ClassDirectoryPage({ params, searchParams }: ListParams) {
@@ -166,12 +168,14 @@ export default async function ClassDirectoryPage({ params, searchParams }: ListP
           ))}
         </DataTable>
       )}
-      <ClassPager
-        offset={filter.offset}
-        hasMore={page.hasMore}
-        hrefFor={sessionsHref(base, filter)}
+      <AdminPager
         label={t('surface.classes')}
-        copy={copy}
+        offset={filter.offset}
+        pageSize={CLASS_PAGE}
+        more={page.hasMore}
+        href={sessionsHref(base, filter)}
+        previousLabel={t('previous')}
+        nextLabel={t('next')}
       />
     </main>
   );

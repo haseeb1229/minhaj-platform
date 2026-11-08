@@ -26,6 +26,7 @@ import {
   TextLink,
 } from '@/components/ui';
 import { ActionForm } from '../../(identity)/form-state';
+import { AdminPager } from '../pager';
 import { adminCopy } from '../shared';
 import { StepUpPrompt } from '../step-up';
 import { changeHadithState } from './actions';
@@ -435,16 +436,16 @@ export function Pager({
   readonly label: string;
   readonly copy: Copy;
 }) {
-  const hasMore = offset + HADITH_PAGE < total;
-  if (offset === 0 && !hasMore) return null;
-  const current = offset / HADITH_PAGE + 1;
   return (
-    <nav className="flex gap-6" aria-label={label}>
-      {offset > 0 ? (
-        <TextLink href={hrefFor(current - 1)}>{copy.t('previous')}</TextLink>
-      ) : null}
-      {hasMore ? <TextLink href={hrefFor(current + 1)}>{copy.t('next')}</TextLink> : null}
-    </nav>
+    <AdminPager
+      label={label}
+      offset={offset}
+      pageSize={HADITH_PAGE}
+      total={total}
+      href={hrefFor}
+      previousLabel={copy.t('previous')}
+      nextLabel={copy.t('next')}
+    />
   );
 }
 

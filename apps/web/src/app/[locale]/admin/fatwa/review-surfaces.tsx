@@ -179,13 +179,7 @@ export async function ReviewQueueScreen({ params, searchParams }: ListParams) {
           published={false}
         />
       )}
-      <Pager
-        offset={offset}
-        shown={page.items.length}
-        total={page.total}
-        base={base}
-        copy={copy}
-      />
+      <Pager offset={offset} total={page.total} base={base} copy={copy} />
     </main>
   );
 }
@@ -406,13 +400,7 @@ export async function PublishedListScreen({ params, searchParams }: ListParams) 
           published
         />
       )}
-      <Pager
-        offset={offset}
-        shown={page.items.length}
-        total={page.total}
-        base={base}
-        copy={copy}
-      />
+      <Pager offset={offset} total={page.total} base={base} copy={copy} />
     </main>
   );
 }

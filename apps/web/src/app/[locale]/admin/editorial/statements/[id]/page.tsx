@@ -2,6 +2,9 @@ import { z } from 'zod';
 import { notFound } from 'next/navigation';
 import { requireLocale } from '@/config/route-locale';
 import { ContentEditor } from '../../content';
+import { adminPageMetadata } from '../../../metadata';
+
+export const generateMetadata = adminPageMetadata('admin', 'titles.editorial.statement');
 export default async function Page({
   params,
   searchParams,

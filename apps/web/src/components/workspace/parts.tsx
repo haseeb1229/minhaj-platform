@@ -6,8 +6,9 @@ import { ProductBar } from '@/components/shell/product-bar';
 import { PageHeading } from '@/components/ui';
 
 /**
- * The private workspaces' frame — My Minhaj, the Teacher area and the
- * administration (ARCHITECTURE.md §13).
+ * The private workspaces' frame — the Teacher area and the administration
+ * (ARCHITECTURE.md §13). My Minhaj has its own frame since R2
+ * (`@/components/my/frame`), under the same product bar.
  *
  * PRESENTATION ONLY. Nothing here reads a session, a permission or a record:
  * each area's layout decides what may be shown and hands the shell finished
@@ -37,8 +38,8 @@ const WIDTHS = {
  *
  * `areaIsHeading` keeps the administration's established outline — the area
  * name is the document's first heading and each page's own `h1` sits inside its
- * `main`. My Minhaj and the Teacher area name themselves in text instead, so
- * each of their pages has exactly one `h1`.
+ * `main`. The Teacher area names itself in text instead, so each of its pages
+ * has exactly one `h1`.
  *
  * The skip link is the first stop on every workspace page and moves past the
  * band and the navigation to the content column — a sidebar of two dozen links
@@ -150,49 +151,6 @@ export function WorkspacePage({
       </header>
       {children}
     </main>
-  );
-}
-
-/**
- * One section of a workspace overview: a heading, a short status and the
- * links onward.
- *
- * A plain `<section>` with no accessible name, so a dashboard of a dozen cards
- * is a dozen headings to jump between rather than a dozen landmarks.
- */
-export function WorkspaceCard({
-  heading,
-  level = 2,
-  wide = false,
-  links,
-  children,
-}: {
-  readonly heading: ReactNode;
-  readonly level?: 2 | 3;
-  /** Spans both columns of a two-column overview. */
-  readonly wide?: boolean;
-  readonly links?: readonly { readonly href: string; readonly text: string }[];
-  readonly children?: ReactNode;
-}) {
-  const Heading = level === 2 ? 'h2' : 'h3';
-  return (
-    <section
-      className={`flex min-w-0 flex-col gap-3 rounded-panel border border-border bg-surface-raised p-5 shadow-panel ${
-        wide ? 'md:col-span-2' : ''
-      }`}
-    >
-      <Heading
-        className={level === 2 ? 'text-lg font-semibold' : 'text-base font-semibold'}
-      >
-        {heading}
-      </Heading>
-      {children === undefined ? null : (
-        <div className="flex min-w-0 flex-col gap-2 text-sm">{children}</div>
-      )}
-      {links === undefined || links.length === 0 ? null : (
-        <WorkspaceLinks links={links} />
-      )}
-    </section>
   );
 }
 

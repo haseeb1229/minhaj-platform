@@ -13,7 +13,7 @@ import {
   readSurahSegment,
 } from '@/components/quran/presentation';
 import { quranAvailability, quranMetadata, readSurah } from '@/components/quran/read';
-import { AyahPage } from '@/components/quran/reader';
+import { AyahPage, PERSONAL_ANCHOR } from '@/components/quran/reader';
 import { PersonalControls } from '@/components/personal-island/personal-controls';
 import { requireLocale } from '@/config/route-locale';
 
@@ -84,11 +84,13 @@ export default async function AyahRoute({ params, searchParams }: AyahParams) {
         ayah={found.ayah}
         request={readReadingRequest(await searchParams)}
       />
-      <PersonalControls
-        locale={locale}
-        target={{ kind: 'ayah', surah: found.ayah.surah, ayah: found.ayah.ayah }}
-        framed
-      />
+      <div id={PERSONAL_ANCHOR} className="scroll-mt-6">
+        <PersonalControls
+          locale={locale}
+          target={{ kind: 'ayah', surah: found.ayah.surah, ayah: found.ayah.ayah }}
+          framed
+        />
+      </div>
     </>
   );
 }

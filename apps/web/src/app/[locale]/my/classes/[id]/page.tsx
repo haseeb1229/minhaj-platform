@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -10,14 +11,15 @@ import {
   JoinLink,
   ParticipationBadge,
   SessionStateBadge,
-  classLinks,
   classMessages,
 } from '@/components/my-classes/parts';
 import { LearningTitle } from '@/components/my-learning/parts';
 import { learningRead } from '@/components/my-learning/read';
-import { ConfirmField, PersonalFrame, PersonalLinks } from '@/components/personal/parts';
+import { ConfirmField } from '@/components/personal/parts';
 import { Alert, Panel, SectionHeading, TextLink } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
+import { MyPage } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../(identity)/form-state';
 import { requireActiveSession } from '../../guard';
@@ -35,7 +37,13 @@ import { cancelBookingAction } from '../actions';
  * one. The person's own confirmed future trial may be cancelled here, under
  * the Booking version they are looking at.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'class');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -51,7 +59,6 @@ export default async function MyClassPage({
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myClasses' });
   const actor = { accountId: session.account.id };
-  const back = <PersonalLinks label={t('nav.label')} links={classLinks(locale, t)} />;
 
   const read = await learningRead('learning-my-class', async () => {
     const { myClasses } = learningRuntime();
@@ -65,9 +72,9 @@ export default async function MyClassPage({
   });
   if (!read.ok)
     return (
-      <PersonalFrame title={t('detail.fallbackTitle')} back={back}>
+      <MyPage title={t('detail.fallbackTitle')}>
         <Alert tone="error">{t('failure.load')}</Alert>
-      </PersonalFrame>
+      </MyPage>
     );
   if (read.value === null) notFound();
 
@@ -87,7 +94,7 @@ export default async function MyClassPage({
   );
 
   return (
-    <PersonalFrame
+    <MyPage
       title={title}
       description={
         <div className="flex flex-wrap items-center gap-2">
@@ -98,7 +105,6 @@ export default async function MyClassPage({
           )}
         </div>
       }
-      back={back}
     >
       <Panel>
         <div className="flex flex-col gap-3">
@@ -182,6 +188,6 @@ export default async function MyClassPage({
           </div>
         </Panel>
       ) : null}
-    </PersonalFrame>
+    </MyPage>
   );
 }

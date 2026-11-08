@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
@@ -10,6 +11,7 @@ import {
 } from '@/components/messaging/read';
 import { NotActivated, TeacherFrame } from '@/components/teacher/parts';
 import { Alert, EmptyState, TextLink } from '@/components/ui';
+import { teacherPageMetadata } from '@/components/teacher/metadata';
 import { messagingRuntime } from '@/composition/messaging';
 import { requireLocale } from '@/config/route-locale';
 import { requireTeacher } from '../guard';
@@ -25,7 +27,13 @@ import { requireTeacher } from '../guard';
  * says so. A conversation is started from a student's own page, never from a
  * directory of people.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return teacherPageMetadata(params, 'messages');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';

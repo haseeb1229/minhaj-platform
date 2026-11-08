@@ -1,4 +1,5 @@
 import { localizedPath } from '@minhaj/contracts';
+import { CLASS_PAGE } from '@minhaj/contracts/learning';
 import { ConfirmField } from '@/components/personal/parts';
 import {
   Alert,
@@ -19,17 +20,18 @@ import { requireAdminPage } from '@/composition/authorization';
 import { learningRuntime } from '@/composition/learning';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../../(identity)/form-state';
+import { AdminPager } from '../../../pager';
 import { pageOffset, queryValue } from '../../../shared';
 import { endScopeAction, grantScopeAction } from '../../actions';
 import { Title, learningCopy, titleText, type ListParams } from '../../shared';
 import {
   ActivationNotice,
-  ClassPager,
   PersonName,
   classesBase,
   pagedHref,
   participantNameMap,
 } from '../parts';
+import { adminPageMetadata } from '../../../metadata';
 
 /**
  * `/{locale}/admin/learning/classes/scopes` — which teacher teaches which
@@ -45,6 +47,7 @@ import {
  * Ending a scope is confirmed and carries the version shown; the row stays as
  * safe history.
  */
+export const generateMetadata = adminPageMetadata('adminLearning', 'classes.scopes');
 export const dynamic = 'force-dynamic';
 
 /** The most catalogue pages consulted for the Course choice. */
@@ -60,7 +63,7 @@ export default async function ScopesPage({ params, searchParams }: ListParams) {
   const actor = { accountId: context.session.account.id };
   const administer = context.authorization.can('learning.classes.administer');
   const ended = queryValue(query, 'show') === 'ended';
-  const offset = pageOffset(query, 24);
+  const offset = pageOffset(query, CLASS_PAGE);
   const { classes } = learningRuntime();
 
   const [mode, page] = await Promise.all([
@@ -183,12 +186,14 @@ export default async function ScopesPage({ params, searchParams }: ListParams) {
             ))}
           </DataTable>
         )}
-        <ClassPager
-          offset={offset}
-          hasMore={page.hasMore}
-          hrefFor={pagedHref(base, ended ? { show: 'ended' } : {})}
+        <AdminPager
           label={t('classes.scopes')}
-          copy={copy}
+          offset={offset}
+          pageSize={CLASS_PAGE}
+          more={page.hasMore}
+          href={pagedHref(base, ended ? { show: 'ended' } : {})}
+          previousLabel={t('previous')}
+          nextLabel={t('next')}
         />
       </section>
 

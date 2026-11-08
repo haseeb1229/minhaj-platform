@@ -16,7 +16,11 @@ import {
   Panel,
   TextInput,
 } from '@/components/ui';
-import { PAGE_SIZE, pageOffset, queryValue } from '../../shared';
+import { AdminPager } from '../../pager';
+import { adminPageHref } from '../../paging';
+import { PAGE_SIZE, pageOffset } from '../../shared';
+import { adminPageMetadata } from '../../metadata';
+import { readAuditFilters } from './filters';
 
 /**
  * The audit record — READ-ONLY.
@@ -25,8 +29,8 @@ import { PAGE_SIZE, pageOffset, queryValue } from '../../shared';
  * principal is DENIED UPDATE and DELETE on `AuditLog` at the database, so the
  * discipline survives a mistake in this file (SECURITY_BASELINE.md §13.1).
  *
- * ONLY INDEXED FILTERS. Action and actor, each covered by its own index, over a
- * table that only grows. An unindexed predicate here would be a full scan on
+ * ONLY INDEXED FILTERS. An action prefix, the actor and a date range (R2),
+ * each served by an index, over a table that only grows. An unindexed predicate here would be a full scan on
  * every page view of an operator surface (§28, §41).
  *
  * ORDERED DETERMINISTICALLY — newest first, then by id. Time alone is not
@@ -38,7 +42,7 @@ import { PAGE_SIZE, pageOffset, queryValue } from '../../shared';
  * A payload column on an operator screen is where a sensitive snapshot ends up
  * in front of everyone who may read the log (§13.4).
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('admin', 'audit.title');
 export const dynamic = 'force-dynamic';
 
 export default async function AuditPage({
@@ -59,15 +63,17 @@ export default async function AuditPage({
     localizedPath(locale, '/admin/system/audit'),
   );
 
-  const action = queryValue(query, 'action');
-  const actorId = queryValue(query, 'actor');
+  const filters = readAuditFilters(query);
+  const offset = pageOffset(query, PAGE_SIZE);
 
   const { administration } = identityRuntime();
   const records = await administration.listAuditRecords({
-    action,
-    actorId,
+    action: filters.action,
+    actorId: filters.actorId,
+    from: filters.from,
+    to: filters.to,
     limit: PAGE_SIZE,
-    offset: pageOffset(query, PAGE_SIZE),
+    offset,
   });
 
   return (
@@ -79,34 +85,64 @@ export default async function AuditPage({
 
       <Panel>
         <form method="get" className="flex flex-wrap items-end gap-3">
-          <div className="min-w-48 grow">
-            <Field id="action" label={t('audit.filterAction')}>
+          <div className="min-w-44 grow">
+            <Field
+              id="action"
+              label={t('audit.filterAction')}
+              help={t('audit.filterActionHelp')}
+            >
               {(props) => (
                 <TextInput
                   {...props}
                   name="action"
                   type="search"
-                  defaultValue={action ?? ''}
+                  defaultValue={filters.action ?? ''}
                   maxLength={128}
+                  dir="ltr"
                 />
               )}
             </Field>
           </div>
-
-          <div className="min-w-48 grow">
+          <div className="min-w-44 grow">
             <Field id="actor" label={t('audit.filterActor')}>
               {(props) => (
                 <TextInput
                   {...props}
                   name="actor"
                   type="search"
-                  defaultValue={actorId ?? ''}
+                  defaultValue={filters.actorId ?? ''}
                   maxLength={64}
+                  dir="ltr"
                 />
               )}
             </Field>
           </div>
-
+          <div className="min-w-44 grow">
+            <Field id="from" label={t('audit.filterFrom')}>
+              {(props) => (
+                <TextInput
+                  {...props}
+                  name="from"
+                  type="date"
+                  defaultValue={filters.fromDay ?? ''}
+                  dir="ltr"
+                />
+              )}
+            </Field>
+          </div>
+          <div className="min-w-44 grow">
+            <Field id="to" label={t('audit.filterTo')}>
+              {(props) => (
+                <TextInput
+                  {...props}
+                  name="to"
+                  type="date"
+                  defaultValue={filters.toDay ?? ''}
+                  dir="ltr"
+                />
+              )}
+            </Field>
+          </div>
           <Button tone="secondary">{t('common.apply')}</Button>
         </form>
       </Panel>
@@ -163,7 +199,20 @@ export default async function AuditPage({
         </Panel>
       )}
 
-      {records.more ? <Alert tone="info">{t('common.more')}</Alert> : null}
+      <AdminPager
+        label={t('pager.label')}
+        offset={offset}
+        pageSize={PAGE_SIZE}
+        more={records.more}
+        href={adminPageHref(localizedPath(locale, '/admin/system/audit'), {
+          action: filters.action,
+          actor: filters.actorId,
+          from: filters.fromDay,
+          to: filters.toDay,
+        })}
+        previousLabel={t('pager.previous')}
+        nextLabel={t('pager.next')}
+      />
     </main>
   );
 }

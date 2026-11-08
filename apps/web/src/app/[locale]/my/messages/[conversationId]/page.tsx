@@ -1,6 +1,8 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { ConversationScreen } from '@/components/messaging/conversation';
 import { readBefore } from '@/components/messaging/presentation';
+import { myPageMetadata } from '@/components/my/metadata';
 import { requireLocale } from '@/config/route-locale';
 import { requireActiveSession } from '../../guard';
 import {
@@ -21,7 +23,13 @@ import {
  * A participant whose teaching relationship has ended is told exactly that,
  * and shown nothing of the conversation.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'conversation');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';

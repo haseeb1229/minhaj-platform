@@ -8,13 +8,17 @@ import type { HadithAvailability } from '@minhaj/contracts/hadith';
 import { SEARCH_QUERY_MAX_LENGTH } from '@minhaj/contracts/search';
 
 import { hadithReadRuntime } from '@/composition/hadith-read';
+import { libraryReadRuntime } from '@/composition/library-read';
+import { WorkCard } from '@/components/library/cards';
+import { CoverStack, LibraryDirectory, LibraryShelf } from '@/components/library/landing';
 import {
   ActionLink,
-  Alert,
   Breadcrumbs,
   Button,
   CardGrid,
   Container,
+  Hero,
+  Icon,
   LinkCard,
   PageHeading,
   PageHero,
@@ -245,24 +249,54 @@ export async function HadithLandingPage({
   );
 }
 
+/** How many hadith works the landing's shelf shows; the rest are a link away. */
+const WORKS_SHELF = 12;
+
 /**
- * THE LANDING WHILE NO COLLECTION IS ACTIVATED.
+ * THE LANDING WHILE NO COLLECTION IS ACTIVATED — MQI's HADITH WORKS (R2).
  *
- * It says so first and plainly, then describes how the section is organised —
- * in words, with no link into it, no number, no sample and no search, because
- * there is nothing behind any of them yet. The two parts that do not depend on
- * an activated collection point at the delivered areas that already serve them
- * (the topic hub and Learn).
+ * Owner decision (2026-11-06): no external hadith corpus is taken in, and MQI
+ * has no structured one to migrate, so the section presents what Minhaj-ul-
+ * Quran itself publishes on hadith — the Library's public works classified
+ * under the `hadith` Topic — as a shelf of covers, with a short word on the
+ * hadith sciences. ONE calm sentence says the collections reader awaits an
+ * authorised source; there is no disclaimer wall, no count and no link into
+ * a part of the section that is not open. Every work links to its own Library
+ * page, and "all" to the Library's own listing for the Topic.
+ *
+ * With no such work (or no Topic) the shelf is simply absent; the rest still
+ * points at the delivered areas that serve the subject (the topic hub, Learn).
  */
 export async function HadithLandingUnavailable({ locale }: { readonly locale: Locale }) {
-  const t = await getTranslations({ locale, namespace: 'hadith' });
-  const parts = await hadithTrail(locale);
-  const structure = [
-    { key: 'collections', href: null },
-    { key: 'study', href: null },
-    { key: 'explore', href: pathFor(locale, requireRoute('topics')) },
-    { key: 'learn', href: pathFor(locale, requireRoute('learn')) },
-  ] as const;
+  const [t, parts, topic] = await Promise.all([
+    getTranslations({ locale, namespace: 'hadith' }),
+    hadithTrail(locale),
+    readHadithTopic(locale),
+  ]);
+  const works =
+    topic === null
+      ? []
+      : (await libraryReadRuntime().works({ topic: topic.id, offset: 0 })).items;
+  const shelf = [
+    ...works.filter((work) => work.cover !== null),
+    ...works.filter((work) => work.cover === null),
+  ].slice(0, WORKS_SHELF);
+  const elsewhere = [
+    {
+      id: 'hadith-elsewhere',
+      heading: t('works.moreHeading'),
+      links: (
+        [
+          ['explore', pathFor(locale, requireRoute('topics'))],
+          ['learn', pathFor(locale, requireRoute('learn'))],
+        ] as const
+      ).map(([key, href]) => ({
+        href,
+        title: t(`unavailable.go.${key}`),
+        description: t(`unavailable.parts.${key}`),
+      })),
+    },
+  ];
 
   return (
     <>
@@ -272,55 +306,53 @@ export async function HadithLandingUnavailable({ locale }: { readonly locale: Lo
         </div>
       </Container>
 
-      <PageHero
-        eyebrow={t('landing.eyebrow')}
+      <Hero
+        variant="split"
         title={t('title')}
-        lede={t('unavailable.lede')}
+        lede={t('works.lede')}
+        aside={<CoverStack works={shelf} />}
       >
-        <div className="max-w-[var(--measure-prose)]">
-          <Alert tone="info">{t('unavailable.body')}</Alert>
-        </div>
-      </PageHero>
+        <p className="flex max-w-[var(--measure-prose)] items-start gap-2 text-sm text-foreground-muted">
+          <Icon name="book" size={16} className="mt-1 text-accent" />
+          <span>{t('works.awaiting')}</span>
+        </p>
+      </Hero>
 
       <Container>
         <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
-          <section className="flex flex-col gap-5" aria-labelledby="hadith-structure">
-            <SectionHeader
-              id="hadith-structure"
-              heading={t('unavailable.structureHeading')}
-              intro={t('unavailable.structureIntro')}
-            />
-            <ul className="grid list-none grid-cols-1 gap-4 p-0 *:min-w-0 sm:grid-cols-2 lg:grid-cols-4">
-              {structure.map((part) => (
-                <li
-                  key={part.key}
-                  className="flex h-full min-w-0 flex-col gap-2.5 rounded-panel border border-border bg-surface-raised p-5 shadow-panel"
-                >
-                  <h3 className="text-subheading font-semibold">
-                    {t(`landing.${part.key}`)}
-                  </h3>
-                  <p className="text-sm text-foreground-muted">
-                    {t(`unavailable.parts.${part.key}`)}
-                  </p>
-                  <p className="mt-auto pt-1 text-sm">
-                    {part.href === null ? (
-                      <span className="text-caption font-medium text-foreground-muted">
-                        {t('unavailable.awaiting')}
-                      </span>
-                    ) : (
-                      <TextLink href={part.href}>
-                        {t(`unavailable.go.${part.key}`)}
-                      </TextLink>
-                    )}
-                  </p>
-                </li>
+          {topic === null || shelf.length === 0 ? null : (
+            <LibraryShelf
+              id="hadith-works"
+              heading={t('works.shelf')}
+              action={{
+                href: localizedPath(
+                  locale,
+                  `/library/books?topic=${encodeURIComponent(topic.id)}`,
+                ),
+                text: t('works.shelfAll'),
+              }}
+              previousLabel={t('works.showPrevious')}
+              nextLabel={t('works.showNext')}
+            >
+              {shelf.map((work) => (
+                <WorkCard key={work.id} locale={locale} work={work} />
               ))}
-            </ul>
+            </LibraryShelf>
+          )}
+
+          <section
+            aria-labelledby="hadith-about"
+            className="grid grid-cols-1 gap-x-10 gap-y-3 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]"
+          >
+            <h2 id="hadith-about" className="text-heading font-semibold text-balance">
+              {t('works.aboutHeading')}
+            </h2>
+            <p className="reading-face max-w-[var(--measure-prose)] text-lede">
+              {t('works.about')}
+            </p>
           </section>
 
-          <p>
-            <TextLink href={localizedPath(locale, '')}>{t('unavailable.home')}</TextLink>
-          </p>
+          <LibraryDirectory groups={elsewhere} />
         </div>
       </Container>
     </>

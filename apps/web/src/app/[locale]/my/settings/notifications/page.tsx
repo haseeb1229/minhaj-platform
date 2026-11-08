@@ -1,15 +1,14 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
-import { settingsLinks } from '@/components/personal/nav';
-import {
-  PersonalFrame,
-  PersonalLinks,
-  refusalMessages,
-} from '@/components/personal/parts';
+import { refusalMessages } from '@/components/personal/parts';
 import { personalRead } from '@/components/personal/read';
 import { Alert, Panel, StatusBadge, TextLink } from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
+import { myTabs } from '@/components/my/sections';
+import { MyPage } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../(identity)/form-state';
 import { requireActiveSession } from '../../guard';
@@ -26,7 +25,13 @@ import { setNotificationPreferenceAction } from './actions';
  * security mail are Identity's and are always sent; the newsletter is a
  * separate subscription, managed from its own emails (ARCHITECTURE.md §4.6.1).
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'notificationSettings');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -42,10 +47,14 @@ export default async function NotificationSettingsPage({
     localizedPath(locale, '/my/settings/notifications'),
   );
   const t = await getTranslations({ locale, namespace: 'personal' });
+  const my = await getTranslations({ locale, namespace: 'my' });
+  const tabs = {
+    label: my('tabs.label.settings'),
+    items: myTabs(locale, 'settings', 'notifications', (tab) => my(`tabs.${tab}`)),
+  };
   const read = await personalRead('personal-notification-preferences', () =>
     personalisationRuntime().notifications.preferences({ accountId: session.account.id }),
   );
-  const back = <PersonalLinks label={t('nav.label')} links={settingsLinks(locale, t)} />;
   const description = (
     <>
       <p>{t('notificationSettings.description')}</p>
@@ -63,10 +72,11 @@ export default async function NotificationSettingsPage({
   );
 
   return (
-    <PersonalFrame
+    <MyPage
+      tabs={tabs}
+      measure="reading"
       title={t('notificationSettings.title')}
       description={description}
-      back={back}
     >
       {!read.ok ? (
         <Alert tone="error">{t('failure.load')}</Alert>
@@ -115,6 +125,6 @@ export default async function NotificationSettingsPage({
           ))}
         </ul>
       )}
-    </PersonalFrame>
+    </MyPage>
   );
 }

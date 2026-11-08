@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
@@ -7,11 +8,13 @@ import {
   CourseUnavailable,
   readTeacherCourse,
 } from '@/components/teacher/course-frame';
-import { NotActivated } from '@/components/teacher/parts';
+import { teacherPageMetadata } from '@/components/teacher/metadata';
+import { NotActivated, TeacherSection } from '@/components/teacher/parts';
+import { ownZone } from '@/components/teacher/presentation';
 import { collectPages } from '@/components/teacher/read';
 import { ReportTable } from '@/components/teacher/report-table';
-import { SessionCard } from '@/components/teacher/session-card';
-import { Alert, EmptyState, SectionHeading, TextLink } from '@/components/ui';
+import { Agenda, SessionRow } from '@/components/teacher/schedule';
+import { Alert, EmptyState, TextLink } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
 import { requireLocale } from '@/config/route-locale';
 import { requireTeacher } from '../../../guard';
@@ -26,7 +29,13 @@ import { requireTeacher } from '../../../guard';
  * the teacher's Courses and are kept for this one. When a bound is reached
  * the page says more may exist — it never presents a cut list as complete.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return teacherPageMetadata(params, 'courseSessions');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -55,12 +64,7 @@ export default async function CourseSessionsPage({
 
   if (course.format !== 'live')
     return (
-      <CourseFrame
-        course={course}
-        heading={t('course.sessionsTitle')}
-        locale={locale}
-        t={t}
-      >
+      <CourseFrame course={course} view="sessions" locale={locale} t={t}>
         <EmptyState>{t('course.notLive')}</EmptyState>
       </CourseFrame>
     );
@@ -83,35 +87,34 @@ export default async function CourseSessionsPage({
   const mine = <T extends { readonly course: { readonly id: string } }>(
     items: readonly T[],
   ) => items.filter((item) => item.course.id === course.id);
+  const now = new Date();
+  const zone = ownZone(accountZone);
 
   return (
-    <CourseFrame
-      course={course}
-      heading={t('course.sessionsTitle')}
-      locale={locale}
-      t={t}
-    >
-      <section className="flex flex-col gap-3" aria-labelledby="course-upcoming">
-        <span id="course-upcoming">
-          <SectionHeading>{t('course.upcoming')}</SectionHeading>
-        </span>
-        <p className="text-sm text-foreground-muted">{t('course.upcomingHelp')}</p>
+    <CourseFrame course={course} view="sessions" locale={locale} t={t}>
+      <TeacherSection
+        id="course-upcoming"
+        heading={t('course.upcoming')}
+        intro={t('course.upcomingHelp')}
+      >
         {!upcoming.ok ? (
           <Alert tone="error">{t('failure.load')}</Alert>
         ) : mine(upcoming.value.items).length === 0 ? (
           <EmptyState>{t('course.upcomingEmpty')}</EmptyState>
         ) : (
-          <ol className="flex flex-col gap-3" aria-label={t('course.upcoming')}>
+          <Agenda label={t('course.upcoming')}>
             {mine(upcoming.value.items).map((view) => (
-              <SessionCard
+              <SessionRow
                 key={view.session.id}
                 view={view}
                 locale={locale}
-                accountZone={accountZone}
+                zone={zone}
+                now={now}
+                showDate
                 t={t}
               />
             ))}
-          </ol>
+          </Agenda>
         )}
         {upcoming.ok && upcoming.value.truncated ? (
           <p className="text-sm">
@@ -121,13 +124,13 @@ export default async function CourseSessionsPage({
             </TextLink>
           </p>
         ) : null}
-      </section>
+      </TeacherSection>
 
-      <section className="flex flex-col gap-3" aria-labelledby="course-past">
-        <span id="course-past">
-          <SectionHeading>{t('course.past')}</SectionHeading>
-        </span>
-        <p className="text-sm text-foreground-muted">{t('course.pastHelp')}</p>
+      <TeacherSection
+        id="course-past"
+        heading={t('course.past')}
+        intro={t('course.pastHelp')}
+      >
         {!past.ok ? (
           <Alert tone="error">{t('failure.load')}</Alert>
         ) : mine(past.value.items).length === 0 ? (
@@ -140,7 +143,7 @@ export default async function CourseSessionsPage({
             t={t}
           />
         )}
-      </section>
+      </TeacherSection>
     </CourseFrame>
   );
 }

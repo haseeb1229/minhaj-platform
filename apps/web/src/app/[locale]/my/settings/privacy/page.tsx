@@ -1,15 +1,14 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
-import { settingsLinks } from '@/components/personal/nav';
-import {
-  PersonalFrame,
-  PersonalLinks,
-  refusalMessages,
-} from '@/components/personal/parts';
+import { refusalMessages } from '@/components/personal/parts';
 import { personalRead } from '@/components/personal/read';
 import { Alert, Panel, SectionHeading, StatusBadge, TextLink } from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
+import { myTabs } from '@/components/my/sections';
+import { MyPage } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../(identity)/form-state';
 import { requireActiveSession } from '../../guard';
@@ -35,7 +34,13 @@ import { setHistoryAction } from './actions';
  * NO LEGAL CLAIM. The page describes what the platform does; it does not say
  * which jurisdiction's rules that satisfies.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'privacy');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -51,13 +56,19 @@ export default async function PrivacyPage({
     localizedPath(locale, '/my/settings/privacy'),
   );
   const t = await getTranslations({ locale, namespace: 'personal' });
+  const my = await getTranslations({ locale, namespace: 'my' });
+  const tabs = {
+    label: my('tabs.label.settings'),
+    items: myTabs(locale, 'settings', 'privacy', (tab) => my(`tabs.${tab}`)),
+  };
   const read = await personalRead('personal-privacy', () =>
     personalisationRuntime().settings.settings({ accountId: session.account.id }),
   );
-  const back = <PersonalLinks label={t('nav.label')} links={settingsLinks(locale, t)} />;
 
   return (
-    <PersonalFrame
+    <MyPage
+      tabs={tabs}
+      measure="reading"
       title={t('privacy.title')}
       description={
         <>
@@ -65,7 +76,6 @@ export default async function PrivacyPage({
           <p className="text-sm">{t('privacy.noLegalClaim')}</p>
         </>
       }
-      back={back}
     >
       {/* ---- History ----------------------------------------------------- */}
 
@@ -259,6 +269,6 @@ export default async function PrivacyPage({
           </TextLink>
         </p>
       </section>
-    </PersonalFrame>
+    </MyPage>
   );
 }

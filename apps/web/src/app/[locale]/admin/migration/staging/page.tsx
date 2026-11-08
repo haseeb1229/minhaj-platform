@@ -43,6 +43,7 @@ import {
   ReviewBadge,
   ValidationBadge,
 } from '../status';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/migration/staging` — the review queue under
@@ -61,7 +62,7 @@ import {
  * every item exactly as a single review — a refused one is listed with its
  * reason, never forced. A reader is offered no act.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminMigration', 'staging.title');
 
 export const dynamic = 'force-dynamic';
 

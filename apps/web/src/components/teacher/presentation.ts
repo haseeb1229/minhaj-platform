@@ -4,10 +4,10 @@ import {
   learningIdSchema,
   REMINDER_LEAD_MINUTES,
   type ClassSessionRecord,
-  type ClassSessionView,
   type ReminderLeadMinutes,
 } from '@minhaj/contracts/learning';
-import { instantsOf, localTimeAt } from '@minhaj/contracts/platform';
+
+import { addDays, dateIn, dayStartIn } from './week';
 
 /**
  * Presentation decisions for the Teacher area — PURE and free of React
@@ -74,8 +74,6 @@ export function readLesson(query: Query): string | null {
  * Time
  * ========================================================================= */
 
-const DAY = 86_400_000;
-
 /** The teacher's display zone: the account's own when it is a real one, else UTC. */
 export function ownZone(timeZone: string | null): string {
   if (timeZone === null || timeZone === '') return 'UTC';
@@ -86,45 +84,17 @@ export function ownZone(timeZone: string | null): string {
   }
 }
 
-/** The calendar date, `YYYY-MM-DD`, of an instant in a zone. */
-export function dateIn(instant: Date, zone: string): string {
-  return localTimeAt(instant, zone).slice(0, 10);
-}
-
 /**
  * The half-open instant range [start, end) of the calendar day that holds
- * `now` in `zone` — a 23-, 24- or 25-hour day, as the zone has it. A midnight
- * a zone skips falls back to the UTC reading of that date, which is the only
- * honest approximation left.
+ * `now` in `zone` — a 23-, 24- or 25-hour day, as the zone has it, beginning
+ * where the clocks skip midnight at the moment they jump.
  */
 export function dayBounds(
   now: Date,
   zone: string,
 ): { readonly from: Date; readonly to: Date } {
   const today = dateIn(now, zone);
-  const [year, month, day] = today.split('-').map(Number) as [number, number, number];
-  const tomorrow = new Date(Date.UTC(year, month - 1, day + 1))
-    .toISOString()
-    .slice(0, 10);
-  const from =
-    instantsOf(`${today}T00:00`, zone)[0] ?? new Date(Date.UTC(year, month - 1, day));
-  const to = instantsOf(`${tomorrow}T00:00`, zone)[0] ?? new Date(from.getTime() + DAY);
-  return { from, to };
-}
-
-/** A page of classes grouped by the calendar day each starts on, in `zone`. */
-export function groupByDay(
-  items: readonly ClassSessionView[],
-  zone: string,
-): readonly { readonly day: string; readonly items: readonly ClassSessionView[] }[] {
-  const groups = new Map<string, ClassSessionView[]>();
-  for (const item of items) {
-    const day = dateIn(item.session.startsAt, zone);
-    const group = groups.get(day);
-    if (group === undefined) groups.set(day, [item]);
-    else group.push(item);
-  }
-  return [...groups.entries()].map(([day, grouped]) => ({ day, items: grouped }));
+  return { from: dayStartIn(today, zone), to: dayStartIn(addDays(today, 1), zone) };
 }
 
 /** One class's start and end as a range in one zone, in the interface locale. */
@@ -138,16 +108,6 @@ export function classRange(
     timeStyle: 'short',
     timeZone: zone,
   }).formatRange(session.startsAt, session.endsAt);
-}
-
-/** A calendar day's heading in one zone. */
-export function dayHeading(day: string, zone: string, locale: Locale): string {
-  const instant = instantsOf(`${day}T12:00`, zone)[0];
-  return instant === undefined
-    ? day
-    : new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeZone: zone }).format(
-        instant,
-      );
 }
 
 /** A zone's own localised name at an instant — how a reader sees daylight saving. */

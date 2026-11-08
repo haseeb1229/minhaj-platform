@@ -6,6 +6,7 @@ import {
   juzPathOf,
   readJuzSegment,
   readQuranOffset,
+  readReadingRequest,
 } from '@/components/quran/presentation';
 import { quranAvailability, quranMetadata, readJuz } from '@/components/quran/read';
 import { JuzPage } from '@/components/quran/reader';
@@ -51,12 +52,14 @@ export default async function JuzRoute({ params, searchParams }: JuzParams) {
   const locale = await requireLocale(params);
   const [availability, juz] = await Promise.all([quranAvailability(), load(params)]);
   if (!availability.active || juz === null) notFound();
+  const query = await searchParams;
   return (
     <JuzPage
       locale={locale}
       availability={availability}
       juz={juz}
-      offset={readQuranOffset(await searchParams)}
+      offset={readQuranOffset(query)}
+      request={readReadingRequest(query)}
     />
   );
 }

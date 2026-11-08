@@ -16,8 +16,9 @@ import { quranReadRuntime } from '@/composition/quran-read';
 import { Pagination } from '@/components/media/parts';
 import { EmptyState, PageHeading, TextLink } from '@/components/ui';
 import { directionOf } from '@/config/locale';
-import { ArabicText, FixtureNotice, QuranFrame, quranTrail } from './parts';
-import { DEFAULT_TEXT_SIZE, ayahPath, offsetPathOf, pageLinks } from './presentation';
+import { CorpusNotice, QuranFrame, quranTrail } from './parts';
+import { ArabicText } from './scripture';
+import { ayahPath, offsetPathOf, pageLinks } from './presentation';
 import { quranAvailability } from './read';
 
 /**
@@ -52,7 +53,7 @@ function TopicAyatList({
 }) {
   const Heading = headingLevel;
   return (
-    <ol aria-label={label} className="flex flex-col">
+    <ol aria-label={label} className="quran-reader flex flex-col">
       {ayat.map((ayah) => {
         const ref = { surah: ayah.surah, ayah: ayah.ayah };
         const key = `${String(ayah.surah)}-${String(ayah.ayah)}`;
@@ -72,7 +73,6 @@ function TopicAyatList({
                   id={`topic-arabic-${key}`}
                   label={t('layer.arabic')}
                   text={ayah.text}
-                  size={DEFAULT_TEXT_SIZE}
                 />
               </div>
             </article>
@@ -172,7 +172,7 @@ export async function QuranTopicSection({
       <h2 id={headingId} className="text-lg font-semibold">
         {heading}
       </h2>
-      <FixtureNotice locale={locale} availability={availability} />
+      <CorpusNotice locale={locale} availability={availability} />
       <TopicAyatList
         locale={locale}
         ayat={page.items.slice(0, HUB_PREVIEW)}

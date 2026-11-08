@@ -16,7 +16,7 @@ import {
 import { supportedTimeZones } from '@minhaj/contracts/platform';
 
 import { ClassTime } from '@/components/live-learning/parts';
-import { Alert, Field, Select, StatusBadge, TextInput, TextLink } from '@/components/ui';
+import { Alert, Field, Select, StatusBadge, TextInput } from '@/components/ui';
 import { identityRuntime } from '@/composition/identity';
 import { pageOffset, queryValue } from '../../shared';
 import { Title, type Copy, type Query } from '../shared';
@@ -222,32 +222,6 @@ export function sessionsHref(
     const encoded = search.toString();
     return encoded === '' ? base : `${base}?${encoded}`;
   };
-}
-
-/** Previous and next pages of a class listing, as links. */
-export function ClassPager({
-  offset,
-  hasMore,
-  hrefFor,
-  label,
-  copy,
-}: {
-  readonly offset: number;
-  readonly hasMore: boolean;
-  readonly hrefFor: (page: number) => string;
-  readonly label: string;
-  readonly copy: Copy;
-}) {
-  if (offset === 0 && !hasMore) return null;
-  const current = offset / CLASS_PAGE + 1;
-  return (
-    <nav className="flex gap-6" aria-label={label}>
-      {offset > 0 ? (
-        <TextLink href={hrefFor(current - 1)}>{copy.t('previous')}</TextLink>
-      ) : null}
-      {hasMore ? <TextLink href={hrefFor(current + 1)}>{copy.t('next')}</TextLink> : null}
-    </nav>
-  );
 }
 
 /** A page-only address with one fixed query, for the scopes listing. */

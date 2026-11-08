@@ -37,6 +37,7 @@ import {
   scholarlyPath,
 } from '@/components/library/scholarly-presentation';
 import { ActionForm } from '../../(identity)/form-state';
+import { AdminPager } from '../pager';
 import { pageOffset, PAGE_SIZE, queryValue } from '../shared';
 import { saveScholarly } from './actions';
 import { libraryCopy } from './forms';
@@ -181,31 +182,6 @@ function RecordTable({
   );
 }
 
-function Pager({
-  offset,
-  hasMore,
-  hrefFor,
-  label,
-  copy,
-}: {
-  readonly offset: number;
-  readonly hasMore: boolean;
-  readonly hrefFor: (page: number) => string;
-  readonly label: string;
-  readonly copy: LibraryCopy;
-}) {
-  if (offset === 0 && !hasMore) return null;
-  const current = offset / PAGE_SIZE + 1;
-  return (
-    <nav className="flex gap-6" aria-label={label}>
-      {offset > 0 ? (
-        <TextLink href={hrefFor(current - 1)}>{copy.t('previous')}</TextLink>
-      ) : null}
-      {hasMore ? <TextLink href={hrefFor(current + 1)}>{copy.t('next')}</TextLink> : null}
-    </nav>
-  );
-}
-
 /** A narrowing GET form for the contributor choices, beside — never inside — a save form. */
 function ReferenceSearch({
   query,
@@ -320,12 +296,14 @@ export async function ScholarlyDirectory({
         hrefFor={(id) => `${base}/${id}`}
         copy={copy}
       />
-      <Pager
-        offset={offset}
-        hasMore={page.hasMore}
-        hrefFor={pageHref}
+      <AdminPager
         label={title}
-        copy={copy}
+        offset={offset}
+        pageSize={PAGE_SIZE}
+        more={page.hasMore}
+        href={pageHref}
+        previousLabel={t('previous')}
+        nextLabel={t('next')}
       />
 
       <Panel>
@@ -429,14 +407,16 @@ export async function ScholarlyEditor({
             hrefFor={(issueId) => `${base}/${record.id}/issues/${issueId}`}
             copy={copy}
           />
-          <Pager
+          <AdminPager
+            label={t('scholarly.issues')}
             offset={offset}
-            hasMore={issues.hasMore}
-            hrefFor={(page) =>
+            pageSize={PAGE_SIZE}
+            more={issues.hasMore}
+            href={(page) =>
               `${base}/${record.id}${page > 1 ? `?page=${String(page)}` : ''}`
             }
-            label={t('scholarly.issues')}
-            copy={copy}
+            previousLabel={t('previous')}
+            nextLabel={t('next')}
           />
           <Panel>
             <div className="flex flex-col gap-4">

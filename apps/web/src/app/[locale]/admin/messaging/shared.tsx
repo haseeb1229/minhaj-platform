@@ -5,7 +5,7 @@ import type { PermissionKey } from '@minhaj/contracts/identity';
 import type { ReportSummary } from '@minhaj/contracts/messaging';
 
 import { withQuery } from '@/components/messaging/presentation';
-import { FilterLink, StatusBadge, TextLink } from '@/components/ui';
+import { FilterLink, Pager, StatusBadge } from '@/components/ui';
 
 /**
  * What every Messaging administration screen shares (Phase 24): which key
@@ -99,19 +99,15 @@ export function QueuePager({
   readonly next: string | null;
   readonly copy: AdminMessagingCopy;
 }) {
-  if (cursor === null && next === null) return null;
   const state = filter === 'open' ? null : filter;
   return (
-    <nav aria-label={copy.t('pages')} className="flex flex-wrap gap-x-6 gap-y-2">
-      {cursor === null ? null : (
-        <TextLink href={withQuery(base, { state })}>{copy.t('first')}</TextLink>
-      )}
-      {next === null ? null : (
-        <TextLink href={withQuery(base, { state, cursor: next })}>
-          {copy.t('next')}
-        </TextLink>
-      )}
-    </nav>
+    <Pager
+      label={copy.t('pages')}
+      previous={cursor === null ? null : withQuery(base, { state })}
+      next={next === null ? null : withQuery(base, { state, cursor: next })}
+      previousLabel={copy.t('first')}
+      nextLabel={copy.t('next')}
+    />
   );
 }
 

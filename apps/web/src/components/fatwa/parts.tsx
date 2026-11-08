@@ -13,9 +13,11 @@ import {
   Alert,
   Breadcrumbs,
   Container,
-  PageHero,
+  Hero,
+  Icon,
   SectionHeader,
 } from '@/components/ui';
+import { OFFICIAL_FATWA_SITE } from './official-site';
 import { fatwaSectionPath } from './presentation';
 import { isFatwaFixture } from './read';
 
@@ -239,18 +241,79 @@ export async function FatwaUnavailable({
   return (
     <>
       <FatwaLandingTop locale={locale} availability={null} />
-      <PageHero title={t('title')} lede={t('description')}>
-        <Alert tone="info">{t('unavailable.body')}</Alert>
+      <Hero title={t('title')} lede={t('description')}>
+        <p className="flex max-w-[var(--measure-prose)] items-start gap-2 text-sm text-foreground-muted">
+          <Icon name="info" size={16} className="mt-1 text-accent" />
+          <span>{t('unavailable.body')}</span>
+        </p>
         {ways}
-      </PageHero>
+      </Hero>
       <Container>
-        <div className="py-[var(--space-section)]">
+        <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
+          <section aria-labelledby="fatwa-offer" className="flex flex-col gap-6">
+            <SectionHeader id="fatwa-offer" heading={t('unavailable.offerHeading')} />
+            <ul className="grid list-none grid-cols-1 gap-x-10 gap-y-8 p-0 md:grid-cols-3">
+              {OFFER.map(({ key, icon }) => (
+                <li key={key} className="flex min-w-0 flex-col gap-2">
+                  <Icon name={icon} size={24} className="text-accent" />
+                  <h3 className="text-subheading font-semibold">
+                    {t(`unavailable.offer.${key}.title`)}
+                  </h3>
+                  <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
+                    {t(`unavailable.offer.${key}.body`)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section
+            aria-labelledby="fatwa-ask"
+            className="grid grid-cols-1 gap-x-10 gap-y-3 border-t border-border pt-8 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]"
+          >
+            <h2 id="fatwa-ask" className="text-heading font-semibold text-balance">
+              {t('unavailable.askHeading')}
+            </h2>
+            <p className="reading-face max-w-[var(--measure-prose)] text-lede">
+              {t('unavailable.askBody')}
+            </p>
+          </section>
+
+          <section
+            aria-labelledby="fatwa-official"
+            className="flex flex-col gap-3 rounded-panel bg-surface-sunken px-6 py-6 sm:flex-row sm:items-center sm:justify-between sm:gap-8"
+          >
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <h2 id="fatwa-official" className="text-subheading font-semibold">
+                {t('unavailable.officialHeading')}
+              </h2>
+              <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
+                {t('unavailable.officialBody')}
+              </p>
+            </div>
+            <a
+              href={OFFICIAL_FATWA_SITE}
+              rel="external noopener noreferrer"
+              className="inline-flex min-h-11 shrink-0 items-center gap-2 self-start rounded-control border border-border-strong bg-surface-raised px-4 text-sm font-semibold text-foreground no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface sm:self-auto"
+            >
+              {t('unavailable.officialLink')}
+              <Icon name="external" size={16} className="text-foreground-muted" />
+            </a>
+          </section>
+
           <FatwaPrinciples locale={locale} />
         </div>
       </Container>
     </>
   );
 }
+
+/** What the service will hold, in the order a visitor meets it. */
+const OFFER = Object.freeze([
+  { key: 'rulings', icon: 'book' },
+  { key: 'browse', icon: 'list' },
+  { key: 'ask', icon: 'message' },
+] as const);
 
 /** A date, in the interface locale, never shifted by a zone, machine-readable. */
 export function FatwaDate({

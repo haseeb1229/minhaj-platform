@@ -1,11 +1,13 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { LearningTitle } from '@/components/my-learning/parts';
 import { pickLabel } from '@/components/my-learning/presentation';
 import { learningRead } from '@/components/my-learning/read';
-import { NotActivated, TeacherFrame } from '@/components/teacher/parts';
-import { Alert, EmptyState, Panel, TextLink } from '@/components/ui';
+import { teacherPageMetadata } from '@/components/teacher/metadata';
+import { NoScope, NotActivated, TeacherFrame } from '@/components/teacher/parts';
+import { Alert, Icon } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
 import { requireLocale } from '@/config/route-locale';
 import { requireTeacher } from '../guard';
@@ -16,7 +18,13 @@ import { requireTeacher } from '../guard';
  * shared drive and no file store behind this page, and it says so plainly
  * rather than presenting an empty shelf as a feature.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return teacherPageMetadata(params, 'resources');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -43,41 +51,50 @@ export default async function ResourcesPage({
       {!read.ok ? (
         <Alert tone="error">{t('failure.load')}</Alert>
       ) : read.value.length === 0 ? (
-        <EmptyState>{t('resources.empty')}</EmptyState>
+        <NoScope locale={locale} t={t} />
       ) : (
-        <ul className="flex flex-col gap-3" aria-label={t('resources.title')}>
+        <ul
+          className="rounded-panel border border-border bg-surface-raised px-4 shadow-panel sm:px-5"
+          aria-label={t('resources.title')}
+        >
           {read.value.map(({ course, scope }) => (
-            <Panel key={scope.id} as="li">
-              <div className="flex min-w-0 flex-col gap-2">
-                <h2 className="font-semibold">
-                  <LearningTitle
-                    labels={course.labels}
-                    primaryLocale={course.primaryLocale}
-                    locale={locale}
-                  />
-                </h2>
-                <p className="text-sm">
-                  {t('courses.syllabusSize', {
-                    modules: String(course.modules),
-                    lessons: String(course.lessons),
-                  })}
-                </p>
-                <p>
-                  <TextLink
-                    href={localizedPath(
-                      locale,
-                      `/teacher/courses/${encodeURIComponent(course.id)}/materials`,
-                    )}
-                  >
-                    {t('resources.open', {
-                      title:
-                        pickLabel(course.labels, locale, course.primaryLocale)?.title ??
-                        course.slug,
+            <li
+              key={scope.id}
+              className="flex flex-col gap-2 border-b border-border py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+            >
+              <div className="flex min-w-0 items-start gap-3">
+                <Icon name="book" size={24} className="mt-0.5 shrink-0 text-accent" />
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <h2 className="font-semibold">
+                    <LearningTitle
+                      labels={course.labels}
+                      primaryLocale={course.primaryLocale}
+                      locale={locale}
+                    />
+                  </h2>
+                  <p className="text-sm text-foreground-muted">
+                    {t('courses.syllabusSize', {
+                      modules: String(course.modules),
+                      lessons: String(course.lessons),
                     })}
-                  </TextLink>
-                </p>
+                  </p>
+                </div>
               </div>
-            </Panel>
+              <a
+                href={localizedPath(
+                  locale,
+                  `/teacher/courses/${encodeURIComponent(course.id)}/materials`,
+                )}
+                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 text-sm font-semibold text-action underline-offset-4 hover:underline"
+              >
+                {t('resources.open', {
+                  title:
+                    pickLabel(course.labels, locale, course.primaryLocale)?.title ??
+                    course.slug,
+                })}
+                <Icon name="arrow-end" size={16} />
+              </a>
+            </li>
           ))}
         </ul>
       )}

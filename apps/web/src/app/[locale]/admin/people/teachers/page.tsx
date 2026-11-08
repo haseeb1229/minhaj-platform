@@ -1,6 +1,7 @@
 import type { ProfileKind } from '@minhaj/contracts/people';
 
 import { FacetDirectory } from '../facet-directory';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/people/teachers` — the teacher directory
@@ -17,7 +18,7 @@ import { FacetDirectory } from '../facet-directory';
  * module it renders — an export on an imported component is not configuration,
  * it is a value nothing reads.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('admin', 'people.facets.teacher.title');
 export const dynamic = 'force-dynamic';
 
 const KIND: ProfileKind = 'teacher';

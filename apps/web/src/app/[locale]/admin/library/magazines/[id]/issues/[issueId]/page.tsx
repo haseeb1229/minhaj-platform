@@ -1,9 +1,11 @@
 import { IssueEditor } from '../../../../scholarly';
+import { adminPageMetadata } from '../../../../../metadata';
 
 /**
  * `/{locale}/admin/library/magazines/{id}/issues/{issueId}` — editing one issue
  * beneath its Magazine. An issue addressed under another Magazine is a 404.
  */
+export const generateMetadata = adminPageMetadata('admin', 'titles.library.issue');
 export const dynamic = 'force-dynamic';
 
 export default function MagazineIssueEditor(props: {

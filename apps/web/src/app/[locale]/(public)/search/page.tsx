@@ -12,8 +12,11 @@ import {
 } from '@minhaj/contracts/search';
 import type { SearchFormState, SearchOutcome } from '@minhaj/search';
 
+import { readPresence } from '@/composition/presence';
 import { searchReadRuntime } from '@/composition/search-read';
 import { taxonomyRuntime } from '@/composition/taxonomy';
+import { contentLanguageBadge } from '@/components/content-language';
+import { facetCount, facetKinds } from '@/components/search/facets';
 import { Highlighted } from '@/components/search/highlighted';
 import { hadithHitKey, type HadithHitDisplay } from '@/components/search/hadith-hit';
 import { currentHadithHitText } from '@/components/search/hadith-hit-text';
@@ -22,17 +25,21 @@ import { currentFatwaHitText } from '@/components/search/fatwa-hit-text';
 import { quranHitKey, type QuranHitDisplay } from '@/components/search/quran-hit';
 import { currentQuranHitText } from '@/components/search/quran-hit-text';
 import {
-  ActionLink,
   Alert,
+  Badge,
   Breadcrumbs,
   Button,
   CardGrid,
   Container,
   EmptyState,
   Field,
+  LanguageBadge,
   LinkCard,
+  LinkTabs,
+  ListRow,
   MetaRow,
   PageHeading,
+  Pager,
   SectionHeader,
   Select,
   TextInput,
@@ -41,6 +48,7 @@ import {
 import { publicIndexingEnabled } from '@/config/indexing';
 import { directionOf, isSupportedLocale } from '@/config/locale';
 import { requireLocale } from '@/config/route-locale';
+import { hasSignal, type PresenceSnapshot } from '@/shell/presence';
 import { pathFor, requireRoute } from '@/shell/registry';
 
 /**
@@ -123,10 +131,11 @@ export default async function SearchPage({ params, searchParams }: SearchParams)
   const t = await getTranslations({ locale, namespace: 'search' });
   const shell = await getTranslations({ locale, namespace: 'shell' });
 
-  const [outcome, topics, languages] = await Promise.all([
+  const [outcome, topics, languages, presence] = await Promise.all([
     searchReadRuntime().search(raw, { locale }),
     taxonomyRuntime().taxonomy.listTree({ locale, includeArchived: false }),
     taxonomyRuntime().taxonomy.listLanguages({ includeRetired: false }),
+    readPresence(),
   ]);
 
   const { form } = outcome;
@@ -341,7 +350,9 @@ export default async function SearchPage({ params, searchParams }: SearchParams)
             quranText={quranText}
             hadithText={hadithText}
             fatwaText={fatwaText}
+            presence={presence}
             t={t}
+            shell={shell}
             href={(overrides) => searchHref(locale, form, overrides)}
           />
         </div>
@@ -370,17 +381,61 @@ function QuietLink({
   );
 }
 
-/** The two delivered places to browse instead of search, named by where they go. */
-function BrowseLinks({ locale, t }: { readonly locale: Locale; readonly t: Translate }) {
+type ShellTranslate = Awaited<ReturnType<typeof getTranslations<'shell'>>>;
+
+/**
+ * Where to go when a search finds nothing (R2): the platform's main areas that
+ * HAVE published content, each named by where it goes with one line saying
+ * what is there — then topics, which always exist. Never an empty destination.
+ */
+const BROWSE: readonly {
+  readonly id: 'quran' | 'library' | 'watch' | 'news';
+  readonly route: string;
+  readonly signal: 'quran' | 'library' | 'watch' | 'news';
+}[] = [
+  { id: 'quran', route: 'quran', signal: 'quran' },
+  { id: 'library', route: 'library', signal: 'library' },
+  { id: 'watch', route: 'watch', signal: 'watch' },
+  { id: 'news', route: 'news-events', signal: 'news' },
+];
+
+function BrowseInstead({
+  locale,
+  presence,
+  t,
+  shell,
+}: {
+  readonly locale: Locale;
+  readonly presence: PresenceSnapshot;
+  readonly t: Translate;
+  readonly shell: ShellTranslate;
+}) {
+  const present = BROWSE.filter((entry) => hasSignal(presence, entry.signal));
   return (
-    <span className="mt-3 flex flex-wrap justify-center gap-x-6">
-      <QuietLink href={pathFor(locale, requireRoute('topics'))}>
-        {t('browseTopics')}
-      </QuietLink>
-      <QuietLink href={pathFor(locale, requireRoute('library'))}>
-        {t('browseLibrary')}
-      </QuietLink>
-    </span>
+    <section aria-labelledby="search-browse" className="flex max-w-3xl flex-col gap-1">
+      <h3 id="search-browse" className="text-subheading font-semibold">
+        {t('tryInstead')}
+      </h3>
+      <ul className="flex list-none flex-col p-0">
+        {present.map((entry) => (
+          <ListRow
+            key={entry.id}
+            href={pathFor(locale, requireRoute(entry.route))}
+            title={shell(`nav.items.${entry.id}.title` as 'nav.items.quran.title')}
+            description={shell(
+              `nav.items.${entry.id}.description` as 'nav.items.quran.description',
+            )}
+            headingLevel="p"
+          />
+        ))}
+        <ListRow
+          href={pathFor(locale, requireRoute('topics'))}
+          title={t('browseTopics')}
+          description={t('start.topics')}
+          headingLevel="p"
+        />
+      </ul>
+    </section>
   );
 }
 
@@ -391,7 +446,9 @@ function SearchResults({
   quranText,
   hadithText,
   fatwaText,
+  presence,
   t,
+  shell,
   href,
 }: {
   readonly outcome: SearchOutcome;
@@ -400,7 +457,9 @@ function SearchResults({
   readonly quranText: ReadonlyMap<string, QuranHitDisplay>;
   readonly hadithText: ReadonlyMap<string, HadithHitDisplay>;
   readonly fatwaText: ReadonlyMap<string, FatwaHitDisplay>;
+  readonly presence: PresenceSnapshot;
   readonly t: Translate;
+  readonly shell: ShellTranslate;
   readonly href: (overrides: Partial<SearchFormState> & { page?: number }) => string;
 }) {
   switch (outcome.state) {
@@ -460,7 +519,7 @@ function SearchResults({
             {t('resultsLabel')}
           </h2>
 
-          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-border pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
             <p role="status" className="text-sm font-medium">
               {results.capped
                 ? t('resultsCapped', { count: SEARCH_RESULT_CEILING, query })
@@ -478,19 +537,50 @@ function SearchResults({
             )}
           </div>
 
+          {/* The result types, as sibling views of this one query: each is its
+              own address, the current one marked and carrying the total. */}
+          <LinkTabs
+            label={t('facets')}
+            tabs={[
+              {
+                href: href({ type: '' }),
+                text: t('allTypes'),
+                current: form.type === '',
+                ...(form.type === ''
+                  ? { count: facetCount(results, SEARCH_RESULT_CEILING, locale) }
+                  : {}),
+              },
+              ...facetKinds(presence.signals, form.type).map((kind) => ({
+                href: href({ type: kind }),
+                text: t(`kinds.${kind}`),
+                current: form.type === kind,
+                ...(form.type === kind
+                  ? { count: facetCount(results, SEARCH_RESULT_CEILING, locale) }
+                  : {}),
+              })),
+            ]}
+          />
+
           {results.hits.length === 0 ? (
             results.page > 1 ? (
               <EmptyState>
                 {t('pastEnd')} <TextLink href={href({})}>{t('firstPage')}</TextLink>
               </EmptyState>
             ) : (
-              <EmptyState>
-                <span className="block font-medium text-foreground">
-                  {t('noResults', { query })}
-                </span>
-                <span className="mt-1 block">{t('noResultsHelp')}</span>
-                <BrowseLinks locale={locale} t={t} />
-              </EmptyState>
+              <div className="flex flex-col gap-8">
+                <EmptyState
+                  icon="search"
+                  title={t('noResults', { query })}
+                  {...(form.type === ''
+                    ? {}
+                    : {
+                        action: { href: href({ type: '' }), text: t('searchAllTypes') },
+                      })}
+                >
+                  {t('noResultsHelp')}
+                </EmptyState>
+                <BrowseInstead locale={locale} presence={presence} t={t} shell={shell} />
+              </div>
             )
           ) : (
             <ol
@@ -513,29 +603,27 @@ function SearchResults({
             </ol>
           )}
 
-          {results.pageCount > 1 && results.hits.length > 0 ? (
-            <nav
-              aria-label={t('pagination')}
-              className="flex max-w-3xl flex-wrap items-center justify-between gap-4 border-t border-border pt-5"
-            >
-              <span className="min-w-0">
-                {results.page > 1 ? (
-                  <ActionLink href={href({ page: results.page - 1 })} tone="secondary">
-                    {t('previous')}
-                  </ActionLink>
-                ) : null}
-              </span>
-              <span aria-current="page" className="text-sm text-foreground-muted">
-                {t('pageStatus', { page: results.page, pages: results.pageCount })}
-              </span>
-              <span className="min-w-0">
-                {results.page < results.pageCount ? (
-                  <ActionLink href={href({ page: results.page + 1 })} tone="secondary">
-                    {t('next')}
-                  </ActionLink>
-                ) : null}
-              </span>
-            </nav>
+          {results.hits.length > 0 ? (
+            <div className="max-w-3xl">
+              <Pager
+                label={t('pagination')}
+                previous={results.page > 1 ? href({ page: results.page - 1 }) : null}
+                next={
+                  results.page < results.pageCount
+                    ? href({ page: results.page + 1 })
+                    : null
+                }
+                previousLabel={t('previous')}
+                nextLabel={t('next')}
+                pages={{
+                  current: results.page,
+                  total: results.pageCount,
+                  href: (page) => href({ page }),
+                  label: (page) => t('pageLabel', { page }),
+                  format: (page) => new Intl.NumberFormat(locale).format(page),
+                }}
+              />
+            </div>
           ) : null}
         </section>
       );
@@ -596,16 +684,16 @@ function ResultItem({
     (isSupportedLocale(textLanguage) ? directionOf(textLanguage) : 'ltr');
   const contentLanguageCode =
     current === undefined ? hit.contentLanguage : current.language;
-  const contentLanguage =
-    contentLanguageCode === null
-      ? null
-      : (languageNames.get(contentLanguageCode) ?? null);
+  // The content's language, said in the interface language, only when it is
+  // not the interface language (F10).
+  const languageBadge = contentLanguageBadge(contentLanguageCode ?? textLanguage, locale);
 
   return (
     <li className="min-w-0 border-b border-border py-5 first:pt-0 last:border-b-0">
       <article className="flex min-w-0 flex-col gap-2">
-        <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
-          {t(`kinds.${hit.kind}`)}
+        <p className="flex flex-wrap items-center gap-1.5">
+          <Badge>{t(`kinds.${hit.kind}`)}</Badge>
+          {languageBadge === undefined ? null : <LanguageBadge {...languageBadge} />}
         </p>
         <h3
           className="text-subheading font-semibold break-words"
@@ -621,9 +709,12 @@ function ResultItem({
         </h3>
         {summary === '' ? null : (
           <p
-            className="max-w-[var(--measure-prose)] text-sm break-words text-foreground-muted"
+            className={`max-w-[var(--measure-prose)] text-sm break-words text-foreground-muted${
+              quran?.layer === 'arabic' ? ' quran-text' : ''
+            }`}
             lang={textLanguage}
             dir={direction}
+            {...(quran?.layer === 'arabic' ? { translate: 'no' as const } : {})}
           >
             <Highlighted text={summary} query={query} />
           </p>
@@ -643,9 +734,6 @@ function ResultItem({
               : hadith.layer === 'original'
                 ? t('hadithOriginal')
                 : t('hadithTranslation', { language: language?.name ?? textLanguage }),
-            contentLanguage === null ? null : (
-              <span lang={contentLanguageCode ?? undefined}>{contentLanguage.name}</span>
-            ),
             hit.year === null ? null : t('published', { year: String(hit.year) }),
           ]}
         />

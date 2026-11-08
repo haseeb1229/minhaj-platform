@@ -29,7 +29,11 @@ export function AccountEntry({
   readonly signInLabel: string;
   /** Screen-reader suffix announcing the signed-in state. */
   readonly signedInLabel: string;
-  readonly variant: 'bar' | 'drawer';
+  /**
+   * `strip`: the laptop header's utility strip, with its words. `icon`: the
+   * phone header's icon, named by the same words for assistive technology.
+   */
+  readonly variant: 'strip' | 'icon';
 }) {
   const [state, setState] = useState<State>('unknown');
 
@@ -57,10 +61,11 @@ export function AccountEntry({
   const href = signedOut ? signInHref : myHref;
   const label = signedOut ? signInLabel : myLabel;
 
-  const base =
-    variant === 'bar'
-      ? 'inline-flex min-h-11 items-center gap-2 rounded-control px-3 text-sm font-semibold no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken'
-      : 'flex min-h-12 items-center justify-center gap-2 rounded-control border border-border-strong px-4 text-base font-semibold no-underline hover:bg-surface-sunken';
+  const base = {
+    strip:
+      'inline-flex min-h-9 items-center gap-1.5 rounded-control px-2 text-sm font-semibold no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken',
+    icon: 'inline-flex size-11 items-center justify-center rounded-control no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken',
+  }[variant];
 
   return (
     <a href={href} className={`${base} text-foreground`}>
@@ -89,7 +94,7 @@ export function AccountEntry({
           <circle cx="18.5" cy="6" r="3" className="fill-action" stroke="none" />
         ) : null}
       </svg>
-      <span>{label}</span>
+      <span className={variant === 'icon' ? 'sr-only' : undefined}>{label}</span>
       {state === 'signed-in' ? <span className="sr-only">{signedInLabel}</span> : null}
     </a>
   );

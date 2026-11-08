@@ -30,6 +30,7 @@ import {
   reportTarget,
   type Query,
 } from '../shared';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * Every report, open or decided (ROUTE_MAP.md §7; DELIVERY_PLAN.md Phase 24)
@@ -40,7 +41,7 @@ import {
  * the report's own page as an audited act. The moderation queue shows the open
  * reports oldest first; this is the full record, including decided ones.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminMessaging', 'reports.title');
 
 export const dynamic = 'force-dynamic';
 

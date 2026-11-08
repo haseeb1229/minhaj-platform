@@ -34,6 +34,7 @@ import {
   setTopicTranslationAction,
 } from '../actions';
 import { taxonomyCopy } from '../copy';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * Canonical topic administration.
@@ -56,7 +57,7 @@ import { taxonomyCopy } from '../copy';
  * deliberately; a surface that quietly rendered the fallback everywhere would
  * turn a known omission into one nobody notices.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('admin', 'taxonomy.topics.title');
 export const dynamic = 'force-dynamic';
 
 /** Every interface locale a topic may be translated into. */

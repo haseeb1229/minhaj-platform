@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { requireLocale } from '@/config/route-locale';
 import { ContentDirectory } from '../content';
+import { adminPageMetadata } from '../../metadata';
+
+export const generateMetadata = adminPageMetadata('editorial', 'news');
 export default async function Page({
   params,
   searchParams,

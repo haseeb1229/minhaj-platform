@@ -181,6 +181,14 @@ test.describe('an anonymous visitor reads the Library', () => {
     await expect(
       page.getByRole('link', { name: 'Synthetic browser proof work' }),
     ).toBeVisible();
+
+    // R2: the reader's order is a choice too, and never admits a draft.
+    await page.goto('/library/books?sort=newest');
+    await expect(page.locator('#filter-sort')).toHaveValue('newest');
+    await expect(
+      page.getByRole('link', { name: 'Synthetic browser proof work' }),
+    ).toBeVisible();
+    await expect(page.getByText('Synthetic hidden draft work')).toHaveCount(0);
   });
 
   test('shows the Work with truthful editions, translation and availability', async ({

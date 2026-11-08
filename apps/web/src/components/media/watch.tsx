@@ -17,48 +17,52 @@ import {
 import type { TopicView } from '@minhaj/contracts/taxonomy';
 
 import { mediaReadRuntime } from '@/composition/media-read';
-import {
-  contentLanguages,
-  referenceNames,
-  type ContentLanguage,
-} from '@/composition/public-references';
+import { contentLanguages, referenceNames } from '@/composition/public-references';
 import { taxonomyRuntime } from '@/composition/taxonomy';
+import {
+  contentLanguageBadge,
+  interfaceLanguageFirst,
+} from '@/components/content-language';
 import { paragraphsOf } from '@/components/library/scholarly-presentation';
 import {
   ActionLink,
   Alert,
+  Badge,
+  Breadcrumbs,
   Button,
   CardGrid,
   Container,
   DetailRow,
   EmptyState,
   Field,
-  FilterLink,
-  LinkCard,
+  Hero,
+  Icon,
+  LanguageBadge,
+  LinkTabs,
+  ListRow,
+  MediaCard,
   MetaRow,
-  PageHero,
   Panel,
+  Poster,
   Prose,
   SectionHeader,
   Select,
-  StatusBadge,
   TextLink,
   TopicChips,
 } from '@/components/ui';
+import { Shelf } from '@/components/ui/shelf';
 import { absoluteUrl } from '@/config/origin';
 import { directionOf } from '@/config/locale';
 import { isContentIndexable, serializeStructuredData } from '@/seo/metadata';
 import {
   Duration,
-  EyebrowWords,
   formatDate,
-  MEDIA_CARD,
-  MEDIA_CARD_LINK,
   MediaPageHeader,
   Pagination as MediaPagination,
 } from './parts';
 import { VideoPlayer } from './player';
 import {
+  formatOfView,
   mediaLabel,
   mediaLocales,
   offsetPath,
@@ -108,182 +112,123 @@ function providerName(t: WatchTranslator, provider: VideoRecord['provider']): st
  * ========================================================================= */
 
 /**
- * The poster. DECORATIVE AND FIRST-PARTY: a 16:9 ink panel with a play mark,
- * drawn inline, so a grid of twenty-four videos makes no request to anybody and
- * every card keeps the same shape whatever its title. A video the provider no
- * longer serves gets a muted poster, so the grid does not promise playback.
- * The play mark is not mirrored in a right-to-left page: it is a media symbol,
- * not a direction.
- *
- * PHASE 30-R — A FIRST-PARTY PICTURE WHEN THE VIDEO HAS ONE. A Video may carry
- * its own poster: our stored copy of the image the organisation published for
- * it, served by Media's own route. It sits under the same play mark, cropped to
- * the same 16:9 frame with its measured box reserved, lazy below the fold —
- * and it still makes no request to the video's provider.
+ * A Video's picture, as the image primitives take it: our own stored copy of
+ * the poster the organisation published for it (Phase 30-R), at Media's own
+ * route, with its measured size — or null, and the card is text-first. NEVER a
+ * provider thumbnail: painting a card contacts nobody but this platform.
  */
-function Poster({
-  muted = false,
-  videoId,
-  poster = null,
-}: {
-  readonly muted?: boolean;
-  readonly videoId: string;
-  readonly poster?: VideoPoster | null;
-}) {
-  return (
-    <div
-      aria-hidden="true"
-      className={`relative flex aspect-video w-full items-center justify-center overflow-hidden ${
-        muted ? 'bg-surface-sunken text-foreground-muted' : 'bg-ink text-ink-accent'
-      }`}
-    >
-      {poster === null ? null : (
-        <PosterPicture
-          videoId={videoId}
-          poster={poster}
-          className={muted ? 'opacity-40 grayscale' : ''}
-        />
-      )}
-      <span
-        className={`relative flex size-14 items-center justify-center rounded-full border transition-colors duration-[var(--duration-fast)] ${
-          muted
-            ? 'border-border-strong'
-            : 'border-ink-border bg-ink-raised group-hover:border-ink-accent'
-        }`}
-      >
-        <svg viewBox="0 0 24 24" className="size-6" fill="currentColor">
-          <path d="M9 6.5v11l9-5.5z" />
-        </svg>
-      </span>
-    </div>
-  );
+function posterImage(video: {
+  readonly id: string;
+  readonly poster: VideoPoster | null;
+}): { readonly path: string; readonly width: number; readonly height: number } | null {
+  return video.poster === null
+    ? null
+    : {
+        path: videoPosterPath(video.id, video.poster.assetId),
+        width: video.poster.width,
+        height: video.poster.height,
+      };
+}
+
+/** The people named on a page of Videos, in their order, as plain names. */
+function speakerNames(video: VideoListing, people: NameMap): string {
+  return video.speakerIds
+    .flatMap((id) => {
+      const person = people.get(id);
+      return person === undefined ? [] : [person.name];
+    })
+    .join(' · ');
 }
 
 /**
- * The ONE place Watch sets an image source (Phase 30-R): a Video's first-party
- * poster at Media's own two-allow route, derived from the Video and asset
- * identifiers — never another origin, never a literal. Decorative: the card or
- * page beside it names the Video. Cropped to its 16:9 frame, box reserved.
+ * ONE VIDEO AS A POSTER CARD (R2): the 16:9 poster edge to edge with its kind
+ * on the picture and its running time on the corner, then the title in its own
+ * language, then who speaks and when. The card is one link. A Video in another
+ * language than the interface says which (F10); one the provider no longer
+ * serves says so on its picture, so the card never promises playback.
  */
-function PosterPicture({
-  videoId,
-  poster,
-  eager = false,
-  className = '',
+function VideoCard({
+  locale,
+  video,
+  people,
+  t,
+  headingLevel = 'h2',
+  episode = false,
+  priority = false,
+  sizes = '(min-width: 64rem) 22rem, (min-width: 40rem) 45vw, 100vw',
 }: {
-  readonly videoId: string;
-  readonly poster: VideoPoster;
-  readonly eager?: boolean;
-  readonly className?: string;
+  readonly locale: Locale;
+  readonly video: VideoListing;
+  readonly people: NameMap;
+  readonly t: WatchTranslator;
+  readonly headingLevel?: 'h2' | 'h3';
+  /** Show the episode number, for a Series page. */
+  readonly episode?: boolean;
+  readonly priority?: boolean;
+  readonly sizes?: string;
 }) {
+  const label = mediaLabel(video, locale);
+  const language = contentLanguageBadge(video.languageCode, locale);
+  const kind =
+    video.availability === 'unavailable'
+      ? t('unavailable')
+      : video.format === null
+        ? undefined
+        : t(`format.${video.format}`);
+  const speakers = speakerNames(video, people);
+
   return (
-    <img
-      src={videoPosterPath(videoId, poster.assetId)}
-      width={poster.width}
-      height={poster.height}
-      alt=""
-      loading={eager ? 'eager' : 'lazy'}
-      decoding="async"
-      className={`absolute inset-0 size-full object-cover ${className}`}
+    <MediaCard
+      href={videoPath(locale, video.slug)}
+      title={label.title}
+      lang={label.locale}
+      dir={directionOf(label.locale)}
+      headingLevel={headingLevel}
+      image={posterImage(video)}
+      aspect="poster"
+      sizes={sizes}
+      priority={priority}
+      {...(kind === undefined ? {} : { type: kind })}
+      {...(language === undefined ? {} : { language })}
+      {...(video.durationSeconds === null
+        ? {}
+        : { overlay: <Duration seconds={video.durationSeconds} /> })}
+      meta={[
+        episode && video.seriesPosition !== null
+          ? t('fact.episode', { number: video.seriesPosition })
+          : null,
+        speakers === '' ? null : (
+          <span dir="auto">
+            <span className="sr-only">{t('speakers')}: </span>
+            {speakers}
+          </span>
+        ),
+        video.publishedOn === null ? null : (
+          <time dateTime={video.publishedOn}>
+            {formatDate(video.publishedOn, locale)}
+          </time>
+        ),
+      ]}
     />
   );
 }
 
 /** The grid Media cards sit in: one column on a phone, up to three on a laptop. */
 const VIDEO_GRID =
-  'grid list-none grid-cols-1 gap-x-5 gap-y-6 p-0 *:min-w-0 sm:grid-cols-2 lg:grid-cols-3';
+  'grid list-none grid-cols-1 gap-x-6 gap-y-9 p-0 *:min-w-0 sm:grid-cols-2 lg:grid-cols-3';
 
-function VideoCard({
-  locale,
-  video,
-  people,
-  languages,
-  t,
-  headingLevel = 'h2',
-  episode = false,
-}: {
-  readonly locale: Locale;
-  readonly video: VideoListing;
-  readonly people: NameMap;
-  readonly languages: ReadonlyMap<string, ContentLanguage>;
-  readonly t: WatchTranslator;
-  readonly headingLevel?: 'h2' | 'h3';
-  /** Show the episode number, for a Series page. */
-  readonly episode?: boolean;
-}) {
-  const label = mediaLabel(video, locale);
-  const Heading = headingLevel;
-  const language = languages.get(video.languageCode);
-  const speakers = video.speakerIds.flatMap((id) => {
-    const person = people.get(id);
-    return person === undefined ? [] : [person.name];
-  });
-
-  const unavailable = video.availability === 'unavailable';
-  const eyebrow = [
-    episode && video.seriesPosition !== null
-      ? t('fact.episode', { number: video.seriesPosition })
-      : null,
-    video.format === null ? null : t(`format.${video.format}`),
-  ];
-
-  return (
-    <li className={MEDIA_CARD}>
-      <Poster muted={unavailable} videoId={video.id} poster={video.poster} />
-      <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-4">
-        {eyebrow.every((word) => word === null) && !unavailable ? null : (
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-caption flex flex-wrap items-center gap-x-2 font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
-              <EyebrowWords words={eyebrow} />
-            </p>
-            {unavailable ? (
-              <StatusBadge tone="caution">{t('unavailable')}</StatusBadge>
-            ) : null}
-          </div>
-        )}
-        <Heading
-          className="text-subheading font-semibold wrap-anywhere"
-          lang={label.locale}
-          dir={directionOf(label.locale)}
-        >
-          <a href={videoPath(locale, video.slug)} className={MEDIA_CARD_LINK}>
-            {label.title}
-          </a>
-        </Heading>
-        {speakers.length === 0 ? null : (
-          <p
-            className="line-clamp-2 text-sm wrap-anywhere text-foreground-muted"
-            dir="auto"
-          >
-            <span className="sr-only">{t('speakers')}: </span>
-            {speakers.join(' · ')}
-          </p>
-        )}
-        <div className="mt-auto pt-1">
-          <MetaRow
-            items={[
-              video.durationSeconds === null ? null : (
-                <Duration seconds={video.durationSeconds} />
-              ),
-              video.publishedOn === null ? null : (
-                <time dateTime={video.publishedOn}>
-                  {formatDate(video.publishedOn, locale)}
-                </time>
-              ),
-              <span lang={video.languageCode} dir={language?.direction ?? 'auto'}>
-                {language?.name ?? video.languageCode}
-              </span>,
-            ]}
-          />
-        </div>
-      </div>
-    </li>
+/** The people on a page of Videos, resolved in ONE People call. */
+async function speakersOf(videos: readonly VideoListing[], locale: Locale) {
+  const references = await referenceNames(
+    { personIds: videos.flatMap((video) => video.speakerIds), topicIds: [] },
+    locale,
   );
+  return references.people;
 }
 
 /**
  * A page of cards with the names of everyone on it resolved in ONE People call
- * and the content languages in ONE Taxonomy call — never a call per card.
+ * — never a call per card.
  */
 async function VideoGrid({
   locale,
@@ -292,6 +237,7 @@ async function VideoGrid({
   headingLevel = 'h2',
   episode = false,
   ordered = false,
+  lead = false,
 }: {
   readonly locale: Locale;
   readonly videos: readonly VideoListing[];
@@ -300,32 +246,104 @@ async function VideoGrid({
   readonly episode?: boolean;
   /** A playlist's order is its meaning, so it is an ordered list. */
   readonly ordered?: boolean;
+  /**
+   * The first card leads: two columns and two rows wide from a laptop up, its
+   * poster loaded first — the landing's opening picture.
+   */
+  readonly lead?: boolean;
 }) {
   const t = await getTranslations({ locale, namespace: 'watch' });
-  const [references, languages] = await Promise.all([
-    referenceNames(
-      { personIds: videos.flatMap((video) => video.speakerIds), topicIds: [] },
-      locale,
-    ),
-    contentLanguages(),
-  ]);
+  const people = await speakersOf(videos, locale);
   const List = ordered ? 'ol' : 'ul';
 
   return (
-    <List aria-label={label} className={VIDEO_GRID}>
-      {videos.map((video) => (
+    <List
+      aria-label={label}
+      className={`${VIDEO_GRID} ${lead ? 'lg:items-start lg:[&>li:first-child]:col-span-2 lg:[&>li:first-child]:row-span-2' : ''}`}
+    >
+      {videos.map((video, index) => (
         <VideoCard
           key={video.id}
           locale={locale}
           video={video}
-          people={references.people}
-          languages={languages}
+          people={people}
           t={t}
           headingLevel={headingLevel}
           episode={episode}
+          {...(lead && index === 0
+            ? {
+                priority: true,
+                sizes: '(min-width: 64rem) 46rem, (min-width: 40rem) 45vw, 100vw',
+              }
+            : {})}
         />
       ))}
     </List>
+  );
+}
+
+/**
+ * A SHELF OF POSTERS (R2): one horizontal row under its section header, every
+ * card in the list and the tab order, scrolled by touch or by its buttons.
+ */
+async function VideoShelf({
+  locale,
+  id,
+  heading,
+  headingLang,
+  videos,
+  action,
+  episode = false,
+}: {
+  readonly locale: Locale;
+  readonly id: string;
+  readonly heading: string;
+  /** The heading's language, when it is content (a programme's title). */
+  readonly headingLang?: Locale;
+  readonly videos: readonly VideoListing[];
+  readonly action: { readonly href: string; readonly text: string };
+  readonly episode?: boolean;
+}) {
+  const t = await getTranslations({ locale, namespace: 'watch' });
+  const people = await speakersOf(videos, locale);
+
+  return (
+    <section aria-labelledby={id} className="flex min-w-0 flex-col gap-5">
+      <Shelf
+        label={heading}
+        previousLabel={t('previous')}
+        nextLabel={t('next')}
+        size="poster"
+        header={
+          <SectionHeader
+            id={id}
+            heading={
+              headingLang === undefined ? (
+                heading
+              ) : (
+                <span lang={headingLang} dir={directionOf(headingLang)}>
+                  {heading}
+                </span>
+              )
+            }
+            action={action}
+          />
+        }
+      >
+        {videos.map((video) => (
+          <VideoCard
+            key={video.id}
+            locale={locale}
+            video={video}
+            people={people}
+            t={t}
+            headingLevel="h3"
+            episode={episode}
+            sizes="(min-width: 40rem) 18.5rem, 16rem"
+          />
+        ))}
+      </Shelf>
+    </section>
   );
 }
 
@@ -393,7 +411,7 @@ export async function VideoListingPage({
   const title = t(`sections.${section}` as 'sections.videos');
 
   const reads = mediaReadRuntime();
-  const [page, languages, topics, speakers, series, programs] = await Promise.all([
+  const [page, languageMap, topics, speakers, series, programs] = await Promise.all([
     reads.videos({ ...filters, format }),
     contentLanguages(),
     taxonomyRuntime().taxonomy.listTree({ locale, includeArchived: false }),
@@ -418,6 +436,13 @@ export async function VideoListingPage({
     filters.series !== null ||
     filters.language !== null;
   const groupings = [...series.items, ...programs.items];
+  // The interface's own language is offered first among the content languages
+  // (F10); every other language stays one choice away.
+  const languages = interfaceLanguageFirst(
+    [...languageMap.values()],
+    (language) => language.code,
+    locale,
+  );
 
   return (
     <Container>
@@ -427,94 +452,88 @@ export async function VideoListingPage({
             label: trail.label,
             trail: [trail.home, trail.watch, { text: title }],
           }}
-          eyebrow={trail.watch.text}
           title={title}
           lede={t(`sectionBody.${section}` as 'sectionBody.videos')}
         />
 
-        {/* The curated views are siblings of this listing, one choice away. */}
-        <nav aria-label={t('viewsLabel')}>
-          <ul className="flex flex-wrap gap-2">
-            {['videos', ...WATCH_VIEWS].map((view) => (
-              <li key={view}>
-                <FilterLink
-                  href={localizedPath(locale, `/watch/${view}`)}
-                  current={view === section}
-                >
-                  {t(`sections.${view}` as 'sections.videos')}
-                </FilterLink>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        {/* The curated views are sibling pages of this listing, one choice away. */}
+        <LinkTabs
+          label={t('viewsLabel')}
+          tabs={['videos', ...WATCH_VIEWS].map((view) => ({
+            href: localizedPath(locale, `/watch/${view}`),
+            text: t(`sections.${view}` as 'sections.videos'),
+            current: view === section,
+          }))}
+        />
 
-        <Panel>
-          <form
-            method="get"
-            action={base}
-            className="flex flex-col gap-4"
-            aria-label={t('filters')}
-          >
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field id="filter-topic" label={t('filterTopic')}>
-                {(props) => (
-                  <Select {...props} name="topic" defaultValue={filters.topic ?? ''}>
-                    <option value="">{t('filterAny')}</option>
-                    {topics.map((topic) => (
-                      <option key={topic.id} value={topic.id}>
-                        {topic.label.name}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-              <Field id="filter-speaker" label={t('filterSpeaker')}>
-                {(props) => (
-                  <Select {...props} name="speaker" defaultValue={filters.speaker ?? ''}>
-                    <option value="">{t('filterAny')}</option>
-                    {[...speakerNames.people.entries()].map(([id, person]) => (
-                      <option key={id} value={id}>
-                        {person.name}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-              <Field id="filter-series" label={t('filterSeries')}>
-                {(props) => (
-                  <Select {...props} name="series" defaultValue={filters.series ?? ''}>
-                    <option value="">{t('filterAny')}</option>
-                    {groupings.map((group) => (
-                      <option key={group.id} value={group.id}>
-                        {mediaLabel(group, locale).title}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-              <Field id="filter-language" label={t('filterLanguage')}>
-                {(props) => (
-                  <Select
-                    {...props}
-                    name="language"
-                    defaultValue={filters.language ?? ''}
-                  >
-                    <option value="">{t('filterAny')}</option>
-                    {[...languages.values()].map((language) => (
-                      <option key={language.code} value={language.code}>
-                        {language.name}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-            </div>
-            <div className="flex flex-wrap items-center gap-4">
-              <Button tone="secondary">{t('filterApply')}</Button>
-              {filtered ? <TextLink href={base}>{t('filterClear')}</TextLink> : null}
-            </div>
-          </form>
-        </Panel>
+        <form
+          method="get"
+          action={base}
+          className="flex flex-col gap-4 border-b border-border pb-8"
+          aria-label={t('filters')}
+        >
+          <div className="grid items-end gap-4 sm:grid-cols-2 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
+            <Field id="filter-topic" label={t('filterTopic')}>
+              {(props) => (
+                <Select {...props} name="topic" defaultValue={filters.topic ?? ''}>
+                  <option value="">{t('filterAny')}</option>
+                  {topics.map((topic) => (
+                    <option key={topic.id} value={topic.id}>
+                      {topic.label.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field id="filter-speaker" label={t('filterSpeaker')}>
+              {(props) => (
+                <Select {...props} name="speaker" defaultValue={filters.speaker ?? ''}>
+                  <option value="">{t('filterAny')}</option>
+                  {[...speakerNames.people.entries()].map(([id, person]) => (
+                    <option key={id} value={id}>
+                      {person.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field id="filter-series" label={t('filterSeries')}>
+              {(props) => (
+                <Select {...props} name="series" defaultValue={filters.series ?? ''}>
+                  <option value="">{t('filterAny')}</option>
+                  {groupings.map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {mediaLabel(group, locale).title}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field id="filter-language" label={t('filterLanguage')}>
+              {(props) => (
+                <Select {...props} name="language" defaultValue={filters.language ?? ''}>
+                  <option value="">{t('filterAny')}</option>
+                  {languages.map((language) => (
+                    <option
+                      key={language.code}
+                      value={language.code}
+                      lang={language.code}
+                      dir={language.direction}
+                    >
+                      {language.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Button tone="secondary">{t('filterApply')}</Button>
+          </div>
+          {filtered ? (
+            <p className="text-sm">
+              <TextLink href={base}>{t('filterClear')}</TextLink>
+            </p>
+          ) : null}
+        </form>
 
         {page.items.length === 0 ? (
           <EmptyState>
@@ -618,14 +637,50 @@ function VideoStructuredData({
   );
 }
 
-/** How many other episodes a Video's page previews. */
+/** How many other episodes a Video's page lists beside it. */
 const EPISODE_PREVIEW = 6;
 
+/** How many related Videos a Video's page offers under it. */
+const RELATED_PREVIEW = 6;
+
 /**
- * One Video's page: what it is and who speaks, then the privacy-gated player —
- * or, for a video the provider no longer serves, an honest statement and the
- * link — then its facts, accessibility alternatives, topics, series and
- * playlists. Usable signed out; nothing about the visit is recorded.
+ * VIDEOS RELATED TO ONE VIDEO — what else its first speaker gives, else what
+ * else is on its first topic — never itself, and never the episodes already
+ * listed beside it. Composed from the public listing read Media already has,
+ * so "related" means a fact the records state, never a guess.
+ */
+async function relatedVideos(
+  record: VideoRecord,
+  exclude: ReadonlySet<string>,
+): Promise<readonly VideoListing[]> {
+  const reads = mediaReadRuntime();
+  const keep = (items: readonly VideoListing[]) =>
+    items.filter((video) => video.id !== record.id && !exclude.has(video.id));
+  const speaker = record.speakerIds[0];
+  const bySpeaker =
+    speaker === undefined ? [] : keep((await reads.videos({ speaker })).items);
+  if (bySpeaker.length >= RELATED_PREVIEW) return bySpeaker.slice(0, RELATED_PREVIEW);
+  const topic = record.topicIds[0];
+  const byTopic = topic === undefined ? [] : keep((await reads.videos({ topic })).items);
+  const seen = new Set(bySpeaker.map((video) => video.id));
+  return [...bySpeaker, ...byTopic.filter((video) => !seen.has(video.id))].slice(
+    0,
+    RELATED_PREVIEW,
+  );
+}
+
+/**
+ * One Video's page (R2): THE STAGE FIRST. The poster-led, one-press player at
+ * full width of the reading column, then what the video is — its title in its
+ * own language, its kind, who speaks — then its description and transcript,
+ * with its facts, topics, playlists and the episodes around it beside them,
+ * and related videos below. A video the provider no longer serves shows its
+ * poster muted, says so plainly, and links out. Usable signed out; nothing
+ * about the visit is recorded.
+ *
+ * ONLY WHAT IS KNOWN IS SHOWN. A caption track the provider offers is stated;
+ * an unknown one is not turned into a "no captions" row, and a transcript is a
+ * section of its own rather than a row saying where it is.
  */
 export async function VideoDetailPage({
   locale,
@@ -672,184 +727,245 @@ export async function VideoDetailPage({
       : episodes.items
           .filter((video) => video.id !== record.id)
           .slice(0, EPISODE_PREVIEW);
-
-  const hasStory = label.description !== '' || record.transcript !== null;
+  const related = await relatedVideos(record, new Set(others.map((video) => video.id)));
+  const people = await speakersOf([...others, ...related], locale);
+  const contentBadge = contentLanguageBadge(record.languageCode, locale);
+  // The description is written in the interface's language; when the video is
+  // spoken in another, say once that the words describe it, not translate it.
+  const describedInOtherLanguage =
+    label.description !== '' &&
+    (record.languageCode.split('-')[0] ?? '').toLowerCase() !== label.locale;
+  const poster = posterImage(record);
+  const unavailable = record.availability === 'unavailable';
 
   return (
     <Container>
-      <article className="flex flex-col gap-10 py-[var(--space-page)]">
-        <MediaPageHeader
-          crumbs={{
-            label: trailParts.label,
-            trail: [
-              ...trail
-                .slice(0, -1)
-                .map((entry) => ({ href: entry.path, text: entry.name })),
-              { text: label.title },
-            ],
-          }}
-          eyebrow={
-            <>
-              <EyebrowWords
-                words={[
-                  record.format === null ? null : t(`format.${record.format}`),
-                  record.series === null
-                    ? null
-                    : t('fact.episode', { number: record.series.position }),
-                ]}
-              />
-              {record.availability === 'unavailable' ? (
-                <StatusBadge tone="caution">{t('unavailable')}</StatusBadge>
-              ) : null}
-            </>
-          }
-          title={label.title}
-          lang={label.locale}
-          dir={direction}
-          {...(speakers.length === 0
-            ? {}
-            : {
-                lede: (
-                  <p className="text-base" dir="auto">
-                    <span>{t('speakers')}: </span>
-                    {speakers.map((person, index) => (
-                      <span key={person.slug}>
-                        {index === 0 ? null : ' · '}
-                        <TextLink
-                          href={localizedPath(
-                            locale,
-                            `/people/${encodeURIComponent(person.slug)}`,
-                          )}
-                        >
-                          {person.name}
-                        </TextLink>
-                      </span>
-                    ))}
-                  </p>
-                ),
-              })}
-          meta={
-            <MetaRow
-              items={[
-                record.durationSeconds === null ? null : (
-                  <Duration seconds={record.durationSeconds} />
-                ),
-                record.publishedOn === null ? null : (
-                  <time dateTime={record.publishedOn}>
-                    {formatDate(record.publishedOn, locale)}
-                  </time>
-                ),
-                <span lang={record.languageCode} dir={contentDirection}>
-                  {language?.name ?? record.languageCode}
-                </span>,
-                provider,
+      <article className="flex flex-col gap-[var(--space-section)] py-[var(--space-page)]">
+        <div className="grid gap-x-10 gap-y-10 lg:grid-cols-[minmax(0,1fr)_21rem]">
+          <div className="flex min-w-0 flex-col gap-6">
+            <Breadcrumbs
+              label={trailParts.label}
+              trail={[
+                ...trail
+                  .slice(0, -1)
+                  .map((entry) => ({ href: entry.path, text: entry.name })),
+                { text: label.title },
               ]}
             />
-          }
-        />
 
-        {/*
-         * THE STAGE: a bounded, stable 16:9 frame. The player decides whether
-         * anything is loaded from the provider; this page only gives it room.
-         */}
-        <section aria-labelledby="video-player" className="flex max-w-4xl flex-col gap-3">
-          <h2 id="video-player" className="sr-only">
-            {t('playerHeading')}
-          </h2>
-          {record.availability === 'available' ? (
-            <VideoPlayer
-              provider={record.provider}
-              providerVideoId={record.providerVideoId}
-              backdrop={
-                record.poster === null ? null : (
-                  <PosterPicture videoId={record.id} poster={record.poster} eager />
-                )
-              }
-              labels={{
-                notice: t('player.notice', { provider }),
-                load: t('player.load', { provider }),
-                fallback: t('player.fallback', { provider, title: label.title }),
-                frameTitle: t('player.frameTitle', { provider, title: label.title }),
-              }}
-            />
-          ) : (
-            <div className="flex flex-col gap-3">
-              <Poster muted videoId={record.id} poster={record.poster} />
-              <Alert tone="info">{t('player.unavailable', { provider })}</Alert>
-              <p className="text-sm">
-                <TextLink
-                  href={providerWatchUrl(record.provider, record.providerVideoId)}
-                >
-                  {t('player.tryProvider', { provider })}
-                </TextLink>
-              </p>
-            </div>
-          )}
-        </section>
+            {/*
+             * THE STAGE: a stable 16:9 box at every width. The player decides
+             * whether anything is loaded from the provider; this page only
+             * gives it room and its own poster.
+             */}
+            <section aria-labelledby="video-player">
+              <h2 id="video-player" className="sr-only">
+                {t('playerHeading')}
+              </h2>
+              {unavailable ? (
+                <div className="flex flex-col gap-3">
+                  {poster === null ? null : (
+                    <Poster
+                      {...poster}
+                      alt=""
+                      radius="panel"
+                      priority
+                      sizes="(min-width: 64rem) 48rem, 100vw"
+                      className="opacity-40 grayscale"
+                    />
+                  )}
+                  <Alert tone="info">{t('player.unavailable', { provider })}</Alert>
+                  <p className="text-sm">
+                    <TextLink
+                      href={providerWatchUrl(record.provider, record.providerVideoId)}
+                    >
+                      {t('player.tryProvider', { provider })}
+                    </TextLink>
+                  </p>
+                </div>
+              ) : (
+                <VideoPlayer
+                  provider={record.provider}
+                  providerVideoId={record.providerVideoId}
+                  backdrop={
+                    poster === null ? null : (
+                      <Poster
+                        {...poster}
+                        alt=""
+                        radius="none"
+                        priority
+                        sizes="(min-width: 64rem) 48rem, 100vw"
+                      />
+                    )
+                  }
+                  badge={
+                    record.durationSeconds === null ? null : (
+                      <Duration seconds={record.durationSeconds} />
+                    )
+                  }
+                  labels={{
+                    play: t('player.play', { provider, title: label.title }),
+                    disclosure: t('player.disclosure', { provider }),
+                    fallback: t('player.fallback', { provider, title: label.title }),
+                    frameTitle: t('player.frameTitle', { provider, title: label.title }),
+                  }}
+                />
+              )}
+            </section>
 
-        <div
-          className={`grid gap-10 ${hasStory ? 'lg:grid-cols-[minmax(0,1fr)_20rem]' : ''}`}
-        >
-          {hasStory ? (
-            <div className="flex min-w-0 flex-col gap-10">
-              {label.description === '' ? null : (
-                <section className="flex flex-col gap-4" aria-labelledby="video-about">
-                  <h2 id="video-about" className="text-heading font-semibold">
-                    {t('aboutHeading')}
-                  </h2>
-                  <Prose>
-                    {paragraphsOf(label.description).map((paragraph, index) => (
-                      <p key={index} lang={label.locale} dir={direction}>
-                        {paragraph}
-                      </p>
-                    ))}
-                    <p className="text-caption border-s-2 border-accent-rule ps-3 text-foreground-muted">
+            <header className="flex flex-col gap-3 border-b border-border pb-6">
+              <h1
+                className="text-title font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere"
+                lang={label.locale}
+                dir={direction}
+              >
+                {label.title}
+              </h1>
+              <div className="flex flex-wrap items-center gap-2">
+                {record.format === null ? null : (
+                  <Badge>{t(`format.${record.format}`)}</Badge>
+                )}
+                {unavailable ? (
+                  <Badge kind="status" tone="caution">
+                    {t('unavailable')}
+                  </Badge>
+                ) : null}
+                {contentBadge === undefined ? null : <LanguageBadge {...contentBadge} />}
+                <MetaRow
+                  items={[
+                    record.series === null
+                      ? null
+                      : t('fact.episode', { number: record.series.position }),
+                    record.durationSeconds === null ? null : (
+                      <Duration seconds={record.durationSeconds} />
+                    ),
+                    record.publishedOn === null ? null : (
+                      <time dateTime={record.publishedOn}>
+                        {formatDate(record.publishedOn, locale)}
+                      </time>
+                    ),
+                  ]}
+                />
+              </div>
+              {speakers.length === 0 ? null : (
+                <p className="text-base" dir="auto">
+                  <span className="text-foreground-muted">{t('speakers')}: </span>
+                  {speakers.map((person, index) => (
+                    <span key={person.slug}>
+                      {index === 0 ? null : ' · '}
+                      <TextLink
+                        href={localizedPath(
+                          locale,
+                          `/people/${encodeURIComponent(person.slug)}`,
+                        )}
+                      >
+                        {person.name}
+                      </TextLink>
+                    </span>
+                  ))}
+                </p>
+              )}
+            </header>
+
+            {label.description === '' ? null : (
+              <section className="flex flex-col gap-4" aria-labelledby="video-about">
+                <h2 id="video-about" className="text-heading font-semibold">
+                  {t('aboutHeading')}
+                </h2>
+                <Prose>
+                  {paragraphsOf(label.description).map((paragraph, index) => (
+                    <p key={index} lang={label.locale} dir={direction}>
+                      {paragraph}
+                    </p>
+                  ))}
+                  {describedInOtherLanguage ? (
+                    <p className="text-caption text-foreground-muted">
                       {t('metadataNotice')}
                     </p>
-                  </Prose>
-                </section>
-              )}
+                  ) : null}
+                </Prose>
+              </section>
+            )}
 
-              {record.transcript === null ? null : (
-                <section
-                  className="flex flex-col gap-4"
-                  aria-labelledby="video-transcript"
-                >
-                  <h2 id="video-transcript" className="text-heading font-semibold">
-                    {t('fact.transcript')}
-                  </h2>
-                  <details className="rounded-panel border border-border bg-surface-raised px-5 py-2">
-                    <summary className="min-h-11 cursor-pointer py-2.5 font-medium">
-                      {t('transcriptShow')}
-                    </summary>
-                    <div
-                      className="library-reader flex max-w-[var(--measure-prose)] flex-col gap-4 pt-2 pb-4"
-                      lang={record.languageCode}
-                      dir={contentDirection}
-                    >
-                      {paragraphsOf(record.transcript).map((paragraph, index) => (
-                        <p key={index}>{paragraph}</p>
-                      ))}
-                    </div>
-                  </details>
-                </section>
-              )}
-            </div>
-          ) : null}
+            {record.transcript === null ? null : (
+              <section className="flex flex-col gap-4" aria-labelledby="video-transcript">
+                <h2 id="video-transcript" className="text-heading font-semibold">
+                  {t('fact.transcript')}
+                </h2>
+                <details className="group/transcript border-y border-border">
+                  <summary className="flex min-h-11 cursor-pointer items-center gap-2 py-2.5 font-medium">
+                    <Icon
+                      name="chevron-down"
+                      size={16}
+                      className="transition-transform duration-[var(--duration-fast)] group-open/transcript:rotate-180"
+                    />
+                    {t('transcriptShow')}
+                  </summary>
+                  <div
+                    className="library-reader flex max-w-[var(--measure-prose)] flex-col gap-4 pt-2 pb-6"
+                    lang={record.languageCode}
+                    dir={contentDirection}
+                  >
+                    {paragraphsOf(record.transcript).map((paragraph, index) => (
+                      <p key={index}>{paragraph}</p>
+                    ))}
+                  </div>
+                </details>
+              </section>
+            )}
+          </div>
 
-          <aside className="flex min-w-0 flex-col gap-8">
-            <section
-              className="flex flex-col gap-3 rounded-panel border border-border bg-surface-raised p-5"
-              aria-labelledby="video-facts"
-            >
+          <aside className="flex min-w-0 flex-col gap-8 lg:pt-11">
+            {record.series === null ||
+            seriesLabel === null ||
+            others.length === 0 ? null : (
+              <section className="flex flex-col gap-1" aria-labelledby="video-episodes">
+                <h2 id="video-episodes" className="text-subheading font-semibold">
+                  {t(`moreFrom.${record.series.kind}`)}
+                </h2>
+                <p className="text-sm text-foreground-muted">
+                  <span lang={seriesLabel.locale} dir={directionOf(seriesLabel.locale)}>
+                    {seriesLabel.title}
+                  </span>
+                </p>
+                <ol aria-labelledby="video-episodes" className="list-none p-0">
+                  {others.map((video) => {
+                    const other = mediaLabel(video, locale);
+                    return (
+                      <ListRow
+                        key={video.id}
+                        href={videoPath(locale, video.slug)}
+                        title={other.title}
+                        lang={other.locale}
+                        dir={directionOf(other.locale)}
+                        image={posterImage(video)}
+                        meta={[
+                          video.seriesPosition === null
+                            ? null
+                            : t('fact.episode', { number: video.seriesPosition }),
+                          video.durationSeconds === null ? null : (
+                            <Duration seconds={video.durationSeconds} />
+                          ),
+                        ]}
+                      />
+                    );
+                  })}
+                </ol>
+                <p className="pt-2 text-sm">
+                  <TextLink
+                    href={seriesPath(locale, record.series.kind, record.series.slug)}
+                  >
+                    {t('allEpisodes')}
+                  </TextLink>
+                </p>
+              </section>
+            )}
+
+            <section className="flex flex-col gap-2" aria-labelledby="video-facts">
               <h2 id="video-facts" className="text-subheading font-semibold">
                 {t('facts')}
               </h2>
-              <dl
-                className={`grid gap-x-8 divide-y divide-border ${
-                  hasStory ? '' : 'sm:grid-cols-2 sm:divide-y-0'
-                }`}
-              >
+              <dl className="grid divide-y divide-border">
                 <DetailRow term={t('fact.provider')}>{provider}</DetailRow>
                 <DetailRow term={t('fact.language')}>
                   <span lang={record.languageCode} dir={contentDirection}>
@@ -884,16 +1000,11 @@ export async function VideoDetailPage({
                     {t('fact.episode', { number: record.series.position })}
                   </DetailRow>
                 )}
-                <DetailRow term={t('fact.captions')}>
-                  {record.captions
-                    ? t('captionsAvailable', { provider })
-                    : t('captionsUnknown')}
-                </DetailRow>
-                <DetailRow term={t('fact.transcript')}>
-                  {record.transcript === null
-                    ? t('transcriptNone')
-                    : t('transcriptBelow')}
-                </DetailRow>
+                {record.captions ? (
+                  <DetailRow term={t('fact.captions')}>
+                    {t('captionsAvailable', { provider })}
+                  </DetailRow>
+                ) : null}
               </dl>
             </section>
 
@@ -942,23 +1053,21 @@ export async function VideoDetailPage({
           </aside>
         </div>
 
-        {record.series === null || others.length === 0 ? null : (
-          <section className="flex flex-col gap-5" aria-labelledby="video-episodes">
-            <SectionHeader
-              id="video-episodes"
-              heading={t(`moreFrom.${record.series.kind}`)}
-              action={{
-                href: seriesPath(locale, record.series.kind, record.series.slug),
-                text: t('allEpisodes'),
-              }}
-            />
-            <VideoGrid
-              locale={locale}
-              videos={others}
-              label={t(`moreFrom.${record.series.kind}`)}
-              headingLevel="h3"
-              episode
-            />
+        {related.length === 0 ? null : (
+          <section className="flex flex-col gap-6" aria-labelledby="video-related">
+            <SectionHeader id="video-related" heading={t('related')} />
+            <ul aria-labelledby="video-related" className={VIDEO_GRID}>
+              {related.map((video) => (
+                <VideoCard
+                  key={video.id}
+                  locale={locale}
+                  video={video}
+                  people={people}
+                  t={t}
+                  headingLevel="h3"
+                />
+              ))}
+            </ul>
           </section>
         )}
 
@@ -975,6 +1084,8 @@ export async function VideoDetailPage({
 /**
  * A Series, programme or Playlist as a card: its kind, its title in its own
  * language and the start of its description — one link to its ONE address.
+ * A grouping has no picture of its own, so its card is text-first (R2): the
+ * kind as a badge, never an upper-case label over the title.
  */
 function GroupCard({
   locale,
@@ -989,9 +1100,9 @@ function GroupCard({
 }) {
   const label = mediaLabel(record, locale);
   return (
-    <LinkCard
+    <MediaCard
       href={href}
-      eyebrow={kind}
+      type={kind}
       title={label.title}
       description={label.description}
       headingLevel="h2"
@@ -1027,7 +1138,6 @@ export async function SeriesListingPage({
             label: trail.label,
             trail: [trail.home, trail.watch, { text: title }],
           }}
-          eyebrow={trail.watch.text}
           title={title}
           lede={t(`sectionBody.${section}` as 'sectionBody.series')}
         />
@@ -1238,7 +1348,6 @@ export async function PlaylistListingPage({
             label: trail.label,
             trail: [trail.home, trail.watch, { text: title }],
           }}
-          eyebrow={trail.watch.text}
           title={title}
           lede={t('sectionBody.playlists')}
         />
@@ -1356,7 +1465,6 @@ export async function SpeakerBrowsePage({
             label: trail.label,
             trail: [trail.home, trail.watch, { text: title }],
           }}
-          eyebrow={trail.watch.text}
           title={title}
           lede={t('sectionBody.speakers')}
         />
@@ -1394,9 +1502,7 @@ export async function SpeakerBrowsePage({
                         className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-action underline-offset-4 hover:underline"
                       >
                         {t('speakerVideos', { count: String(row.videos) })}
-                        <span aria-hidden="true" className="rtl:-scale-x-100">
-                          →
-                        </span>
+                        <Icon name="arrow-end" size={16} />
                       </a>
                     </p>
                   </div>
@@ -1447,7 +1553,6 @@ export async function WatchTopicPage({
             label: trail.label,
             trail: [trail.home, trail.watch, { text: topic.label.name }],
           }}
-          eyebrow={trail.watch.text}
           title={
             <>
               {t('topicTitle')}:{' '}
@@ -1528,32 +1633,47 @@ export async function VideoPreview({
  * The landing page
  * ========================================================================= */
 
-/** How many Videos the landing page shows before linking to the full list. */
-const LANDING = 12;
+/** How many Videos the landing's featured or latest grid shows under the lead. */
+const LANDING = 9;
+
+/** How many posters one shelf of the landing carries. */
+const SHELF = 12;
+
+/** How many programmes the landing gives a shelf of their own episodes. */
+const PROGRAMME_SHELVES = 2;
 
 /**
- * Every Watch surface this phase delivers, grouped the way the landing offers
- * them: the kinds of video, the ordered groupings, and the ways to find by
- * person or topic — with Listen, Watch's sibling for audio, linked ONCE.
+ * Every Watch surface this phase delivers, grouped the way the landing's browse
+ * index offers them: the kinds of video, the ordered groupings, and the ways to
+ * find by person or topic — with Listen, Watch's sibling for audio, linked ONCE.
  */
 const LANDING_GROUPS = [
   { key: 'formats', surfaces: ['videos', ...WATCH_VIEWS] },
   { key: 'groups', surfaces: ['series', 'programs', 'playlists'] },
+  { key: 'find', surfaces: ['speakers', 'topics', 'listen'] },
 ] as const;
+
+/** Where a browse entry goes: Watch's own surfaces, the topic hub, or Listen. */
+function surfacePath(locale: Locale, surface: string): string {
+  if (surface === 'topics') return localizedPath(locale, '/topics');
+  if (surface === 'listen') return localizedPath(locale, '/listen');
+  return localizedPath(locale, `/watch/${surface}`);
+}
 
 /**
  * `/watch` — `?sort=featured|latest` (ROUTE_MAP.md §3.7).
  *
+ * POSTER-LED (R2, audit F13). The page opens on its lead video — the first
+ * featured one with a poster, beside the section's name — then the featured or
+ * latest grid, then a shelf per kind of video and per leading programme, each
+ * only when it has something in it, then a compact index of every surface.
+ * Within a shelf the interface's own language comes first (F10).
+ *
  * NO FAKE CURATION. "Featured" is the Videos an operator marked featured, and
  * when there are none the page says so and points at the latest instead of
- * relabelling the latest as featured. The browse list names only what exists:
- * the Watch surfaces, topics, and — from Phase 11 — Listen, Watch's sibling for
- * audio. Photographs are reached from News and Events (Phase 13), their designed
- * entry point, not from here. No "coming soon".
- *
- * THE SECTION'S FRONT DOOR: the one ink band among the Media pages, then the
- * featured or latest videos, then every surface grouped by how a visitor looks
- * for a video. Text and an inline poster only — no image, nothing that moves.
+ * relabelling the latest as featured. The browse index names only what exists:
+ * the Watch surfaces, topics, and Listen. Photographs are reached from News and
+ * Events, their designed entry point. No "coming soon".
  */
 export async function WatchLandingPage({
   locale,
@@ -1563,25 +1683,57 @@ export async function WatchLandingPage({
   readonly sort: 'featured' | 'latest';
 }) {
   const t = await getTranslations({ locale, namespace: 'watch' });
-  const page = await mediaReadRuntime().videos({ featured: sort === 'featured' });
+  const reads = mediaReadRuntime();
+  const views = WATCH_VIEWS.flatMap((view) => {
+    const format = formatOfView(view);
+    return format === null ? [] : [{ view, format }];
+  });
+  const [page, programmes, ...byFormat] = await Promise.all([
+    reads.videos({ featured: sort === 'featured' }),
+    reads.seriesList('program', 0),
+    ...views.map(({ format }) => reads.videos({ format })),
+  ]);
+  const programmeShelves = await Promise.all(
+    programmes.items.slice(0, PROGRAMME_SHELVES).map(async (programme) => ({
+      programme,
+      videos: (await reads.seriesVideos(programme.id, 0)).items.slice(0, SHELF),
+    })),
+  );
+
   const heading = t(`sort.${sort}`);
+  const ordered = interfaceLanguageFirst(
+    page.items,
+    (video) => video.languageCode,
+    locale,
+  );
+  // The lead is the first with a poster, so the grid opens on a picture.
+  const lead = ordered.find((video) => video.poster !== null) ?? ordered[0];
+  const shown = (
+    lead === undefined ? [] : [lead, ...ordered.filter((video) => video !== lead)]
+  ).slice(0, LANDING);
+  const shelves = views
+    .map((entry, index) => ({
+      ...entry,
+      videos: interfaceLanguageFirst(
+        byFormat[index]?.items ?? [],
+        (video) => video.languageCode,
+        locale,
+      ).slice(0, SHELF),
+    }))
+    .filter((shelf) => shelf.videos.length > 0);
+  const nameFor = (view: string) => t(`sections.${view}` as 'sections.videos');
 
   return (
     <>
-      <PageHero
-        tone="ink"
+      <Hero
         title={t('title')}
         lede={t('description')}
         actions={
           <>
-            <ActionLink href={localizedPath(locale, '/watch/videos')} onInk>
+            <ActionLink href={localizedPath(locale, '/watch/videos')}>
               {t('allVideos')}
             </ActionLink>
-            <ActionLink
-              href={localizedPath(locale, '/watch/programs')}
-              tone="secondary"
-              onInk
-            >
+            <ActionLink href={localizedPath(locale, '/watch/programs')} tone="secondary">
               {t('sections.programs')}
             </ActionLink>
           </>
@@ -1590,100 +1742,122 @@ export async function WatchLandingPage({
 
       <Container>
         <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
-          <section className="flex flex-col gap-5" aria-labelledby="watch-videos">
+          <section className="flex flex-col gap-6" aria-labelledby="watch-videos">
             <SectionHeader
               id="watch-videos"
               heading={heading}
               intro={t(`landing.${sort}Intro`)}
             />
-            <nav aria-label={t('sort.label')}>
-              <ul className="flex flex-wrap gap-2">
-                {(['featured', 'latest'] as const).map((option) => (
-                  <li key={option}>
-                    <FilterLink
-                      href={localizedPath(
-                        locale,
-                        `/watch${option === 'featured' ? '' : '?sort=latest'}`,
-                      )}
-                      current={option === sort}
-                    >
-                      {t(`sort.${option}`)}
-                    </FilterLink>
-                  </li>
-                ))}
-              </ul>
-            </nav>
+            <LinkTabs
+              label={t('sort.label')}
+              tabs={(['featured', 'latest'] as const).map((option) => ({
+                href: localizedPath(
+                  locale,
+                  `/watch${option === 'featured' ? '' : '?sort=latest'}`,
+                ),
+                text: t(`sort.${option}`),
+                current: option === sort,
+              }))}
+            />
             {page.items.length === 0 ? (
-              <EmptyState>
-                {sort === 'featured' ? (
-                  <span className="flex flex-col gap-2">
-                    <span>{t('featuredEmpty')}</span>
-                    <TextLink href={localizedPath(locale, '/watch?sort=latest')}>
-                      {t('sort.latest')}
-                    </TextLink>
-                  </span>
-                ) : (
-                  t('empty')
-                )}
+              <EmptyState
+                icon="video"
+                {...(sort === 'featured'
+                  ? {
+                      action: {
+                        href: localizedPath(locale, '/watch?sort=latest'),
+                        text: t('sort.latest'),
+                      },
+                    }
+                  : {})}
+              >
+                {sort === 'featured' ? t('featuredEmpty') : t('empty')}
               </EmptyState>
             ) : (
               <VideoGrid
                 locale={locale}
-                videos={page.items.slice(0, LANDING)}
+                videos={shown}
                 label={heading}
                 headingLevel="h3"
+                lead
               />
             )}
           </section>
 
-          {LANDING_GROUPS.map((group) => (
-            <section
-              key={group.key}
-              className="flex flex-col gap-5"
-              aria-labelledby={`watch-${group.key}`}
-            >
-              <SectionHeader
-                id={`watch-${group.key}`}
-                heading={t(`landing.${group.key}Heading`)}
-                intro={t(`landing.${group.key}Intro`)}
-              />
-              <CardGrid>
-                {group.surfaces.map((surface) => (
-                  <LinkCard
-                    key={surface}
-                    href={localizedPath(locale, `/watch/${surface}`)}
-                    title={t(`sections.${surface}` as 'sections.videos')}
-                    description={t(`sectionBody.${surface}` as 'sectionBody.videos')}
-                  />
-                ))}
-              </CardGrid>
-            </section>
+          {shelves.map((shelf) => (
+            <VideoShelf
+              key={shelf.view}
+              locale={locale}
+              id={`watch-${shelf.view}`}
+              heading={nameFor(shelf.view)}
+              videos={shelf.videos}
+              action={{
+                href: localizedPath(locale, `/watch/${shelf.view}`),
+                text: t('landing.seeAll', {
+                  name: nameFor(shelf.view).toLocaleLowerCase(locale),
+                }),
+              }}
+            />
           ))}
 
-          <section className="flex flex-col gap-5" aria-labelledby="watch-find">
-            <SectionHeader
-              id="watch-find"
-              heading={t('landing.findHeading')}
-              intro={t('landing.findIntro')}
-            />
-            <CardGrid>
-              <LinkCard
-                href={localizedPath(locale, '/watch/speakers')}
-                title={t('sections.speakers')}
-                description={t('sectionBody.speakers')}
-              />
-              <LinkCard
-                href={localizedPath(locale, '/topics')}
-                title={t('sections.topics')}
-                description={t('sectionBody.topics')}
-              />
-              <LinkCard
-                href={localizedPath(locale, '/listen')}
-                title={t('sections.listen')}
-                description={t('sectionBody.listen')}
-              />
-            </CardGrid>
-          </section>
+          {programmeShelves
+            .filter((shelf) => shelf.videos.length > 0)
+            .map(({ programme, videos }) => {
+              const programmeLabel = mediaLabel(programme, locale);
+              return (
+                <VideoShelf
+                  key={programme.id}
+                  locale={locale}
+                  id={`watch-programme-${programme.id}`}
+                  heading={programmeLabel.title}
+                  headingLang={programmeLabel.locale}
+                  videos={videos}
+                  episode
+                  action={{
+                    href: seriesPath(locale, programme.kind, programme.slug),
+                    text: t('allEpisodes'),
+                  }}
+                />
+              );
+            })}
+
+          {/* Every surface, as a compact index rather than a wall of cards. */}
+          <nav aria-labelledby="watch-browse" className="flex flex-col gap-6">
+            <h2 id="watch-browse" className="text-heading font-semibold">
+              {t('browse')}
+            </h2>
+            <div className="grid gap-x-10 gap-y-8 border-t border-border pt-6 sm:grid-cols-2 lg:grid-cols-3">
+              {LANDING_GROUPS.map((group) => (
+                <div key={group.key} className="flex min-w-0 flex-col gap-3">
+                  <h3 className="text-subheading font-semibold">
+                    {t(`landing.${group.key}Heading`)}
+                  </h3>
+                  <ul className="flex list-none flex-col p-0">
+                    {group.surfaces.map((surface) => (
+                      <li key={surface}>
+                        <a
+                          href={surfacePath(locale, surface)}
+                          className="group flex min-h-11 flex-col justify-center gap-0.5 border-b border-border py-2.5 no-underline"
+                        >
+                          <span className="inline-flex items-center gap-1.5 font-semibold text-foreground decoration-accent-rule underline-offset-4 group-hover:underline">
+                            {nameFor(surface)}
+                            <Icon
+                              name="arrow-end"
+                              size={16}
+                              className="text-accent opacity-0 transition-opacity duration-[var(--duration-fast)] group-hover:opacity-100 group-focus-visible:opacity-100"
+                            />
+                          </span>
+                          <span className="text-sm text-foreground-muted">
+                            {t(`sectionBody.${surface}` as 'sectionBody.videos')}
+                          </span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </nav>
         </div>
       </Container>
     </>

@@ -51,6 +51,7 @@ import {
   unlinkAccountAction,
 } from '../actions';
 import { peopleCopy } from '../copy';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * Contributor administration — the canonical People surface.
@@ -90,7 +91,7 @@ import { peopleCopy } from '../copy';
  * it is not a mutation and carries no CSRF concern; every mutation on this page
  * is a Server Action (SECURITY_BASELINE.md §7.1).
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('admin', 'people.persons.title');
 export const dynamic = 'force-dynamic';
 
 /** Every interface locale a contributor may be described in. */

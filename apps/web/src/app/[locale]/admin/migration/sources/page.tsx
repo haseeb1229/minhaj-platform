@@ -43,6 +43,7 @@ import {
   type Query,
 } from '../shared';
 import { ContentKindLabel } from '../status';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/migration/sources` — legacy sources (DOMAIN_MODEL.md §16.1
@@ -67,7 +68,7 @@ import { ContentKindLabel } from '../status';
  * version the operator saw; the service refuses to activate a real source
  * without its recorded authorisation.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminMigration', 'sources.title');
 
 export const dynamic = 'force-dynamic';
 

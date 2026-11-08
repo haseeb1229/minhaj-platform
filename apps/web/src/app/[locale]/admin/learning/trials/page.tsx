@@ -45,6 +45,7 @@ import {
   type Copy,
   type ListParams,
 } from '../shared';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/learning/trials` — trial-class requests (ROUTE_MAP.md §7;
@@ -62,6 +63,7 @@ import {
  *
  * A REQUEST IS NOT A BOOKING until that form succeeds; the page says so.
  */
+export const generateMetadata = adminPageMetadata('adminLearning', 'surface.trials');
 export const dynamic = 'force-dynamic';
 
 /** Open windows for each Course on this page of requests, one read per Course. */

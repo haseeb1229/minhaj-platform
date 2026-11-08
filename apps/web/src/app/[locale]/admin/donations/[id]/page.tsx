@@ -43,6 +43,7 @@ import {
   adminDonationsCopy,
   donorName,
 } from '../shared';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * One donation, as an operator reads it (DELIVERY_PLAN.md Phase 27) — under
@@ -66,7 +67,7 @@ import {
  * and its step-up appear only for a holder of `donations.refund`, and only
  * while something remains refundable.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminDonations', 'record.title');
 
 export const dynamic = 'force-dynamic';
 
@@ -349,7 +350,7 @@ export default async function DonationRecordPage({
           </p>
         ) : (
           <>
-            <DonationRefundStepUp locale={locale} />
+            <DonationRefundStepUp locale={locale} returnTo={path} />
             <Panel>
               <div className="flex flex-col gap-3">
                 <h3 className="font-semibold">{t('refund.heading')}</h3>

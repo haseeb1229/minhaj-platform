@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import type { ReactNode } from 'react';
@@ -10,8 +11,8 @@ import type {
   SessionState,
 } from '@minhaj/contracts/learning';
 
-import { Alert, StatusBadge } from '@/components/ui';
-import { WorkspaceLinks, WorkspacePage } from '@/components/workspace/parts';
+import { Alert, EmptyState, SectionHeader, StatusBadge } from '@/components/ui';
+import { WorkspacePage } from '@/components/workspace/parts';
 import { classRange, ownZone, zoneName } from './presentation';
 
 /**
@@ -39,16 +40,80 @@ export type TeacherTranslator = Awaited<ReturnType<typeof getTranslations<'teach
 export function TeacherFrame({
   title,
   description,
+  action,
   children,
 }: {
   readonly title: ReactNode;
   readonly description?: ReactNode;
+  /** The page's one primary action, beside its heading. */
+  readonly action?: ReactNode;
   readonly children: ReactNode;
 }) {
   return (
-    <WorkspacePage title={title} {...(description === undefined ? {} : { description })}>
+    <WorkspacePage
+      title={title}
+      {...(description === undefined ? {} : { description })}
+      {...(action === undefined ? {} : { action })}
+    >
       {children}
     </WorkspacePage>
+  );
+}
+
+/**
+ * One section of a Teacher-area page: its `h2` (labelling the section), an
+ * optional line of help, an optional link onward named by where it goes, and
+ * its content.
+ */
+export function TeacherSection({
+  id,
+  heading,
+  intro,
+  action,
+  children,
+}: {
+  readonly id: string;
+  readonly heading: ReactNode;
+  readonly intro?: ReactNode;
+  readonly action?: { readonly href: string; readonly text: ReactNode };
+  readonly children: ReactNode;
+}) {
+  return (
+    <section aria-labelledby={id} className="flex min-w-0 flex-col gap-4">
+      <SectionHeader
+        id={id}
+        heading={heading}
+        {...(intro === undefined ? {} : { intro })}
+        {...(action === undefined ? {} : { action })}
+      />
+      {children}
+    </section>
+  );
+}
+
+/**
+ * What a teacher with no Course yet sees: not an empty dashboard, but what
+ * happens next — Courses are assigned by the learning team, and the classes,
+ * learners and materials follow from that. Availability can be offered now.
+ */
+export function NoScope({
+  locale,
+  t,
+}: {
+  readonly locale: Locale;
+  readonly t: TeacherTranslator;
+}) {
+  return (
+    <EmptyState
+      icon="book"
+      title={t('noScope.title')}
+      action={{
+        href: localizedPath(locale, '/teacher/availability'),
+        text: t('noScope.action'),
+      }}
+    >
+      {t('noScope.body')}
+    </EmptyState>
   );
 }
 
@@ -154,21 +219,6 @@ export function AttendanceWord({
   );
 }
 
-/** A labelled group of links to neighbouring pages, each a 44-pixel target. */
-export function TeacherLinks({
-  label,
-  links,
-}: {
-  readonly label: string;
-  readonly links: readonly { readonly href: string; readonly text: string }[];
-}) {
-  return (
-    <nav aria-label={label}>
-      <WorkspaceLinks links={links} />
-    </nav>
-  );
-}
-
 /**
  * The words for every refusal a Teacher-area action can return — a category,
  * never content; `overrides` gives one form its own wording.
@@ -197,6 +247,7 @@ export function teacherMessages(
     'ambiguous-time': t('failure.ambiguousTime'),
     'invalid-meeting': t('failure.invalidMeeting'),
     'not-participant': t('failure.notParticipant'),
+    'not-started': t('failure.notStarted'),
     booked: t('failure.booked'),
     ...overrides,
   };

@@ -216,7 +216,7 @@ function FactCard({
   return (
     <section
       aria-labelledby={id}
-      className="flex min-w-0 flex-col gap-3 rounded-panel border border-border border-t-4 border-t-accent-rule bg-surface-raised p-5 shadow-panel"
+      className="flex min-w-0 flex-col gap-3 rounded-panel border border-border bg-surface-raised p-5"
     >
       <h2 id={id} className="text-subheading font-semibold">
         {heading}
@@ -276,7 +276,7 @@ export async function CentreDetailPage({
         trail={[...trail.base, { text: trail.name }]}
       />
       <RecordHeader
-        eyebrow={t('centre.eyebrow')}
+        kind={t('centre.eyebrow')}
         name={trail.name}
         nameLocale={trail.nameLocale}
       >
@@ -451,19 +451,16 @@ export async function CentreDetailPage({
  * and the way back to the Centre.
  */
 function CentreSubpageHero({
-  eyebrow,
   title,
   lede,
   back,
 }: {
-  readonly eyebrow: string;
   readonly title: string;
   readonly lede: string;
   readonly back: { readonly href: string; readonly text: string };
 }) {
   return (
     <PageHero
-      eyebrow={eyebrow}
       title={<span dir="auto">{title}</span>}
       lede={lede}
       actions={
@@ -507,7 +504,6 @@ export async function CentreNewsPage({
         ]}
       />
       <CentreSubpageHero
-        eyebrow={t('centre.eyebrow')}
         title={title}
         lede={t('centreNews.intro')}
         back={{
@@ -584,7 +580,6 @@ export async function CentreEventsPage({
         ]}
       />
       <CentreSubpageHero
-        eyebrow={t('centre.eyebrow')}
         title={title}
         lede={t('centreEvents.intro')}
         back={{
@@ -646,7 +641,6 @@ export async function CentreContactPage({
         ]}
       />
       <CentreSubpageHero
-        eyebrow={t('centre.eyebrow')}
         title={title}
         lede={t('contact.notice')}
         back={{

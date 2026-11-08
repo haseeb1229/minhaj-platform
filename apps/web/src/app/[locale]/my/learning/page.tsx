@@ -1,10 +1,9 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { LEARNING_PAGE } from '@minhaj/contracts/learning';
 
-import { Pagination } from '@/components/media/parts';
-import { learningLinks } from '@/components/my-learning/nav';
 import {
   LearningTitle,
   ProgressStatus,
@@ -12,12 +11,17 @@ import {
 } from '@/components/my-learning/parts';
 import { pickLabel } from '@/components/my-learning/presentation';
 import { learningRead } from '@/components/my-learning/read';
-import { PersonalFrame, PersonalLinks, PersonalTime } from '@/components/personal/parts';
+import { lessonPercent } from '@/components/my/dashboard';
+import { MyPage, MySection, OnwardLink, ProgressMeter } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
+import { myTabs } from '@/components/my/sections';
+import { shortDate } from '@/components/my/time';
+import { PersonalTime } from '@/components/personal/parts';
 import {
   personalOffsetHref,
   readPersonalOffset,
 } from '@/components/personal/presentation';
-import { Alert, EmptyState, Panel, SectionHeading, TextLink } from '@/components/ui';
+import { Alert, EmptyState, Pager, Panel, TextLink } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
@@ -37,7 +41,13 @@ import { withdrawTrialAction } from './actions';
  * been scheduled, with a way to withdraw it; nothing here offers a time, a
  * teacher or a confirmation.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'courses');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -68,79 +78,94 @@ export default async function MyLearningPage({
   const read = await learningRead('learning-my-learning', () =>
     learningPanels(session.account.id, offset),
   );
-  const back = <PersonalLinks label={t('nav.label')} links={learningLinks(locale, t)} />;
+  const my = await getTranslations({ locale, namespace: 'my' });
+  const tabs = {
+    label: my('tabs.label.learning'),
+    items: myTabs(locale, 'learning', 'courses', (key) => my(`tabs.${key}`)),
+  };
+  const browse = (
+    <OnwardLink href={localizedPath(locale, '/learn/courses')}>
+      {t('nav.catalogue')}
+    </OnwardLink>
+  );
   const description = <p>{t('description')}</p>;
 
   if (!read.ok)
     return (
-      <PersonalFrame title={t('title')} description={description} back={back}>
+      <MyPage title={t('title')} description={description} tabs={tabs} action={browse}>
         <Alert tone="error">{t('failure.load')}</Alert>
-      </PersonalFrame>
+      </MyPage>
     );
 
   const { courses, paths, trials } = read.value;
   const timeZone = session.account.timezone;
 
   return (
-    <PersonalFrame title={t('title')} description={description} back={back}>
+    <MyPage title={t('title')} description={description} tabs={tabs} action={browse}>
       {/* ---- Courses ----------------------------------------------------- */}
 
-      <section className="flex flex-col gap-3" aria-labelledby="learning-courses">
-        <span id="learning-courses">
-          <SectionHeading>{t('courses.heading')}</SectionHeading>
-        </span>
+      <MySection id="learning-courses" heading={t('courses.heading')}>
         {courses.items.length === 0 ? (
-          <>
-            <EmptyState>
-              {offset === 0 ? t('courses.empty') : t('list.beyond')}
+          offset === 0 ? (
+            <EmptyState
+              icon="book"
+              action={{
+                href: localizedPath(locale, '/learn/courses'),
+                text: t('courses.browse'),
+              }}
+            >
+              {t('courses.empty')}
             </EmptyState>
-            <p>
-              <TextLink href={localizedPath(locale, '/learn/courses')}>
-                {t('courses.browse')}
-              </TextLink>
-            </p>
-          </>
+          ) : (
+            <EmptyState>{t('list.beyond')}</EmptyState>
+          )
         ) : (
-          <ol aria-label={t('courses.heading')} className="flex flex-col gap-3">
+          <ol
+            aria-label={t('courses.heading')}
+            className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2"
+          >
             {courses.items.map((entry) => (
-              <Panel key={entry.course.id} as="li">
-                <div className="flex min-w-0 flex-col gap-2">
-                  <TextLink
+              <li
+                key={entry.course.id}
+                className="flex min-w-0 flex-col gap-3 rounded-panel border border-border bg-surface-raised p-5 shadow-panel"
+              >
+                <h3 className="text-subheading font-semibold text-balance">
+                  <a
                     href={localizedPath(
                       locale,
                       `/my/learning/courses/${encodeURIComponent(entry.course.slug)}`,
                     )}
+                    className="text-foreground underline decoration-accent-rule underline-offset-4 hover:decoration-action"
                   >
                     <LearningTitle
                       labels={entry.course.labels}
                       primaryLocale={entry.course.primaryLocale}
                       locale={locale}
                     />
-                  </TextLink>
-                  <p className="flex flex-wrap items-center gap-3">
-                    <ProgressStatus
-                      completed={entry.completedLessons}
-                      lessons={entry.course.lessons}
-                      t={t}
-                    />
-                    <span className="text-sm text-foreground-muted">
-                      {t('courses.enrolledAt')}{' '}
-                      <PersonalTime
-                        value={entry.enrolledAt.toISOString()}
-                        locale={locale}
-                        timeZone={timeZone}
-                      />
-                    </span>
-                  </p>
-                  {entry.available ? null : (
-                    <p className="text-sm">{t('courses.unavailable')}</p>
-                  )}
-                </div>
-              </Panel>
+                  </a>
+                </h3>
+                <ProgressMeter
+                  percent={lessonPercent(entry.completedLessons, entry.course.lessons)}
+                >
+                  <ProgressStatus
+                    completed={entry.completedLessons}
+                    lessons={entry.course.lessons}
+                    t={t}
+                  />
+                </ProgressMeter>
+                <p className="mt-auto text-caption text-foreground-muted">
+                  {my('learning.enrolled', {
+                    date: shortDate(entry.enrolledAt, locale, timeZone),
+                  })}
+                </p>
+                {entry.available ? null : (
+                  <p className="text-sm">{t('courses.unavailable')}</p>
+                )}
+              </li>
             ))}
           </ol>
         )}
-        <Pagination
+        <Pager
           label={t('courses.heading')}
           previous={
             offset === 0
@@ -151,15 +176,11 @@ export default async function MyLearningPage({
           previousLabel={t('list.previous')}
           nextLabel={t('list.next')}
         />
-      </section>
+      </MySection>
 
       {/* ---- Learning paths, derived ------------------------------------- */}
 
-      <section className="flex flex-col gap-3" aria-labelledby="learning-paths">
-        <span id="learning-paths">
-          <SectionHeading>{t('paths.heading')}</SectionHeading>
-        </span>
-        <p className="text-sm text-foreground-muted">{t('paths.help')}</p>
+      <MySection id="learning-paths" heading={t('paths.heading')} intro={t('paths.help')}>
         {paths.length === 0 ? (
           <EmptyState>{t('paths.empty')}</EmptyState>
         ) : (
@@ -192,15 +213,15 @@ export default async function MyLearningPage({
             ))}
           </ul>
         )}
-      </section>
+      </MySection>
 
       {/* ---- Trial-class requests ---------------------------------------- */}
 
-      <section className="flex flex-col gap-3" aria-labelledby="learning-trials">
-        <span id="learning-trials">
-          <SectionHeading>{t('trials.heading')}</SectionHeading>
-        </span>
-        <p className="text-sm text-foreground-muted">{t('trials.help')}</p>
+      <MySection
+        id="learning-trials"
+        heading={t('trials.heading')}
+        intro={t('trials.help')}
+      >
         {trials.length === 0 ? (
           <EmptyState>{t('trials.empty')}</EmptyState>
         ) : (
@@ -282,7 +303,7 @@ export default async function MyLearningPage({
             })}
           </ul>
         )}
-      </section>
-    </PersonalFrame>
+      </MySection>
+    </MyPage>
   );
 }

@@ -1,4 +1,3 @@
-import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';
@@ -55,21 +54,6 @@ import {
  */
 
 export type MessagingTranslator = Awaited<ReturnType<typeof getTranslations<'messages'>>>;
-
-interface Link {
-  readonly href: string;
-  readonly text: string;
-}
-
-/** The neighbouring pages each person-facing Messaging page links to. */
-export function messagingLinks(locale: Locale, t: MessagingTranslator): readonly Link[] {
-  return [
-    { href: localizedPath(locale, '/my/messages'), text: t('nav.messages') },
-    { href: localizedPath(locale, '/my/messages/support'), text: t('nav.support') },
-    { href: localizedPath(locale, '/my/teachers'), text: t('nav.teachers') },
-    { href: localizedPath(locale, '/my'), text: t('nav.account') },
-  ];
-}
 
 /**
  * The words for every refusal a Messaging action can return — a category,

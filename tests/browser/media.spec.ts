@@ -23,7 +23,8 @@ import {
  *
  * WHAT ONLY A BROWSER CAN PROVE: that a Video page makes NO request to any
  * provider until the visitor asks — and then only to the privacy-enhanced host
- * the CSP names; that the frame carries an accessible title and no autoplay;
+ * the CSP names; that one press of Play both loads it and starts it (R2) while
+ * nothing else autoplays; that the frame carries an accessible title;
  * that a known-unavailable video offers no player at all; that the Watch pages
  * work signed out and set no cookie; that every former address — a Video, a
  * Playlist, and a series that has since become a programme — answers ONE 301
@@ -179,12 +180,22 @@ test.describe('an anonymous visitor browses Watch', () => {
     expect(response?.headers()['set-cookie']).toBeUndefined();
     await expect(page.getByRole('heading', { level: 1, name: 'Watch' })).toBeVisible();
 
-    // Featured means what an operator featured; latest means everything.
-    await expect(page.getByRole('link', { name: LECTURE_TITLE })).toBeVisible();
-    await expect(page.getByRole('link', { name: INTERVIEW_TITLE })).toHaveCount(0);
-    await page.getByRole('link', { name: 'Latest' }).click();
+    // Featured means what an operator featured; latest means everything. (R2:
+    // the shelves below show every video of their kind, so the claim is made
+    // of the sorted section itself.)
+    const featured = page.getByRole('region', { name: 'Featured' });
+    await expect(featured.getByRole('link', { name: LECTURE_TITLE })).toBeVisible();
+    await expect(featured.getByRole('link', { name: INTERVIEW_TITLE })).toHaveCount(0);
+    // A kind of video has its own shelf, linked to its own view.
+    const interviews = page.getByRole('region', { name: 'Interviews' });
+    await expect(interviews.getByRole('link', { name: INTERVIEW_TITLE })).toBeVisible();
+    await page.getByRole('link', { name: 'Latest', exact: true }).click();
     await expect(page).toHaveURL(/\/watch\?sort=latest$/);
-    await expect(page.getByRole('link', { name: INTERVIEW_TITLE })).toBeVisible();
+    await expect(
+      page
+        .getByRole('region', { name: 'Latest' })
+        .getByRole('link', { name: INTERVIEW_TITLE }),
+    ).toBeVisible();
 
     // Every surface it offers exists; audio and galleries are not offered.
     const hrefs = await page
@@ -275,7 +286,7 @@ test.describe('an anonymous visitor browses Watch', () => {
     await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(0);
   });
 
-  test('loads ONLY the privacy-enhanced provider, by keyboard, without autoplay', async ({
+  test('loads ONLY the privacy-enhanced provider, by keyboard, and plays on that one press', async ({
     page,
   }) => {
     await page.route('https://www.youtube-nocookie.com/**', (route) =>
@@ -288,18 +299,24 @@ test.describe('an anonymous visitor browses Watch', () => {
     const external = thirdPartyRequests(page);
     await page.goto(`/watch/videos/${lectureSlug}`);
 
-    const load = page.getByRole('button', { name: 'Load the video from YouTube' });
-    await load.focus();
+    const play = page.getByRole('button', {
+      name: `Play “${LECTURE_TITLE}” (plays from YouTube)`,
+    });
+    await play.focus();
     await page.keyboard.press('Enter');
 
     const frame = page.locator('iframe');
     await expect(frame).toHaveCount(1);
     await expect(frame).toHaveAttribute(
       'src',
-      `https://www.youtube-nocookie.com/embed/${LECTURE_ID}?rel=0`,
+      `https://www.youtube-nocookie.com/embed/${LECTURE_ID}?rel=0&autoplay=1`,
     );
     await expect(frame).toHaveAttribute('title', `${LECTURE_TITLE} — YouTube player`);
-    expect(await frame.getAttribute('allow')).not.toContain('autoplay');
+    // The press is the request AND the play: the frame alone is allowed to
+    // autoplay, and only this click-created frame exists.
+    expect(await frame.getAttribute('allow')).toBe(
+      'autoplay; encrypted-media; picture-in-picture; fullscreen',
+    );
     await expect(frame).toBeFocused();
 
     await page.waitForLoadState('networkidle');
@@ -322,13 +339,18 @@ test.describe('an anonymous visitor browses Watch', () => {
     );
     expect(policy).toContain("frame-ancestors 'none'");
     expect(policy).not.toContain('unsafe-eval');
-    expect(player.headers()['permissions-policy']).toContain('autoplay=()');
+    // Autoplay is delegated on the player page only, to itself and exactly the
+    // two privacy-enhanced embed origins; everywhere else it stays refused.
+    expect(player.headers()['permissions-policy']).toContain(
+      'autoplay=(self "https://www.youtube-nocookie.com" "https://player.vimeo.com")',
+    );
 
     for (const path of ['/watch', '/watch/videos', `/watch/programs/${programSlug}`]) {
       const other = await request.get(path);
       expect(other.headers()['content-security-policy'], path).toContain(
         "frame-src 'none'",
       );
+      expect(other.headers()['permissions-policy'], path).toContain('autoplay=()');
     }
   });
 
@@ -337,7 +359,7 @@ test.describe('an anonymous visitor browses Watch', () => {
     await expect(
       page.getByText('YouTube does not currently offer this video to be played here.'),
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: /Load the video/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Play / })).toHaveCount(0);
     await expect(page.locator('iframe')).toHaveCount(0);
     await expect(
       page.getByRole('link', { name: 'Try opening it on YouTube' }),
@@ -435,7 +457,9 @@ test.describe('an anonymous visitor browses Watch', () => {
     await expect(heading).toHaveText(`آزمائشی خطاب ${run}`);
     await expect(heading).toHaveAttribute('lang', 'ur');
     await expect(
-      page.getByRole('button', { name: 'ویڈیو YouTube سے لوڈ کریں' }),
+      page.getByRole('button', {
+        name: `“آزمائشی خطاب ${run}” چلائیں (YouTube سے چلتی ہے)`,
+      }),
     ).toBeVisible();
   });
 
@@ -548,9 +572,12 @@ test.describe('Media administration', () => {
     await admin.getByRole('button', { name: 'Create', exact: true }).click();
     await admin.waitForURL(/\/admin\/media\/videos\/[0-9a-f-]{36}$/);
 
-    // The editor previews through the same gate: nothing loaded until asked.
+    // The editor previews through the same gate: nothing loaded until asked
+    // (R2: the same one-press Play the public page shows).
     await expect(
-      admin.getByRole('button', { name: 'Load the video from YouTube' }),
+      admin.getByRole('button', {
+        name: 'Play “Synthetic admin video” (plays from YouTube)',
+      }),
     ).toBeVisible();
     await expect(admin.locator('iframe')).toHaveCount(0);
 

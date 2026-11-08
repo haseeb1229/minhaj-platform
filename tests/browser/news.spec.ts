@@ -223,31 +223,36 @@ test('shows News and Events to an anonymous visitor with no cookie, and the same
     'alt',
     'Minhaj-ul-Quran International',
   );
-  // PROMOTED BY EVIDENCE: published news puts News in the primary navigation
-  // and in the footer's Discover group. The shell's presence snapshot may be
-  // up to 30 seconds old, so the promotion is awaited, never assumed.
+  // PROMOTED BY EVIDENCE: published news puts News in the primary navigation's
+  // "News & Events" group (R2: grouped navigation — the link sits in that
+  // group's panel, closed until opened) and in the footer's News & Events
+  // column. The shell's presence snapshot may be up to 30 seconds old, so the
+  // promotion is awaited, never assumed.
+  const mainNavigation = page
+    .getByRole('banner')
+    .getByRole('navigation', { name: 'Main navigation' });
   await expect(async () => {
     await page.goto('/news');
-    await expect(
-      page
-        .getByRole('banner')
-        .getByRole('navigation', { name: 'Main navigation' })
-        .locator('a[href="/news"]'),
-    ).toBeVisible({ timeout: 1_000 });
+    await expect(mainNavigation.locator('a[href="/news"]')).toHaveCount(1, {
+      timeout: 1_000,
+    });
     await expect(
       page
         .getByRole('contentinfo')
-        .getByRole('navigation', { name: 'Discover' })
+        .getByRole('navigation', { name: 'News & Events' })
         .locator('a[href="/news"]'),
     ).toHaveCount(1, { timeout: 1_000 });
   }).toPass({ timeout: 45_000, intervals: [2_000, 5_000] });
-  // The current section is marked for assistive technology.
-  await expect(
-    page
-      .getByRole('banner')
-      .getByRole('navigation', { name: 'Main navigation' })
-      .locator('a[href="/news"]'),
-  ).toHaveAttribute('aria-current', 'page');
+  // Opening the group shows the link; the current section is marked for
+  // assistive technology on the link and on its group's trigger.
+  const group = mainNavigation.getByRole('button', { name: /^News & Events/ });
+  await expect(group).toContainText('(current section)');
+  await group.click();
+  await expect(mainNavigation.locator('a[href="/news"]')).toBeVisible();
+  await expect(mainNavigation.locator('a[href="/news"]')).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
 
   // `?sort=latest` is the same resource, never a path of its own.
   expect((await page.goto('/news?sort=latest'))?.status()).toBe(200);

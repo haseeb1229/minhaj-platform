@@ -97,6 +97,8 @@ interface Catalogue {
   readonly personal: Readonly<
     Record<string, Record<string, string | Record<string, string>>>
   >;
+  /** R2: My Minhaj's own catalogue (the area's frame and home page). */
+  readonly my: Readonly<Record<string, unknown>>;
 }
 
 const EN = JSON.parse(readFileSync(path.join(MESSAGES, 'en.json'), 'utf8')) as Catalogue;
@@ -106,6 +108,15 @@ const ISLAND = EN.personalIsland;
 function copy(area: string, key: string): string {
   const value = EN.personal[area]?.[key];
   if (typeof value !== 'string') throw new Error(`No copy personal.${area}.${key}`);
+  return value;
+}
+
+/** One string from the English `my` catalogue, by its dotted key. */
+function myCopy(key: string): string {
+  let value: unknown = EN.my;
+  for (const part of key.split('.'))
+    value = (value as Record<string, unknown> | undefined)?.[part];
+  if (typeof value !== 'string') throw new Error(`No copy my.${key}`);
   return value;
 }
 
@@ -342,19 +353,27 @@ test.describe('a public page', () => {
  * ========================================================================= */
 
 test.describe('a signed-in reader', () => {
-  test('the landing invites the optional interests, and nothing is saved yet', async () => {
+  test('the landing shows a new account how to begin, and no empty panels', async () => {
     await owner.goto('/my');
     const main = owner.getByRole('main');
-    await expect(main.getByRole('heading', { level: 2 })).toContainText([
-      copy('home', 'onboardingHeading'),
-      copy('home', 'notificationsHeading'),
-      copy('home', 'quranHeading'),
-      copy('home', 'savedHeading'),
+    // R2: every module renders only with something in it, so a brand-new
+    // account sees one module — how to begin — instead of a wall of empties.
+    await expect(main.getByRole('heading', { level: 2 })).toHaveText([
+      myCopy('home.start.heading'),
     ]);
-    await expect(main).toContainText(copy('saved', 'empty'));
-    await expect(main).toContainText(copy('home', 'quranNone'));
-    // History is off, so the landing shows no history panel at all.
-    await expect(main).not.toContainText(copy('home', 'historyHeading'));
+    await expect(main.getByRole('heading', { level: 3 })).toHaveText([
+      myCopy('home.start.interests.title'),
+      myCopy('home.start.save.title'),
+      // History is off, so turning it on is offered as the optional third step.
+      myCopy('home.start.history.title'),
+    ]);
+    await expect(
+      main.getByRole('link', { name: myCopy('home.start.interests.action') }),
+    ).toHaveAttribute('href', '/my/settings/interests');
+    await expect(main).toContainText(myCopy('home.intro.new'));
+    await expect(main).not.toContainText(copy('home', 'savedHeading'));
+    await expect(main).not.toContainText(copy('home', 'notificationsHeading'));
+    await expect(main).not.toContainText(myCopy('home.continue.heading'));
   });
 
   test('saves a book and finds it under bookmarks', async () => {
@@ -572,9 +591,8 @@ test.describe('a signed-in reader', () => {
     ).toHaveCount(0);
 
     await owner.goto('/my');
-    await expect(owner.getByRole('main')).not.toContainText(
-      copy('home', 'onboardingHeading'),
-    );
+    // Answered (skipped) and something already saved: the beginning is over.
+    await expect(owner.getByRole('main')).not.toContainText(myCopy('home.start.heading'));
 
     await owner.goto('/my/settings/interests');
     const interest = EN.personal['interests']?.['interest'] as Record<string, string>;
@@ -629,18 +647,21 @@ test.describe('a signed-in reader', () => {
     const main = owner.getByRole('main');
     const saved = main.getByRole('list', { name: copy('home', 'savedHeading') });
     await expect(saved.getByRole('link', { name: TITLE.work })).toBeVisible();
-    await expect(main).toContainText(copy('home', 'historyHeading'));
-    const reading = main.getByRole('list', {
-      name: EN.personal['nav']?.['reading'] as string,
+    // R2: the last thing read and the last thing watched are offered to continue.
+    const continuing = main.getByRole('region', {
+      name: myCopy('home.continue.heading'),
     });
-    await expect(reading.getByRole('link', { name: TITLE.work })).toBeVisible();
-    const watch = main.getByRole('list', {
-      name: EN.personal['nav']?.['watch'] as string,
-    });
-    await expect(watch.getByRole('link', { name: TITLE.video })).toBeVisible();
-    await expect(main).toContainText(
-      (EN.personal['notifications']?.['unreadCount'] as string).replace('{count}', '0'),
+    await expect(continuing.getByRole('link', { name: TITLE.work })).toHaveAttribute(
+      'href',
+      PAGE.work,
     );
+    await expect(continuing.getByRole('link', { name: TITLE.video })).toHaveAttribute(
+      'href',
+      PAGE.video,
+    );
+    await expect(main).toContainText(myCopy('home.intro.returning'));
+    // No notification yet, so no notifications module.
+    await expect(main).not.toContainText(copy('home', 'notificationsHeading'));
   });
 });
 

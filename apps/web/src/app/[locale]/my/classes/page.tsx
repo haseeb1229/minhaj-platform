@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
@@ -7,26 +8,33 @@ import {
   type LearnerClassView,
 } from '@minhaj/contracts/learning';
 
-import { Pagination } from '@/components/media/parts';
 import {
   AttendanceBadge,
   ClassSchedule,
   JoinLink,
   ParticipationBadge,
   SessionStateBadge,
-  classLinks,
   classMessages,
 } from '@/components/my-classes/parts';
 import { LearningTitle } from '@/components/my-learning/parts';
 import { pickLabel } from '@/components/my-learning/presentation';
 import { learningRead } from '@/components/my-learning/read';
-import { ConfirmField, PersonalFrame, PersonalLinks } from '@/components/personal/parts';
+import { ConfirmField } from '@/components/personal/parts';
 import {
   personalOffsetHref,
   readPersonalOffset,
 } from '@/components/personal/presentation';
-import { Alert, EmptyState, Panel, SectionHeading, TextLink } from '@/components/ui';
+import {
+  Alert,
+  EmptyState,
+  Pager,
+  Panel,
+  SectionHeading,
+  TextLink,
+} from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
+import { MyPage, OnwardLink } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
 import { requireActiveSession } from '../guard';
@@ -48,7 +56,13 @@ import { cancelBookingAction } from './actions';
  * HONEST WHILE SWITCHED OFF. When live learning is not activated the page says
  * so in words rather than listing an empty week.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'classes');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -86,14 +100,18 @@ export default async function MyClassesPage({
   const read = await learningRead('learning-my-classes', () =>
     classPanels(session.account.id, offset),
   );
-  const back = <PersonalLinks label={t('nav.label')} links={classLinks(locale, t)} />;
   const description = <p>{t('description')}</p>;
+  const schedule = (
+    <OnwardLink href={localizedPath(locale, '/learn/live')}>
+      {t('nav.schedule')}
+    </OnwardLink>
+  );
 
   if (!read.ok)
     return (
-      <PersonalFrame title={t('title')} description={description} back={back}>
+      <MyPage title={t('title')} description={description} action={schedule}>
         <Alert tone="error">{t('failure.load')}</Alert>
-      </PersonalFrame>
+      </MyPage>
     );
 
   const { activated, upcoming, past, joins } = read.value;
@@ -148,7 +166,7 @@ export default async function MyClassesPage({
   };
 
   return (
-    <PersonalFrame title={t('title')} description={description} back={back}>
+    <MyPage title={t('title')} description={description} action={schedule}>
       {activated ? null : <Alert tone="info">{t('notActivated')}</Alert>}
 
       {/* ---- Upcoming ---------------------------------------------------- */}
@@ -244,7 +262,7 @@ export default async function MyClassesPage({
             ))}
           </ol>
         )}
-        <Pagination
+        <Pager
           label={t('past.heading')}
           previous={
             offset === 0
@@ -256,6 +274,6 @@ export default async function MyClassesPage({
           nextLabel={t('list.next')}
         />
       </section>
-    </PersonalFrame>
+    </MyPage>
   );
 }

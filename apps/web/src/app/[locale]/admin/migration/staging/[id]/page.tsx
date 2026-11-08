@@ -67,6 +67,7 @@ import {
   TopicMappingBadge,
   ValidationBadge,
 } from '../../status';
+import { adminPageMetadata } from '../../../metadata';
 
 /**
  * `/{locale}/admin/migration/staging/{id}` — one staged revision, as a
@@ -89,7 +90,7 @@ import {
  * exists for it and a manifest refuses it — and its acceptance belongs to the
  * religious authority (OPEN_DECISIONS.md §1).
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminMigration', 'staged.title');
 
 export const dynamic = 'force-dynamic';
 
@@ -629,7 +630,13 @@ function PersonalDataFindings({
       ) : (
         <>
           {decidable ? (
-            <MigrationPersonalDataStepUp locale={locale} />
+            <MigrationPersonalDataStepUp
+              locale={locale}
+              returnTo={migrationPath(
+                locale,
+                `/staging/${encodeURIComponent(staged.id)}`,
+              )}
+            />
           ) : awaiting ? (
             <p className="text-sm text-foreground-muted">{t('findings.clearerOnly')}</p>
           ) : null}

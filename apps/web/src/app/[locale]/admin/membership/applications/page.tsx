@@ -34,14 +34,10 @@ import {
 import { requireAdminPage } from '@/composition/authorization';
 import { membershipRuntime } from '@/composition/membership';
 import { requireLocale } from '@/config/route-locale';
+import { AdminPager } from '../../pager';
 import { pageOffset } from '../../shared';
-import {
-  Pager,
-  PersonName,
-  adminMembershipCopy,
-  personNames,
-  type Query,
-} from '../shared';
+import { PersonName, adminMembershipCopy, personNames, type Query } from '../shared';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/membership/applications` — the application queue
@@ -60,7 +56,10 @@ import {
  * A MALFORMED TYPE FILTER NEVER BROADENS: it is explained and nothing is
  * listed. An unknown status is the default view.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata(
+  'adminMembership',
+  'applications.title',
+);
 
 export const dynamic = 'force-dynamic';
 
@@ -220,14 +219,16 @@ export default async function MembershipApplicationsPage({
       )}
 
       {listing?.ok === true ? (
-        <Pager
+        <AdminPager
+          label={t('applications.pages')}
           offset={offset}
+          pageSize={MEMBERSHIP_PAGE}
           total={listing.value.total}
-          hrefFor={(page) =>
+          href={(page) =>
             withQuery(base, { ...filtered, page: page > 1 ? String(page) : null })
           }
-          label={t('applications.pages')}
-          copy={copy}
+          previousLabel={t('previous')}
+          nextLabel={t('next')}
         />
       ) : null}
     </main>

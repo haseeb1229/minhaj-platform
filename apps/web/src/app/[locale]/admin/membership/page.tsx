@@ -47,6 +47,7 @@ import { requireAdminPage } from '@/composition/authorization';
 import { membershipRuntime } from '@/composition/membership';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
+import { AdminPager } from '../pager';
 import { pageOffset } from '../shared';
 import {
   closeMembershipAction,
@@ -56,7 +57,6 @@ import {
   transitionTypeAction,
 } from './actions';
 import {
-  Pager,
   PersonName,
   RecordIdentity,
   adminMembershipCopy,
@@ -64,6 +64,7 @@ import {
   type AdminMembershipCopy,
   type Query,
 } from './shared';
+import { adminPageMetadata } from '../metadata';
 
 /**
  * `/{locale}/admin/membership` — the Membership types and the members
@@ -87,7 +88,7 @@ import {
  * Forms appear only for a holder of `membership.administer`, and every action
  * re-checks it.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminMembership', 'types.title');
 
 export const dynamic = 'force-dynamic';
 
@@ -270,12 +271,14 @@ export default async function MembershipAdminPage({
           </ul>
         )}
         {listing?.ok === true ? (
-          <Pager
-            offset={offset}
-            total={listing.value.total}
-            hrefFor={membersHref}
+          <AdminPager
             label={t('members.pages')}
-            copy={copy}
+            offset={offset}
+            pageSize={MEMBERSHIP_PAGE}
+            total={listing.value.total}
+            href={membersHref}
+            previousLabel={t('previous')}
+            nextLabel={t('next')}
           />
         ) : null}
       </section>

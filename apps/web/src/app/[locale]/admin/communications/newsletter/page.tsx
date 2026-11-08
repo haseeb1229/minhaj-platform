@@ -28,6 +28,7 @@ import {
 import { ActionForm } from '../../../(identity)/form-state';
 import { adminCopy, queryValue } from '../../shared';
 import { reinstateNewsletterSubscriber, suppressNewsletterSubscriber } from './actions';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * Newsletter subscribers — states and consent dates (ROUTE_MAP.md §7:
@@ -45,7 +46,7 @@ import { reinstateNewsletterSubscriber, suppressNewsletterSubscriber } from './a
  * bounce and complaint suppression is a different mechanism, owned by outbound
  * mail delivery and counted on its own page; it overrides anything here.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('newsletter.admin', 'title');
 export const dynamic = 'force-dynamic';
 
 type Query = Record<string, string | string[] | undefined>;

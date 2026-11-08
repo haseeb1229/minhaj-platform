@@ -656,7 +656,9 @@ test.describe('an anonymous visitor finds Collections', () => {
       'href',
       `/collections/${slug.main}`,
     );
-    // A card states only what the Collection owns: no picture, no member.
+    // A card names no member. R2: its only possible picture is a leading
+    // member's OWN first-party lead image, and these fixtures carry none, so the
+    // card is set as text — never a placeholder.
     await expect(page.locator('main img')).toHaveCount(0);
     await expect(list.getByText(MEMBER.work.title)).toHaveCount(0);
 
@@ -685,6 +687,18 @@ test.describe('an anonymous visitor finds Collections', () => {
     );
     await expectPublicOrder(page, FINAL_ORDER);
     await expect(page.locator('iframe, embed, object')).toHaveCount(0);
+
+    // R2 (audit F51): a date order reads the same members, grouped by year;
+    // an order that is not one is the curated order.
+    expect((await page.goto(`/collections/${slug.main}?order=oldest`))?.status()).toBe(
+      200,
+    );
+    await expect(
+      page.locator('section[aria-labelledby="collection-items"] ol > li'),
+    ).toHaveCount(FINAL_ORDER.length);
+    await page.goto(`/collections/${slug.main}?order=sideways`);
+    await expectPublicOrder(page, FINAL_ORDER);
+    await page.goto(`/collections/${slug.main}`);
 
     // Every member link resolves at its owner.
     for (const name of FINAL_ORDER)
@@ -906,7 +920,17 @@ test.describe('withdrawn members and an archived Collection', () => {
     const collectionId = collectionIdOf(mainEditor);
     const before = await targetStates();
     await publisher.goto(mainEditor);
-    await clickSaved(publisher, 'Archive');
+    // R2: archiving asks first; only the dialog's own button submits.
+    const next =
+      Number(await publisher.locator('input[name="version"]').first().inputValue()) + 1;
+    await publisher.getByRole('button', { name: 'Archive', exact: true }).click();
+    await publisher
+      .getByRole('dialog', { name: 'Archive this item?' })
+      .getByRole('button', { name: 'Archive', exact: true })
+      .click();
+    await expect(
+      publisher.getByRole('status').filter({ hasText: `Version ${String(next)}` }),
+    ).toBeVisible();
     expect((await collectionRow(collectionId)).state).toBe('archived');
     expect(await targetStates()).toBe(before);
 

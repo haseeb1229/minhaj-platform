@@ -2,6 +2,7 @@ import { Alert, PageHeading, Panel, SectionHeading, TextLink } from '@/component
 import { requireAdminPage } from '@/composition/authorization';
 import { requireLocale } from '@/config/route-locale';
 import { adminMigrationCopy, migrationPath } from './shared';
+import { adminPageMetadata } from '../metadata';
 
 /**
  * `/{locale}/admin/migration` — the Migration area's overview
@@ -13,7 +14,7 @@ import { adminMigrationCopy, migrationPath } from './shared';
  * proof), and that runs and promotions are carried out by the command line,
  * not from this browser.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminMigration', 'title');
 
 export const dynamic = 'force-dynamic';
 

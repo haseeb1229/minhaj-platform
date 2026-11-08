@@ -21,6 +21,7 @@ import {
   pageHref,
   type ListParams,
 } from '../shared';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/learning/enrolments` — how many people are enrolled on each
@@ -31,6 +32,7 @@ import {
  * no Learning permission reaches one. Nothing here changes anybody's
  * Enrolment or Progress.
  */
+export const generateMetadata = adminPageMetadata('adminLearning', 'surface.enrolments');
 export const dynamic = 'force-dynamic';
 
 export default async function EnrolmentSummaryPage({ params, searchParams }: ListParams) {

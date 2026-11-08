@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Breadcrumbs, Container, PageHero } from '@/components/ui';
+import { Badge, Breadcrumbs, Container, Icon, PageHero } from '@/components/ui';
 import { descriptionDirection } from '@/config/locale';
 
 /**
@@ -63,11 +63,7 @@ export function ListingFrame({
     <>
       <CrumbStrip label={breadcrumbLabel} trail={trail} />
       <PageHero title={title} {...(lede === undefined ? {} : { lede })}>
-        {notice === undefined ? null : (
-          <p className="max-w-[var(--measure-prose)] border-s-2 border-accent-rule ps-3 text-sm text-foreground-muted">
-            {notice}
-          </p>
-        )}
+        {notice === undefined ? null : <Notice text={notice} />}
       </PageHero>
       <Body>{children}</Body>
     </>
@@ -75,12 +71,27 @@ export function ListingFrame({
 }
 
 /**
+ * A standing qualification, said once and quietly: a small line of muted text
+ * after an information mark — never a coloured stripe or a banner (F21).
+ */
+function Notice({ text }: { readonly text: string }) {
+  return (
+    <p className="flex max-w-[var(--measure-prose)] items-start gap-2 text-sm text-foreground-muted">
+      <Icon name="info" size={16} className="mt-[0.2em] text-accent" />
+      <span>{text}</span>
+    </p>
+  );
+}
+
+/**
  * A Library record — a book, a research record, a magazine or an issue.
  *
  * The title and the summary are rendered in THEIR OWN language and direction;
- * the eyebrow, the metadata row and the notice are interface text. The record
- * body is a two-column layout from a laptop up: the reading column, and an
- * aside for facts, attribution and context.
+ * the kind badge, the metadata row and the notice are interface text. A record
+ * with a cover opens with it at the inline start, beside the words (R2), so a
+ * book page looks like the book. The record body is a two-column layout from a
+ * laptop up: the reading column, and an aside for facts, attribution and
+ * context.
  */
 export function RecordFrame({
   breadcrumbLabel,
@@ -92,6 +103,7 @@ export function RecordFrame({
   summary,
   meta,
   notice,
+  cover,
   aside,
   children,
 }: {
@@ -108,41 +120,56 @@ export function RecordFrame({
   readonly summary: readonly string[];
   readonly meta?: ReactNode;
   readonly notice?: string;
+  /** The record's cover, shown whole beside the title. */
+  readonly cover?: ReactNode;
   readonly aside?: ReactNode;
   readonly children: ReactNode;
 }) {
+  const words = (
+    <div className="flex max-w-3xl min-w-0 flex-col gap-4">
+      <h1
+        className="text-title font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere"
+        lang={lang}
+        dir={dir}
+      >
+        {title}
+      </h1>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <Badge>{eyebrow}</Badge>
+        {meta}
+      </div>
+      {summary.map((paragraph, index) => (
+        <p
+          key={index}
+          className="text-lede max-w-[var(--measure-prose)] text-foreground-muted"
+          lang={lang}
+          dir={descriptionDirection(dir)}
+        >
+          {paragraph}
+        </p>
+      ))}
+      {notice === undefined ? null : <Notice text={notice} />}
+    </div>
+  );
+
   return (
     <>
       <CrumbStrip label={breadcrumbLabel} trail={trail} />
       <div className="border-b border-border">
         <Container>
-          <header className="flex max-w-3xl flex-col gap-4 py-[var(--space-page)]">
-            <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
-              {eyebrow}
-            </p>
-            <h1
-              className="text-title font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere"
-              lang={lang}
-              dir={dir}
-            >
-              {title}
-            </h1>
-            {summary.map((paragraph, index) => (
-              <p
-                key={index}
-                className="text-lede max-w-[var(--measure-prose)] text-foreground-muted"
-                lang={lang}
-                dir={descriptionDirection(dir)}
-              >
-                {paragraph}
-              </p>
-            ))}
-            {meta}
-            {notice === undefined ? null : (
-              <p className="max-w-[var(--measure-prose)] border-s-2 border-accent-rule ps-3 text-sm text-foreground-muted">
-                {notice}
-              </p>
+          <header
+            className={`py-[var(--space-page)] ${
+              cover === undefined
+                ? ''
+                : 'grid grid-cols-1 items-start gap-6 sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)] sm:gap-x-8 lg:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] lg:gap-x-12'
+            }`}
+          >
+            {cover === undefined ? null : (
+              <div className="w-36 rounded-panel bg-surface-raised p-2 shadow-raised sm:w-auto">
+                {cover}
+              </div>
             )}
+            {words}
           </header>
         </Container>
       </div>

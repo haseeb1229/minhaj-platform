@@ -18,6 +18,7 @@ import {
   requireOwnSession,
 } from '@/composition/authorization';
 import { identityRuntime } from '@/composition/identity';
+import { safeStepUpReturnTo } from '@/composition/return-to';
 import type { AuthorizationFailure } from '@/contexts/identity-access';
 import {
   grantReasonSchema,
@@ -103,6 +104,11 @@ export type StepUpFailure =
 export interface StepUpActionState {
   readonly status: 'idle' | 'success' | 'error';
   readonly failure?: StepUpFailure;
+  /**
+   * R2: where to resume once confirmed — a validated, purpose-bound address
+   * (`safeStepUpReturnTo`), present only when the form named one.
+   */
+  readonly resume?: string;
 }
 
 const stepUpSchema = z.object({
@@ -119,6 +125,12 @@ const stepUpSchema = z.object({
  * `privilege-administration` does not authorise an account-status change, so
  * re-proving yourself for one sensitive class never quietly authorises another
  * (SECURITY_BASELINE.md §8.1).
+ *
+ * RESUMES WHERE THE PERSON WAS (R2, audit F35). A form may name the page it
+ * belongs to as `returnTo`; the answer carries it back, validated against
+ * the PURPOSE (`safeStepUpReturnTo`): only a page whose changes this purpose
+ * authorises, never anywhere else. A value that fails is dropped and the
+ * person simply stays where they are, told it worked.
  */
 export async function grantStepUpAction(
   _previous: StepUpActionState,
@@ -155,7 +167,12 @@ export async function grantStepUpAction(
   }
 
   refresh(locale);
-  return { status: 'success' };
+  const raw = form.get('returnTo');
+  const resume = safeStepUpReturnTo(
+    typeof raw === 'string' ? raw : null,
+    parsed.data.purpose,
+  );
+  return resume === null ? { status: 'success' } : { status: 'success', resume };
 }
 
 /* ===========================================================================

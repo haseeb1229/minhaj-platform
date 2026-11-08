@@ -5,6 +5,7 @@ import { requireAdminPage } from '@/composition/authorization';
 import { taxonomyRuntime } from '@/composition/taxonomy';
 import { requireLocale } from '@/config/route-locale';
 import { Alert, EmptyState, PageHeading, Panel, SectionHeading } from '@/components/ui';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * Topic mapping — cross-domain topic assignment, as it ACTUALLY stands.
@@ -35,7 +36,7 @@ import { Alert, EmptyState, PageHeading, Panel, SectionHeading } from '@/compone
  * those are implementation detail owned by the later context, not product
  * vocabulary Taxonomy may publish.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('admin', 'taxonomy.mapping.title');
 export const dynamic = 'force-dynamic';
 
 export default async function TopicMappingPage({

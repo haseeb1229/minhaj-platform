@@ -275,8 +275,14 @@ test.describe('a periodical and its issues', () => {
   test('lists public issues newest first, and never a draft', async ({ page }) => {
     await page.goto(`/library/magazines/${magazineSlug}`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(MAGAZINE_TITLE);
-    const issues = page.getByRole('list', { name: 'Issues' });
-    await expect(issues.getByRole('listitem')).toHaveCount(2);
+    // R2 (audit F14): the issues are grouped under their year, newest first.
+    const issues = page.getByRole('region', { name: 'Issues' });
+    await expect(
+      issues.getByRole('heading', { name: '2021', exact: true }),
+    ).toBeVisible();
+    await expect(
+      issues.getByRole('list', { name: '2021' }).getByRole('listitem'),
+    ).toHaveCount(2);
     await expect(issues.getByRole('link')).toHaveText([
       'Synthetic spring issue',
       'Synthetic winter issue',

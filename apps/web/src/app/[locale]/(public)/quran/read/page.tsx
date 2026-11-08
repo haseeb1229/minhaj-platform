@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { QuranUnavailable } from '@/components/quran/parts';
@@ -9,8 +10,14 @@ import {
   readSurahSegment,
   surahPath,
 } from '@/components/quran/presentation';
-import { quranAvailability, quranMetadata, readSurah } from '@/components/quran/read';
-import { ReaderEntryPage } from '@/components/quran/reader';
+import { parseQuickJump, quickJumpPathOf } from '@/components/quran/quick-jump';
+import {
+  quranAvailability,
+  quranMetadata,
+  readSurah,
+  readSurahs,
+} from '@/components/quran/read';
+import { ReaderEntryPage, jumpIndex } from '@/components/quran/reader';
 import { requireLocale } from '@/config/route-locale';
 
 /**
@@ -25,6 +32,12 @@ import { requireLocale } from '@/config/route-locale';
  * Ayah must be within it — and the only address ever produced is the canonical
  * citation built from those numbers, so no value a URL carries can choose where
  * the visitor is sent. A choice that cannot be honoured is said so in words.
+ *
+ * `?q=` IS THE QUICK JUMP (R2): "18", "18:10", a Surah name or "juz 15", parsed
+ * against the reader's own Surahs, counts and recorded names
+ * (`@/components/quran/quick-jump`). The address it opens is built from the
+ * numbers that parse confirmed — never from the text typed — so it is no
+ * redirect parameter either.
  */
 export const dynamic = 'force-dynamic';
 
@@ -56,9 +69,16 @@ export default async function ReadRoute({ params, searchParams }: ReadParams) {
   const query = await searchParams;
   const surahText = query['surah'];
   const ayahText = query['ayah'];
-  let problem: 'surah' | 'ayah' | null = null;
+  const jumpText = typeof query['q'] === 'string' ? query['q'] : null;
+  let problem: 'surah' | 'ayah' | 'query' | null = null;
 
-  if (surahText !== undefined) {
+  if (jumpText !== null && jumpText.trim() !== '') {
+    const target = quickJumpPathOf(
+      parseQuickJump(jumpText, jumpIndex(await readSurahs())),
+    );
+    if (target === null) problem = 'query';
+    else redirect(localizedPath(locale, target));
+  } else if (surahText !== undefined) {
     const number = typeof surahText === 'string' ? readSurahSegment(surahText) : null;
     const surah = number === null ? null : await readSurah(number);
     if (surah === null) problem = 'surah';
@@ -72,6 +92,11 @@ export default async function ReadRoute({ params, searchParams }: ReadParams) {
   }
 
   return (
-    <ReaderEntryPage locale={locale} availability={availability} problem={problem} />
+    <ReaderEntryPage
+      locale={locale}
+      availability={availability}
+      problem={problem}
+      query={problem === 'query' ? (jumpText ?? '') : ''}
+    />
   );
 }

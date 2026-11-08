@@ -5,8 +5,37 @@ import type { Locale } from '@minhaj/contracts';
 import type { AttendanceReportRow } from '@minhaj/contracts/learning';
 
 import { LearningTitle } from '@/components/my-learning/parts';
-import { DataCell, DataRow, DataTable, TextLink } from '@/components/ui';
+import { DataCell, DataRow, DataTable, LinkTabs, TextLink } from '@/components/ui';
 import { OwnTime, SessionStateBadge, type TeacherTranslator } from './parts';
+
+/** The two views of attendance — what is still to mark, and every past class. */
+export function AttendanceTabs({
+  current,
+  locale,
+  t,
+}: {
+  readonly current: 'pending' | 'reports';
+  readonly locale: Locale;
+  readonly t: TeacherTranslator;
+}) {
+  return (
+    <LinkTabs
+      label={t('attendancePage.views')}
+      tabs={[
+        {
+          href: localizedPath(locale, '/teacher/attendance'),
+          text: t('attendancePage.pendingTab'),
+          current: current === 'pending',
+        },
+        {
+          href: localizedPath(locale, '/teacher/attendance/reports'),
+          text: t('attendancePage.reports'),
+          current: current === 'reports',
+        },
+      ]}
+    />
+  );
+}
 
 /**
  * Past classes with their attendance counts — present, absent, not marked —

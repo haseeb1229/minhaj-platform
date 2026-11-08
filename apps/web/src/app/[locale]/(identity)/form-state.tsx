@@ -1,8 +1,10 @@
 'use client';
 
-import { useActionState } from 'react';
+import { startTransition, useActionState, useEffect, useRef } from 'react';
 
 import { Alert, Button } from '@/components/ui';
+import { useConfirmGate, type ConfirmSpec } from '@/components/ui/confirm-action';
+import { STEP_UP_GRANTED } from '@/components/ui/step-up-event';
 
 /**
  * The one Client Component the authentication and administration surfaces use.
@@ -37,6 +39,7 @@ export function ActionForm<State extends FormActionState>({
   children,
   tone = 'primary',
   preserveInput = false,
+  confirm,
 }: {
   readonly action: (state: State, form: FormData) => Promise<State>;
   readonly submitLabel: string;
@@ -53,10 +56,39 @@ export function ActionForm<State extends FormActionState>({
    * cancels that reset, so the author corrects the one field and saves again.
    */
   readonly preserveInput?: boolean;
+  /**
+   * R2: ask before submitting. The form's button opens a confirmation dialog
+   * (with an optional reason field) and only the dialog's button submits. For
+   * irreversible or destructive changes (audit F29); the action re-checks
+   * everything regardless.
+   */
+  readonly confirm?: ConfirmSpec;
 }) {
   const [state, submit, pending] = useActionState<State, FormData>(action, {
     status: 'idle',
   } as Awaited<State>);
+  const gate = useConfirmGate(confirm, tone);
+
+  // R2 (audit F35): a submission refused for want of a fresh step-up is held,
+  // and sent again — exactly as it was — once a step-up prompt on the page
+  // announces a grant. The server re-checks everything; holding it only spares
+  // the person retyping the change. Kept until the next submission replaces it.
+  const held = useRef<FormData | null>(null);
+  useEffect(() => {
+    if (state.status !== 'error' || state.failure !== 'step-up-required') return;
+    const data = held.current;
+    if (data === null) return;
+    const resume = () => {
+      startTransition(() => submit(data));
+    };
+    window.addEventListener(STEP_UP_GRANTED, resume, { once: true });
+    return () => window.removeEventListener(STEP_UP_GRANTED, resume);
+  }, [state, submit]);
+
+  function hold(event: React.FormEvent<HTMLFormElement>) {
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    held.current = new FormData(event.currentTarget, submitter);
+  }
 
   const message =
     state.status === 'success'
@@ -70,6 +102,10 @@ export function ActionForm<State extends FormActionState>({
       action={submit}
       className="flex flex-col gap-4"
       noValidate
+      onSubmit={(event) => {
+        gate.onSubmit?.(event);
+        if (!event.defaultPrevented) hold(event);
+      }}
       {...(preserveInput ? { onReset: (event) => event.preventDefault() } : {})}
     >
       {message === undefined ? null : (
@@ -81,6 +117,7 @@ export function ActionForm<State extends FormActionState>({
       <Button tone={tone} disabled={pending} aria-busy={pending}>
         {pending ? pendingLabel : submitLabel}
       </Button>
+      {gate.dialog}
     </form>
   );
 }

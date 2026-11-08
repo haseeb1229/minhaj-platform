@@ -17,6 +17,7 @@ import { requireAdminPage } from '@/composition/authorization';
 import { messagingRuntime } from '@/composition/messaging';
 import { requireLocale } from '@/config/route-locale';
 import { QueuePager, adminMessagingCopy, reportTarget, type Query } from '../shared';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * The moderation queue (ROUTE_MAP.md §7; DELIVERY_PLAN.md Phase 24): the
@@ -27,7 +28,7 @@ import { QueuePager, adminMessagingCopy, reportTarget, type Query } from '../sha
  * report that has waited longest is the first one a moderator meets. No
  * content is listed; the evidence is read, audited, on the report's page.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminMessaging', 'moderation.title');
 
 export const dynamic = 'force-dynamic';
 

@@ -35,7 +35,10 @@ export function AttendanceMarks({
   readonly names: ReadonlyMap<string, string>;
   readonly locale: Locale;
   readonly action: (state: FormActionState, form: FormData) => Promise<FormActionState>;
-  /** False for a cancelled class: marks are shown, and no control the service would refuse. */
+  /**
+   * False before the class starts and for a cancelled class (`classControls`):
+   * marks are shown, and no control the service would refuse.
+   */
   readonly markable: boolean;
   readonly t: TeacherTranslator;
 }) {

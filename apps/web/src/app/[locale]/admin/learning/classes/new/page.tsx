@@ -25,6 +25,7 @@ import {
   participantNameMap,
   scopeOptionText,
 } from '../parts';
+import { adminPageMetadata } from '../../../metadata';
 
 /**
  * `/{locale}/admin/learning/classes/new?scope=` — a regular Course session on
@@ -40,6 +41,7 @@ import {
  * and refused otherwise. It is never shown again except by the disclosure
  * read on the class's own page.
  */
+export const generateMetadata = adminPageMetadata('adminLearning', 'classes.create');
 export const dynamic = 'force-dynamic';
 
 /** The most scope pages consulted to fill the choice. */

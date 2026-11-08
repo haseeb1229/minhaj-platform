@@ -1,82 +1,88 @@
 import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
-import type { ReactNode } from 'react';
-
 import type { Locale } from '@minhaj/contracts';
 import type { TeacherStudentSummary } from '@minhaj/contracts/learning';
 
-import { LearningTitle } from '@/components/my-learning/parts';
-import { Panel, TextLink } from '@/components/ui';
+import { pickLabel } from '@/components/my-learning/presentation';
 import type { TeacherTranslator } from './parts';
+import { ownZone } from './presentation';
+import { StudentDirectory, type DirectoryRow } from './student-directory';
+import { progressStage } from './student-progress';
 
 /**
  * A page of learners as their teacher may see them: a name, and for each of
  * the teacher's Courses they are on, when they enrolled and how far they are.
- * Progress is written as words — "Lessons complete: 3 of 10" — never as a bar
- * alone. Each name opens the learner's Learning facts, and nothing else.
+ * Progress is written as words — "Lessons complete: 3 of 10" — beside a bar
+ * that only repeats them. Each name opens the learner's Learning facts, and
+ * nothing else.
+ *
+ * The words are finished here, on the server, in the teacher's own zone and
+ * language; the directory island only narrows what is already on the page.
  */
 export function StudentList({
   label,
   students,
   names,
   locale,
-  enrolledAt,
+  accountZone,
   t,
 }: {
   readonly label: string;
   readonly students: readonly TeacherStudentSummary[];
   readonly names: ReadonlyMap<string, string>;
   readonly locale: Locale;
-  readonly enrolledAt: (at: Date) => ReactNode;
+  readonly accountZone: string | null;
   readonly t: TeacherTranslator;
 }) {
+  const enrolled = new Intl.DateTimeFormat(locale, {
+    dateStyle: 'medium',
+    timeZone: ownZone(accountZone),
+  });
+  const rows: DirectoryRow[] = students.map((student) => ({
+    accountId: student.accountId,
+    name: names.get(student.accountId) ?? t('common.learner'),
+    href: localizedPath(
+      locale,
+      `/teacher/students/${encodeURIComponent(student.accountId)}`,
+    ),
+    courses: student.courses.map((entry) => {
+      const title = pickLabel(entry.course.labels, locale, entry.course.primaryLocale);
+      const completed = Math.min(entry.completedLessons, entry.course.lessons);
+      return {
+        id: entry.course.id,
+        title: title?.title ?? entry.course.slug,
+        lang: title?.locale,
+        progress: t('students.progress', {
+          completed: String(completed),
+          total: String(entry.course.lessons),
+        }),
+        completed,
+        total: entry.course.lessons,
+        stage: progressStage(entry.completedLessons, entry.course.lessons),
+        enrolled: t('directory.enrolledOn', { date: enrolled.format(entry.enrolledAt) }),
+      };
+    }),
+  }));
+
   return (
-    <ol className="flex flex-col gap-3" aria-label={label}>
-      {students.map((student) => (
-        <Panel key={student.accountId} as="li">
-          <div className="flex min-w-0 flex-col gap-2">
-            <TextLink
-              href={localizedPath(
-                locale,
-                `/teacher/students/${encodeURIComponent(student.accountId)}`,
-              )}
-            >
-              <span dir="auto" className="wrap-anywhere">
-                {names.get(student.accountId) ?? t('common.learner')}
-              </span>
-            </TextLink>
-            <ul
-              className="flex flex-col gap-1 text-sm"
-              aria-label={t('students.courses')}
-            >
-              {student.courses.map((entry) => (
-                <li
-                  key={entry.course.id}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1"
-                >
-                  <LearningTitle
-                    labels={entry.course.labels}
-                    primaryLocale={entry.course.primaryLocale}
-                    locale={locale}
-                  />
-                  <span>
-                    {t('students.progress', {
-                      completed: String(
-                        Math.min(entry.completedLessons, entry.course.lessons),
-                      ),
-                      total: String(entry.course.lessons),
-                    })}
-                  </span>
-                  <span className="text-foreground-muted">
-                    {t('students.enrolledAt')} {enrolledAt(entry.enrolledAt)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </Panel>
-      ))}
-    </ol>
+    <StudentDirectory
+      rows={rows}
+      locale={locale}
+      words={{
+        label,
+        search: t('directory.search'),
+        stage: t('directory.stage'),
+        allStages: t('directory.allStages'),
+        stages: {
+          'not-started': t('progress.notStarted'),
+          'in-progress': t('progress.inProgress'),
+          completed: t('progress.completed'),
+        },
+        // The island fills the two counts as the reader filters.
+        shown: t('directory.shown', { shown: '{shown}', total: '{total}' }),
+        noMatch: t('directory.noMatch'),
+      }}
+    />
   );
 }

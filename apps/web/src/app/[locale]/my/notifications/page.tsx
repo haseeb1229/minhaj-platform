@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
@@ -7,19 +8,15 @@ import {
 } from '@minhaj/contracts/personalisation';
 
 import { pageLinks } from '@/components/hadith/presentation';
-import { Pagination } from '@/components/media/parts';
-import {
-  PersonalFrame,
-  PersonalLinks,
-  PersonalTime,
-  refusalMessages,
-} from '@/components/personal/parts';
+import { MyPage, OnwardLink } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
+import { PersonalTime, refusalMessages } from '@/components/personal/parts';
 import {
   personalOffsetHref,
   readPersonalOffset,
 } from '@/components/personal/presentation';
 import { personalRead } from '@/components/personal/read';
-import { Alert, EmptyState, Panel, StatusBadge, TextLink } from '@/components/ui';
+import { Alert, Badge, EmptyState, Icon, Pager } from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
@@ -33,7 +30,7 @@ import {
 
 /**
  * Notifications — system-generated, one-directional, the person's own
- * (ROUTE_MAP.md §5.1; DOMAIN_MODEL.md §14.1; Phase 21).
+ * (ROUTE_MAP.md §5.1; DOMAIN_MODEL.md §14.1; Phase 21; redesigned in R2).
  *
  * WHAT A NOTIFICATION SAYS IS A KEY THIS PAGE TRANSLATES — never stored prose —
  * so it reads in the interface language the person is using now.
@@ -41,8 +38,16 @@ import {
  * A LINK ONLY TO THIS SITE. A notification's destination is a stored same-site
  * path; it is re-checked here with the contract's own rule before it becomes an
  * `href`, so even a row that somehow held anything else renders no link at all.
+ *
+ * UNREAD IS SAID IN WORDS (a badge) and by weight — never by a dot alone.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'notifications');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -58,6 +63,7 @@ export default async function NotificationsPage({
   const path = localizedPath(locale, '/my/notifications');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'personal' });
+  const my = await getTranslations({ locale, namespace: 'my' });
   const actor = { accountId: session.account.id };
   const offset = readPersonalOffset(await searchParams);
   const { notifications } = personalisationRuntime();
@@ -67,24 +73,17 @@ export default async function NotificationsPage({
       notifications.unread(actor),
     ]),
   );
-  const back = (
-    <PersonalLinks
-      label={t('nav.label')}
-      links={[
-        {
-          href: localizedPath(locale, '/my/settings/notifications'),
-          text: t('nav.notificationSettings'),
-        },
-        { href: localizedPath(locale, '/my'), text: t('nav.account') },
-      ]}
-    />
+  const settings = (
+    <OnwardLink href={localizedPath(locale, '/my/settings/notifications')}>
+      {t('nav.notificationSettings')}
+    </OnwardLink>
   );
 
   if (!read.ok)
     return (
-      <PersonalFrame title={t('notifications.title')} back={back}>
+      <MyPage title={t('notifications.title')} action={settings}>
         <Alert tone="error">{t('failure.load')}</Alert>
-      </PersonalFrame>
+      </MyPage>
     );
 
   const [page, unread] = read.value;
@@ -92,15 +91,18 @@ export default async function NotificationsPage({
   const messages = refusalMessages(t);
 
   return (
-    <PersonalFrame
+    <MyPage
       title={t('notifications.title')}
       description={
         <>
           <p>{t('notifications.description')}</p>
-          <p>{t('notifications.unreadCount', { count: unread })}</p>
+          <p className="font-semibold text-foreground">
+            {t('notifications.unreadCount', { count: unread })}
+          </p>
         </>
       }
-      back={back}
+      action={settings}
+      measure="reading"
     >
       {page.total === 0 ? null : (
         <div className="flex flex-wrap items-start gap-2">
@@ -130,59 +132,78 @@ export default async function NotificationsPage({
       )}
 
       {page.items.length === 0 ? (
-        <EmptyState>
-          {page.total === 0 ? t('notifications.empty') : t('list.beyond')}
-        </EmptyState>
+        page.total === 0 ? (
+          <EmptyState icon="bell" title={my('notifications.emptyTitle')}>
+            {t('notifications.empty')}
+          </EmptyState>
+        ) : (
+          <EmptyState>{t('list.beyond')}</EmptyState>
+        )
       ) : (
-        <ol aria-label={t('notifications.list')} className="flex flex-col gap-3">
+        <ol
+          aria-label={t('notifications.list')}
+          className="flex flex-col border-t border-border"
+        >
           {page.items.map((entry) => {
             const destination =
               entry.destination !== null && isInternalDestination(entry.destination)
                 ? localizedPath(locale, `${entry.destination}`)
                 : null;
+            const unreadEntry = entry.readAt === null;
             return (
-              <Panel key={entry.id} as="li">
-                <div className="flex min-w-0 flex-col gap-3">
-                  <div className="flex flex-wrap items-center gap-3">
-                    {entry.readAt === null ? (
-                      <StatusBadge tone="caution">
-                        {t('notifications.unread')}
-                      </StatusBadge>
-                    ) : (
-                      <StatusBadge tone="neutral">{t('notifications.read')}</StatusBadge>
-                    )}
-                    <span className="text-sm text-foreground-muted">
+              <li
+                key={entry.id}
+                className={`flex min-w-0 flex-col gap-3 border-b border-border py-4 sm:flex-row sm:items-start ${
+                  unreadEntry ? '' : 'text-foreground-muted'
+                }`}
+              >
+                <div className="flex min-w-0 flex-1 items-start gap-4">
+                  <span
+                    aria-hidden="true"
+                    className={`flex size-10 shrink-0 items-center justify-center rounded-full ${
+                      unreadEntry
+                        ? 'bg-accent-surface text-accent'
+                        : 'bg-surface-sunken text-foreground-muted'
+                    }`}
+                  >
+                    <Icon name="bell" size={20} />
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="flex flex-wrap items-center gap-2 text-caption">
+                      {unreadEntry ? (
+                        <Badge kind="status" tone="caution">
+                          {t('notifications.unread')}
+                        </Badge>
+                      ) : (
+                        <Badge kind="status">{t('notifications.read')}</Badge>
+                      )}
                       <PersonalTime
                         value={entry.createdAt}
                         locale={locale}
                         timeZone={session.account.timezone}
                       />
                     </span>
-                  </div>
-                  <p className={entry.readAt === null ? 'font-semibold' : undefined}>
-                    {t(`notifications.kind.${entry.kind}`)}
-                  </p>
-                  {destination === null ? null : (
-                    <p>
-                      <TextLink href={destination}>{t('notifications.open')}</TextLink>
+                    <p
+                      className={
+                        unreadEntry ? 'font-semibold text-foreground' : 'text-foreground'
+                      }
+                    >
+                      {t(`notifications.kind.${entry.kind}`)}
                     </p>
-                  )}
-                  <div className="flex flex-wrap items-start gap-2">
-                    {entry.readAt === null ? (
-                      <ActionForm
-                        action={markNotificationReadAction}
-                        submitLabel={t('notifications.markRead')}
-                        pendingLabel={t('common.working')}
-                        tone="secondary"
-                        messages={messages}
-                      >
-                        <input type="hidden" name="locale" value={locale} />
-                        <input type="hidden" name="id" value={entry.id} />
-                      </ActionForm>
-                    ) : null}
+                    {destination === null ? null : (
+                      <p>
+                        <OnwardLink href={destination}>
+                          {t('notifications.open')}
+                        </OnwardLink>
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-wrap items-start gap-2 ps-14 sm:ps-0">
+                  {unreadEntry ? (
                     <ActionForm
-                      action={removeNotificationAction}
-                      submitLabel={t('notifications.remove')}
+                      action={markNotificationReadAction}
+                      submitLabel={t('notifications.markRead')}
                       pendingLabel={t('common.working')}
                       tone="secondary"
                       messages={messages}
@@ -190,15 +211,25 @@ export default async function NotificationsPage({
                       <input type="hidden" name="locale" value={locale} />
                       <input type="hidden" name="id" value={entry.id} />
                     </ActionForm>
-                  </div>
+                  ) : null}
+                  <ActionForm
+                    action={removeNotificationAction}
+                    submitLabel={t('notifications.remove')}
+                    pendingLabel={t('common.working')}
+                    tone="secondary"
+                    messages={messages}
+                  >
+                    <input type="hidden" name="locale" value={locale} />
+                    <input type="hidden" name="id" value={entry.id} />
+                  </ActionForm>
                 </div>
-              </Panel>
+              </li>
             );
           })}
         </ol>
       )}
 
-      <Pagination
+      <Pager
         label={t('notifications.list')}
         previous={
           links.previous === null ? null : personalOffsetHref(path, links.previous)
@@ -207,6 +238,6 @@ export default async function NotificationsPage({
         previousLabel={t('list.previous')}
         nextLabel={t('list.next')}
       />
-    </PersonalFrame>
+    </MyPage>
   );
 }

@@ -555,6 +555,144 @@ export async function rightsManyAction(
 }
 
 /* ===========================================================================
+ * R2: run-wide acts — `migration.administer`, confirmed over the exact set shown
+ * ========================================================================= */
+
+/**
+ * What one run-wide act came to: how many items were decided, each one left
+ * as it was with the refusal that names why, and how many candidates remain
+ * for the next confirmation. Identifiers and reason words only.
+ */
+export interface RunBatchState extends FormActionState {
+  readonly decided?: number;
+  readonly refused?: readonly { readonly id: string; readonly reason: string }[];
+  readonly remaining?: number;
+}
+
+/** The confirmation every run-wide form carries: run, set size and fingerprint. */
+function confirmationOf(form: FormData) {
+  return {
+    runId: field(form, 'runId'),
+    expectedCount: whole(form, 'expectedCount'),
+    fingerprint: field(form, 'fingerprint'),
+  };
+}
+
+/** A run-wide act's outcome, as the form shows it. */
+function batchOutcome(outcome: {
+  readonly decided: number;
+  readonly refused: readonly { readonly id: string; readonly reason: string }[];
+  readonly remaining: number;
+}): RunBatchState {
+  return outcome.refused.length === 0
+    ? { status: 'success', ...outcome }
+    : { status: 'error', failure: 'items-refused', ...outcome };
+}
+
+/** An outage part-way: what was decided stands, so the page is refreshed. */
+function interrupted(error: unknown, operation: string, locale: Locale): RunBatchState {
+  const state = rejected(error, operation);
+  if (state.failure !== 'unavailable') return state;
+  refreshed(locale);
+  return { status: 'error', failure: 'batch-interrupted' };
+}
+
+/**
+ * R2. Approves the next slice of a run's approval candidates, after an
+ * explicit confirmation of the WHOLE set the reviewer was shown (its size and
+ * fingerprint). The service refuses a set that moved since, and decides and
+ * audits every revision exactly as a single review.
+ */
+export async function approveRunAction(
+  _state: RunBatchState,
+  form: FormData,
+): Promise<RunBatchState> {
+  if (form.get('confirm') !== 'on') return UNCONFIRMED;
+  const actor = await administer(form);
+  if ('refused' in actor) return actor.refused;
+  try {
+    const outcome = await migrationRuntime().decisions.approveRun(
+      { accountId: actor.accountId },
+      { ...confirmationOf(form), note: textarea(form, 'note') ?? '' },
+    );
+    refreshed(actor.locale);
+    return batchOutcome({
+      ...outcome,
+      refused: outcome.refused.map((item) => ({
+        id: item.stagedRecordId,
+        reason: item.reason,
+      })),
+    });
+  } catch (error) {
+    return interrupted(error, 'migration-run-approve', actor.locale);
+  }
+}
+
+/**
+ * R2. Clears for release the next slice of a run's pictures on ONE of its
+ * source's registered hosts — those the source stated it owns, with a public
+ * copy the reviewer was shown — under the licence, evidence and holder the
+ * reviewer states, after an explicit confirmation of the whole set.
+ */
+export async function rightsRunAction(
+  _state: RunBatchState,
+  form: FormData,
+): Promise<RunBatchState> {
+  if (form.get('confirm') !== 'on') return UNCONFIRMED;
+  const actor = await administer(form);
+  if ('refused' in actor) return actor.refused;
+  try {
+    const outcome = await migrationRuntime().decisions.rightsRun(
+      { accountId: actor.accountId },
+      {
+        ...confirmationOf(form),
+        host: field(form, 'host'),
+        licence: field(form, 'licence'),
+        licenceEvidence: textarea(form, 'licenceEvidence') ?? '',
+        rightsHolder: field(form, 'rightsHolder'),
+      },
+    );
+    refreshed(actor.locale);
+    return batchOutcome({
+      ...outcome,
+      refused: outcome.refused.map((item) => ({
+        id: item.provenanceId,
+        reason: item.reason,
+      })),
+    });
+  } catch (error) {
+    return interrupted(error, 'migration-run-rights', actor.locale);
+  }
+}
+
+/**
+ * R2. A draft manifest over the next slice of a balanced run's approved,
+ * publishable revisions, confirmed over the whole set; then to its page,
+ * where only a verified publisher may publish it.
+ */
+export async function createRunManifestAction(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  if (form.get('confirm') !== 'on') return UNCONFIRMED;
+  const actor = await administer(form);
+  if ('refused' in actor) return actor.refused;
+  let id: string;
+  try {
+    ({ id } = await migrationRuntime().publication.createRunManifest(
+      { accountId: actor.accountId },
+      confirmationOf(form),
+    ));
+  } catch (error) {
+    return rejected(error, 'migration-run-manifest-create');
+  }
+  refreshed(actor.locale);
+  redirect(
+    localizedPath(actor.locale, `/admin/migration/manifests/${encodeURIComponent(id)}`),
+  );
+}
+
+/* ===========================================================================
  * Raw evidence — `migration.administer`
  * ========================================================================= */
 

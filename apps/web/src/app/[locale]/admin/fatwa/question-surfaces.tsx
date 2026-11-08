@@ -164,13 +164,7 @@ export async function QuestionsScreen({ params, searchParams }: ListParams) {
           copy={copy}
         />
       )}
-      <Pager
-        offset={offset}
-        shown={page.items.length}
-        total={page.total}
-        base={base}
-        copy={copy}
-      />
+      <Pager offset={offset} total={page.total} base={base} copy={copy} />
     </main>
   );
 }
@@ -216,13 +210,7 @@ export async function AssignmentScreen({ params, searchParams }: ListParams) {
           copy={copy}
         />
       )}
-      <Pager
-        offset={offset}
-        shown={rows.length}
-        total={page.total}
-        base={base}
-        copy={copy}
-      />
+      <Pager offset={offset} total={page.total} base={base} copy={copy} />
     </main>
   );
 }

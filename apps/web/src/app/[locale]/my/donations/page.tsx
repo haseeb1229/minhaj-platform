@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
@@ -14,7 +15,8 @@ import { donatePath } from '@/components/donations/presentation';
 import { readDonatePage } from '@/components/donations/public-read';
 import { donationsRead } from '@/components/donations/read';
 import { DonationStartForm } from '@/components/donations/start-form';
-import { PersonalFrame, PersonalLinks } from '@/components/personal/parts';
+import { MyPage, MySection, OnwardLink } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
 import { Alert, DetailRow, EmptyState, Panel, SectionHeading } from '@/components/ui';
 import { donationsRuntime } from '@/composition/donations';
 import { requireLocale } from '@/config/route-locale';
@@ -42,7 +44,13 @@ import { startOwnDonation } from './actions';
  * BOUNDED (newest first, at most `OWN_DONATION_HISTORY`), `noindex`, and
  * rendered per request.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'giving');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -64,15 +72,7 @@ export default async function MyDonationsPage({
   );
   const giving = await donationsRead('donations-my-giving', () => readDonatePage());
 
-  const back = (
-    <PersonalLinks
-      label={t('nav.label')}
-      links={[
-        { href: donatePath(locale), text: t('nav.public') },
-        { href: localizedPath(locale, '/my'), text: t('nav.account') },
-      ]}
-    />
-  );
+  const my = await getTranslations({ locale, namespace: 'my' });
   const description = (
     <>
       <p>{t('description')}</p>
@@ -81,7 +81,11 @@ export default async function MyDonationsPage({
   );
 
   return (
-    <PersonalFrame title={t('title')} description={description} back={back}>
+    <MyPage
+      title={t('title')}
+      description={description}
+      action={<OnwardLink href={donatePath(locale)}>{t('nav.public')}</OnwardLink>}
+    >
       {giving.ok && giving.value.availability.available ? (
         <TestEnvironmentBanner
           environment={giving.value.availability.environment}
@@ -91,30 +95,36 @@ export default async function MyDonationsPage({
 
       {/* ---- History ------------------------------------------------------ */}
 
-      <section className="flex flex-col gap-3" aria-labelledby="donations-history">
-        <span id="donations-history">
-          <SectionHeading>{t('history.heading')}</SectionHeading>
-        </span>
+      <MySection
+        id="donations-history"
+        heading={t('history.heading')}
+        {...(history.ok && history.value.length > 0
+          ? { link: { href: '/api/my/export/donations', text: my('giving.export') } }
+          : {})}
+      >
         {!history.ok ? (
           <Alert tone="error">{t('failure.load')}</Alert>
         ) : history.value.length === 0 ? (
-          <EmptyState>{t('history.empty')}</EmptyState>
+          <EmptyState icon="heart">{t('history.empty')}</EmptyState>
         ) : (
-          <ul aria-label={t('history.heading')} className="flex flex-col gap-3">
+          <ul
+            aria-label={t('history.heading')}
+            className="flex flex-col border-t border-border"
+          >
             {history.value.map((entry) => (
-              <Panel key={entry.id} as="li">
+              <li
+                key={entry.id}
+                className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-2 border-b border-border py-4 sm:grid-cols-[minmax(0,1fr)_auto]"
+              >
                 <div className="flex min-w-0 flex-col gap-2">
+                  <p className="font-semibold">
+                    <CampaignTitle campaign={entry.campaign} locale={locale} t={d} />
+                  </p>
                   <div className="flex flex-wrap items-center gap-2">
                     <DonationStateBadge state={entry.state} t={d} />
                     <EnvironmentBadge environment={entry.environment} t={d} />
                   </div>
-                  <p className="font-semibold">
-                    <CampaignTitle campaign={entry.campaign} locale={locale} t={d} />
-                  </p>
-                  <dl className="divide-y divide-border">
-                    <DetailRow term={d('detail.amount')}>
-                      <Money money={entry.expected} locale={locale} />
-                    </DetailRow>
+                  <dl className="grid grid-cols-[minmax(0,1fr)] gap-x-6 sm:grid-cols-2">
                     {entry.refundedMinor > 0n ? (
                       <DetailRow term={d('detail.refunded')}>
                         <Money
@@ -151,11 +161,15 @@ export default async function MyDonationsPage({
                     </DetailRow>
                   </dl>
                 </div>
-              </Panel>
+                <p className="order-first font-serif text-heading font-semibold tabular-nums sm:order-none sm:text-end">
+                  <span className="sr-only">{d('detail.amount')} </span>
+                  <Money money={entry.expected} locale={locale} />
+                </p>
+              </li>
             ))}
           </ul>
         )}
-      </section>
+      </MySection>
 
       {/* ---- Give, linked ------------------------------------------------- */}
 
@@ -192,6 +206,6 @@ export default async function MyDonationsPage({
           </ul>
         )}
       </section>
-    </PersonalFrame>
+    </MyPage>
   );
 }

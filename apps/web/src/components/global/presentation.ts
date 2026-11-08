@@ -101,3 +101,27 @@ export function finderPath(
     city: scope.city?.slug ?? null,
   });
 }
+
+/**
+ * R2 — the newest items across several newest-first pages (one per Centre in a
+ * Country), each item once, newest `chronologyAt` first, at most `limit`. When
+ * every page holds its own newest `limit`, the result IS the union's newest
+ * `limit`; the caller asks each page for exactly that many.
+ */
+export function latestAcross<
+  T extends { readonly kind: string; readonly slug: string; readonly chronologyAt: Date },
+>(pages: readonly (readonly T[])[], limit: number): readonly T[] {
+  const seen = new Map<string, T>();
+  for (const items of pages)
+    for (const item of items) {
+      const key = `${item.kind}:${item.slug}`;
+      if (!seen.has(key)) seen.set(key, item);
+    }
+  return [...seen.values()]
+    .sort(
+      (a, b) =>
+        b.chronologyAt.getTime() - a.chronologyAt.getTime() ||
+        (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0),
+    )
+    .slice(0, Math.max(0, limit));
+}

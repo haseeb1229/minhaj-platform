@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
@@ -27,9 +28,11 @@ import {
   type Query,
 } from '@/components/membership/presentation';
 import { membershipRead } from '@/components/membership/read';
-import { ConfirmField, PersonalFrame, PersonalLinks } from '@/components/personal/parts';
+import { ConfirmField } from '@/components/personal/parts';
 import { Alert, DetailRow, EmptyState, Panel, SectionHeading } from '@/components/ui';
 import { membershipRuntime } from '@/composition/membership';
+import { MyPage, OnwardLink } from '@/components/my/frame';
+import { myPageMetadata } from '@/components/my/metadata';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
 import { requireActiveSession } from '../guard';
@@ -56,7 +59,13 @@ import { applyAction, closeOwnAction, withdrawAction } from './actions';
  * BOUNDED: the service returns at most `OWN_HISTORY` applications and
  * Memberships, newest first. `noindex`, and rendered per request.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  return myPageMetadata(params, 'membership');
+}
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
@@ -102,15 +111,8 @@ export default async function MyMembershipPage({
     membershipRuntime().applicant.state({ accountId: session.account.id }),
   );
 
-  const back = (
-    <PersonalLinks
-      label={t('nav.label')}
-      links={[
-        { href: membershipPath(locale), text: t('nav.public') },
-        { href: localizedPath(locale, '/my'), text: t('nav.account') },
-      ]}
-    />
-  );
+  const my = await getTranslations({ locale, namespace: 'my' });
+  const about = <OnwardLink href={membershipPath(locale)}>{t('nav.public')}</OnwardLink>;
   const description = (
     <>
       <p>{t('description')}</p>
@@ -120,9 +122,9 @@ export default async function MyMembershipPage({
 
   if (!read.ok)
     return (
-      <PersonalFrame title={t('title')} description={description} back={back}>
+      <MyPage title={t('title')} description={description} action={about}>
         <Alert tone="error">{t('failure.load')}</Alert>
-      </PersonalFrame>
+      </MyPage>
     );
 
   const { available, applications, memberships } = read.value;
@@ -136,7 +138,7 @@ export default async function MyMembershipPage({
   const messages = formMessages(t);
 
   return (
-    <PersonalFrame title={t('title')} description={description} back={back}>
+    <MyPage title={t('title')} description={description} action={about}>
       {notice === null ? null : <Alert tone="success">{t(`done.${notice}`)}</Alert>}
 
       {/* ---- Applications in progress ------------------------------------ */}
@@ -199,6 +201,34 @@ export default async function MyMembershipPage({
           <SectionHeading>{t('apply.heading')}</SectionHeading>
         </span>
         <p className="text-sm text-foreground-muted">{t('apply.help')}</p>
+        {available.length === 0 ? null : (
+          <ol
+            aria-label={my('membership.stepsLabel')}
+            className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-3"
+          >
+            {(['apply', 'review', 'decision'] as const).map((step, index) => (
+              <li
+                key={step}
+                className="flex min-w-0 gap-3 rounded-panel bg-surface-sunken p-4 text-sm"
+              >
+                <span
+                  aria-hidden="true"
+                  className="flex size-7 shrink-0 items-center justify-center rounded-full bg-action font-semibold text-action-foreground tabular-nums"
+                >
+                  {index + 1}
+                </span>
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="font-semibold">
+                    {my(`membership.steps.${step}.title`)}
+                  </span>
+                  <span className="text-foreground-muted">
+                    {my(`membership.steps.${step}.body`)}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
         {available.length === 0 ? (
           <EmptyState>{t('apply.empty')}</EmptyState>
         ) : (
@@ -302,7 +332,7 @@ export default async function MyMembershipPage({
           </ul>
         )}
       </section>
-    </PersonalFrame>
+    </MyPage>
   );
 }
 

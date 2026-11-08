@@ -31,6 +31,7 @@ import {
   adminMembershipCopy,
   personNames,
 } from '../../shared';
+import { adminPageMetadata } from '../../../metadata';
 
 /**
  * One application, as an operator reads it (DELIVERY_PLAN.md Phase 26) —
@@ -52,7 +53,7 @@ import {
  * finished application changes no further. A malformed or unknown id is the
  * administrative 404.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = adminPageMetadata('adminMembership', 'application.title');
 
 export const dynamic = 'force-dynamic';
 

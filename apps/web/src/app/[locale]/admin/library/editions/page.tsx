@@ -15,6 +15,7 @@ import {
 } from '@/components/ui';
 import { pageOffset, PAGE_SIZE } from '../../shared';
 import { EditionForm, libraryCopy } from '../forms';
+import { adminPageMetadata } from '../../metadata';
 
 /**
  * `/{locale}/admin/library/editions` — the Editions directory and the create form
@@ -28,6 +29,7 @@ import { EditionForm, libraryCopy } from '../forms';
  * BOUNDED AND DETERMINISTICALLY ORDERED, by owning Work and then by identifier, from
  * the persistence layer's own cap.
  */
+export const generateMetadata = adminPageMetadata('library', 'admin.editions');
 export const dynamic = 'force-dynamic';
 
 export default async function EditionsDirectory({
