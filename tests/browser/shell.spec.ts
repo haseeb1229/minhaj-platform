@@ -835,7 +835,7 @@ test.describe('the public header', () => {
       await page.goto(localizedPath(locale, '/explore'));
       const banner = page.getByRole('banner');
       await banner
-        .getByRole('button', { name: locale === 'en' ? 'Search' : 'تلاش' })
+        .getByRole('link', { name: locale === 'en' ? 'Search' : 'تلاش', exact: true })
         .click();
       const palette = page.getByRole('dialog');
       await expect(palette, locale).toBeVisible();
