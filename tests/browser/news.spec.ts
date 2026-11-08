@@ -212,7 +212,8 @@ test('shows News and Events to an anonymous visitor with no cookie, and the same
   // which names every News family and the archive with what each one holds.
   for (const name of ['Events', 'News archive'])
     await expect(main.getByRole('link', { name, exact: true }).first()).toBeVisible();
-  const browse = main.locator('section[aria-labelledby="news-browse"]');
+  // The browse list itself: the year links beside it also reach the archive.
+  const browse = main.locator('section[aria-labelledby="news-browse"] > div').first();
   for (const href of [
     '/news/press-releases',
     '/news/statements',

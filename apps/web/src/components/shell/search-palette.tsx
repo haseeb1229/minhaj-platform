@@ -63,76 +63,84 @@ export function SearchPalette({
       : quickLinks.filter((link) => link.label.toLocaleLowerCase().includes(needle));
 
   return (
-    <Dialog
-      title={labels.title}
-      hideTitle
-      closeLabel={labels.close}
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) setQuery('');
-      }}
-      trigger={{
-        label: (
-          <>
+    <>
+      {/* A LINK FIRST: without JavaScript it opens the search page itself;
+          with it, the press opens the palette instead. */}
+      <a
+        href={action}
+        onClick={(event) => {
+          if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey)
+            return;
+          event.preventDefault();
+          setOpen(true);
+        }}
+        aria-haspopup="dialog"
+        className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-control text-sm font-medium text-foreground no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border xl:border xl:border-border-strong"
+      >
+        <Icon name="search" />
+        {/* Named, never labelled on screen: the nine domains need the row. */}
+        <span className="sr-only">{labels.open}</span>
+      </a>
+      <Dialog
+        title={labels.title}
+        hideTitle
+        closeLabel={labels.close}
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) setQuery('');
+        }}
+      >
+        <form role="search" action={action} method="get" className="flex items-stretch">
+          <label className="sr-only" htmlFor={fieldId}>
+            {labels.field}
+          </label>
+          <input
+            id={fieldId}
+            data-autofocus
+            type="search"
+            name="q"
+            required
+            maxLength={maxLength}
+            enterKeyHint="search"
+            autoComplete="off"
+            placeholder={labels.placeholder}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className="min-h-12 w-full min-w-0 rounded-s-control border border-e-0 border-border-strong bg-surface px-4 text-base text-foreground placeholder:text-foreground-muted focus-visible:border-action"
+          />
+          <button
+            type="submit"
+            className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-e-control bg-action text-action-foreground transition-colors duration-[var(--duration-fast)] hover:bg-action-hover"
+          >
             <Icon name="search" />
-            {/* Named, never labelled on screen: the nine domains need the row. */}
-            <span className="sr-only">{labels.open}</span>
-          </>
-        ),
-        className:
-          'inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-control text-sm font-medium text-foreground transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border xl:border xl:border-border-strong',
-      }}
-    >
-      <form role="search" action={action} method="get" className="flex items-stretch">
-        <label className="sr-only" htmlFor={fieldId}>
-          {labels.field}
-        </label>
-        <input
-          id={fieldId}
-          data-autofocus
-          type="search"
-          name="q"
-          required
-          maxLength={maxLength}
-          enterKeyHint="search"
-          autoComplete="off"
-          placeholder={labels.placeholder}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          className="min-h-12 w-full min-w-0 rounded-s-control border border-e-0 border-border-strong bg-surface px-4 text-base text-foreground placeholder:text-foreground-muted focus-visible:border-action"
-        />
-        <button
-          type="submit"
-          className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-e-control bg-action text-action-foreground transition-colors duration-[var(--duration-fast)] hover:bg-action-hover"
-        >
-          <Icon name="search" />
-          <span className="sr-only">{labels.submit}</span>
-        </button>
-      </form>
+            <span className="sr-only">{labels.submit}</span>
+          </button>
+        </form>
 
-      <nav aria-label={labels.quickLinks} className="mt-6">
-        <p className="text-caption font-semibold text-foreground-muted">
-          {labels.quickLinks}
-        </p>
-        {matching.length === 0 ? (
-          <p className="mt-2 text-sm text-foreground-muted">{labels.noQuickLinks}</p>
-        ) : (
-          <ul className="mt-2 grid list-none grid-cols-1 gap-1 p-0 sm:grid-cols-2">
-            {matching.map((link) => (
-              <li key={link.href}>
-                <a
-                  href={link.href}
-                  className="flex min-h-11 items-center gap-2 rounded-control px-3 text-sm font-medium text-foreground no-underline hover:bg-surface-sunken"
-                >
-                  <Icon name="arrow-end" size={16} className="text-accent" />
-                  {link.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </nav>
-    </Dialog>
+        <nav aria-label={labels.quickLinks} className="mt-6">
+          <p className="text-caption font-semibold text-foreground-muted">
+            {labels.quickLinks}
+          </p>
+          {matching.length === 0 ? (
+            <p className="mt-2 text-sm text-foreground-muted">{labels.noQuickLinks}</p>
+          ) : (
+            <ul className="mt-2 grid list-none grid-cols-1 gap-1 p-0 sm:grid-cols-2">
+              {matching.map((link) => (
+                <li key={link.href}>
+                  <a
+                    href={link.href}
+                    className="flex min-h-11 items-center gap-2 rounded-control px-3 text-sm font-medium text-foreground no-underline hover:bg-surface-sunken"
+                  >
+                    <Icon name="arrow-end" size={16} className="text-accent" />
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </nav>
+      </Dialog>
+    </>
   );
 }

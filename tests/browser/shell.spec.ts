@@ -879,7 +879,7 @@ test.describe('the public header', () => {
       await expect(nav.locator(':focus'), `stop ${String(index)}`).toHaveCount(1);
     }
     await page.keyboard.press('Tab');
-    const search = banner.getByRole('button', { name: 'Search' });
+    const search = banner.getByRole('link', { name: 'Search', exact: true });
     await expect(search).toBeFocused();
 
     await page.keyboard.press('Enter');
@@ -1072,7 +1072,7 @@ test.describe('the mobile navigation', () => {
     await expect(page.getByRole('dialog')).toBeHidden();
     await expect(banner.getByRole('navigation', { name: NAV })).toHaveCount(0);
     await expect(banner.getByRole('search')).toHaveCount(0);
-    const search = banner.getByRole('button', { name: 'Search', exact: true });
+    const search = banner.getByRole('link', { name: 'Search', exact: true });
     await expect(search).toBeVisible();
     await search.click();
     await expect(page.getByRole('searchbox', { name: SEARCH_LABEL })).toBeFocused();

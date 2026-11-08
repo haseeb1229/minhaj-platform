@@ -189,11 +189,11 @@ components and their keyboard behaviour.
 - **Why 1280 px, not 1024 px.** Measured in a real browser in the shipped faces (2026-11-08), the
   nine domain buttons (14 px labels) with the wordmark and an icon-only Search button fit one row
   at 1280 px in English, Urdu and Arabic, but not at 1024 px in English (they wrap to a second
-  row). Below 1280 px the Menu sheet carries the same links. Search is therefore an icon button
+  row). Below 1280 px the Menu sheet carries the same links. Search is therefore an icon link
   named "Search" (its visible label and Ctrl K hint were dropped to make the room).
-- **Search** is a button that opens a search palette (also Ctrl+K, ⌘K on a Mac): a real GET form
+- **Search** is a link to `/search` that, with JavaScript, opens a search palette instead (also Ctrl+K, ⌘K on a Mac): a real GET form
   to `/search?q=`, with the nine domains' landings as quick links beneath it, narrowed as the
-  visitor types. Without JavaScript the form still submits.
+  visitor types. Without JavaScript the link opens the search page itself.
 - **Below 1280 px** the Menu button opens a modal sheet (focus kept inside, page inert, Escape
   closes): a search form, **one accordion per domain holding its landing and every link of its
   menu**, Donate, the utility links and the language switcher.
