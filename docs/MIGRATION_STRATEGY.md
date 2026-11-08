@@ -11,7 +11,9 @@ Phase-30 migration engineering is delivered and the seven anticipated public sou
 registered under the owner's recorded pre-adoption attestation (OPEN_DECISIONS.md §3.1). Phase 30
 runs in two stages (§10.1): **Stage 1A**, a bounded, representative real review corpus for
 pre-adoption staging, and **Stage 1B**, the full initial corpus after Minhaj's review and go-ahead,
-which has **not** run.
+which has **not** run. Since Rebaseline R2 the owner's further attestation widens what pre-adoption
+staging may carry, still in Stage 1A's kind, with 23 catalogued sources (§19; OPEN_DECISIONS.md
+§3.9).
 
 ---
 
@@ -642,6 +644,17 @@ source genuinely has them. **Nothing is fabricated to fill a page**: a source th
 surface leaves an honest, polished unavailable or limited state, and the limitation is reported.
 The selection is recorded by the run itself (its discovered items) and in the operator's local
 evidence; there is no "sample data" feature and no DemoMode.
+
+> **Current state since Rebaseline R2 (owner decision 2026-11-06, OPEN_DECISIONS.md §4.2).** Still
+> no DemoMode and no sample-data feature in the application, and nothing synthetic ever enters the
+> migrated corpus. Separately from migration, the **pre-adoption staging environment only** may hold
+> clearly synthetic demo personas and their private journeys (classes, messages, a membership on a
+> demo type, fixture donations), put there by an operator with `staging:demo:*` / `demo.sh` as
+> **environment data**: written through the ordinary services, refused on any deployment that is
+> not exactly staging or is indexable, idempotent and resettable, with no real person's name, no
+> mail sent and no money moved. It is never an application mode, flag or branch, and promotion never
+> carries it (§10.1.1, which already excludes accounts and test records). The R2 corpus itself
+> widens Stage 1A without becoming Stage 1B (§19).
 
 **How Stage 1B expands Stage 1A without rebuilding it.** Source keys never change; each record's
 identity is its source plus a deterministic canonical external key (§5.1), so a widened discovery
@@ -1346,3 +1359,140 @@ approved; the rule was corrected as above and the parsers moved to new versions.
 - **Final review:** 41 routes in en, ur and ar at 390, 768 and 1440 px — **369 loads**, each 200
   in its locale's direction with one main heading, no horizontal overflow, no broken or alt-less
   image, no `[redacted]` placeholder and no request to any other host.
+
+## 19. As delivered (Rebaseline R2) — the comprehensive pre-adoption presentation corpus
+
+> **An owner-directed operational macro, not a canonical phase and not Stage 1B.** The owner
+> attested on 2026-11-06 that the pre-adoption staging build may carry the public official content
+> of every built kind, not artificially capped
+> (`OWNER-ATTESTATION-2026-11-06-R2-COMPREHENSIVE-PRESENTATION-CORPUS`, OPEN_DECISIONS.md §3.9) —
+> still staging only, `noindex`, behind the environment gate, and still Stage 1A in kind (§10.1.0):
+> the same registrations, adapters, normalisers, provenance, review and publishers, with wider
+> selections. It is not Minhaj's content acceptance, not production and not adoption. **No
+> Migration & Provenance schema change** and no new kind; the platform's two R2 migrations belong
+> to Quran and Storage, so the count becomes **33** (DOMAIN_MODEL.md §1.1, §8.4, §16.9).
+
+**Sources.** 23 catalogued authorised sources (`scripts/migration/sources/catalogue.ts`), five of
+them new, each on an existing kind and under the same politeness (three seconds between requests,
+one at a time, robots respected):
+
+- `minhaj-org-press-releases-ur` and `minhaj-org-articles-ur` — the Urdu Press Release and Articles
+  listings of minhaj.org;
+- `minhaj-info-issues-ulama` — the quarterly al-Ulama on minhaj.info (titles, dates and the table
+  of contents; no PDF), beside the two existing magazines;
+- `minhaj-tv-videos-ur` — the Urdu Speeches listing of minhaj.tv (metadata and YouTube identifiers
+  only, from the `/english/Urdu-Speeches/` listing robots allows); a video the English listing also
+  holds collapses into one record by its YouTube id, as before;
+- `minhajbooks-authors` (`people.person`) — eight Minhaj Books author pages as public profiles:
+  the name, the full biography paragraph (never the cut teaser) and the author's own first-party
+  photo; no social link, contact detail or book list. The publisher's author index less the four
+  authors already public as one record each (the founder's biography Page and three leadership
+  profiles): one person, one record.
+
+And wider catalogues on existing sources: `minhaj-org-collections-en` reads **all fourteen**
+editor-curated `lkcatid` archives the site's archive index listed on 2026-11-06 — the three of
+Phase 30-RD plus Women Activities, Welfare Projects & Events, Conferences & Seminars, Interfaith
+Activities, Quaid Day Programs, Spiritual Gatherings, Processions & Rallies, Educational Projects,
+Overseas Activities, Visits & Delegations, and Peace, Integration and Reconciliation (the owner's
+extension of OPEN_DECISIONS.md §3.8 to every genuine archive; still never every category);
+`minhaj-org-archive-news-en` names the **519** posts those archives hold (114 before), each `tid`
+once under the first archive that lists it, the two recorded exclusions kept (§17); the Minhaj
+Books works source walks every English category the site's sitemap names (33); the countries table
+names **39** countries, "Korea" placed as the Republic of Korea only on its own page's evidence; and
+the Explore page bindings gain two: the contact page (tid 1797) at `/contact` and the Annual Reports
+page (56402).
+
+**The same post through two sources — a soft identity.** The organisation's sites share one CMS
+whose post number (`tid`) is one number space across languages, sections and hosts, so a press
+release is also under "All News" and an archive member also in a section listing. A news item,
+article or press release whose legacy identifier is `tid-{n}` carries `tid:{n}` as an identifier
+signal that is **not hard** (§5.2): a second record with it is a duplicate candidate a person decides
+at `/admin/migration/duplicates` (merge or distinct) — never collapsed automatically and never a
+title guess. `NORMALIZER_VERSION` is unchanged (30.3).
+
+**Deliberate deviations from the R2 working plan** — each a recorded limit, never a gap filled by
+guessing:
+
+- **No year archives.** Selection stays bounded listing pages, newest first.
+- **Only two more Explore pages.** No other organisational page of the site's own site map
+  truthfully *is* a reserved route: the founder's profile sections are one page, the peace award
+  (57642) is a news post, Minhaj-ul-Amal (3421) a self-assessment form, the websites list (1801)
+  would replace the Digital resources landing, and the copyright notice (455) is no legal page.
+- **Eight authors, and no Work ↔ author link.** The publisher's book grid names books only by slug,
+  which cannot be keyed without fetching each book, so no Work is related to a profile.
+- **Deferred hosts.** minhajsisters.com, youth.com.pk, msmpakistan.org, research.com.pk,
+  equranclass.com, itikaf.com and welfare.org.pk are not registered in R2; the wing sites publish on
+  the same `tid` CMS, so any later registration relies on the soft identity above.
+  **minhajwelfare.org (UK)** is a separate legal entity and needs its own authorisation before any
+  contact (OPEN_DECISIONS.md §3.9).
+
+**Run-wide acts — a person's decision, still item by item** (DOMAIN_MODEL.md §16.9;
+SECURITY_BASELINE.md §10.11). A run's review pages offer three acts over its whole candidate set:
+
+- **Approve the run** (`/admin/migration/runs/{id}/approve`) — candidates are pending, valid, free of
+  personal data, of a publishable kind and named by no open duplicate pair; the page counts what the
+  act leaves and why (invalid, flagged, cleared, review-only, awaiting a duplicate decision).
+- **Clear pictures by registered host** (`/admin/migration/runs/{id}/rights`) — only restricted
+  acquisitions on a page or asset host the run's source registers, claimed `organisation-owned`
+  with stated evidence and having a public copy, under the licence, evidence and holder the person
+  states. Unknown rights are never in the set.
+- **Draft a manifest of the next 100** approved, publishable revisions no live manifest holds; it is
+  then an ordinary manifest, published only by a `migration.publish` holder after the
+  `migration-publication` step-up.
+
+Each act is confirmed by the set's **count and SHA-256 fingerprint** (every candidate's
+`id:version`, in order, one per line); the service re-reads the set and refuses `conflict` unless
+both still match, refuses a run that is not completed and balanced (`run-unreconciled`), confirms
+over at most 10,000 candidates and decides at most **150** per act, each through the single
+decision's own path, checks and audit, attributed to the person. **Just before each approval it
+asks again whether an open duplicate pair now names the record** (`duplicate-open`), because the
+fingerprint names versions, not pairs. A refused item is reported with its reason and never forced;
+an outage stops the act after what was done. Fatwa and Quran revisions are never in a run-wide set.
+
+**Seeing a picture before clearing it.** `GET /api/admin/migration/assets/{provenanceId}` serves the
+metadata-stripped public copy of one acquisition — never the acquired evidence bytes, never an asset
+the acquisition does not name, never a PDF — to a live `migration.administer` holder, so the browser
+contacts no other host; every refusal is the same empty `404`, `private, no-store`
+(SECURITY_BASELINE.md §10.11).
+
+**Editorial's side.** After a manifest publishes, a **second administrator** may approve and publish
+a selection from one kind's queue page (at most 25) in one act — each record still approved and
+published through the single-record workflow and audited on its own, self-approval still refused
+(DOMAIN_MODEL.md §7.2).
+
+**Irfan-ul-Quran feeds the Quran reference preview, not a migration publication.** The two Irfan
+sources' revisions stay review-only and are never in a manifest (§14). On staging only,
+`quran:reference:translations` (`quran-reference.sh translations`) reads them exactly as staged and
+saves each surah through Quran's own administrative service as the layered `reference` translation
+beside the Tanzil text; a surah whose staged revision fails validation is skipped and reported, never
+repaired (DOMAIN_MODEL.md §8.4; OPEN_DECISIONS.md §1.2).
+
+### 19.1 Run plan on staging — PLANNED, not yet run
+
+Every figure below is an **expected** count from the R2 survey of the sources, not a result; the
+recorded outcome replaces it when the runs complete. Each run is
+`migration-run.sh run --source <key> --operator <adminId> --pages P --limit L [--max-items 500]` on
+the staging ingest profile, in the background over several hours. First the five new keys are
+registered (`register --source <key> --operator <id> --authorisation-reference
+OWNER-ATTESTATION-2026-11-06-R2-COMPREHENSIVE-PRESENTATION-CORPUS --authorised-on 2026-11-06
+--activate`).
+
+| # | Source | Pages / limit | Expected (planned, not a result) |
+|---|---|---|---|
+| 1 | `minhaj-overseas-countries` | 1 / 39 | +9 countries |
+| 2 | `minhajbooks-authors` | 1 / 8 | 8 profiles |
+| 3 | `minhaj-org-pages-en` | 1 / 10 (`--items 1797,56402`) | 2 pages |
+| 4 | `minhaj-info-magazines` | 1 / 3 | +1 magazine (al-Ulama), published before its issues |
+| 5–7 | `minhaj-info-issues-mq` · `-di` · `-ulama` | 1/300 · 1/300 · 1/20 | about 278 (about 242 new) · 259 · 4 issues |
+| 8 | `minhajbooks-works` | 30 / 1000 | about 600 works (about 500 new) |
+| 9–10 | `minhaj-tv-videos` · `minhaj-tv-videos-ur` | 10/300 · 90/3000 | about 180 + about 2,700, merged by YouTube id |
+| 11–17 | press releases en (28/560) → ur (26/520) → articles en (8/320) → ur (19/760) → news en (82/1230) → ur (72/1080) → ar (8/120) | — | about 4,600 records; same-`tid` pairs go to the duplicates queue |
+| 18 | `minhaj-org-archive-news-en` | 1 / 519 | 405 new posts |
+| 19 | `minhaj-org-collections-en` | 1 / 14 | 11 new Collections, only after their members are public |
+| 20 | `thefatwa-rulings` | 5 / 250 | about 226 new, review-only |
+| 21 | `irfan-ul-quran-ur` · `-en` | 1 / 114 (`--items 1..114`) | 228 staged (222 new), review-only |
+
+After each run: the run-wide approval, pictures by host, manifests of 100, each manifest published
+under step-up, then the second administrator's Editorial queue selections. The contact page (1797)
+is expected to be flagged for its organisational contact details and to go through the 30-RD
+clearance (§17); its first picture (a "read in Urdu" button) stays restricted.

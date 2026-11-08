@@ -539,6 +539,26 @@ consumer's key still names it. The API takes a token, never an asset id, so no c
 another's asset and nothing stored without a token can be released at all; Storage still reads no
 consumer's table. Messaging is the first user (SECURITY_BASELINE.md §10.1).
 
+**Image derivatives (Rebaseline R2).** "No pixel is decoded on the server" above describes
+admission, and still does. Since R2 Storage may also render a public still image at up to four
+narrower WebP widths (`IMAGE_DERIVATIVE_WIDTHS`: 320, 640, 960, 1440; never wider than the
+displayed image) — the one place Storage decodes pixels, through `sharp`
+(`packages/storage/src/derivative.ts`, a direct dependency of `@minhaj/storage`; TECH_STACK.md
+§18.10), fenced as SECURITY_BASELINE.md §10.10 describes. Each width is **its own `Asset`**, stored
+through `store()` with full upload custody, and linked to its source by `AssetDerivative`
+(`sourceAssetId`, `width`, `assetId`) — **Storage's own Layer-0 table**, with no owner column and
+nothing cascading (migration `20261107000000_r2_storage_derivatives`). `openDerivative` serves a
+width only after the **source** passes `open`'s two decisions under the owning context's policy,
+then requires the derivative's own custody (`not-derived` otherwise); `derive` renders what is
+missing; releasing a source releases its derivatives. Storage still reads no consumer table: the
+derivative route beside each public picture route builds its sibling's policy, and the operator's
+backfill (`composition/storage-derivatives-backfill.ts`, run by `bin/derivatives-backfill.sh`)
+enumerates each family's published pictures through the owning contexts' adapters. A visitor
+reaching a width not yet rendered is sent to the original and queues the derivation in the
+background (`composition/storage-derivatives.ts`: one at a time, at most 32 waiting) — derived work
+in the sense of §8.5, reconstructable by the backfill. Pages build `srcset` from the picture's
+recorded width (`components/ui/image-derivatives.ts`).
+
 ### 4.3 Search
 
 **SearchService** abstraction, implemented over **SQL Server Full-Text Search** for V1, so a
@@ -789,7 +809,20 @@ never painted; they appear only inside structured data, which browsers do not fe
 keeps `frame-src 'none'` site-wide and names exactly those two origins only on the public
 Video page and its administrative editor; no provider script is allowed anywhere, and
 `Permissions-Policy` refuses `autoplay`. No provider API is called: metadata is entered by an
-operator and a page never depends on provider uptime.
+operator and a page never depends on provider uptime. *(At Phase-10 exit; the frame's autoplay and
+the player routes' `Permissions-Policy` are amended by Rebaseline R2, below.)*
+
+**One press plays (Rebaseline R2, audit F08).** The visitor's press of the first-party Play button
+is still what creates the provider frame — nothing reaches the provider before it — and that same
+press now also starts the video: the frame is created with `providerPlaybackUrl`, the same
+privacy-enhanced address plus `autoplay=1`, rather than asking for a second press inside the
+provider's frame. The browser honours it only because the two player routes (the public Video page
+and its administrative editor) delegate `autoplay` to themselves and exactly the two embed
+origins, from the same contract as `frame-src`; every other page still refuses `autoplay`
+(SECURITY_BASELINE.md §16.2). Structured data keeps the plain embed address, the CSP is unchanged,
+and the one-line disclosure of which provider plays the video sits beside the stage — never a
+panel over the poster, never a modal. Nothing about the press is stored. Stage and frame share one
+16:9 box, so nothing moves when the frame replaces the poster.
 
 ---
 
@@ -971,6 +1004,45 @@ The diagram and the bullets above are the **Phase-29 exit** state; §5.2 records
   `verifyPrivilegedActor` re-verification publication uses.
 - **Operations image.** It also carries `migration-collection-targets.ts` and
   `collection-member-owners.ts` — every module `migration-runner.ts` reaches.
+
+### 5.5 As delivered (Rebaseline R2) — new roots, same Model A
+
+Rebaseline R2 (owner decisions 2026-11-06; DELIVERY_PLAN.md, the R2 record after Phase 30) adds no
+bounded context, no dependency edge and no capability crossing a boundary. What it adds to the
+Model A surface:
+
+- **Three node-runnable Layer-4 roots**, each like `migration-runner.ts` — packages and explicit
+  `.ts` paths only, wiring the SAME services to their adapters as the web roots do, holding no
+  database capability of their own, and run as the **runtime** principal under live authority:
+  `composition/quran-reference-runner.ts` (Quran's canonical and administrative services, Identity's
+  privileged-action gate for `quran.editCanonical` + `quran-canonical-edit`, Migration's read and
+  source services under `migration.read`; tool `scripts/quran/reference-runtime.ts`),
+  `composition/staging-demo-runner.ts` (the services of every context the demonstration exercises;
+  tool `scripts/demo/demo-runtime.ts`) and `composition/storage-derivatives-backfill.ts` (Storage
+  and the four picture-owning contexts' public policies; tool `scripts/storage/derivatives-backfill.ts`).
+  The owner-side halves — registering the Quran source and its activation, writing the demo
+  personas and `fixture` activations — stay in `packages/database` lifecycle code
+  (`lifecycle/quran-reference.ts`, `lifecycle/tanzil-corpus.ts`, `lifecycle/staging-demo.ts`), run
+  on the owner session by `packages/database/scripts/staging-*.ts`, which start the runtime child.
+  A web-process root, `composition/storage-derivatives.ts`, queues background derivation (§4.2).
+- **Owner reads, not tunnels.** Each picture-owning context's adapter gains its own enumeration of
+  published records that name a picture (`publishedLeadImageReferences`,
+  `publishedCoverReferences`, `publishedMediaPictureReferences`, `publishedPortraitReferences`);
+  none decides anything — each candidate is still put to that context's public policy. Quran's
+  public reader takes a `QuranAdmission` (`admitReference`) from its composition root, decided from
+  configuration, never from a request (§8.3.1.1).
+- **Narrow port additions, each owned by its context.** Migration's read port gains eight bounded
+  reads (one acquisition, a run's approval counts, approval/rights candidates and their keys,
+  manifest candidate keys, `hasOpenDuplicate`) and its decision service a `sources` dependency on
+  Migration's own source port; Editorial a batch over its existing single-record transition and
+  news filters (kind, language, preferred language) and collection lead members; Library a `sort`
+  (`title` with `titleLocale`, `newest`); Global country choices with their ISO code; Membership
+  `openApplicationCount` and Donations `attentionCount`; Identity's audit query an action prefix and
+  a date range (DOMAIN_MODEL.md §16.9 and each context's section).
+- **Operations image.** It also carries `quran-reference-runner.ts`,
+  `storage-derivatives-backfill.ts`, the `quran` context and `scripts/quran` and `scripts/storage`;
+  `sharp` arrives with `npm ci` as `@minhaj/storage`'s dependency, its linux-x64 prebuilt binary
+  included.
 
 ---
 
@@ -1202,6 +1274,28 @@ island that asks `/api/my/account-state` (one boolean, `private, no-store`, same
 the page has loaded, so the public HTML is identical for every visitor (§8.2). Until R1 the
 public layout and `/explore` read only code and were not content routes (historical).
 
+**Rebaseline R2 keeps these rules and adds three facts.**
+
+- **One more non-secret setting.** The public Quran roots (reader, assets, search) read
+  `RELIGIOUS_REFERENCE_PREVIEW` through `apps/web/src/config/religious-reference.ts` — not through
+  the secret-bearing server configuration, which the public graph must not reach — and admit a
+  `reference` corpus only when it is exactly `enabled` **and** the build is non-indexable
+  (SECURITY_BASELINE.md §5.1). Reference mode is `noindex`, in no sitemap and without canonical or
+  alternates, by one exhaustive posture table (`QURAN_MODE_POSTURE`), so no page decides it with its
+  own comparison.
+- **The presence snapshot reads more signals, the same way.** R2's grouped navigation
+  (INFORMATION_ARCHITECTURE.md §2) adds signals — the reference preview, Hadith works, books,
+  magazines, research, encyclopedias, articles, series, playlists, paths, live classes, teachers,
+  press releases, membership — each from its owning context's own public read, each failing closed.
+  The snapshot's computation, memoisation and the account island are unchanged.
+- **One public, shared-cacheable byte class.** A Storage image derivative is served
+  `public, max-age=31536000, immutable` (SECURITY_BASELINE.md §10.10). It does not breach §8.1: the
+  route reads no session, decides from the owning context's public policy on every request, and its
+  address is content-addressed (source asset + width), so a cached copy is never stale for its
+  address. Withdrawal works by the address no longer being emitted and answering `404`; a browser
+  may keep bytes it already fetched for up to a year, which is why no shared edge cache is placed
+  in front of these routes without a purge path.
+
 ### 8.4 Validation
 
 **Cache-leakage tests are a standing exit criterion of every feature phase**: no
@@ -1331,6 +1425,14 @@ Pre-adoption/presentation → Staging (DELIVERY_PLAN.md Phase 28) → Production
 separate generic "sandbox" environment or subsystem**; a provider's own sandbox account is
 adapter configuration within one of these environments, never a fifth one.
 
+**Staging demonstration data is environment data, not a mode (Rebaseline R2;
+OPEN_DECISIONS.md §4.2).** Since R2 the staging database may hold synthetic demo personas and their
+private journeys, put there by an operator command (§10.6). The application has no demo mode,
+flag or branch and never learns that demo data exists: the personas are ordinary accounts and their
+records ordinary records made through the ordinary services. The command refuses every deployment
+but exactly staging and non-indexable, so it adds no environment to this model. Likewise the Quran
+reference preview is admitted by one deployment setting, set only on the staging web service.
+
 **Staging is delivered as its own foundation milestone before any live-source migration**
 (DELIVERY_PLAN.md), not as part of final production hardening. Migration dry-runs and
 religious QA must never run against production.
@@ -1340,6 +1442,13 @@ religious QA must never run against production.
 Type check → lint → **architecture boundary rules** → unit and integration tests → build →
 E2E on critical paths. Migrations are reviewed and applied deliberately, never automatically
 on deploy.
+
+Since Rebaseline R2 the Database foundation job also runs an **Authorisation catalogue proof
+(real SQL Server)** step: the Identity and Taxonomy authorisation integration suites, read against
+the live database (every delivered key and step-up purpose catalogued exactly once, every
+externally gated key held by no role), followed by `scripts/assert-authorization-proofs.mjs`, which
+fails the job if any of them did not run — they skip without a database and had drifted unseen
+behind Phase 30-RD.
 
 ### 10.4 Backups and complete recovery
 
@@ -1546,6 +1655,37 @@ local `identity:bootstrap`, executed as the operator principal, refusing once an
 The account must already be registered and verified (transactional email configured in the host's
 `app.env`) and enrols its second factor before any protected capability opens.
 
+**The Quran reference preview (Rebaseline R2; OPEN_DECISIONS.md §1.1, §1.2).** The staging `web`
+service — and no other service or environment — sets `RELIGIOUS_REFERENCE_PREVIEW=enabled` beside
+`PUBLIC_INDEXING_ENABLED=false`. `bin/quran-reference.sh import --sha256 <hex> --operator <id>`
+reads the two Tanzil files the operator placed in `/srv/minhaj/imports/quran-reference/` (mounted
+read-only into the exact-SHA operations image), verifies their structure and exact digest,
+registers the source and activates the corpus as the owner, and has the corpus accepted by Quran's
+canonical service in a runtime child under the operator's live `quran-canonical-edit` step-up
+(earned on `/admin/quran/surahs`); it resumes an interrupted import and refuses once a corpus is
+active. `translations --operator <id>` imports Irfan-ul-Quran from the staged migration revisions
+through Quran's administrative service. The corpus is irreversible on its database: only a staging
+reset removes it.
+
+**Demonstration data (Rebaseline R2; OPEN_DECISIONS.md §4.2).** `bin/demo.sh seed|status|reset`
+runs `staging-demo` in the operations image after the staging host proof and a check that the
+running web service is explicitly non-indexable. The owner side writes the three synthetic
+personas (passwords generated once on the host into a root-only file and passed on standard input)
+and the `fixture` activations; a runtime child (`composition/staging-demo-runner.ts`) does
+everything else through the ordinary services — the demo teaching role granted by the operator
+under a live `privilege-administration` step-up, classes, messages, a membership application and
+fixture donations against a Stripe protocol simulator on loopback inside that process. No mail is
+sent and no money moves; public Donate stays off. `reset` closes the personas through Identity's
+own closure, runs every context's closed-account disposition and archives the demo catalogue
+(SECURITY_BASELINE.md §21.5).
+
+**Image derivatives (Rebaseline R2).** `bin/derivatives-backfill.sh [--limit <n>]` runs
+`staging-storage-derivatives` in the `ops` service (staging storage root mounted, scanner on the
+internal network) after the full staging guard, as the runtime principal: every picture a
+published record shows now is put to its owner's public policy and its missing widths stored
+through Storage's custody (§4.2). It is idempotent and resumable, reports counts only, and is run
+again after a migration publication.
+
 **Operating posture.** Deallocated when idle (`az vm deallocate` — an operating-system shutdown
 alone still bills compute); the disks, static IP and Blob storage continue to bill while
 deallocated. The daily backup timer is persistent, so a run missed while deallocated happens at
@@ -1627,6 +1767,7 @@ surface is built to be discarded.
 | **Phase 2** | The **minimum** shared visual and interaction foundation needed by authentication, Account & Security and the initial privileged entry surfaces |
 | **Phase 4** | The **canonical broad product design system** and the public shell *(at Phase-4 exit; its visual values are historical, superseded by Rebaseline R1's interim identity — the token structure it established stands)* |
 | **Rebaseline R1** (operational macro, 2026-11-06) | The owner-approved **interim One Minhaj visual identity** — token values, utilities, shipped typefaces and the shell frame (§13.2–§13.3) — replaceable by the organisation's official brand pack (OPEN_DECISIONS.md §6.4) |
+| **Rebaseline R2** (operational macro, 2026-11-06 onward) | The **primitive catalogue** every public, My Minhaj, Teacher and Admin surface is rebuilt on (§13.4), the third elevation and the icon set (§13.2), the long-form scale and the Quran face (§13.3), grouped navigation and modal surfaces (§13.6), and responsive images (§13.8) — extending R1's identity, never rebranding it |
 | **Later specialised phases** | Extensions for readers, media, editorial, religious content, learning and administrative complexity |
 | **Phase 32** | The assembled UX, accessibility and SEO acceptance pass |
 
@@ -1676,6 +1817,13 @@ approved an **interim** identity, replaceable by Minhaj's official brand pack, w
   official MQI logo is used **unmodified** as a **secondary** organisational mark, in the footer
   only beside the one pre-adoption statement; it is never redrawn or recoloured.
 
+**Extended by Rebaseline R2 — no new colour, no rebrand.** A third and last elevation,
+`--shadow-overlay`, for a modal surface above a dimmed page (a dialog, a sheet): panel < raised <
+overlay, nothing higher. An **in-house icon set** (`components/ui/icon.tsx`) — 37 outline icons on a
+24-unit grid with a 1.5-pixel non-scaling stroke, decorative (`aria-hidden`) unless given a label,
+the directional ones (chevrons, arrows, external) mirrored in Urdu and Arabic. No icon dependency is
+added.
+
 ### 13.3 Typography across three scripts
 
 English, Urdu and Arabic — including **mixed scripts within one page** — with deliberate
@@ -1698,10 +1846,27 @@ The script roles are applied by `:lang()` in the base layer, so a page's languag
 faces. The faces were chosen after a rendered side-by-side trial (Newsreader + Instrument Sans
 against Source Serif/Sans and Literata/Plex; Gulzar against Noto Nastaliq Urdu and Naskh; Noto
 Naskh Arabic against IBM Plex Sans Arabic and Noto Sans Arabic). **No Quran face is shipped** —
-one arrives with an approved corpus and is never used for ordinary Arabic interface text; Jameel
+one arrives with an approved corpus and is never used for ordinary Arabic interface text *(at R1
+exit; superseded for the staging reference preview by Rebaseline R2, below)*; Jameel
 Noori Nastaleeq is not shipped because its licence is unclear. `tests/config/fonts.test.ts`
 enforces one font module, `next/font/local` only, no Google-hosted font loading, an `OFL.txt`
 beside every file and the preload policy. CSP `font-src 'self'` is unchanged.
+
+**As delivered (Rebaseline R2) — a fifth face, for Quran text only.** With the staging reference
+preview (OPEN_DECISIONS.md §1.1) the Quran gains its face: **Scheherazade New 4.500**, SIL Global's
+unmodified `ScheherazadeNew-Regular.woff2` (OFL; TECH_STACK.md §18.9), declared as `quranFace`
+(`--font-face-quran`, role `--font-quran`) in the same font module, **not preloaded** — the browser
+fetches it only where Quran text is on the page. It renders the Tanzil Uthmani text as stored,
+without the character rewriting a font-specific Quran face would need. It applies only through
+`[lang|='ar']:is(.quran-text, .quran-name)` — an Ayah's canonical Arabic, and beside it a Surah's
+Arabic name and the presentational ayah-end mark — **never** interface Arabic, which stays Noto
+Naskh Arabic.
+
+**The long-form scale (Rebaseline R2).** A published article's or News record's reading column,
+`.editorial-prose.long-form`: 18px on a phone and 19px from a laptop at a 70ch measure (in the
+text's own `ch`, so enlarging it narrows the column); Nastaliq set larger with at least twice its
+size between lines (Urdu 21px / 2.2), Naskh a little less (Arabic 20px / 1.95); a heading the
+contents list links to stops clear of the sticky header.
 
 ### 13.4 Component and state contract
 
@@ -1715,6 +1880,33 @@ error and confirmation** states.
 **focus-visible** · active · selected · pressed · disabled · destructive · pending ·
 submitting · success · error. A state that is undefined is a state that will be invented
 inconsistently later.
+
+**As delivered (Rebaseline R2) — the primitive catalogue.** `apps/web/src/components/ui/` is split
+by job, and every surface the R2 owner decision widened (OPEN_DECISIONS.md §8) is rebuilt on it:
+
+| Module | Primitives |
+|---|---|
+| `layout` · `composition` | Container, PageHeading, SectionHeading, Panel, Prose, Breadcrumbs, AuthLayout · PageHero, SectionHeader, CardGrid, LinkCard, ActionLink, MetaRow, TopicChips |
+| `hero` · `cards` | Hero (one per page family) · MediaCard (image-led), EditorialCard, ListRow |
+| `image` | ResponsiveImage, Poster, Cover, Portrait — first-party `/assets/…` addresses only, a fixed aspect box filled edge to edge, lazy unless `priority`, derivative `srcset` (§13.8) |
+| `indicators` · `icon` | Badge, LanguageBadge (on a card whose content language differs from the interface), Stat · Icon (§13.2) |
+| `feedback` · `forms` · `data` | Alert, EmptyState, Skeleton · Button, Field, inputs, Select, FilterLink, TextLink · DataTable and rows, StatusBadge |
+| `link-tabs` · `pager` | LinkTabs (tabs that are addresses) · Pager — the one pager; the administration's listings use it through one `AdminPager` (`app/[locale]/admin/pager.tsx`, `paging.ts`: numbered pages when a listing knows its total, previous/next when it only knows whether more follow) |
+
+The barrel `components/ui/index.tsx` exports **server components only**, so a page that uses a card
+ships no JavaScript for it. The four primitives whose behaviour lives in the browser are **client
+islands imported from their own modules**: `dialog` (Dialog and Sheet on the native `<dialog>` with
+`showModal()` — the rest of the page inert, Escape closes, focus kept inside and restored to the
+opener on close, backdrop press closes, page scroll locked; a sheet sits against the inline end,
+mirrored in RTL), `tabs` (ARIA tabs with roving focus), `shelf` (a horizontal scroller whose every
+item stays in the tab order, with named previous/next buttons) and `confirm-action` (ConfirmAction:
+a destructive or irreversible form asks first in a Dialog, optionally for a reason, and only the
+dialog's button submits the same form — presentation, never the control; without JavaScript the
+form submits directly, SECURITY_BASELINE.md §16.2). The keyboard and scroll rules behind them are
+pure, unit-tested functions (`interaction.ts`, e.g. roving focus that follows what the visitor sees
+in RTL). **My Minhaj has its own frame** (`components/my/frame.tsx`): the shared product bar, the
+area's navigation column and a page column with one `h1`, `minmax(0, 1fr)` columns so nothing
+overflows at 320px — presentation only, reading no session, permission or record.
 
 ### 13.5 Responsive layout
 
@@ -1732,6 +1924,12 @@ navigation · **keyboard-operable disclosure menus** (the header's "More"; the m
 line named until Rebaseline R1 are historical, removed by R1) · scroll restoration · predictable anchor
 behaviour · **focus restoration when a dialog closes** · scroll locking while it is open · and
 no scroll jank.
+
+*Since Rebaseline R2 the header's "More" is historical too*: the header is six grouped disclosure
+panels (INFORMATION_ARCHITECTURE.md §2) — disclosure buttons with `aria-expanded`/`aria-controls`,
+Escape closes, roving focus across the triggers, mirrored in RTL — below laptop width a drawer
+on the shared Sheet (modal, against the inline end) with one disclosure accordion per group, and a search command palette (a modal Dialog, also opened
+with Ctrl/⌘ K). Focus restoration and scroll locking are delivered by the shared Dialog (§13.4).
 
 **Motion is purposeful, subtle and consistent.** `prefers-reduced-motion` support is
 **mandatory**, not optional. **No decorative animation on religious content**
@@ -1756,7 +1954,17 @@ without shift · bounded lists · route-level loading states · graceful media d
 Font discipline as delivered (Rebaseline R1): only the two Latin faces (~150 KB together) are
 preloaded, with metric-adjusted fallbacks so the swap does not shift layout; the Arabic-script
 faces (Gulzar ~204 KB, Noto Naskh Arabic ~53–57 KB per weight) are subset to Arabic script and
-fetched only by pages that show Urdu or Arabic text (§13.3).
+fetched only by pages that show Urdu or Arabic text (§13.3). Since Rebaseline R2 the Quran face
+(~122 KB) is fetched only where Quran text is shown.
+
+**Responsive images as delivered (Rebaseline R2).** Every picture is a first-party `/assets/…`
+route rendered by the `image` primitives (§13.4) in a reserved aspect box (no layout shift), lazy
+by default with `priority` for the one picture above the fold. Where the picture's width is
+recorded, its `srcset` offers Storage's WebP derivatives (320/640/960/1440, never wider than the
+picture, the picture itself as the widest candidate when it is narrower than 1440) beside a
+`sizes` hint, so a card on a phone can download a 320- or 640-pixel WebP instead of the
+original (§4.2). A derivative not yet rendered falls back to the original by redirect, never a
+broken image.
 
 ### 13.9 Data scale
 

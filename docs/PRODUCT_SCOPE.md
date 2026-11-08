@@ -30,6 +30,9 @@ Where official material is not yet available — the authoritative corpus, organ
 accounts, official infrastructure, the official domain — the gap is **environment and content
 state**, never a smaller product. Representative development content is data, not
 architecture. **There is no DemoMode**, and no second, lesser version of the system exists.
+*(Amended at Rebaseline R2, 2026-11-06, for pre-adoption staging only: synthetic demonstration
+personas and their private journeys may be put on staging by an operator as **environment data** —
+never an application mode, flag or branch; see "Pre-adoption deployment" below.)*
 
 ### Three acceptance dimensions, never conflated
 
@@ -81,7 +84,9 @@ equally non-indexable, and is no more an official or reduced build than the pres
 carries a **bounded, representative corpus of real public content**, migrated from the authorised
 legacy sources through the very pipeline, provenance, review and domain publishers the full
 migration uses (MIGRATION_STRATEGY.md §10.1.0). It is **data, never a reduced product**: no DemoMode,
-no sample-data feature, no second import path, and nothing fabricated to fill a page — a surface a
+no sample-data feature, no second import path, and nothing fabricated to fill a page (the staging
+demonstration personas of Rebaseline R2, below, are environment data outside this corpus, never
+migrated content) — a surface a
 source cannot fill shows an honest unavailable or limited state. It is **not** the full corpus
 (that is Stage 1B, after Minhaj's review), **not** officially accepted content, and religious
 material in it is staged for review, never published by migration. All three acceptance
@@ -117,6 +122,29 @@ also appeared in the header — historical). English addresses are unprefixed (`
 Urdu and Arabic under `/ur` and `/ar`, ROUTE_MAP.md §1.1), and the shell promotes only areas with
 real published content or an open service; every route stays reachable by its address with its
 honest state (INFORMATION_ARCHITECTURE.md §2.2).
+
+**Full ecosystem completion (Rebaseline R2, owner decisions 2026-11-06).** The owner widened R2 to
+every public, My Minhaj, Teacher and Admin surface (superseding R1's split of presentation work into
+R2–R4), and replaced R1's short promoted bar with six fixed navigation groups that still list only
+destinations with real content or an open service (OPEN_DECISIONS.md §8;
+INFORMATION_ARCHITECTURE.md §2). For **pre-adoption staging only**, and none of it Minhaj's decision:
+
+- **A comprehensive presentation corpus** — the public official content of every built kind, not
+  artificially capped, through the same migration pipeline; still not Stage 1B, not accepted
+  content, not production (OPEN_DECISIONS.md §3.9; MIGRATION_STRATEGY.md §19).
+- **A Quran reference preview** — the Tanzil Project's Uthmani text, verbatim under its CC BY 3.0
+  licence, with Minhaj-ul-Quran's own Irfan-ul-Quran translation, shown only on a deployment that
+  explicitly admits it and is non-indexable, labelled on every Quran page as **not yet reviewed by
+  Minhaj-ul-Quran's religious authority** and never called approved. The production approval path
+  is unchanged; no Hadith corpus is shown (the Hadith area presents the organisation's own hadith
+  works) and no Fatwa is published (OPEN_DECISIONS.md §1.1–§1.4).
+- **Staging demonstration data** — three clearly fictional personas (a student, a teacher and a
+  member, on reserved `.invalid` addresses) with classes, messages, a membership on a "Demo
+  membership (staging)" type and fixture donations, put there by an operator through the ordinary
+  services so the private journeys can be reviewed. It is **environment data, never an application
+  mode**: refused on any deployment that is not exactly staging or is indexable, idempotent and
+  resettable, with no real person's name, no committed secret, no mail sent and no money moved; it
+  is never promoted (OPEN_DECISIONS.md §4.2; MIGRATION_STRATEGY.md §10.1.0). Public Donate stays off.
 
 Commercial questions — source ownership, licensing, portfolio rights, retention of a clone,
 future reuse — are **outside technical architecture** and are deliberately not recorded in

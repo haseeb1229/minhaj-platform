@@ -207,6 +207,19 @@ Every route is localised per §1.1: unprefixed in English, under `/ur` or `/ar` 
 unified content graph, presenting works, videos, articles, research, Fatawa, courses, audio
 and contributors for one topic. It sits at root level because it serves every context.
 
+**Rebaseline R2 (2026-11-06).** No root route is added. `/search` offers result-type facets only
+for kinds whose domain has published content (the shell's presence evidence) — the chosen kind is
+always offered, and only the current facet carries a count, the one total the index reports; a
+query that finds nothing lists the main areas that hold published content instead. A search
+palette in the header (Ctrl+K, ⌘K on a Mac) is the same GET form to `/search?q=`
+(INFORMATION_ARCHITECTURE.md §2.2). A Collection page takes **`?order=curated|newest|oldest`**:
+`curated` is the editor's saved order and the bare address; `newest`/`oldest` order by each
+member's own date where its owner states one (members without a date follow, in curated order),
+offered only when at least two members are dated; anything else is `curated`. Every `?order`
+variant is canonical to the bare Collection address and is never a sitemap entry. `/contact` may
+carry a published Editorial Page above the contact form — the source's contact page is bound to it
+in the R2 migration catalogue (MIGRATION_STRATEGY.md §19).
+
 ### 3.2 Explore
 
 | Route | Purpose |
@@ -234,6 +247,14 @@ a reserved page. The source's three curated archives are Collections at the exis
 `/collections/{slug}` (`al-hidayah`, `mawlid-conferences`, `itikaf-during-ramadhan`) — no
 legacy category route exists. `/explore/leadership` lists the published leadership profiles, each
 canonical at `/people/{slug}`, and links the Shaykh-ul-Islam biography. No new path is created.
+
+**Rebaseline R2.** `/explore` opens with a narrative — the organisation's own published Pages,
+picture-led (the founder's biography first when published), then its published leadership by
+portrait — before the index of every section, which is the same panel the header's About MQI
+group renders; it still lists published pages only. The R2 migration catalogue binds one more
+Explore address, `organization/annual-reports` (and the root `/contact`, §3.1), and extends the
+curated archives to all fourteen genuine `lkcatid` archives at `/collections/{slug}`
+(OPEN_DECISIONS.md §3.9; MIGRATION_STRATEGY.md §19). No new path is created.
 
 ### 3.3 Quran
 
@@ -271,6 +292,36 @@ deterministic by-topic read. **Phase 22:** `/quran/courses` is delivered — Lea
 Course listing for the seeded `quran` topic, composed at Layer 4 and canonical to the Course catalogue
 (Quran imports nothing of Learning).
 
+**Rebaseline R2 — the reference mode and the reader (OPEN_DECISIONS.md §1.1; DOMAIN_MODEL.md
+§8.4).** A third corpus state joins the two above: a **reference** corpus (a licensed external text
+reproduced verbatim — on staging, the Tanzil Uthmani text with Minhaj-ul-Quran's own Irfan-ul-Quran
+translation) is active **only on a deployment that admits it** (`RELIGIOUS_REFERENCE_PREVIEW`,
+refused beside public indexing — SECURITY_BASELINE.md §5.1); everywhere else it is inactive and the
+section is as with no corpus. In reference mode every Quran page is **`noindex`**, emits **no
+canonical or alternates**, and the `quran` sitemap segment is empty — the same posture as fixture
+mode, decided by one exhaustive table (`QURAN_MODE_POSTURE`) that only the approved mode makes
+indexable — and every Quran page names its sources and says the text has not been reviewed by
+Minhaj-ul-Quran's religious authority (one line at the top and an "About this text" panel, not a
+banner on every Ayah). Unlike fixture mode, a reference corpus is a navigation destination
+(INFORMATION_ARCHITECTURE.md §2.2).
+
+- **`/quran/read?q=` is the quick jump** — "18", "18:10", a Surah name the corpus records, or
+  "juz 15" (Arabic-Indic digits accepted, input at most 60 characters), parsed against the
+  reader's own Surahs, ayah counts and recorded names. A match answers a redirect to the canonical
+  Surah, Ayah or Juz address built from the parsed numbers — never from the typed text, so `q` is no
+  redirect parameter; no match re-renders the entry form with the input and an explained refusal.
+  The landing's quick-jump form and its client island answer the same input the same way.
+- **Reader defaults.** Which default translations are shown and the Arabic and translation sizes are
+  the visitor's own presentation preferences, kept in the browser (`localStorage`, never sent,
+  validated on read) beside the last Ayah read on that device. With no stored choice the page shows
+  the interface language's translation where one exists — **none in the Arabic interface**, whose
+  readers read the text itself — otherwise the one that exists. `?translation` and the other
+  queries above still win, and the canonical URL is still the bare citation.
+- **Bismillah header** — shown at the head of a Surah only in reference mode, as Al-Fatiha's first
+  Ayah's stored text unchanged (the Tanzil text carries it in 1:1 alone), never counted or copied as
+  an Ayah and hidden from assistive technology; **never on Surahs 1 or 9**. An approved corpus
+  decides its own convention, so nothing is shown there until that is a recorded decision.
+
 ### 3.4 Hadith
 
 | Route | Purpose |
@@ -303,6 +354,15 @@ approved activation is indexable. Related views: `/hadith/books`, `/hadith/video
 topic, canonical to the owner's collection; `/hadith/articles` and `/hadith/scholars` stay absent and
 unlinked until an owner exposes a deterministic read. **Phase 22:** `/hadith/courses` is delivered —
 Learning's public Course listing for the seeded `hadith` topic, composed at Layer 4.
+
+**Rebaseline R2 — the Hadith works landing (OPEN_DECISIONS.md §1.3).** No route changes. While no
+collection is activated, `/hadith` presents MQI's own hadith **works** — the Library's public Works
+classified under the `hadith` Topic, as a shelf of covers each linking to its `/library/books/{slug}`
+page, with "all" leading to `/hadith/books` — and a short word on the hadith sciences, with one calm
+sentence that the collections reader awaits an authorised source; it links nothing that is not open
+(the collection, browse and search routes keep their honest unavailable state at their addresses).
+With no such Work the shelf is absent. The shell promotes `/hadith` as "Hadith works" under the
+`hadithWorks` signal (INFORMATION_ARCHITECTURE.md §2.2); an activated collection takes over as before.
 
 ### 3.5 Learn
 
@@ -353,6 +413,16 @@ Both pages read no session. There is no public per-session route.
 | `/library/magazines` · `/{slug}` · `/{slug}/issues/{issueSlug}` | Periodicals |
 | `/library/downloads` · `/library/sale-points` | Access |
 
+**Rebaseline R2.** `/library` is a cover-led, data-backed landing rendered per request from the
+Library's public reader: the newest publications as a shelf, a shelf for each of the largest topics
+and the latest magazine issues, then a directory of every other way in; a shelf with nothing on it is
+absent and no deferred capability is linked. `/library/books` takes **`?sort=title|newest`**:
+`title` (the default) is A–Z by the title shown in the interface locale (else the Work's primary
+title), `newest` the latest publication year among a Work's published Editions first (Works with no
+recorded year last, then A–Z); both are total orders ending on the identifier, so pages never repeat
+or skip a Work, and an unknown value is the default. The legacy slug order is no longer what a
+visitor meets. Like every filter, `?sort` is canonical to the base listing and never a sitemap
+entry. A magazine's issues are grouped by year on its page.
 ### 3.7 Watch / Listen
 
 | Route | Purpose |
@@ -365,6 +435,15 @@ Both pages read no session. There is no public per-session route.
 | `/watch/topics/{slug}` | Filtered view, canonical → `/topics/{slug}` |
 | `/listen` · `/listen/lectures` · `/{slug}` · `/listen/series` · `/{slug}` | Audio — a **sibling** of `/watch`, not a child. `/listen/lectures` takes `?topic, speaker, series, language`; each track and audio series is canonical at exactly one address (Phase 11) |
 | `/listen/recitations` | **Catalogue projection of Quran-owned recitations**, canonical → `/quran/recitations`. Delivered in Phase 18 as a Layer-4 page over Quran's public reader, present only while a corpus is active — never filled by an AudioTrack |
+
+**Rebaseline R2 — one press plays.** `/watch` is a poster-led landing and `/watch/videos/{slug}`
+keeps its privacy facade: no provider request until the visitor presses Play, and that one press now
+both loads the provider's privacy-enhanced embed and starts it (`autoplay=1` on the frame the click
+creates). To let the browser honour it, the two player routes — `/watch/videos/{slug}` and
+`/admin/media/videos/{id}`, in every locale — and only they send a `Permissions-Policy` that
+delegates `autoplay` to the page itself and the two embed origins; every other route still declines
+`autoplay` (SECURITY_BASELINE.md §16.2; ARCHITECTURE.md §4.7.1). Structured data keeps the plain
+embed URL; the CSP is unchanged.
 
 ### 3.8 Fatwa
 
@@ -397,6 +476,13 @@ category or topic view answers 404; a fixture activation shows "Test fixture —
 on every page and is `noindex` with no sitemap entry; only an approved activation is indexable.
 Structured data is `BreadcrumbList` only.
 
+**Rebaseline R2 (OPEN_DECISIONS.md §1.4).** No route changes and no ruling is published. With no
+activation `/fatwa` is a calm "coming" page rather than a bare refusal: what the service will hold,
+how asking will work, and an **outbound link to Minhaj-ul-Quran's own fatwa website**
+(`https://thefatwa.com/urdu/index.html`, the one address in `components/fatwa/official-site.ts` —
+a plain link, never fetched, embedded or tracked). The shell does not promote `/fatwa` until the
+service is active and a ruling is published (the `fatwa` signal, unchanged).
+
 ### 3.9 News, Events, Media, Global
 
 | Route | Purpose |
@@ -412,6 +498,17 @@ Structured data is `BreadcrumbList` only.
 | `/global/centres` · `/{slug}` · `/{slug}/{news\|events\|contact}` | Centres — `news` and the display-only `contact` delivered in Phase 16; `events` (Local Events, `?when=past` canonical to it) delivered in Phase 14 |
 | `/global/pakistan` | Pakistan structure entry point — a view of the Pakistan Country, canonical to its Country page and never a sitemap entry (Phase 16) |
 
+**Rebaseline R2.** `/news` and each family listing (`/news/press-releases`, `/statements`,
+`/media-coverage`) take **`?lang=en|ur|ar`**, narrowing to records that have a published
+translation in that content language; without it every record is listed with the interface
+language's records first (each group still newest first). `/news/archive` also takes
+**`?type=`** — one of the four News families — beside `?lang`, `?year` and `?month`, and counts its
+periods over the same narrowing. A repeated or unknown value is simply ignored, never broadened
+into an error; every variant stays canonical to its base listing and outside the sitemap. The
+`/news` landing leads with the newest story and the next three beside it. `/global/countries` lists
+every public Country at once, grouped by world region (derived from each Country's ISO 3166-1 code;
+an unplaced code is shown under "other", never dropped) — its former `?offset` paging is
+withdrawn.
 ### 3.10 Legal and machine-readable
 
 | Route | Purpose |
@@ -424,7 +521,14 @@ Structured data is `BreadcrumbList` only.
 | `/assets/people/portraits/{personId}/{assetId}` | Unprefixed. A published Person's portrait under People's policy (Phase 30-R) |
 | `/assets/library/covers/editions/{editionId}/{assetId}` · `/assets/library/covers/issues/{issueId}/{assetId}` | Unprefixed. A published Edition's (of a published Work) or MagazineIssue's (of a published Magazine) cover (Phase 30-R) |
 | `/assets/media/posters/{videoId}/{assetId}` | Unprefixed. A published Video's first-party poster — no provider request (Phase 30-R) |
+| `/assets/{family path}/{assetId}/{width}w.webp` — beside each of the six public picture routes: editorial lead images, People portraits, Edition covers, MagazineIssue covers, Video posters and `/assets/media/photos/{photoId}/{assetId}` | Unprefixed. A WebP **derivative** of that picture, `{width}` ∈ 320 · 640 · 960 · 1440 (Rebaseline R2). The same two owners decide, about the SOURCE asset, exactly as the sibling picture route does; only then is the derivative looked up. `200`/`304` carry `public, max-age=31536000, immutable` (content-addressed: a new picture is a new asset and a new address); every refusal — a draft's, withdrawn, replaced or restricted picture, an unknown width, a malformed address — is the same `404`, `private, no-store`; a width not rendered yet answers `307` (`no-store`) to the sibling picture route's own path and queues the rendering. All `X-Robots-Tag: noindex, nofollow` (SECURITY_BASELINE.md §10.10) |
 | `/rss` · `/rss/{feed}` | Feeds |
+
+Derivatives are rendered on demand (a `307` queues the missing width) and, for pictures already
+public, by the idempotent, resumable operator backfill `docker/staging/bin/derivatives-backfill.sh`
+(`npm run staging:storage:derivatives`), run as the runtime principal against each picture's owning
+policy — nothing restricted, drafted or withdrawn is decoded (ARCHITECTURE.md §4.2). Pages emit a
+`srcset` of the widths a picture actually has, never wider than the original.
 
 ---
 
@@ -494,6 +598,19 @@ own every operation reachable beneath it:
 > **Route placement transfers no semantic or domain ownership.** These routes *compose* the
 > capabilities through their owning contexts' public interfaces. Personalisation &
 > Notifications owns the aggregates of DOMAIN_MODEL.md §14.1 — and only those.
+
+**Rebaseline R2 — My Minhaj's own frame and grouped navigation.** No `/my` route is added or
+removed. The area's navigation (`apps/web/src/components/my/sections.ts`) lists its sections in ten
+fixed groups — Home · Library (saved, notes, collections, history) · Quran (`/my/progress/quran`) ·
+Learning (`/my/learning`, `/my/classes`, `/my/teachers`) · Messages · Questions · Membership ·
+Giving (`/my/donations`) · Notifications · Settings — and offers a section only while the
+deployment has switched its capability on, answered by each owner's session-free read
+(`apps/web/src/app/[locale]/my/capabilities.ts`): a readable Quran corpus, a published course or
+live learning, a conversation type, Fatwa intake, an open membership type, open giving. A group with
+no offered section is not listed. **This is presentation, never a control:** a hidden section's page
+still answers at its address with its own session and owner checks, and the `/my` home links
+anything the person already has there (its modules render only when there is something to show).
+A read that fails hides only its own section.
 
 ### 5.1 Route, owner and delivery register
 
@@ -616,7 +733,7 @@ to the holder of its 32-byte opaque token (a malformed and an unknown token answ
 | `/admin/system/integrations` — provider configuration and status | Platform integrations | **Phase 2** for email; extended per provider |
 | `/admin/communications/newsletter` | **Personalisation & Notifications** | **Phase 21** — delivered: subscription counts and a paginated list of masked addresses, states and consent dates under `newsletter.read`; suppress and reinstate (to `unsubscribed`, requiring fresh confirmation) under `newsletter.operate`. No campaign, sending or segmentation surface exists |
 | `/admin/communications/delivery` — pending, failed, suppressed mail | The shared communication concern | **Phase 2** |
-| `/admin/system/navigation` | Layer 4 shell | **Phase 4**, only to the extent it is genuinely promised. Read-only. Since Rebaseline R1 its Placement column (registry `placements`) is replaced by a **Promotion** column — always / waits for a named signal / promoted now / not promoted (reachable by address) — from the content-aware presentation policy (INFORMATION_ARCHITECTURE.md §2.2) |
+| `/admin/system/navigation` | Layer 4 shell | **Phase 4**, only to the extent it is genuinely promised. Read-only. Since Rebaseline R1 its Placement column (registry `placements`) is replaced by a **Promotion** column — always / waits for a named signal / promoted now / not promoted (reachable by address) — from the content-aware presentation policy (INFORMATION_ARCHITECTURE.md §2.2). Since Rebaseline R2 the rule is one of three kinds — **always**, a **signal** (promoted now / waiting for it) or a published **Page** binding (promoted now / waiting for its Page), matched by route key or by the route's address — or not promoted |
 
 **Every route above carries:** a semantic owner · a delivery phase · availability rules
 (§5.2) · defined empty, loading and error behaviour where applicable · and permissions where
@@ -684,6 +801,20 @@ current scope and the learner's Enrolment on that Course, so a revoked or replac
 conversation as ended and nothing of it. A teacher starts a conversation from a learner's Student
 Detail, per Course they currently teach that learner on — there is no learner directory.
 
+**Rebaseline R2.** No Teacher route is added. `/teacher/calendar` and `/teacher/availability` show a
+**week** — Monday to Sunday (ISO 8601) in every interface language, each day a calendar day in the
+teacher's own zone — chosen by **`?week=YYYY-MM-DD`** (any date of that week; a malformed or unreal
+date, or one beyond 53 weeks back or 27 ahead, is this week, never repaired); `/teacher/availability`
+pages its list independently with `?offset=`. Each class shows its stage — upcoming, live, ended,
+completed or cancelled — and **the UI never offers attendance or "mark held" before a class has
+started**, mirroring Learning's `not-started` refusal (DOMAIN_MODEL.md §13.5), which stays the
+authority. `/teacher/students` lists the bounded page of learners the service returns (names from
+Identity, progress from Learning, the listing audited) with a search by name and progress that
+narrows that page in the browser only and reads nothing new; a class's "mark held" and "cancel"
+open in a dialog (ARCHITECTURE.md §13). Every Teacher page names itself in the title template
+("Calendar · Teacher area · One Minhaj") with fixed words — a class or learner page is "Class" or
+"Student", so no learner's name reaches a tab or history; all stay `noindex`.
+
 ---
 
 ## 7. Admin routes
@@ -716,6 +847,46 @@ shows who asked and confirms a request into a Booking on a teacher's open window
 | Communications | `/admin/communications/{newsletter\|delivery}` — subscriber and suppression state; pending, failed and suppressed outbound mail |
 | System | `/admin/system/{navigation\|redirects\|search\|audit\|integrations\|settings}` — **redirects** distinguishes native slug history from legacy mappings; **search** covers configuration, rebuild, indexing lag and failures; **integrations** covers provider configuration and status |
 
+**Rebaseline R2.** Additions and changes, each permission-checked as above:
+
+- **Area roots.** `/admin/{communications|editorial|global|hadith|identity|library|media|people|quran|system|taxonomy}`
+  — formerly a 404 for everyone — now redirect to the first surface of that area the reader's keys
+  open, in the navigation's own order; holding none is the administrative 404. The destination
+  re-checks its own permission. The Fatwa, Learning and Messaging roots keep their own rules.
+- **Dashboard.** `/admin` is queue-first: per area the viewer can act in, how much work waits —
+  each number from the owning context's own service (an existing bounded listing's total, or a
+  count added for this: Membership's open applications, Donations' attention flags); counts name
+  nobody and are not audited accesses, and a failed read says "unavailable" on its card only.
+- **One shared pager** for every administrative listing (numbered where the total is known,
+  previous/next otherwise); administrative navigation groups with no reachable surface are not
+  shown; every page carries its own title; irreversible and privilege-changing forms (identity
+  users, roles and assignments, learning courses, URL mappings, search rebuild, the bulk acts below)
+  ask in a confirmation dialog, with a reason where the change wants one — presentation only, the
+  action still re-checks everything (SECURITY_BASELINE.md §7.1).
+- **`/admin/system/audit`** takes `?action=` (a **prefix** of action names — `role.` finds every
+  role action), `?actor=` (an account identifier) and `?from=`/`?to=` (calendar days, inclusive,
+  UTC); a value that does not fit its shape is dropped — the filter is not applied — and a reversed
+  range is put the right way round.
+- **Editorial queue.** `/admin/editorial/queue` offers, per kind, a bulk **approve and publish** of
+  the selected in-review rows on the page (at most 25, each at the version shown), after an explicit
+  confirmation, to an actor holding both `content.review` and `content.publish`; every record goes
+  through the single-record workflow and is audited on its own, self-approval still refused
+  (SECURITY_BASELINE.md §3.5).
+- **Migration run-wide acts** (SECURITY_BASELINE.md §10.11; MIGRATION_STRATEGY.md §19):
+  `/admin/migration/runs/{id}/approve` lists a completed, balanced run's approval candidates —
+  pending, valid, free of personal data, of a publishable kind, with no open duplicate — with the
+  counts it leaves out, and approves the confirmed set (its size and SHA-256 fingerprint) in slices
+  of at most 150, each revision through the single review's checks and audit and re-checked for an
+  open duplicate just before; `runs/{id}/rights?host=` does the same for a run's restricted pictures
+  on one registered page or asset host, each shown through the administrative preview
+  `/api/admin/migration/assets/{provenanceId}` (§8); `manifests?run=` drafts a manifest over the next
+  100 approved revisions no live manifest holds. Each act is under `migration.administer`;
+  publication still needs `migration.publish` and its step-up.
+- **Quran.** While no corpus exists, `/admin/quran/surahs` shows a holder of `quran.editCanonical`
+  the `quran-canonical-edit` step-up an operator's host-side corpus acceptance needs; nothing on the
+  screen imports or accepts anything (DOMAIN_MODEL.md §8.4). The corpus status names the
+  `reference` authority beside fixture and approved.
+
 **Route-level authorisation is never sufficient.** Every mutation re-checks permission at the
 action layer. **Privileged actions require step-up reauthentication** (SECURITY_BASELINE.md
 §8). **Raw migration snapshots render inertly** — escaped text or sandboxed download, never
@@ -736,7 +907,7 @@ owning phase's handlers and tests, not this table.
 | Personal | `/api/my/*` | Authenticated personal actions. Phase 21: `target-state` (GET) and `bookmarks`, `notes`, `collection-items`, `history`, `quran-progress` (POST) serve the private island on public content pages after hydration, and `export` (GET) returns the person's Personalisation data as a JSON download. Phase 22: `learning/state` (GET) and `learning/enrolments`, `learning/trials` (POST) serve a Course page's private island, and `export/learning` (GET) returns the person's Learning data. Phase 26: `export/membership` (GET) returns the person's Membership applications and Memberships. Phase 27: `export/donations` (GET) returns the person's linked donations. Rebaseline R1: `account-state` (GET, same-origin only) answers only `{ signedIn: boolean }` for the shared header's account island, so the public HTML stays identical for everyone. Every response is private and `no-store`; every POST requires the configured origin, `Sec-Fetch-Site: same-origin` where sent and the `x-minhaj-intent: personal` header (SECURITY_BASELINE.md §7.1 rule 6) |
 | Messaging REST | `/api/messaging/*` | Phase 24: `conversations/{id}/messages?after={sequence}` (GET) — durable catch-up after a sequence the reader holds, the source Phase 25 reconnection uses; `conversations/{id}/attachments` (POST) — one attachment's streamed raw body, JPEG, PNG or PDF up to 5 MiB, Class A with `x-minhaj-intent: messaging-attachment`; `attachments/{id}/discard` (POST) — release an unsent upload. Every response private and `no-store`; current access re-decided on every request |
 | Teacher / Admin | `/api/teacher/*` · `/api/admin/*` | Role-gated operations |
-| Migration | `/api/admin/migration/*` | Import control and status. Phase 29 delivers two private reads, GET only: `runs/{id}` — one run's state, discovery, reconciliation and item counts as JSON under `migration.read` (identifiers, states and numbers only); `snapshots/{id}` — one raw snapshot's bytes under `migration.administer`, an audited read sent as an inert attachment (`application/octet-stream`, `nosniff`, `sandbox; default-src 'none'`, `private, no-store`; SECURITY_BASELINE.md §10.5). A cross-site Fetch-Metadata request is refused first and every refusal is the same empty 404. Runs and promotions are started by the command line, mutations are Server Actions; nothing here changes state |
+| Migration | `/api/admin/migration/*` | Import control and status. Phase 29 delivers two private reads, GET only: `runs/{id}` — one run's state, discovery, reconciliation and item counts as JSON under `migration.read` (identifiers, states and numbers only); `snapshots/{id}` — one raw snapshot's bytes under `migration.administer`, an audited read sent as an inert attachment (`application/octet-stream`, `nosniff`, `sandbox; default-src 'none'`, `private, no-store`; SECURITY_BASELINE.md §10.5). A cross-site Fetch-Metadata request is refused first and every refusal is the same empty 404. Runs and promotions are started by the command line, mutations are Server Actions; nothing here changes state. Rebaseline R2 adds `assets/{provenanceId}` (GET) — the administrative preview of one acquisition's metadata-stripped **public copy** under a live `migration.administer`, never the acquired evidence bytes or any other asset, served inline with its verified image type, `nosniff`, a sandboxing policy and `private, no-store`; every refusal is the same empty 404 (SECURITY_BASELINE.md §10.11) |
 | Media | `/api/media/*` | Asset serving and signed downloads |
 | Messaging bytes | `/assets/messaging/attachments/{id}` · `/assets/messaging/support/{id}` · `/assets/messaging/evidence/{reportId}/{id}` | Phase 24: a participant's attachment, a support staff member's (audited) and a moderator's inside one report's evidence (audited). Images `inline`, PDFs `attachment`; `private, no-store`, `nosniff`, CORP same-origin; one 404 for every denial. No signed or public URL |
 | Media upload | `/api/admin/media/audio/{id}/asset` · `/api/admin/media/photos/{id}/asset` | Phase 11: one track's audio file; Phase 12: one Photo's image. `POST` only, a streamed raw body — Class A with explicit anti-CSRF (SECURITY_BASELINE.md §7.1) |
@@ -881,6 +1052,8 @@ A **sitemap index** at `/sitemap.xml` referencing partitioned child sitemaps:
 | Staging environment | **Entire site `noindex` + `Disallow`** — at the edge as well as in the build: `X-Robots-Tag: noindex, nofollow, noarchive` on every response (401s and 404s included) and a robots file served by NGINX that disallows `/` and names no sitemap, behind an environment access gate (SECURITY_BASELINE.md §21, ARCHITECTURE.md §10.6) |
 | **Pre-adoption / presentation origin** | **Entire site `noindex` + `Disallow`**, no submitted sitemaps, and **no canonical URLs pointing at the official origin** — until the approved launch transition (PRODUCT_SCOPE.md, *Product status and acceptance*) |
 | **Deferred or unavailable capability** | **Never listed in a sitemap** and never linked as dead navigation (§5.2) |
+| **Religious corpus not approved** — a fixture corpus, or (since Rebaseline R2) a Quran **reference** preview | **`noindex`**, no canonical or alternates, **an empty sitemap segment** — even if the deployment were indexable; a reference corpus is shown at all only on a deployment that admits it, which configuration refuses beside public indexing (§3.3; SECURITY_BASELINE.md §5.1) |
+| Image derivatives (`…/{assetId}/{width}w.webp`, Rebaseline R2) | `X-Robots-Tag: noindex, nofollow` on every answer; never sitemap entries (§3.10) |
 | Unpublished, staged or draft content | **Never publicly reachable at all** |
 
 > **Why the pre-adoption row exists.** While the platform runs on a developer-controlled origin

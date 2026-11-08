@@ -22,8 +22,13 @@ Stage 1B, the full initial corpus, follows Minhaj's review and go-ahead. Phase 3
 Since then the owner-directed **Rebaseline Program R1 — Flagship Foundation** (an operational
 macro, 2026-11-06, not a canonical phase; recorded after Phase 30 in §4) has reset the product's
 foundation: the interim One Minhaj identity, unprefixed English URLs, content-aware navigation,
-shipped typefaces and one product frame. Stage 1B and Phases 31–35 have not started, and readiness
-is reported in six separate dimensions, never as a bare "complete".
+shipped typefaces and one product frame. It was followed by **Rebaseline Program R2 — Full
+Ecosystem Completion** (also an operational macro, owner-directed 2026-11-06, recorded after R1 in
+§4): every public, My Minhaj, Teacher and Admin surface redesigned on a shared primitive catalogue
+and grouped navigation, a comprehensive pre-adoption presentation corpus, a labelled Quran
+reference preview and operator-run demonstration data — all for pre-adoption staging only. Stage
+1B and Phases 31–35 have not started, and readiness is reported in six separate dimensions, never
+as a bare "complete".
 
 ---
 
@@ -183,7 +188,7 @@ Exit criteria for **all** feature phases, not a later sweep:
 | **Accessibility** | **WCAG 2.2 AA** for delivered surfaces. **Software conformance and content conformance are accepted separately** — where a source supplies no caption, transcript or alternative, the gap is recorded and never fabricated (SECURITY_BASELINE.md §16.3) |
 | **Design system** | Every routed surface uses the shared token, component and state contract of ARCHITECTURE.md §13. **No phase invents throw-away styling**, and no phase re-implements the design system |
 | **Responsive and motion** | Delivered surfaces work from small phone to wide desktop with **no horizontal overflow**, correct RTL at every breakpoint, and `prefers-reduced-motion` honoured (ARCHITECTURE.md §13.5–§13.6) |
-| **User-facing completeness** | A phase that promises a public, admin or user experience is **not complete with backend, API or schema alone**: it delivers a usable professional interface for that experience — responsive, keyboard- and focus-correct, localised with RTL, with its loading/pending, empty, success, error and unavailable states and validation feedback — and **no dead controls or demo-only UI**. An infrastructure-only phase owes no decorative UI |
+| **User-facing completeness** | A phase that promises a public, admin or user experience is **not complete with backend, API or schema alone**: it delivers a usable professional interface for that experience — responsive, keyboard- and focus-correct, localised with RTL, with its loading/pending, empty, success, error and unavailable states and validation feedback — and **no dead controls or demo-only UI**. An infrastructure-only phase owes no decorative UI. (Since Rebaseline R2, pre-adoption staging may hold operator-run synthetic **demonstration data** — environment data made through the ordinary services, never a UI, mode or flag in product code — so this rule is unchanged: OPEN_DECISIONS.md §4.2) |
 | **Professional microfeatures** | The plan does not rely on every small feature being enumerated in advance. A microfeature discovered during a phase is classified: a genuine One Minhaj need or an unnecessary generic-product feature; its **semantic owner**; whether the **current** phase or a named **later owning** phase delivers it; and any security, privacy, legal or religious gate. Genuine in-scope needs are delivered, later ones are recorded against their owner, and generic features are not added |
 | **Data scale** | Bounded queries and page sizes, deterministic ordering with tie-breakers, relevant indexes, no whole-corpus client filtering, bounded bulk actions (ARCHITECTURE.md §13.9). **A phase claims no scale it has not exercised** |
 | **Time and money** | Authoritative instants in UTC, IANA zones for user scheduling, exact non-floating money (DOMAIN_MODEL.md §19.5–§19.6) |
@@ -2654,7 +2659,9 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > **Intentionally NOT in R1:** the home and landing-page redesign (R2; the home body's own hero
 > line is left for it), media-player redesign, the My Minhaj / Teacher / Admin workflow redesign
 > (R3/R4), Stage 1B, Phases 31–35, production cutover, any schema change and any official adoption
-> claim.
+> claim. *(The "(R2)" / "(R3/R4)" split is historical, superseded by the owner's R2 scope decision
+> of 2026-11-06 — OPEN_DECISIONS.md §8: R2 covers every public, My Minhaj, Teacher and Admin
+> surface, and the media-player redesign, in one macro; see the Rebaseline R2 record below.)*
 >
 > **Readiness vocabulary (owner-approved).** Readiness is never reported as a bare "complete". It
 > is reported in six separate dimensions — **Engineering**, **Product**, **Content**, **Activation**,
@@ -2684,6 +2691,147 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > (Stage 1A, 617 public records; Stage 1B not started). Activation — unchanged (religious corpora,
 > giving, learning and messaging not activated). Production — not started (Phases 34–35).
 > Flagship/presentation — improved but not yet presentation-ready; R2 is the next step.
+> *(A snapshot at R1 exit; "R2–R4" there is superseded by the R2 scope decision — see below.)*
+
+> **Rebaseline Program R2 — Full Ecosystem Completion (an OPERATIONAL macro, 2026-11-06 onward;
+> owner-directed, not a canonical phase and not Phase 31).** Branch
+> `feature/rebaseline-r2-full-ecosystem-completion` from main `1725be9`. It follows R1 and a
+> competitor benchmark and ecosystem study of minhaj.org and its sister hosts (held outside the
+> repository), and finishes the product's presentation across every surface on the real corpus.
+> **Two schema migrations** — `20261106000001_r2_quran_reference_preview` and
+> `20261107000000_r2_storage_derivatives` (**33 migrations**); one new runtime dependency, `sharp`
+> 0.35.5 for Storage alone (TECH_STACK.md §18.10), and one development dependency,
+> `@axe-core/playwright` 4.14.0, for the accessibility smoke (§18.11); public indexing still off; staging still
+> pre-adoption.
+>
+> **Owner decisions (2026-11-06, Haseeb, project owner; OPEN_DECISIONS.md §8)** — each for
+> pre-adoption staging only where so marked, none a decision of Minhaj-ul-Quran International:
+>
+> - **R2 scope** widens to every public, My Minhaj, Teacher and Admin surface, superseding the R1
+>   record's R2/R3/R4 split.
+> - **Grouped navigation** replaces R1's ranked bar of at most six (`PRIMARY_LIMIT`); presence still
+>   hides genuinely empty destinations (INFORMATION_ARCHITECTURE.md §1.5, §2, §4).
+> - **Comprehensive pre-adoption presentation corpus**
+>   (`OWNER-ATTESTATION-2026-11-06-R2-COMPREHENSIVE-PRESENTATION-CORPUS`; OPEN_DECISIONS.md §3.9),
+>   with §3.8 extended to all fourteen genuine curated archives.
+> - **Quran staging reference preview** — the Tanzil Uthmani 1.1 text verbatim (CC BY 3.0) with
+>   Irfan-ul-Quran, a labelled `reference` authority, gated and never indexable; production
+>   unchanged (OPEN_DECISIONS.md §1.1–§1.2).
+> - **Hadith:** external hadith corpora declined; the Hadith landing presents MQI's hadith works
+>   (OPEN_DECISIONS.md §1.3). **Fatwa:** unchanged; the staged review set is widened (§1.4).
+> - **Staging demonstration data** as operator-run environment data, never an application mode
+>   (`OWNER-DECISION-2026-11-06-R2-STAGING-DEMO`; OPEN_DECISIONS.md §4.2).
+>
+> **Delivered:**
+>
+> - **Design system** — the shared primitives split into a catalogue under `components/ui`
+>   (layout, composition, forms, data, feedback, cards, indicators, hero, link tabs, one `Pager`,
+>   responsive image primitives — `ResponsiveImage`, `Cover`, `Poster`, `Portrait` — and an in-house
+>   37-icon SVG set, no icon dependency), client islands kept in their own modules (`Dialog`/`Sheet`
+>   on native `<dialog>`, ARIA `Tabs`, `Shelf`, `ConfirmAction`), a third elevation
+>   (`--shadow-overlay`), the long-form reading scale and the Quran face, Scheherazade New 4.500,
+>   for `.quran-text` and `.quran-name` only (ARCHITECTURE.md §13; TECH_STACK.md §18.9).
+> - **Grouped shell** — six header groups with mega panels from a laptop up, a utility strip, a
+>   search palette (Ctrl/⌘K, a real GET form), a modal Menu sheet below 1024 px, six footer
+>   columns, the organisation's official channels and the Tanzil attribution while a reference
+>   corpus is live; fourteen new presence signals; the admin Navigation page's Promotion column now
+>   `always | signal | page` (INFORMATION_ARCHITECTURE.md §2, §4; ROUTE_MAP.md §7).
+> - **Public page families** — the home page rebuilt from real modules; a cover-led Library with
+>   `?sort=title|newest` and magazine issues by year; a poster-led Watch whose privacy facade now
+>   plays on one press, `autoplay` delegated only on the two player routes (ARCHITECTURE.md §4.7.1);
+>   News with `?lang` and the archive's `?type`; Collections with a cover mosaic and
+>   `?order=curated|newest|oldest`; countries grouped by world region from their ISO code; a
+>   narrative `/explore`; search facets for areas with content; the Hadith works landing; the calm
+>   Fatwa page; content-language badges (ROUTE_MAP.md §3).
+> - **Quran reference preview** — the `reference` authority and its database separation rules,
+>   the two-condition deployment gate (`RELIGIOUS_REFERENCE_PREVIEW`, refused beside indexing), one
+>   exhaustive mode posture table, the reference notice and "About this text" panel, the reader
+>   (quick jump `/quran/read?q=`, presentation settings kept in the browser, copy with citation,
+>   the Bismillah rule), the admin step-up panel, and the host-side import and translation commands
+>   (`docker/staging/bin/quran-reference.sh`) — DOMAIN_MODEL.md §8.4; SECURITY_BASELINE.md §5.1.
+> - **Image derivatives** — Storage's `AssetDerivative` and WebP widths 320/640/960/1440 rendered by a
+>   fenced `sharp` decoder, served beside each of the six public picture routes under a
+>   content-addressed `public, max-age=31536000, immutable` class, with `srcset` on pages and an
+>   operator backfill (`docker/staging/bin/derivatives-backfill.sh`) — ARCHITECTURE.md §4.2;
+>   SECURITY_BASELINE.md §10.10.
+> - **My Minhaj** — its own frame and grouped, capability-aware navigation, a home overview of what to
+>   resume and what is next, and an IANA time-zone picker (INFORMATION_ARCHITECTURE.md §5).
+> - **Teacher** — a Monday-to-Sunday week (`?week=`), class stages, dialogs for "mark held" and
+>   "cancel", a student directory, fixed page titles; attendance and "mark held" are refused
+>   server-side before a class starts (Learning's `not-started`; DOMAIN_MODEL.md §13.5).
+> - **Admin** — a queue-first dashboard from owner-supplied counts (Membership's open applications,
+>   Donations' attention flags — counts, not audited accesses), area roots that open the first
+>   permitted surface, one shared pager, confirmation dialogs (presentation only), audit filters by
+>   action prefix, actor and date range, step-up resume with a purpose-bound return address
+>   (SECURITY_BASELINE.md §8.1, §9.3), the Editorial queue's second-administrator approve-and-publish
+>   (at most 25, both keys), and Migration's run-wide acts — approve a confirmed candidate set,
+>   clear pictures by registered host after seeing each through the administrative preview, draft a
+>   manifest of 100 — each still a person's audited decision per item (SECURITY_BASELINE.md §10.11).
+> - **Migration corpus engineering** — 23 catalogued sources (five new keys), a soft `tid:N` identity
+>   that never merges on its own, all fourteen curated archives, 39 countries, two more
+>   organisational pages and eight Minhaj Books authors (MIGRATION_STRATEGY.md §19).
+> - **Staging demonstration data** — `npm run staging:demo:{seed,status,reset}` behind
+>   `docker/staging/bin/demo.sh`, a second operations composition root
+>   (`apps/web/src/composition/staging-demo-runner.ts`), three synthetic `.invalid` personas, the
+>   email transport refusing `.invalid` recipients (`reserved_domain`), and the provider simulator
+>   in-process for fixture donations (OPEN_DECISIONS.md §4.2; SECURITY_BASELINE.md §21.5).
+> - **CI** — a new "Authorisation catalogue proof (real SQL Server)" step in the Database foundation
+>   job runs the Identity and Taxonomy authorisation suites against the live catalogue and fails if
+>   any did not run (`scripts/assert-authorization-proofs.mjs`); both suites, stale since Phase
+>   30-RD, are repaired.
+> - **Quality gates** (the enterprise audit's finding that no visual, accessibility or performance
+>   check existed) — an **accessibility smoke**, `tests/browser/accessibility.spec.ts`, runs
+>   `@axe-core/playwright` 4.14.0 (a reviewed, exact-pinned development dependency; TECH_STACK.md
+>   §18.11) over home, Quran, Library, Watch, News, Collections, Explore, search, sign-in and a
+>   signed-in My Minhaj, in English and Urdu, at desktop and phone widths, against the WCAG 2.x A/AA
+>   rules, failing on any `serious` or `critical` violation and annotating the rest; it runs in the
+>   `Browser flows` CI job with the rest of `tests/browser`. **Visual snapshots**,
+>   `tests/browser/visual.spec.ts` — `toHaveScreenshot` of the phone header, the footer's brand
+>   column, the home and Library hero words, the search empty state and the Urdu sign-in form,
+>   fonts settled and motion stopped — are Linux-only and opt-in (`MINHAJ_VISUAL_BASELINE`), with
+>   the baseline procedure in the spec; they are not a gate until baselines are committed. A
+>   **performance budget**, `npm run perf:budget` (`scripts/perf-budget.mjs`), loads a list of paths
+>   cold on a deployed build under Lighthouse's mobile Slow 4G and a 4× CPU, reports LCP, CLS and
+>   bytes transferred, and fails when a path's median exceeds LCP 2.5 s or CLS 0.1; Basic Auth comes
+>   only from a netrc file and is never printed. It is run against staging by a person, not in CI.
+>
+> **Intentionally NOT in R2, deferred, and missing reads (recorded, not promised):** Stage 1B,
+> Phases 31–35, production cutover and any official adoption claim; the hosts deferred by §3.9
+> (minhajsisters.com, youth.com.pk, msmpakistan.org, research.com.pk, equranclass.com, itikaf.com,
+> welfare.org.pk; minhajwelfare.org needs its own authorisation), a magazine-article kind, a
+> Works↔author link and year archives (MIGRATION_STRATEGY.md §19); Quran recitation audio; any
+> Hadith corpus or published Fatwa; catalogue-only Courses and date-only Events (no real source);
+> search-result thumbnails and per-country news counts; in My Minhaj, cover pictures in saved
+> targets, progress percentages, a learner's class resources, receipts, recommendations and
+> notification kinds beyond Fatwa; in Teacher, a learner's last activity, server-side student
+> search, per-Course past classes, CSV export, materials upload and recurring availability; the
+> visual-snapshot comparison as a CI gate (the spec exists but skips until Linux baselines are
+> committed and the `Browser flows` job sets `MINHAJ_VISUAL_BASELINE`); and the performance budget
+> in CI (it measures a deployed build, so a person runs it against staging).
+>
+> **Operator steps on staging (each a person's act, none run by CI):** deploy and migrate; register
+> the five new source keys under the §3.9 reference and run the corpus plan, approving, deciding
+> pictures and publishing per run (MIGRATION_STRATEGY.md §19.1); a second administrator's custom
+> role for the Quran import, its step-up, then `quran-reference.sh import --sha256 …` and, after the
+> Irfan-ul-Quran runs, `quran-reference.sh translations`; `derivatives-backfill.sh`; and, after a
+> `privilege-administration` step-up, `demo.sh seed`.
+>
+> #### Closure evidence
+>
+> *Recorded at closure* — CI, staging deployment, staging data runs and acceptance are added here
+> when they exist.
+>
+> **Readiness after R2 (six dimensions), as of this record — each restated at closure on its
+> evidence.** Engineering — the R2 contract is implemented; its CI and staging proof are the
+> closure evidence above, and nothing is called green before them. Product — every public, My
+> Minhaj, Teacher and Admin surface is redesigned on one system; the missing reads listed above
+> remain. Content — Stage 1A's 617 public records until the §19.1 staging runs complete; Stage 1B
+> not started; no religious corpus accepted (the Quran preview is labelled reference text, not
+> accepted content). Activation — unchanged for the organisation: no approved religious corpus, no
+> giving, learning or messaging activation beyond staging's demo `fixture` rows (OPEN_DECISIONS.md
+> §4.2). Production — not started (Phases 34–35). Flagship/presentation — the full presentation
+> layer exists for review on pre-adoption staging; its acceptance is the owner's review of the
+> deployed build, not this record.
 
 ---
 

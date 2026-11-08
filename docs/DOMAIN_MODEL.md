@@ -51,6 +51,15 @@ They are consumed by bounded contexts through interfaces (ARCHITECTURE.md §4). 
 them as domains was an error in the prior revision: it invited business logic to accumulate
 inside infrastructure and produced entity-sized "domains" with no invariants to protect.
 
+**Storage's own tables stay infrastructure (Rebaseline R2).** `Asset` — and, since migration
+`20261107000000_r2_storage_derivatives`, **`AssetDerivative`**, the link from a public still image
+to the Storage `Asset` holding one of its WebP widths (320, 640, 960 or 1440, by CHECK; a source
+and width once, a derivative asset one width of one source, never its own) — carry no context key
+and no business invariant. A derivative is stored through the same custody as an upload and is
+served only while the owning context's public policy would serve its **source**; Storage releases
+a source's derivatives itself when the source is released, and nothing cascades
+(ARCHITECTURE.md §4.2; SECURITY_BASELINE.md §10.10).
+
 The prospective **Minhaj Guide assistant** is **not** given a context here. Reserving an
 empty boundary before the capability is authorised creates an architectural placeholder
 with nothing in it. It will be added when it is scheduled.
@@ -544,6 +553,16 @@ history.
 prior revision's third architecture-breaking defect, because Quran and Hadith needed
 provenance while being forbidden from depending on Editorial.
 
+**A review-queue selection, decided one record at a time (Rebaseline R2).** A second administrator
+may approve and publish a **selection** of one kind's in-review records (`approveAndPublishMany`):
+at most one queue page (`EDITORIAL_BATCH_LIMIT`, 25), each named at the version they were shown,
+no record twice. The actor must hold **both** `content.review` and `content.publish`, checked live
+before anything is done; each record then goes through the single-record workflow exactly as two
+single transitions would — approve (self-approval still refused) and publish at the version that
+approval produced — and each transition is audited on its own. A refusal stops that record only and
+is reported with its reason; an outage stops the selection after what was already done. It is a
+convenience over the same workflow, never a bulk state change.
+
 #### 7.2.1 Article and Page publication snapshots
 
 Each Article and Page owns separate immutable revision, translation, typed Topic/Person
@@ -621,6 +640,13 @@ editorial keys `content.read/author/review/publish` govern them; no `news.*` key
   workflow fact. A migrated record is therefore never dated to its migration or approval.
 - **Issuer and source changes are audited as their own events**, and no audit row carries a
   title, body, authoring document, issuer or source address.
+
+**Public timeline reads (Rebaseline R2).** The public News timeline may be narrowed, each filter
+optional and absent meaning "no narrowing": `kind` to one family; `language` to records that **have**
+a published translation in that content language; and `preferLanguage`, which only **orders** —
+records with a translation in that language first, each group still newest first — so an interface
+opens on what its reader can read without hiding the rest. The archive's year-and-month counts take
+the same `kind` and `language` narrowing (`NewsPeriodFilter`). These are queries, not new state.
 
 #### 7.2.3 Event and EventSchedule — as delivered (Phase 14)
 
@@ -752,6 +778,15 @@ a Collection deletes and changes no target.
 promise no projection — the same posture as Phases 12, 14 and 16 — so Collections have no Search
 kind, scope, filter or indexing intent; Phase 31 reconciles the final searchable inventory.
 
+**What a member looks like, asked of its owner (Rebaseline R2).** A listing card names its
+Collection's first few members in the curated order (`leadMembers`, at most
+`COLLECTION_COVER_MEMBERS` = 4, by typed identifier only — never a title) so it can ask their owners
+for a cover picture; a full page of cards stays inside one bounded owner read. An owner that has them
+may answer with the member's first-party lead image and its reader-facing chronology
+(`leadImage`, `chronologyAt`) — Editorial does for its Article, NewsArticle and PressRelease members.
+Absent means the owner says nothing, and nothing is inferred; a Collection page's chronological
+order is a presentation over those answers, never a change to the curated order.
+
 ### 7.4 Derived views are not entities
 
 `Featured`, `Popular` and `Latest` are **flags and queries**, never separate aggregates,
@@ -863,7 +898,9 @@ ayat must be exactly the activating source's, and every Surah's count must match
 `approved` activation while any Ayah's text came from a fixture source. An active corpus is
 frozen: no structure is added beneath it. A **fixture** activation exists for disposable proof
 environments only: every public Quran page then says it shows non-authoritative engineering
-fixture text, is `noindex`, and no sitemap lists it.
+fixture text, is `noindex`, and no sitemap lists it. *(Since Rebaseline R2 a third authority,
+`reference`, exists for the password-protected, non-indexable staging deployment only — §8.4. It
+does not widen where a fixture may be activated.)*
 
 **Canonical text has one write path.** The application principal holds SELECT and nothing else
 on `Juz`, `Surah` (except its display-name version), `Ayah`, `QuranAyahRevision` and
@@ -930,6 +967,66 @@ Tafsir bodies are not indexed. Nothing is indexed while the corpus is inactive.
 
 **No Personalisation state.** Reading progress, bookmarks and notes are Phase 21's; nothing here
 anticipates them.
+
+### 8.4 Quran — the reference authority (Rebaseline R2)
+
+**An owner decision for pre-adoption staging, not religious approval** (OPEN_DECISIONS.md §1.1,
+§1.2). Migration `20261106000001_r2_quran_reference_preview` adds a third source authority, so a
+real external text is never mislabelled as either of the other two:
+
+| Authority | Meaning |
+|---|---|
+| `fixture` | Synthetic engineering text that proves mechanisms (§8.3) |
+| `reference` | A real, licensed external text reproduced **verbatim**, recorded with its licence, version and digests, and **not reviewed by Minhaj-ul-Quran's religious authority for this platform** |
+| `approved` | A source an external religious authority approved |
+
+**What the schema holds.** `QuranSource_authority_ck` admits the three; `QuranSource_evidence_ck`
+requires a `reference` source to carry its evidence exactly as an `approved` one does, and the
+`reference` column widens to `NVARCHAR(2000)` so the source's own copyright notice, which its licence
+requires in every copy, is kept verbatim beside the version and digests. The activation trigger
+keeps every Phase-18 rule — an approved activation still refuses any Ayah whose source is not
+approved, so reference text can never enter an approved corpus — and gains two: a `reference`
+activation refuses fixture text and a `fixture` activation refuses reference text (51185). The
+canonical-change trigger keeps the same separation for a correction beneath an active fixture or
+reference corpus (51198). No grant changes: the runtime principal still reads the source and
+activation tables and writes neither, and canonical text is still written only by the procedures.
+Hadith and Fatwa are untouched.
+
+**What each mode permits — one exhaustive table** (`QURAN_MODE_POSTURE`,
+`packages/contracts/src/quran/values.ts`), so no page, sitemap, navigation probe or search
+projection decides it with its own comparison:
+
+| Mode | Indexable | Sitemap | Promoted in navigation | Notice on every Quran page |
+|---|---|---|---|---|
+| `approved` | yes (where the deployment is indexable) | yes | yes | none |
+| `reference` | **never** | **never** | yes, where admitted | the reference-preview attribution |
+| `fixture` | never | never | no | the fixture warning |
+
+**A reference corpus is inactive unless the deployment admits it.** The composition root hands the
+public reader the deployment's answer (`admitReference`), from `RELIGIOUS_REFERENCE_PREVIEW=enabled`
+on a non-indexable build (SECURITY_BASELINE.md §5.1); anything else makes a `reference` activation
+read exactly as no corpus at all on every page, search projection, sitemap, navigation probe and
+audio route. An unknown stored authority is never guessed into a mode. Layered works follow their
+corpus: beside an approved corpus only approved works; beside a reference corpus reference or
+approved works, never fixture text; beside a fixture corpus fixture or approved works, never
+reference text.
+
+**What staging holds.** The Tanzil Project's Uthmani text 1.1 (CC BY 3.0), registered as source
+`tanzil-uthmani-1.1` with its structure (114 Surahs, 6,236 ayat, Juz, hizb from its quarters, page
+and sajdah markers) by the owner principal in one transaction, accepted through Quran's own canonical
+service under an operator's live `quran.editCanonical` grant and `quran-canonical-edit` step-up, and
+activated by the owner naming `OWNER-DECISION-2026-11-06-R2-QURAN-REFERENCE-PREVIEW`
+(`packages/database/src/lifecycle/quran-reference.ts`). Irfan-ul-Quran, Minhaj-ul-Quran's own
+translation, is registered as two **provenance** sources (`irfan-ul-quran-ur`,
+`irfan-ul-quran-en`, authority `reference`, **zero ayat** — a translation's source is a provenance
+record) and saved surah by surah through Quran's administrative service (`quran.administer`) from
+the staged, review-only migration revisions exactly as staged; a surah whose staged revision fails
+validation is skipped and reported, never repaired (MIGRATION_STRATEGY.md §19).
+
+**Irreversible on its database.** Canonical Quran is a singleton store that is never deleted, and
+only one corpus is ever accepted: a staging database that holds the reference corpus keeps it until
+the staging database is reset, and a later approved corpus needs a fresh database or a recorded
+correction of every Ayah. Production never runs the import and never sets the admission.
 
 ---
 
@@ -1092,6 +1189,12 @@ Owns published works. Corrects the prior revision's conflation of *localized met
   by Library's own routes only while the Edition and its Work (or the issue and its Magazine)
   are published. A Work shows the cover of its first published Edition that has one; a
   Magazine its newest public issue's.
+- **Listing order (Rebaseline R2).** A public listing of Works is ordered by `sort`: absent, the
+  stable catalogue order (by slug), unchanged for every caller that does not ask; `title`, A–Z by
+  the title a reader of `titleLocale` is shown (the label in that locale, else the Work's
+  primary-locale label); `newest`, the latest publication year among the Work's published
+  Editions first, Works with no recorded year last, then A–Z. Every order ends on the identifier,
+  so a page never repeats or skips a Work. An order is a query; no year or title is stored for it.
 
 ### 10.2 Other aggregates
 
@@ -1468,6 +1571,23 @@ nothing at dispatch. Every message links to the person's own private class page,
 
 **No-show** is derived, not stored: a trial participant marked `absent` on a completed session — or
 unmarked — is the no-show; no Booking state and no subsystem exists for it.
+
+**Nothing is held or attended before it starts (Rebaseline R2, audit F38).** A session cannot be
+closed as `completed`, and no participant can be marked, while its start instant is still in the
+future: both are refused `not-started` by Learning's persistence adapter on the server's clock
+(cancelling ahead of time stays allowed). Attendance is a record of what happened. The teacher
+interface offers neither before the start, but the refusal does not depend on it.
+
+**Staging demonstration data (Rebaseline R2).** On the pre-adoption staging database only, an
+operator may write a `fixture` `LiveLearningActivation` for synthetic demo personas — environment
+data under OPEN_DECISIONS.md §4.2, never an application mode. The row is immutable like any other
+(51280), so that database keeps live learning in fixture state until it is reset. The demo
+teacher's teaching role is created and granted by a staging administrator through Identity's
+audited administration under a live step-up, never seeded, and the demo teacher is a published
+People Person named "Yusuf Example (demo teacher)" whose biography says it is fictional — so it is
+public on staging, which is the trade-off the owner accepted; past demo classes are scheduled through
+the ordinary service and held and marked on the real clock. The demo courses carry their own
+genuine demo syllabus, labelled demo; no real course is invented.
 
 **Public surfaces.** `/learn/live` lists upcoming scheduled sessions on published live Courses under
 current scopes, with the Course and the teacher's public People profile, while activated; a `fixture`
@@ -1937,6 +2057,14 @@ message edit, delete or unsend, group or public conversations, calls, email or n
 messages, an approved student-to-student policy, real support staff or moderators, any strike, ban,
 escalation or retention rule, and every policy OPEN_DECISIONS.md §2.1, §2.2, §2.5 and §6.6 reserve.
 
+**Staging demonstration data (Rebaseline R2).** On the pre-adoption staging database only, the
+owner principal may write `fixture` `MessagingActivation` rows for `support` and `teacher-student`
+— **never `student-student`** — so synthetic demo personas can hold a teacher↔student conversation
+and a non-sensitive support thread (OPEN_DECISIONS.md §4.2). The personas write as themselves through
+the ordinary services, with fixed operation ids so a second seed changes nothing. The rows are
+immutable (51300): that database keeps those kinds in fixture state until it is reset. It is
+environment data, never an application mode.
+
 ### 15.7 As delivered (Phase 25 — the realtime transport; no new aggregate)
 
 Phase 25 adds a TRANSPORT and nothing to the model: no aggregate, table, column, key or trigger.
@@ -2174,6 +2302,48 @@ Migration `20261031000000_phase30rd_owner_decisions` adds one table (OPEN_DECISI
   type refuses the archive. An entry the committed catalogue records as unmigratable is no member:
   the payload names it in `excludedMembers` with its recorded reason for the reviewer.
 
+### 16.9 As delivered (Rebaseline R2 — the comprehensive pre-adoption corpus)
+
+**No schema change in Migration & Provenance, and no new kind** (still thirteen). R2 widens what
+staging may carry (OPEN_DECISIONS.md §3.9) and adds bounded, per-item run-wide acts
+(MIGRATION_STRATEGY.md §19); the platform's migrations count **33**, the two R2 migrations being
+Quran's (§8.4) and Storage's (§1.1).
+
+- **Five more registrations, one existing kind each** — `minhaj-org-press-releases-ur`,
+  `minhaj-org-articles-ur`, `minhaj-info-issues-ulama`, `minhaj-tv-videos-ur` and
+  `minhajbooks-authors` (`people.person`): 23 catalogued authorised sources.
+- **The same post reached by two sources: a soft identity.** The organisation's sites share one CMS
+  whose post number (`tid`) is one number space across languages, sections and hosts. A news item,
+  article or press release whose legacy identifier is `tid-{n}` carries `tid:{n}` as an
+  **identifier** signal that is **not hard**: a second record with it becomes a duplicate candidate
+  a person decides (merge or distinct) — never collapsed automatically, never a title guess.
+  `NORMALIZER_VERSION` is unchanged (30.3).
+- **Run-wide acts, each item decided on its own.** Three decisions may be confirmed over a run's
+  whole candidate set — approve its revisions, clear its pictures on one registered host, and draft a
+  manifest — by naming the set's size and fingerprint (the SHA-256 of every candidate's
+  `id:version`, in order). The service re-reads the set and refuses `conflict` unless both still
+  match, refuses an incomplete or unbalanced run (`run-unreconciled`), and then decides only the
+  first slice (`runChunk`, 150) item by item through the single decision's own path, checks and
+  audit, attributed to the person; a refused item is reported with its reason, never forced. An
+  approval candidate is pending, valid, free of personal data (`none` — flagged and cleared
+  revisions stay single decisions), of a publishable kind and named by no OPEN duplicate candidate;
+  because the fingerprint names versions, not pairs, each record is asked again just before it is
+  approved and refused `duplicate-open` if a pair has opened since. A rights candidate is a
+  restricted acquisition on one of the run's source's registered page or asset hosts, claimed
+  `organisation-owned` with stated evidence and having a public copy; the person states the licence,
+  evidence and holder. A run-wide manifest takes the next 100 (`runManifestEntries`) approved,
+  publishable revisions no live manifest holds and is then an ordinary manifest. At most 10,000
+  candidates (`runCandidates`) are confirmed over at once.
+- **The read port grows by eight methods** — `asset`, `runApprovalCounts`, `approvalCandidates`,
+  `approvalCandidateKeys`, `hasOpenDuplicate`, `rightsCandidates`, `rightsCandidateKeys` and
+  `manifestCandidateKeys` — and an acquisition's `publicCopy` names its Storage `assetId`, which only
+  the administrative picture preview reads. The decision and read services take one more
+  dependency, `sources` (`MigrationSourcePort`, `source` only), to know a run's registered hosts; a
+  host the source does not register is refused, never queried.
+- **Unchanged.** Fatwa and Quran revisions stay review-only and are never in a run-wide set;
+  publication still needs `migration.publish` with its step-up, and Editorial's own workflow
+  (by a different person) still decides every Editorial record migration publishes (§7.2).
+
 ---
 
 ## 17. Global Network, Membership, Donations
@@ -2226,6 +2396,14 @@ A Centre's news and events are ordinary Editorial records carrying a Centre refe
   own site states it is present in (`global.country`) without any Region, City or Centre: no
   authorised source publishes a centre directory with addresses, and none is inferred. Such a
   Country's public page says honestly that no Centre is listed yet.
+- **The ISO code in the public choice (Rebaseline R2).** Global's bounded public Country choice
+  (`countryChoices`, `PublicCountryChoice`) now carries each Country's stored ISO 3166-1 code, so the
+  directory can group its grid by world region without a second read. The region is
+  **presentation** — the World Bank's seven-region grouping applied to the code in the web layer
+  (`apps/web/src/components/global/world-region.ts`), a code it does not place shown as "other" —
+  never stored and never asked of the organisation. Migration's Country table names 39 countries
+  since R2, "Korea" placed as the Republic of Korea only on its own page's evidence
+  (MIGRATION_STRATEGY.md §19).
 
 ### 17.2 Membership
 
@@ -2288,6 +2466,14 @@ separate explicit decision rather than an implied one.
   contract names a Person, a Centre or a place for a member, so none is created or referenced:
   a member is not a public contributor, and a Membership is not a Centre affiliation. The
   allowlist row stands; an allowed edge need not be consumed.
+- **A queue count (Rebaseline R2).** `openApplicationCount` — how many applications are submitted
+  or under review — feeds the administration dashboard. A number that names nobody, so it is not an
+  audited access; opening the queue itself is unchanged.
+- **Staging demonstration data (Rebaseline R2).** The pre-adoption staging environment may hold one
+  published type titled "Demo membership (staging)" and a synthetic demo member's application
+  lifecycle on it, created through the ordinary services (OPEN_DECISIONS.md §4.2). It is never
+  presented as Minhaj's membership policy, but while it is published it is public on staging and
+  Membership is promoted in navigation there.
 
 ### 17.3 Donations
 
@@ -2374,6 +2560,16 @@ only** — never Membership, which has no payment concept, nor any content conte
 **No recurring giving, saved instruments, Gift Aid, tax receipts or production provider** exist;
 those remain OPEN_DECISIONS.md §5.4.
 
+**Since Rebaseline R2.** `attentionCount` — how many donations carry an attention flag — feeds the
+administration dashboard; a number that names no donor, so it is not an audited access. On the
+pre-adoption staging database only, the owner principal may write a `fixture` `DonationActivation`
+for the demo's non-secret account key, and a synthetic demo member's donations are started and
+reconciled through the ordinary donor and reconciliation paths against the Stripe protocol
+simulator on loopback inside the operations process — the `fixture` environment, synthetic
+credentials, no network, **no money** (OPEN_DECISIONS.md §4.2). The activation is immutable: that
+database cannot later take a sandbox activation until it is reset. Public Donate stays off on
+staging, because no provider is configured for the web process.
+
 ---
 
 ## 18. Models that must NOT be merged
@@ -2449,6 +2645,13 @@ SECURITY_BASELINE.md §13.
 
 **Audit actor and target identifiers are historical evidence, not relational references**, and
 are outside the polymorphic-reference prohibition (§6.2.1).
+
+**Reading the audit log (Rebaseline R2).** Identity's audit listing (`listAuditRecords`) is newest
+first; `action` matches as a **prefix** (`role.` finds every role action, a full name that action),
+and an optional `from`/`to` bounds `occurredAt` (inclusive start, exclusive end). Every filter is
+served by an index — `(action, occurredAt)`, `actorId`, `occurredAt`. The audit representation is
+unchanged. Dashboard queue counts (Membership's open applications, Donations' attention flags) name
+nobody and are not audited accesses.
 
 ### 19.4 Referential integrity
 

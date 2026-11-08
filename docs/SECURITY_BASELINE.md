@@ -236,6 +236,16 @@ service and re-checked by the database trigger when the finding moves (§10.9). 
 staging only**, by the owner's decision, the owner's first administrator holds it through a custom
 role a second administrator created and assigned under `permissions.grant` — never a self-grant.
 
+**Rebaseline R2 (2026-11-06) adds no key.** Its run-wide migration acts — approving a run's
+confirmed candidates, clearing a run's pictures on one registered host, drafting a manifest of the
+next approved revisions — and the administrative picture preview are all under the ordinary
+`migration.administer`; none confers publication, which still needs `migration.publish` and its
+step-up for every manifest (§10.11). The Editorial queue batch requires **both** ordinary keys
+`content.review` and `content.publish`, live, and is two single transitions per record (§4). The
+staging demo's teaching role (`staging-demo-teacher`, holding `teaching.perform` among others) is a
+custom role an operator creates and grants through Identity's audited administration under a live
+`privilege-administration` step-up — never seeded and never self-granted (§21.5).
+
 ---
 
 ## 4. CMS publishing permissions
@@ -249,6 +259,16 @@ path or bulk operation moves content to published without passing its required r
 
 Permissions are per content type and per action. Broad wildcards are avoided; where they exist
 for practical administration, their use is audited.
+
+**As delivered (Rebaseline R2) — the queue batch is not a bypass.** A second administrator may
+approve **and** publish a selection of one kind's in-review records from the review queue: at most
+25 (one queue page), each named at the version they were shown, duplicates refused. The actor must
+hold **both** `content.review` and `content.publish`, checked live before anything is done; each
+record then goes through the single-record workflow exactly as two separate acts would — approve
+(self-approval refused by the workflow, as for a single approve) and publish at the version the
+approval produced — and each transition is audited on its own. A refusal stops that record only and
+is reported with its reason; an outage stops the batch and reports what was done before it. There is
+no "publish everything" path, and no bulk act skips a review stage.
 
 ---
 
@@ -279,6 +299,39 @@ application permission. Rule 4's mismatch blocking is exact: code points in the 
 bytes in the database, and canonical text is copied from the registered source's own rows only
 after the candidate matched them. Layered works carry `quran.administer`, isolated from canonical
 text; no `content.*`, `library.*` or `media.*` key confers Quran authority, and no profile does.
+
+**Rebaseline R2 — the staging reference preview (owner decision 2026-11-06; OPEN_DECISIONS.md
+§1.1, §1.2; DOMAIN_MODEL.md §8.4).** A third source authority, `reference`, records a real, licensed
+external text reproduced verbatim — the Tanzil Uthmani 1.1 text (CC BY 3.0) — that Minhaj-ul-Quran's
+religious authority has **not** reviewed for this platform. It is never `approved`, and nothing here
+weakens rules 1–5:
+
+- **The database keeps the authorities apart.** A `reference` source carries its evidence (licence,
+  version, digests, the source's own notice) exactly as an `approved` one does; an approved
+  activation still refuses any Ayah whose source is not approved; a reference activation refuses
+  fixture text and a fixture activation reference text (51185), and a correction may not mix them
+  beneath an active corpus (51198). No grant changes: the runtime principal still writes neither
+  sources nor activations, and canonical text is still written only by the procedures above.
+- **The import uses the ordinary controls.** The owner principal registers the source and writes the
+  activation; the corpus is accepted by Quran's canonical service as the runtime principal under an
+  operator's live `quran.editCanonical` and `quran-canonical-edit` step-up (the admin
+  `/admin/quran/surahs` acceptance panel), the database comparing the candidate with the registered
+  rows byte for byte. Irfan-ul-Quran's translations are saved through Quran's administrative service
+  under `quran.administer`; a Surah whose staged revision fails validation is skipped and reported,
+  never "fixed".
+- **Two gates, both fail closed.** A deployment shows a reference corpus only when
+  `RELIGIOUS_REFERENCE_PREVIEW` is exactly `enabled` **and** the build is non-indexable:
+  `parseServerEnv` refuses `enabled` beside `PUBLIC_INDEXING_ENABLED=true` at startup, and the public
+  reader independently re-checks the indexing posture
+  (`apps/web/src/config/religious-reference.ts`). Without that admission the adapter's one
+  chokepoint (`activeMode`) reports a reference activation as **no corpus at all** to every page,
+  search projection, sitemap, navigation probe and audio route. Only the staging web service sets it.
+- **Never indexable, always attributed.** Reference mode is `noindex`, is in no sitemap and carries
+  no canonical or alternates (`QURAN_MODE_POSTURE`); every Quran page names the Tanzil Project and
+  Irfan-ul-Quran and says the text has not been reviewed by Minhaj-ul-Quran's religious authority.
+- **Irreversible on its database.** Canonical Quran is a singleton never deleted; a staging database
+  that holds the reference corpus keeps it until the database is reset, and production never
+  receives reference rows.
 
 ### 5.2 Hadith
 
@@ -540,6 +593,14 @@ Recent-reauthentication windows are short and configurable. **This requirement d
 Phase 0B scaffolding**; it is a production requirement documented now so it is designed in
 rather than retrofitted.
 
+**Resuming after a step-up (Rebaseline R2).** Rebaseline R2 adds no purpose and shortens no
+window. A protected form refused `step-up-required` keeps the person's submission in the page; when
+the step-up prompt on the same page announces a grant (a browser event that carries the purpose and
+no authority), the form sends the held submission again — and the server re-checks the permission,
+the posture and the grant in full, exactly as for a first submission. A step-up confirmation returns
+to the page the person was working on only through `safeStepUpReturnTo`, which is **purpose-bound**
+(§9.3).
+
 ### 8.2 Privileged multi-factor authentication — a V1 production requirement, precisely scoped
 
 > **High-consequence privileged capabilities require an enrolled second factor before those
@@ -618,6 +679,14 @@ for a named account, not a mode the system can be put into.
 Phase 2 owns the concrete mechanism; **Phase 33 independently re-assures it**
 (DELIVERY_PLAN.md).
 
+**The staging demonstration seeds no privilege (Rebaseline R2; OPEN_DECISIONS.md §4.2).** Its three
+synthetic personas are ordinary accounts with no role; the owner principal writes them in Identity's
+row shape exactly as the Phase-29 migration proof does. The one privilege the demonstration needs —
+the demo teacher's `staging-demo-teacher` role — is created and granted by a named staging
+administrator through Identity's audited administration under that administrator's live
+`privilege-administration` step-up; it is never seeded, never self-granted and never a bootstrap
+path. No seeded superuser or hard-coded credential exists (§21.5).
+
 ---
 
 ## 9. Input validation, output encoding and redirects
@@ -651,6 +720,15 @@ for a religious organisation.
 and protocol-relative URLs (`//evil.example`) are rejected; only same-origin relative paths
 are permitted; invalid values fall back to a safe default. **Legacy 301 targets resolve only
 from the internal mapping table**, never from user input.
+
+**A step-up's return is purpose-bound (Rebaseline R2).** `safeStepUpReturnTo`
+(`apps/web/src/composition/return-to.ts`) applies every path check `safeReturnTo` makes — same
+origin, no scheme or network reference, no traversal, backslash or control character, raw and
+decoded — and then admits only the administrative pages **that step-up purpose authorises changes
+on** (for example `migration-publication` only `/admin/migration/manifests…`, `donation-refund`
+only `/admin/donations/{id}`; `second-factor` none). The page's own query is kept, any fragment is
+replaced by the prompt's own anchor, and anything else answers `null`: the person stays where they
+are, and a refusal never becomes a redirect elsewhere.
 
 **Stored outbound addresses** (Phase 9 citations, Phase 13 media-coverage sources) are parsed
 on write by the platform's URL parser and kept only when absolute HTTPS without credentials, in
@@ -999,6 +1077,94 @@ organisational contact data only**, and no other:
   workflow then needs a different person again to approve and publish the record. Tests:
   `tests/migration/personal-data.test.ts` and the migration lifecycle proof.
 
+### 10.10 As delivered (Rebaseline R2) — public image derivatives
+
+Until R2 no pixel was decoded on the server (§10.7, §10.8). R2 renders a public still image at up to
+four narrower WebP widths (320, 640, 960, 1440) so a card does not download a full original
+(ARCHITECTURE.md §4.2). It is the **only** place Storage decodes pixels, and it is fenced
+(`packages/storage/src/derivative.ts`; dependency review: TECH_STACK.md §18.10):
+
+- **Decode fence.** The decoder is handed only bytes Storage already holds as a **clean** JPEG, PNG
+  or still WebP; anything it reads as another format is refused, so the rest of libvips' format
+  surface is never reached. The declared size is checked against the strictest still-image bounds
+  (40 megapixels, 16,384 pixels a side) **before** any pixel is decoded, and the decoder carries the
+  same pixel ceiling, so a small file declaring an enormous canvas is refused (no decompression
+  bomb); only the first frame is read; libvips' operation cache is off; a width wider than the
+  displayed image is never produced.
+- **No metadata out.** A derivative carries no EXIF, XMP, IPTC or colour profile: pixels are
+  converted to sRGB and written alone.
+- **The same custody as an upload.** Each width is stored through `store()` itself — WebP structure
+  validation (§10.8), sniffing, the scanner, clearance by checksum — as its own `Asset`, linked to
+  its source by Storage's `AssetDerivative` (widths constrained to the four, never its own source,
+  nothing cascading). A derivation that loses a race to link a width releases its own copy.
+  Releasing a source withdraws its derivatives, removes their bytes, then their links and records.
+- **Only what is public is decoded.** Derivation is asked for only after the owning context's
+  **public** serving policy has allowed the source — from a derivative route, or the operator's
+  backfill, which enumerates each family's published records through their owners and puts every
+  candidate to that same policy — and Storage asks the policy again before decoding. A draft, a
+  withdrawn record and a restricted acquisition no record shows are never decoded. Visitor-triggered
+  derivation is bounded: one at a time per process, at most 32 waiting, an asset that failed not
+  retried by that process.
+- **Served beside the owner's route, by the same two decisions.** `…/{assetId}/{width}w.webp` sits
+  beside each of the six public picture routes (Editorial lead images, Library edition and issue
+  covers, Media photographs and posters, People portraits — never previews, audio or private
+  bytes). It builds exactly its sibling's policy and applies it to the **source**; every refusal —
+  draft, withdrawn, replaced, restricted, malformed, unknown width — is the same `404` with
+  `private, no-store`. A servable source whose width is not yet rendered answers `307` (`no-store`)
+  to the sibling picture route — a path derived from the request's own path, never a query, header
+  or stored value — and queues the derivation.
+- **Cache class.** A served derivative is `public, max-age=31536000, immutable` with a checksum
+  ETag, `nosniff`, `Content-Disposition: inline`, `Cross-Origin-Resource-Policy: same-origin` and
+  `X-Robots-Tag: noindex, nofollow`. It is safe because the address is **content-addressed**: it
+  names the source asset, whose bytes never change under its id (a new picture is a new asset and a
+  new address), and the width, and the derivative is a pure function of the two. This is the one
+  public, shared-cacheable byte class; every other picture route keeps the Photo posture
+  (`private, no-cache`, §10.7).
+- **Withdrawal residual — accepted and stated.** Withdrawal works by the address disappearing: a
+  page stops emitting it when the record stops showing the picture, and the route answers `404`
+  from then on. What it cannot do is reach into a cache that already holds the bytes: a browser
+  that fetched a derivative may keep it for up to a year. No edge cache in front of the application
+  stores it (the staging proxy caches nothing); **a CDN must not be placed in front of these routes
+  without a purge path**.
+
+### 10.11 As delivered (Rebaseline R2) — run-wide migration acts and the administrative picture preview
+
+R2's comprehensive corpus (MIGRATION_STRATEGY.md §19) is reviewed with bounded run-wide acts — each
+still a person's decision, each item decided and audited on its own (DOMAIN_MODEL.md §16.9):
+
+- **A confirmed set, never "everything".** A run-wide act names a **completed, balanced** run, the
+  number of candidates the person was shown and their **fingerprint** — the SHA-256 of every
+  candidate's `id:version`, in order. The service re-reads the set and refuses `conflict` unless
+  both still match, so an act never reaches an item the person was not shown, nor one that has moved
+  since; an unreconciled run is refused `run-unreconciled`. A set is confirmed over at most 10,000
+  candidates and each act decides at most its first **150** (well inside the staging edge's read
+  window); the page then shows what remains under a new fingerprint.
+- **Run-wide approval** takes only pending, valid revisions of a publishable kind with **no**
+  personal-data flag: invalid, flagged and cleared revisions (a cleared one still needs a person who
+  cleared nothing, §10.9), review-only kinds (Fatwa, Quran) and any record an **open** duplicate
+  candidate names on either side stay single decisions. Each item goes through the single review's
+  own path — its checks, the database's, one audited approval attributed to the person — and, just
+  before each, the open-duplicate question is asked **again** (`duplicate-open`), because the
+  fingerprint names versions, not pairs. A refused item is reported, never forced; an outage stops
+  the act and reports what was done.
+- **Pictures by registered host.** Clearing a run's pictures for release takes only restricted
+  acquisitions on one page or asset host **the run's source registers**, whose page stated
+  organisational ownership with evidence, and which have a public copy the person was shown;
+  unknown rights are never in the set. Each acquisition is decided `public-eligible` and audited on
+  its own under the licence, evidence and holder the person states.
+- **Manifests of at most 100.** A run-wide draft manifest takes the next 100 approved, valid,
+  publishable revisions no live manifest holds. Publishing it still needs `migration.publish` and a
+  live `migration-publication` step-up, unchanged (§3.5).
+- **The administrative picture preview.** `GET /api/admin/migration/assets/{provenanceId}` shows the
+  person deciding a run's pictures each one before clearing it, without the browser contacting any
+  other host. It serves only the metadata-stripped **public copy** an acquisition records — never
+  the acquired evidence bytes, never an arbitrary asset id, never a PDF — and only when all hold: a
+  live `migration.administer` re-read on the request; the acquisition exists and records a public
+  copy; Migration's policy allows exactly that Storage asset as a public image type; and Storage's
+  own decision (clean, present, checksum matching). It is a private read that changes nothing:
+  Fetch Metadata refuses a cross-site request, every refusal is the same empty `404`, and every
+  response is `private, no-store`, `nosniff`, `noindex`.
+
 ---
 
 ## 11. Live class and meeting URL security
@@ -1179,6 +1345,14 @@ failed or stale pre-mutation marker is fenced before cancellation, so it cannot
 later authorize a write or fabricate a success event. Account closure commits
 its state, mandatory audit and communication intent in one private Identity
 transaction.
+
+**Counts are not audited accesses (Rebaseline R2).** The administration dashboard shows how much
+work waits per area, asking each owning context's service for a **number only** — an existing
+bounded listing's total, Membership's `openApplicationCount` or Donations' `attentionCount` — each
+re-checking the viewer's key live. A number names nobody, so opening the dashboard writes no
+data-access row; reading the rows behind it is still audited by their owners exactly as above. The
+audit viewer's R2 filters — an action **prefix** (`role.` finds every role action) and an
+`occurredAt` date range — narrow what is read; they write nothing and widen no access.
 
 ### 13.3 Audit identifiers are historical evidence, not relational references
 
@@ -1395,6 +1569,14 @@ resizing to 200% without loss of content or function · semantic landmarks and h
 screen reader testing in all three locales · `prefers-reduced-motion` honoured · correct
 `lang` and `dir` on mixed-direction content.
 
+**Automated smoke (Rebaseline R2).** `tests/browser/accessibility.spec.ts` runs axe-core
+(`@axe-core/playwright`) against the production build in the `Browser flows` CI job: a
+representative public route set and a signed-in My Minhaj, in English and Urdu, at desktop and
+phone widths, against the WCAG 2.0/2.1/2.2 A and AA rules. A `serious` or `critical` violation
+fails the job; `moderate` and `minor` findings are reported as annotations. Automated rules cover
+only part of WCAG, so the smoke **supplements** the keyboard, focus, reflow and screen-reader
+checks above and the behavioural browser specs; it is never a conformance claim (§16.3).
+
 ### 16.2 Domain-specific acceptance criteria
 
 | Surface | Requirements |
@@ -1405,6 +1587,21 @@ screen reader testing in all three locales · `prefers-reduced-motion` honoured 
 | **Video and audio** | **Captions and transcripts surfaced when available** · keyboard-operable player · no autoplay with sound |
 | **RTL** | Every page verified in Urdu and Arabic — **not merely those checked during development** |
 | **Forms** | Labels, error identification, and instructions meeting AA |
+
+**Playback starts only from the visitor's own press (Rebaseline R2).** `Permissions-Policy` refuses
+`autoplay` on every page (with camera, microphone, geolocation, payment and `browsing-topics`), with
+**one** scoped exception: on the two player routes — the public Video page and its administrative
+editor — the policy delegates `autoplay` to the page itself and exactly the two privacy-enhanced
+embed origins, taken from the same contract as `frame-src`. The provider frame is created only by
+the visitor's press of Play and asks for `autoplay=1` (`providerPlaybackUrl`), so that one press both
+loads and starts the video; no page renders autoplaying media, and structured data keeps the plain
+embed address (ARCHITECTURE.md §4.7.1). The CSP is unchanged.
+
+**Confirmation dialogs are presentation, never control (Rebaseline R2).** Irreversible or
+destructive administrative forms ask first in a modal dialog, with an optional reason field
+(`ConfirmAction`). Confirming authorises nothing: without JavaScript the form submits directly, and
+the Server Action re-checks permission, posture and step-up — and validates any reason the service
+requires — whatever the dialog did (§3.4 rule 1).
 
 ### 16.3 Software conformance and content conformance are accepted separately
 
@@ -1573,6 +1770,12 @@ preference cookie (historical).
 **Fatwa questions are sensitive** — strictest access control, never exposed in listings,
 search, logs or caches. **Student data** is limited to teachers with a **current** assignment.
 
+**Undeliverable addresses never leave the process (Rebaseline R2).** The email transport refuses
+every recipient on the reserved `.invalid` top-level domain (RFC 2606) — compared on the domain
+after the last `@`, case-insensitively — as a permanent rejection (`reserved_domain`) without
+contacting the provider. A closed account's tombstone address and every synthetic account (the
+staging demonstration's personas, §21.5) sit there; handing one to the provider could only bounce.
+
 #### 19.1.1 Phase-6 general correspondence
 
 ContactInquiry and Feedback have separate private storage and lifecycles. `correspondence.read`
@@ -1694,6 +1897,11 @@ vetting, retention or adults-only rule exists and no real teacher is named (DOMA
 - **Class-A mutations.** Every teacher, learner and operator class mutation is an Origin-protected
   Server Action that re-resolves the session and re-reads authority; teacher and learner writes are
   rate-limited per account; no state-changing GET exists.
+- **Attendance records what happened (Rebaseline R2).** Learning refuses a mark, and marking a
+  class held, for a class that has not started (`not-started`), checked in the persistence
+  adapter against the session's start; cancelling ahead of time is unaffected. The Teacher pages
+  mirror the rule (`classStage`) so they never **offer** a control the service would refuse — the
+  page grants nothing, and the server rule is authoritative.
 - **Service mail.** Learning commits durable intent in the class transaction; the dispatcher relays
   it only after re-checking activation, session state and the recipient's current relationship, and
   Identity resolves the recipient's current address at relay and at send. A marketing unsubscribe
@@ -2068,6 +2276,39 @@ delivery; since Phase 30 staging sends **transactional** mail (verification, res
 notices) through the pre-adoption Resend sender `mail.minhajulquran.haseebliaqat.me` with a
 sending-only credential held only in the host's root-only `app.env` (OPEN_DECISIONS.md §5.1),
 so the owner's staging accounts can verify their addresses. It is never used for outreach.
+
+**Staging demonstration data (Rebaseline R2; owner decision `OWNER-DECISION-2026-11-06-R2-STAGING-DEMO`,
+OPEN_DECISIONS.md §4.2).** Since R2 the staging database may hold clearly **synthetic** demo
+personas and their private journeys. "No real person's data is seeded" still holds; what is added
+is environment data an operator puts there, never an application mode, flag or branch:
+
+- **Fails closed outside staging.** `bin/demo.sh seed|status|reset` runs only after the full staging
+  host proof, against a deployed web service that is explicitly non-indexable; the command refuses
+  again unless the process declares **exactly** the staging deployment and
+  `PUBLIC_INDEXING_ENABLED=false` (absence is a refusal), and the owner side refuses any database
+  but `MinhajStaging` or a disposable `MinhajPhase1Test_<32 hex>`, proven from the connected
+  database's own name.
+- **Synthetic personas, no mail, no secret in the repository.** Three fictional personas ("Amina
+  Example (demo student)", "Yusuf Example (demo teacher)", "Bilal Example (demo member)") on
+  `@demo.minhaj.invalid`, their addresses written as already proved — no message is ever sent, and
+  the transport refuses `.invalid` (§19.1). Their passwords are generated once on the host from the
+  kernel CSPRNG into a root-only file (`/etc/minhaj/secrets/demo-accounts.txt`, mode 600), reach
+  the command on standard input only, are hashed by the authentication library's own
+  `hashPassword`, and are never printed, logged, passed as an argument or committed. Never a real
+  scholar's name.
+- **Real services, live authority.** Everything else goes through the ordinary services as the
+  runtime principal: the operator acts with the keys they hold; the demo teaching role is created
+  and granted by them under a live step-up (§8.3); each persona acts as itself. The owner principal
+  writes only the personas and the `fixture`-authority activations (live learning, Messaging's
+  `support` and `teacher-student` — never `student-student` — and Donations' fixture environment);
+  each activation is **immutable by trigger** and stays until the database is reset.
+- **No money moves.** Demo donations go to a Stripe protocol simulator started on loopback inside
+  the operations process, in the `fixture` environment with synthetic credentials and no network;
+  the adapter's loopback-only rule is unchanged. **Public Donate stays off on staging** (no
+  provider is configured for the web service).
+- **Reset uses the platform's own erasure path**: each persona is closed as Identity closes an
+  account, every context's closed-account disposition runs, and the demo catalogue is archived;
+  nothing the demo did not create is named.
 
 ### 21.6 `PUBLIC_TO_PRIVATE_HANDOFF_CHECK`
 

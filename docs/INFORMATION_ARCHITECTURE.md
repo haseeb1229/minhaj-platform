@@ -75,10 +75,19 @@ search, and its own integrity rules.
 
 ### 1.5 Depth over breadth in navigation
 
-Breadth is controlled by promoting only the destinations that hold real content and by keeping
-the bar short (at most six items, the rest under "More" — §2.2), not by adding top-level items.
-Detail lives on each section's own landing page, not in menus. Any future request for a new
-primary item is answered first by asking which existing destination it belongs under.
+**Since Rebaseline R2 (2026-11-06, owner decision — OPEN_DECISIONS.md §8).** Breadth is
+controlled by **six fixed groups** — Quran · Knowledge · Watch & Listen · Learn · News & Events ·
+About MQI — each listing only the destinations that hold real content or an open service, in a
+fixed order, with a group that has nothing present left out whole (§2.2). Nothing is capped and
+nothing absent is advertised. A new destination is answered first by asking which group it belongs
+in; a new top-level group needs an owner decision.
+
+*(Historical, superseded by Rebaseline R2: from R1 until R2 this rule read "Breadth is controlled by
+promoting only the destinations that hold real content and by keeping the bar short (at most six
+items, the rest under "More" — §2.2), not by adding top-level items. Detail lives on each section's
+own landing page, not in menus. Any future request for a new primary item is answered first by
+asking which existing destination it belongs under." The owner judged six ranked items too thin for
+the breadth of the organisation.)*
 
 *(Historical, superseded by Rebaseline R1, 2026-11-06: until R1 this rule read "Twelve primary
 items is already a large navigation. Breadth is controlled by pushing detail into well-designed
@@ -89,7 +98,20 @@ mega menu they belonged in.)*
 
 ## 2. Primary navigation
 
-### 2.1 Language strip (since Rebaseline R1; formerly the utility navigation)
+### 2.1 Utility strip (since Rebaseline R2; a language strip in R1; formerly the utility navigation)
+
+**Since Rebaseline R2 (2026-11-06) a thin utility strip returns, on laptops and wider (≥ 1024 px).**
+At its inline start: About MQI (`/explore`, always), Contact & Help (Help while a help article is
+published; Contact while its Page is published) and Find a Centre (while a Centre is published) —
+the presence rule of §2.2. At its inline end: the language switcher (English / اردو / العربية,
+plain links preserving route and query, ROUTE_MAP.md §1.3), the account entry (Sign in / My
+Minhaj — the private island of §2.2) and **Donate, only while giving is open**. The account and
+Donate sit in the strip rather than the main row because the six group labels, the wordmark and
+Search would not otherwise fit one line at 1024 px in all three languages. Below 1024 px there is
+no strip: the main row carries the wordmark, a search button, an account icon and Menu, and the
+language switcher moves into the Menu sheet.
+
+*Historical, superseded by Rebaseline R2.* From R1 until R2 the section read as follows.
 
 **Since Rebaseline R1 (2026-11-06) there is no utility bar.** Above the primary row sits only a
 slim language strip: English / اردو / العربية, plain links that preserve the current route and
@@ -110,6 +132,51 @@ carried:
 | Contact / Help | Contact routes and help centre |
 
 ### 2.2 Primary navigation
+
+**Since Rebaseline R2 (2026-11-06; owner decision, OPEN_DECISIONS.md §8) the primary navigation is
+six content-aware groups — grouped, not ranked.** R1's content-awareness stands: the route registry
+(`apps/web/src/shell/registry.ts`) records which routes exist, the presentation policy
+(`apps/web/src/shell/presence.ts`, `navigationGroups`) decides which are promoted, from the same
+per-request, fail-closed evidence snapshot (`apps/web/src/composition/presence.ts`) read from each
+owning context's public reads. What changed is the shape: R1's ranked bar of at most six items
+(`PRIMARY_LIMIT`) and "More" are withdrawn.
+
+| Group (display order) | Destinations, each in this order and each only while its signal holds |
+|---|---|
+| **Quran** | Quran landing · Surah index · Juz index · Translations · Quran search — all under `quran`: a readable corpus is active (an **approved** corpus, or — only on a deployment that admits it — a **reference** preview; never a fixture) |
+| **Knowledge** | Library (`library`) · Books (`books`: a published work) · Magazines (`magazines`) · Research (`research`) · Encyclopedias (`encyclopedias`) · Articles (`articles`) · Hadith (`hadith`: an approved collection is active) **or**, without one, the same `/hadith` address as **Hadith works** (`hadithWorks`: a public Library work under the `hadith` Topic) · Fatwa (`fatwa`: an approved service with a published ruling) |
+| **Watch & Listen** | Watch (`watch`) · Series (`series`) · Playlists (`playlists`) · Listen (`listen`) |
+| **Learn** | Learn (`learn`: a published course) · Paths (`paths`) · Live classes (`live`) · Teachers (`teachers`) — the last two only on an **approved** live-learning activation, never a fixture one |
+| **News & Events** | News (`news`) · Press releases (`press`) · Events (`events`) · Collections (`collections`) |
+| **About MQI** | About → `/explore` (always) · Introduction · The founder (his biography) · Departments · Forums · History — each only while its Page is published · Leadership (`people`) · Global presence (`presence`) · Find a Centre (`centres`) |
+
+- **Each group's first item is its landing**; a group with no present destination is omitted
+  whole. **Each address appears once**: two items naming one destination under different
+  evidence (Hadith with its collection, "Hadith works" without one) keep only the first present.
+  Quran and Hadith stay separate destinations — Hadith sits with the reference services in
+  Knowledge, never inside the Quran group (§1.4).
+- **From a laptop up (≥ 1024 px)** each group is a disclosure button that opens a **mega panel**:
+  the group's one-line purpose, its destinations in two or three columns each with a one-line
+  description, and — where the corpus has one — a featured recent record with its real
+  first-party picture (the newest video with a poster for Watch & Listen, the newest book with a
+  cover for Knowledge, the newest news story with a lead image for News & Events; never a stock
+  image, and a failed read simply has no card). Keyboard: Enter/Space toggles a group, ArrowDown
+  opens it and moves into it, the arrow keys (mirrored in Urdu and Arabic), Home and End move
+  between group buttons, Escape closes; `aria-expanded`/`aria-controls` throughout.
+- **Search** is a button that opens a search palette (also Ctrl+K, ⌘K on a Mac): a real GET form
+  to `/search?q=`, with the platform's present areas as quick links beneath it, narrowed as the
+  visitor types — navigation, never a guessed result. Without JavaScript the form still submits.
+- **Below 1024 px** the Menu button opens a modal sheet (focus kept inside, page inert, Escape
+  closes): a search form, one accordion per group, Donate while giving is open, the utility links
+  and the language switcher.
+- **New signals since R2:** `quranReference` (the active corpus is a reference preview — it needs
+  attribution, §4), `hadithWorks`, `books`, `magazines`, `research`, `encyclopedias`, `articles`,
+  `series`, `playlists`, `paths`, `live`, `teachers`, `press` and `membership` (a published
+  membership type). The fail-closed snapshot rules, Donate's rule and "nothing is hidden — every
+  route stays reachable by its address" are unchanged from R1 (below).
+
+*Historical, superseded by Rebaseline R2.* From R1 until R2 the primary navigation was the ranked
+bar below.
 
 **Since Rebaseline R1 (2026-11-06; owner direction "real content before empty capability") the
 primary navigation is content-aware.** The route registry (`apps/web/src/shell/registry.ts`)
@@ -176,12 +243,15 @@ fixed twelve-item bar below, each content item opening a mega menu (§3):
 **Note on "Watch".** The label is *Watch*, but the domain covers both video and audio.
 Audio lectures and Quran recitation live here. Until Rebaseline R1 the Watch mega menu carried
 an explicit "Listen" grouping so audio was not lost behind a video-shaped label (historical);
-since R1, Listen is its own footer destination, promoted while published audio exists (§4).
+from R1 until R2, Listen was a footer destination only, promoted while published audio exists
+(historical); since R2 the group is named **Watch & Listen** and Listen is one of its destinations
+in the header and the footer, under the same signal (§2.2, §4).
 
 **Note on "My Minhaj".** This is an account entry point, not a content section. Signed
 out it presents sign-in and the value of an account; signed in it becomes the gateway to
 the authenticated area. Since Rebaseline R1 it is the header's account island (§2.2) rather
-than a numbered bar item.
+than a numbered bar item; since R2 that island sits in the utility strip on laptops and as an
+icon in the main row below 1024 px (§2.1).
 
 **Note on "Media".** Photos and galleries are reachable through News & Events (where
 event galleries naturally belong) and through Collections (for the historical archive).
@@ -207,6 +277,11 @@ violate 1.5 while duplicating existing entry points.
 
 ## 3. Mega-menu grouping
 
+> **Since Rebaseline R2 (2026-11-06) the header again opens panels, but not these.** Its six
+> grouped panels (§2.2) are built from the presentation policy's present destinations only —
+> never from the column structures below and never linking a reserved page. The groupings below
+> stay the record of each section's intended structure; the R1 note that follows is historical.
+>
 > **Historical, superseded by Rebaseline R1 (2026-11-06).** The shell renders **no mega menus**
 > since R1 (`apps/web/src/shell/menus.ts` and `components/shell/menu-panel.tsx` were removed with
 > the registry's `placements`). The column groupings below remain the record of each section's
@@ -257,7 +332,10 @@ topic). Since Phase 22 Quran Courses is offered too — Learning's public Course
 `quran` topic. Quran Articles and Quran Teachers are not yet offered and are not linked
 (ROUTE_MAP.md §3.3). While no corpus is active the section says so plainly instead of showing
 empty structure, and Listen's Quran Recitations appear only once a corpus is active. The
-signed-in additions remain Phase 21's.
+signed-in additions remain Phase 21's. Since Rebaseline R2 a deployment that admits it may show a
+**reference** preview (the Tanzil Uthmani text with Irfan-ul-Quran, labelled as not reviewed for
+this platform, never indexed — OPEN_DECISIONS.md §1.1; ROUTE_MAP.md §3.3); the landing then leads
+with the Surah index, a quick jump (`/quran/read?q=`) and the device's "continue reading".
 
 ### 3.3 Hadith
 
@@ -278,7 +356,9 @@ topic). Since Phase 22 Hadith Courses is offered too — Learning's public Cours
 `hadith` topic. Hadith Articles and Hadith Scholars are not yet offered and are not linked
 (ROUTE_MAP.md §3.4); Books and Chapters are reached through a collection, not as separate menu
 entries. While no collection is activated the section says so plainly instead of showing empty
-structure. The signed-in additions remain Phase 21's.
+structure. The signed-in additions remain Phase 21's. Since Rebaseline R2, while no collection is
+activated, the landing presents MQI's own hadith works from the Library (the owner declined
+external hadith corpora — OPEN_DECISIONS.md §1.3) and the shell names it "Hadith works" (§2.2).
 
 ### 3.4 Learn
 
@@ -369,6 +449,37 @@ the service is not activated the section says so plainly and accepts no question
 ---
 
 ## 4. Footer hierarchy
+
+**Since Rebaseline R2 (2026-11-06) the footer is six curated columns, not a sitemap**, drawn from
+the same presentation policy as the header (`footerGroups` in `apps/web/src/shell/presence.ts`):
+a route link appears only while its area has its evidence, a Page link only while that Page is
+published, each address once, and an emptied column is dropped whole. News has a column of its
+own and Learn shares one with the other ways to take part, so every header group is reachable
+from the footer.
+
+| Column | Links (each under its signal, §2.2) |
+|---|---|
+| **Quran & Knowledge** | Quran · Surah index · Hadith (or Hadith works) · Fatwa · Topics (always) |
+| **Library** | Library · Books · Magazines · Research · Encyclopedias · Articles |
+| **Watch & Listen** | Watch · Series · Playlists · Listen |
+| **News & Events** | News · Press releases · Events · Collections |
+| **About MQI** | About → `/explore` (always) · Introduction · The founder · Leadership · Departments · Global presence · Find a Centre |
+| **Learn & take part** | Learn · Paths · Live classes · Teachers · My Minhaj (always) · Membership (`membership`) · Donate (only while giving is open) · Help · Contact |
+
+Beneath the columns, in order:
+
+- **Official channels** — the organisation's own YouTube, Facebook and X accounts and its
+  publisher pages on the App Store and Google Play ("Minhaj Publications"), each address exactly
+  the one minhaj.org's own footer links (`apps/web/src/shell/official-channels.ts`, captured
+  2026-11-06), labelled by platform name; outbound links only — nothing fetched, embedded or
+  tracked.
+- **The Quran text's attribution**, only while the `quranReference` signal holds: "Quran text: the
+  Uthmani text of the Tanzil Project (tanzil.net), used unmodified under the CC BY 3.0 licence"
+  (OPEN_DECISIONS.md §1.1).
+- **The one pre-adoption statement** beside the organisation's unmodified official mark, and the
+  **legal links only for published legal Pages** — both unchanged from R1.
+
+*Historical, superseded by Rebaseline R2.* From R1 until R2 the footer read as follows.
 
 **Since Rebaseline R1 (2026-11-06) the footer is three deliberate groups, not a sitemap**, drawn
 from the same presentation policy as the header (§2.2, `apps/web/src/shell/presence.ts`): a route
@@ -466,6 +577,21 @@ switcher. Private pages are titled "<page> · <Area> · One Minhaj" by their are
 pages by their own heading ("Sign in · One Minhaj"); `noindex` is explicit at each surface. Only
 the frame changed in R1 — the hierarchies and workflows below are as delivered by their phases
 (their redesign is later rebaseline work, not R1).
+
+**Since Rebaseline R2 (2026-11-06; the R2 scope covers every private surface — OPEN_DECISIONS.md
+§8).** My Minhaj has its own frame inside the ProductBar and its navigation is grouped: Home ·
+Library (Saved, Notes, Collections, History) · Quran (reading progress) · Learning (My Learning,
+My Classes, Teachers) · Messages · Questions · Membership · Giving · Notifications · Settings. A
+section is offered only while the deployment has switched its capability on — a readable Quran
+corpus, a published course or live learning, a conversation type, Fatwa intake, an open membership
+type, open giving — from each owner's session-free read (`apps/web/src/app/[locale]/my/capabilities.ts`),
+and a group with nothing offered is not listed. This is presentation, never a control: every page
+still answers at its address under its own session and owner checks, and the Home overview links
+anything the person already has (its modules render only when there is something to show). The
+Home overview leads with what to resume and what is next — the Quran position, enrolled courses,
+the next class, unread messages and notifications, saved items, membership and giving status. The
+tree below is unchanged as a statement of what exists; Certificates and Learning Streaks stay
+absent (ROUTE_MAP.md §5).
 
 ```
 My Minhaj
@@ -609,6 +735,15 @@ none is stored; a future owning decision would add it as its own contract. Resou
 view over the Courses' own syllabus and lesson bodies — nothing is uploaded or shared. Profile is
 read-only here; the public TeacherProfile is People's.
 
+**Since Rebaseline R2.** The tree is unchanged; the surfaces are redesigned. Overview leads with
+today and what is upcoming; Calendar and Availability show a Monday-to-Sunday week in the teacher's
+own zone, moved by `?week=` (ROUTE_MAP.md §6); each class shows its stage (upcoming, live, ended,
+completed, cancelled) and **attendance and "mark held" are never offered before a class has
+started** — the UI mirrors Learning's `not-started` refusal (DOMAIN_MODEL.md §13.5); Students can
+be narrowed by name and progress within the page shown; every page is titled by its own fixed name.
+Not built (recorded, not promised): a learner's last activity, a server-side student search,
+per-Course past classes, a CSV export, materials upload and recurring availability.
+
 ---
 
 ## 7. Admin hierarchy
@@ -732,6 +867,18 @@ delivered by the phase that owns the capability, under the availability rule of
 ROUTE_MAP.md §5.2.
 ```
 
+**Since Rebaseline R2.** The tree is unchanged; its presentation is queue-first. The Dashboard
+shows, per area the viewer can act in, how much work waits (counts from each owning context's own
+service, never names); each area's root address opens the first surface of that area the viewer's
+keys reach instead of a 404; a navigation group with no reachable surface is not shown; every
+listing uses one shared pager; irreversible and privilege-changing forms confirm in a dialog, with
+a reason where the change wants one. The Editorial Queue offers a second administrator's bulk
+approve-and-publish of selected rows (at most 25, each audited as two single acts), and Migration
+offers run-wide acts — approve a run's confirmed candidates, clear its pictures by registered host
+after seeing each, draft a manifest of the next 100 — each a person's audited decision per item
+(ROUTE_MAP.md §7; MIGRATION_STRATEGY.md §19). The Audit Log filters by action prefix, actor and
+date range.
+
 ### 7.1 Why Religious Content is a separate admin branch
 
 Quran, Hadith and Fatwa are separated from general Content at the top level of the admin
@@ -763,7 +910,7 @@ These are reachable from many places and belong to no single section:
 | Collection page | A curated set, possibly of mixed content types |
 | Centre page | A location with its own news, events and contacts |
 | Series / Playlist | Ordered media grouping |
-| Language-filtered browse | Any listing constrained by content language |
+| Language-filtered browse | Any listing constrained by content language. Since Rebaseline R2 a content card whose content language differs from the interface locale carries a language badge, and News listings take `?lang=` while leading with the interface language's records by default (ROUTE_MAP.md §3.9) |
 
 ---
 

@@ -123,8 +123,10 @@ Validation happens **at genuine introduction**, in the phase that owns it
 | **Stripe** (sandbox **engineering** `PaymentProvider` adapter — **not a production provider selection**) | HTTPS API, `Stripe-Version: 2026-09-30.endive`; **no SDK** | ENGINEERING ADAPTER behind the abstraction; the production provider stays OPEN (OPEN_DECISIONS.md §5.4) | Runtime (external) | **Phase 27 — Donations** |
 | SQL Server Full-Text Search | — | LOCKED | Runtime | Search foundation phase |
 | StorageService abstraction | — | LOCKED | Runtime | Storage foundation phase |
+| **sharp** (Storage's image-derivative renderer; a direct dependency of `@minhaj/storage` only — §18.10) | **0.35.5** exact | LOCKED | Runtime | **Rebaseline R2 — Storage image derivatives** |
 | Cheerio (migration HTML parsing; the source fetch boundary is Node's `node:http`/`node:https`/`node:net`, not global `fetch` — §11, §18.6) | **1.2.0** | LOCKED | Development | **Phase 29 — Migration & Provenance** |
 | Playwright | **1.55.x** | LOCKED | Development | **Phase 2 — first browser-critical phase** |
+| @axe-core/playwright (the browser suite's accessibility smoke; brings `axe-core` 4.14.0 — §18.11) | **4.14.0** exact | LOCKED | Development | **Rebaseline R2 — quality gates** |
 | Pino | **10.3.1** | LOCKED | Runtime | Phase 0B |
 | Vitest | **4.1.x** | LOCKED | Development | Phase 0B |
 | ESLint | **10.x** | LOCKED | Development | Phase 0B |
@@ -467,7 +469,9 @@ The abstraction exists precisely so this decision stays reversible.
 adapter later. **No Azure dependency.** **Large PDFs and video files are never database
 BLOBs.** Untrusted uploads are **quarantined before publication**, with **malware scanning
 part of the production security design** — **no scanner was selected or installed in Phase 0A**;
-Phase 7 selected ClamAV (§18.2, SECURITY_BASELINE.md §10).
+Phase 7 selected ClamAV (§18.2, SECURITY_BASELINE.md §10). Since Rebaseline R2 Storage also
+renders narrower WebP **derivatives** of a public still image with **sharp 0.35.5** (§18.10;
+ARCHITECTURE.md §4.2; SECURITY_BASELINE.md §10.10) — the only place Storage decodes pixels.
 
 ---
 
@@ -499,13 +503,30 @@ design (MIGRATION_STRATEGY.md).
 Application logging is distinct from **domain audit** (SECURITY_BASELINE.md §13).
 
 **Vitest 4.1.x** — LOCKED. **Do not jump to a newly released Vitest 5 during this project
-foundation.**
+foundation.** Since Rebaseline R2 the root `vitest.config.ts` sets Vite's `oxc` JSX transform
+(`runtime: 'automatic'`, `importSource: 'react'`) so the shared UI primitives' `.tsx` behaviour
+tests can render server components directly: the web app's own `tsconfig` keeps `jsx: preserve`
+because Next compiles JSX itself, and Vite would otherwise inherit that. A configuration of the
+locked tool, not a new dependency.
 
 **Playwright 1.55.x** for E2E — LOCKED, **introduced in Phase 2**. The same tool serves E2E and
 migration, so one browser-automation dependency covers both. Phase 2 is where it genuinely earns
 its place: real cookies, session transitions, CSRF and browser behaviour, sign-out, verification
 and reset confirmation, authentication return paths, the Account & Security surface, and locale
 and RTL flows (ARCHITECTURE.md §13.10). **It is not installed before that phase.**
+
+**Quality gates on the same runner (Rebaseline R2).** `tests/browser/accessibility.spec.ts` runs
+**`@axe-core/playwright` 4.14.0** (§18.11) over a representative route set in English and Urdu, at
+desktop and phone widths, against the WCAG 2.0/2.1/2.2 A and AA rules, and fails on any `serious`
+or `critical` violation; `moderate` and `minor` ones are reported as test annotations. It runs in
+the `Browser flows` CI job with the rest of `tests/browser`. `tests/browser/visual.spec.ts` holds
+`toHaveScreenshot` comparisons for a few stable surfaces; it runs only on Linux and only when
+`MINHAJ_VISUAL_BASELINE` is set, because screenshot baselines are platform-specific and none is
+committed yet — it is **not** a CI gate until Linux baselines are generated and committed (the
+spec's header gives the procedure). `npm run perf:budget` (`scripts/perf-budget.mjs`) measures LCP,
+CLS and transfer size for a list of paths on a **deployed** build — Playwright's Chromium with CDP
+throttling to Lighthouse's mobile Slow 4G and a 4× CPU, cold per run — and exits non-zero when the
+median misses LCP ≤ 2.5 s or CLS ≤ 0.1; it is run by a person against staging, not in CI.
 
 **ESLint 10.x** · **Prettier 3.x** — LOCKED. ESLint additionally enforces **bounded-context
 dependency rules** transcribed from DOMAIN_MODEL.md §3.1. **Architecture violations fail the
@@ -603,14 +624,15 @@ explicit authorisation boundaries.
 Node.js 24.22.1 · Next.js 16.4.2 · React 19.2.8 · Tailwind CSS 4.3.3 · shadcn/ui (copied
 source) · Motion 13.1.x · next-intl 4.14.x · Prisma ORM 7.10.0 · @prisma/client 7.10.0 ·
 **@prisma/adapter-mssql 7.10.0** · Better Auth 1.7.x · **Resend (first `EmailProvider`
-adapter)** · Zod 4.6.x · React Hook Form 7.x · Tiptap 3.x · Socket.IO 4.8.3 · Pino 10.3.1
+adapter)** · Zod 4.6.x · React Hook Form 7.x · Tiptap 3.x · Socket.IO 4.8.3 · Pino 10.3.1 ·
+sharp 0.35.5 (Storage derivatives, since Rebaseline R2)
 **Infrastructure:** Microsoft SQL Server 2022 · NGINX · Docker · ClamAV · Let's Encrypt
 (certbot, staging edge — §18.5)
 **External services:** Google OAuth · Google Meet · YouTube / Vimeo
 
 ### Development — builds and tests, does not ship
-TypeScript 5.9.x · Vitest 4.1.x · Playwright 1.55.x · ESLint 10.x · Prettier 3.x · Cheerio 1.2.0 ·
-npm workspaces · GitHub Actions
+TypeScript 5.9.x · Vitest 4.1.x · Playwright 1.55.x · @axe-core/playwright 4.14.0 (since
+Rebaseline R2) · ESLint 10.x · Prettier 3.x · Cheerio 1.2.0 · npm workspaces · GitHub Actions
 
 ### Administration — workstation tools, NOT application dependencies
 **SQL Server Management Studio 22.9.1 GA**
@@ -649,7 +671,8 @@ copied or generated asset.
 > (2026-11-06) is that introduction:** four self-hosted SIL OFL 1.1 faces, inventoried in §18.9,
 > under the owner-approved interim identity — the organisation's own brand pack, including any
 > approved Urdu and Arabic typefaces, stays OPEN (OPEN_DECISIONS.md §6.4), and substituting it
-> later is a change to the one font module and its role variables.
+> later is a change to the one font module and its role variables. **Rebaseline R2 (2026-11-06)
+> adds a fifth face**, SIL's Scheherazade New, for Quran text alone (§18.9).
 
 **No enterprise SBOM programme is introduced**, and no speculative compliance bureaucracy. The
 requirement is a maintained, honest inventory — proportionate to a platform that will hold
@@ -823,11 +846,70 @@ OPEN (OPEN_DECISIONS.md §6.4).
 | `gulzar/gulzar-arabic-400-normal.woff2` | `@fontsource/gulzar` 5.3.0 | googlefonts/gulzar · OFL 1.1 | 208,800 | `92dc772098b0f1fd2d309c50bff8fdbc18bb6f6d3dba65f4a69a7a3c8edfa1e9` | urdu: genuine Nastaliq for Urdu headings and long-form · not preloaded |
 | `noto-naskh-arabic/noto-naskh-arabic-arabic-400-normal.woff2` | `@fontsource/noto-naskh-arabic` 5.3.0 | notofonts/arabic · OFL 1.1 | 52,668 | `9cc2d2e90f7b51904468558b4ed529de8a8206497c8edb5e33122bd077e0158c` | naskh: Arabic, dense Urdu interface text · not preloaded |
 | `noto-naskh-arabic/noto-naskh-arabic-arabic-600-normal.woff2` | `@fontsource/noto-naskh-arabic` 5.3.0 | notofonts/arabic · OFL 1.1 | 56,648 | `0cefc9b889f4dc4ff1b958edae5ace24b0e9876fea79558013aa3bf840d8da91` | naskh 600 · not preloaded |
+| `scheherazade-new/ScheherazadeNew-Regular.woff2` (Rebaseline R2) | **Scheherazade New 4.500**, SIL Global's own release — the unmodified `web/ScheherazadeNew-Regular.woff2` from the release archive, not a repackaging | SIL Global · OFL 1.1, Reserved Font Names "Scheherazade" and "SIL" (its verbatim `OFL.txt` beside it) | 124,783 | `fd12c322cd8a0033d5c30b0a9fc0432e1d51288cd065f3f04a85a7974f1de3b7` | quran: the canonical Arabic of an Ayah (`.quran-text`) and what a Quran page sets beside it in the same face (`.quran-name` — a Surah's Arabic name, the ayah-end mark) · not preloaded |
 
 The Latin faces are preloaded because every page renders them, with metric-adjusted fallbacks
 (`adjustFontFallback`) so the swap does not shift layout; the Arabic-script faces are subset to
-Arabic script and are fetched only by a page that shows Urdu or Arabic text. **Not shipped:** a
-Quran face (deferred to an approved corpus, and never used for ordinary Arabic interface text)
-and Jameel Noori Nastaleeq (licence unclear). `tests/config/fonts.test.ts` enforces one font
-module, `next/font/local` only, no Google-hosted fonts, an OFL text beside every file, and this
-preload policy.
+Arabic script and are fetched only by a page that shows Urdu or Arabic text — and the Quran face
+only by a page that shows Quran text. **Not shipped:** Jameel Noori Nastaleeq (licence unclear).
+*Historical, superseded by Rebaseline R2:* at R1 exit a Quran face was also not shipped —
+"deferred to an approved corpus, and never used for ordinary Arabic interface text". Since R2 the
+staging Quran reference preview (OPEN_DECISIONS.md §1.1; DOMAIN_MODEL.md §8.4) shows a real
+text, so one Quran face ships: Scheherazade New renders the Tanzil Uthmani text without the
+character rewriting a font-specific Quran face would need, so the stored text is shown exactly as
+stored; the rule that it is never used for interface Arabic stands. `tests/config/fonts.test.ts`
+enforces one font module, `next/font/local` only, no Google-hosted fonts, an OFL text beside every
+file, this preload policy, and (since R2) the Quran face's exact SHA-256 and reserved names, one
+CSS rule applying it — `[lang|='ar']:is(.quran-text, .quran-name)` — and `translate="no"` on every
+component that renders Quran text.
+
+### 18.10 Rebaseline-R2 image-derivative dependency
+
+**One runtime npm dependency is added, and only to Storage.** Phase 7 recorded that Storage's
+admission is a magic-number table rather than a library and that "a later phase that genuinely
+needs deep format parsing introduces one with its own evidence" (§18.2); the Phase-30-R inventory
+added no image library (§18.8, historical). Rebaseline R2 is that later need: a public still image
+is rendered at narrower WebP widths (320, 640, 960, 1440) so a card or a phone does not download
+the full original (ARCHITECTURE.md §4.2; SECURITY_BASELINE.md §10.10).
+
+| Direct dependency | Exact version | Use and provenance |
+| --- | --- | --- |
+| `sharp` | 0.35.5 | Apache-2.0; [source](https://github.com/lovell/sharp). A direct, exact-pinned dependency of `@minhaj/storage` alone (`packages/storage/src/derivative.ts`), locked in `scripts/shared/version-policy.mjs` as `exact` — a decoder that reads stored bytes is not left to float across a release. It was already in the tree as Next.js's optional image dependency at the same version; R2 declares it directly instead of inheriting it. |
+
+**Its native binaries arrive as per-platform optional packages**, resolved by npm for the
+installing platform: `@img/sharp-{platform}` 0.35.5 (Apache-2.0) and the prebuilt libvips
+`@img/sharp-libvips-{platform}` 1.3.4 (**LGPL-3.0-or-later**, dynamically linked and shipped
+unmodified as its upstream builds it); the Windows and WebAssembly builds declare
+`Apache-2.0 AND LGPL-3.0-or-later`, and `@img/colour` 1.1.0 is MIT. The Linux images install
+the `linux-x64` pair through the ordinary `npm ci` (the operations image's derivative backfill
+included), so no build toolchain and no download outside the npm registry is involved.
+
+**Fenced use.** sharp is handed only bytes Storage already holds as a clean JPEG, PNG or still
+WebP; it refuses any other format the decoder reports, reads the declared size before decoding
+and carries the same pixel ceiling (40,000,000 pixels, 16,384 px edge), reads the first frame
+only, never enlarges, disables libvips' operation cache, and writes WebP with no metadata at all
+(SECURITY_BASELINE.md §10.10). Each derivative is then stored through Storage's ordinary custody
+— sniffed, scanned, cleared by checksum — as its own Asset.
+
+**No other runtime dependency is added by R2**: no icon package (the icon set is an in-house SVG
+component, ARCHITECTURE.md §13), no image CDN or optimiser service, and no font package (§18.9's
+Quran face is a vendored file). R2's one development dependency is §18.11's.
+
+### 18.11 Rebaseline-R2 accessibility-smoke dependency
+
+**One development npm dependency is added**, for the accessibility gate the enterprise audit found
+missing (no automated accessibility, visual or performance check existed). Nothing in the
+application imports it, and the production image does not contain it (the runtime stage installs
+production dependencies only).
+
+| Direct dependency | Exact version | Use and provenance |
+| --- | --- | --- |
+| `@axe-core/playwright` | 4.14.0 (pinned exactly; version policy) | MPL-2.0; [source](https://github.com/dequelabs/axe-core-npm). **Development-only** (`devDependencies`), published 2026-10-15 — the latest stable release at least two weeks old when added; its peer is any `playwright-core` ≥ 1.0.0, satisfied by the locked Playwright 1.55.1's own. Used only by `tests/browser/accessibility.spec.ts`. Its one dependency is `axe-core` 4.14.0 (MPL-2.0; [source](https://github.com/dequelabs/axe-core), published 2026-10-05), the rules engine, injected into the page under test by Playwright; neither has an install script or further dependencies. |
+
+**Licence.** MPL-2.0 is file-level copyleft: it obliges publishing changes to the MPL-licensed files
+themselves when they are distributed. Both packages are used unmodified and only in tests, never
+distributed with the application, so it imposes nothing on this repository. **Audit:**
+`npm run check:dependency-audit` reports no finding against either, and no exception was added
+(SECURITY_BASELINE.md §18.3). **Pinned exactly** because a rules engine that moves across a release
+changes what the gate fails on; an upgrade arrives as a reviewed edit to
+`scripts/shared/version-policy.mjs`.

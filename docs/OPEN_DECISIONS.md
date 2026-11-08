@@ -88,11 +88,66 @@ search and the character-level verification *mechanism* (DELIVERY_PLAN.md, Phase
 are never represented as Quranic scripture**, and an engineering exit is **never** described as
 corpus approval.
 
+**Current status — STILL OPEN; a labelled staging reference preview exists by owner decision
+(Rebaseline R2, 2026-11-06).** The project owner (Haseeb) decided, for the password-protected,
+non-indexable **pre-adoption staging deployment only**
+(`OWNER-DECISION-2026-11-06-R2-QURAN-REFERENCE-PREVIEW`), that staging may show a real Quran text
+for review: **the Tanzil Project's Uthmani text 1.1, reproduced verbatim under its Creative Commons
+Attribution 3.0 licence** (its copyright notice kept verbatim in the source record, its attribution
+in the footer and on every Quran page), beside Minhaj-ul-Quran's own Irfan-ul-Quran translation
+(§1.2).
+
+- **What it is.** A third, separately labelled source authority, `reference` — a licensed external
+  text **not reviewed by Minhaj-ul-Quran's religious authority for this platform** — beside
+  `fixture` and `approved`. The database keeps reference text out of any approved corpus and never
+  mixes fixture and reference text (DOMAIN_MODEL.md §8.4).
+- **The gate.** A reference corpus is shown only on a deployment that sets
+  `RELIGIOUS_REFERENCE_PREVIEW=enabled` **and** is not indexable: startup refuses the setting beside
+  public indexing, and the public reader independently requires a non-indexable build
+  (SECURITY_BASELINE.md §5.1). The staging web service sets it; production never does, and
+  everywhere else the corpus is inactive. In reference mode every Quran page is `noindex`, has no
+  canonical, alternates or sitemap entry, names its sources and says plainly that the text has not
+  been reviewed (ROUTE_MAP.md §3.3, §9.5).
+- **Presentation rules decided with it.** The Bismillah header is shown only in reference mode,
+  taken unchanged from Al-Fatiha 1:1's stored text, never counted as an Ayah and **never on Surahs 1
+  or 9**; an approved corpus will decide its own convention. The Arabic interface shows no
+  translation by default.
+- **How it arrives.** A host-side operator command (`docker/staging/bin/quran-reference.sh
+  import`) reads the two Tanzil files the operator downloaded once, verifies their exact SHA-256
+  and the full structure (114 Surahs, 6,236 Ayat, juz, hizb, page and sajdah), registers the source
+  as the owner, has the corpus accepted through Quran's own canonical service under a live
+  `quran.editCanonical` grant and `quran-canonical-edit` step-up, and activates it as the owner.
+  Proven against the real files in a disposable local database; its staging run is recorded at R2
+  closure (DELIVERY_PLAN.md, Rebaseline R2 record).
+- **Irreversible by design.** Canonical Quran is a singleton store that is never deleted and only one
+  corpus is ever accepted: a staging database that holds the reference corpus keeps it until the
+  database is reset, and a later approved corpus needs a fresh database or a recorded correction of
+  every Ayah. Production never receives reference rows.
+
+**What it is not:** Minhaj's choice of an authoritative text, encoding or verification reference;
+religious approval of anything; production; or an answer to this entry. The rule above stands
+unchanged — **no real corpus is imported, published or activated on assumption**: the preview is
+labelled, gated and attributed, never assumed to be approved. The production approval path
+(`approved` authority with recorded external evidence) is untouched.
+
 ### 1.2 Approved translations, tafsir and recitations
 **Owner:** Minhaj · **Gates:** Phase 18 · **Priority:** High
 
 Which translation works, tafsir works and reciters are approved for publication, plus any
 licensing or attribution requirements.
+
+**Current status — STILL OPEN; Irfan-ul-Quran appears in the staging reference preview (Rebaseline
+R2, 2026-11-06).** Under the same owner decision as §1.1, staging's reference preview shows
+Minhaj-ul-Quran's own **Irfan-ul-Quran** translation (Urdu and English, © Minhaj-ul-Quran
+International) — and no other translation. Its text is taken exactly as staged from the
+review-only Irfan-ul-Quran migration revisions (MIGRATION_STRATEGY.md §19), through Quran's
+administrative service under `quran.administer`, by a host-side operator command
+(`quran-reference.sh translations`); a Surah whose staged revision fails validation is skipped and
+reported, never corrected. Its provenance is recorded as two `reference` sources with no Ayat of
+their own (`irfan-ul-quran-ur`, `irfan-ul-quran-en`). **This is not Minhaj's approval of any
+translation, tafsir or reciter**: no tafsir is shown and no recitation is added (the external
+recitation-timing reference considered for R2 was deferred), and the decisions in this entry stay
+open.
 
 ### 1.3 Authoritative Hadith sources and grading authority
 **Owner:** Minhaj · **Gates:** Phase 19 · **Priority:** Critical
@@ -111,6 +166,16 @@ edition identity, sourced grading and chain fields, permissions, audit, search a
 escalation. **No grading is ever invented and presented as real**, and an engineering exit is
 never scholarly acceptance.
 
+**Current status — STILL OPEN, unchanged by Rebaseline R2 (2026-11-06).** The owner asked whether a
+Hadith corpus could be migrated from Minhaj's own sources; no structured MQI hadith source is
+reachable, and the owner **declined external hadith corpora** (no third-party collection, no
+scraped mirror). No Hadith reference preview exists, and no hadith text or grading is shown.
+Instead, while no collection is activated, the Hadith landing presents **MQI's own hadith works** —
+the Library's published Works classified under the `hadith` Topic — and says that the collections
+reader awaits an authorised source (ROUTE_MAP.md §3.4; INFORMATION_ARCHITECTURE.md §2.2, the
+`hadithWorks` signal). That is Library content under its own pre-adoption basis (§3.1, §3.9), not a
+Hadith corpus.
+
 ### 1.4 Authorised Fatwa scholars
 **Owner:** Minhaj · **Gates:** Phase 20 · **Priority:** Critical
 
@@ -127,6 +192,13 @@ Phase 20's **engineering implementation** may proceed against clearly synthetic 
 rulings and test identities, proving the private workflow, publication authorisation, step-up,
 anonymisation, audit and the absence of every bypass path. **Synthetic material is never
 presented as a genuine Fatwa.**
+
+**Current status — STILL OPEN, unchanged by Rebaseline R2 (2026-11-06).** No `fatwa.publish` grant
+exists and no ruling is published; naming a holder remains Minhaj's decision. R2 widens only the
+**staged, review-only** set of thefatwa.com rulings (MIGRATION_STRATEGY.md §19 — evidence for
+qualified review, never published by migration), and with no activation `/fatwa` is a calm
+"coming" page with a plain outbound link to Minhaj-ul-Quran's own fatwa website, never fetched or
+embedded (ROUTE_MAP.md §3.8). The shell does not promote Fatwa.
 
 ### 1.5 Religious content review capacity
 **Owner:** Minhaj · **Gates:** Phases 18, 19, 30 · **Priority:** High
@@ -377,6 +449,11 @@ authorised source records; the owner's evidence itself stays outside the reposit
 A later decision by Minhaj — a per-source record as in §3.1.1, an exclusion, or a withdrawal —
 supersedes this attestation for that source.
 
+Two later owner attestations extend this one for pre-adoption staging only, each with the same
+"does not cover" and "is not" limits: `OWNER-ATTESTATION-2026-10-29-PREADOPTION-CONTENT-BRAND-EXPANSION`
+(Phase 30-R, §3.7) and `OWNER-ATTESTATION-2026-11-06-R2-COMPREHENSIVE-PRESENTATION-CORPUS`
+(Rebaseline R2, §3.9).
+
 #### 3.1.1 The per-source decision record
 
 **What Minhaj supplies for each in-scope source before Phase 30 contacts it.** This is the
@@ -535,6 +612,20 @@ more Explore pages (MIGRATION_STRATEGY.md §16.1); after Phase 30-RD, on 2026-11
 introduction page, the 112 posts three curated archives hold and those three archives as
 Collections (§3.8; MIGRATION_STRATEGY.md §17.1). **F** is untouched.
 
+**After the Rebaseline R2 attestation (2026-11-06, §3.9).** **A** extends, for pre-adoption staging
+only, to the comprehensive presentation corpus under
+`OWNER-ATTESTATION-2026-11-06-R2-COMPREHENSIVE-PRESENTATION-CORPUS` — the public official content of
+the already registered hosts across every built kind, and five more registrations on those hosts;
+every other MQI host stays uncontacted (§3.9). **B** is unchanged: public content only, each picture
+copied only from a registered host and shown only after a person's rights decision — now also
+decidable run-wide per registered host after the person has seen each picture
+(SECURITY_BASELINE.md §10.11). **C** is public-website ingestion. **D is unchanged and still not
+bypassed**: migrated Fatwa and Quran material stays review-only and is never published by
+migration; the staging Quran reference preview (§1.1, §1.2) is a separately labelled, gated owner
+decision and **not** a D acceptance. **E** stays satisfied for pre-adoption staging only; the
+resulting public counts are recorded when the staging runs complete (MIGRATION_STRATEGY.md §19.1).
+**F** is untouched.
+
 ### 3.7 Pre-adoption review completeness — owner decision (Phase 30-R)
 **Owner:** Owner (pre-adoption) · **Recorded:** 2026-10-29 · **Status:** decided for pre-adoption
 staging only; every Minhaj decision it touches stays open
@@ -617,6 +708,52 @@ not make — so neither was built, and neither is a source limitation:
 introduction page's contents, any production holder of `migration.clearPersonalData`, every
 religious acceptance (§1), production promotion and cutover (§3.4), and official adoption.
 
+**Extended by Rebaseline R2 (owner, 2026-11-06; §3.9).** "The three named above, … never every
+category" was the Phase 30-RD scope (historical). R2 extends it to **every genuine editor-curated
+`lkcatid` archive** the source's archive index listed on 2026-11-06 — fourteen in all: the three
+above and eleven more (Women Activities, Welfare Projects & Events, Conferences & Seminars,
+Interfaith Activities, Quaid Day Programs, Spiritual Gatherings, Processions & Rallies, Educational
+Projects, Overseas Activities, Visits & Delegations, and Peace, Integration and Reconciliation) —
+under exactly the same rules: members migrated first, resolved only through active mappings, source
+order kept, a post two archives name migrated once (MIGRATION_STRATEGY.md §19). It is still never
+"every category".
+
+### 3.9 Comprehensive pre-adoption presentation corpus — owner attestation (Rebaseline R2)
+**Owner:** Owner (pre-adoption) · **Recorded:** 2026-11-06 · **Status:** decided for pre-adoption
+staging only; every Minhaj decision it touches stays open
+
+The owner judged the Stage-1A review build (617 public records) too small to present the breadth of
+the organisation, and attested, for the **password-protected, non-indexable pre-adoption staging
+deployment only**, under `OWNER-ATTESTATION-2026-11-06-R2-COMPREHENSIVE-PRESENTATION-CORPUS`:
+
+- **What it covers.** The **public official MQI content of the hosts already registered** under
+  §3.1 and §3.7, **across every content kind the platform has built**, and **not artificially
+  capped** — bounded instead by each run's recorded page and item limits, the existing politeness
+  policy (at least two seconds per host, `robots.txt` respected) and the same reconciliation, review
+  and per-item publication as every earlier run. Concretely: news, press releases and articles in
+  English, Urdu and Arabic across recent years; the Minhaj Books catalogue (metadata and covers,
+  never PDFs) and its authors; every issue of the registered magazines, including al-Ulama; the
+  Minhaj.TV video speeches in English and Urdu (metadata, the provider's video identifier and the
+  first-party poster — never a video binary); the countries of presence; the curated archives of
+  §3.8 as extended; two further organisational pages; and widened **review-only** Fatwa and
+  Irfan-ul-Quran staging. Five new registrations on already registered hosts carry the reference
+  (MIGRATION_STRATEGY.md §19).
+- **Deferred, and not contacted:** the other MQI hosts the R2 ecosystem study found —
+  minhajsisters.com, youth.com.pk, msmpakistan.org, research.com.pk, equranclass.com, itikaf.com and
+  welfare.org.pk — whose posts would need cross-host de-duplication first; and **minhajwelfare.org
+  (Minhaj Welfare Foundation, UK), a separate legal entity that needs its own authorisation**. Each
+  needs its own registration on recorded evidence before any contact.
+- **What it does not cover:** any private account, question, enrolment, progress or message area;
+  any access-control, anti-bot, authentication or rate-limit bypass; video binaries or book PDFs;
+  API, export or database access; any host not registered; production promotion or cutover (§3.4).
+- **What it is not:** Stage 1B (MIGRATION_STRATEGY.md §10.1.0), Minhaj's content acceptance, official
+  adoption, or any religious acceptance (§1). The counts it produces are pre-adoption staging
+  evidence, recorded when the staging runs complete (MIGRATION_STRATEGY.md §19.1).
+
+**Not decided by this record, and still open:** Minhaj's per-source records (§3.1.1), scope (§3.3),
+per-asset licensing for production (§2.4), the naming of a `migration.publish` holder (§3.5), every
+religious acceptance (§1), production promotion and cutover (§3.4), and official adoption.
+
 ---
 
 ## 4. Infrastructure and hosting
@@ -694,6 +831,50 @@ owner's staging accounts, §5.1) and Donations unavailable (no payment provider 
 Actions deploys it through the protected `staging` environment with OIDC (ARCHITECTURE.md
 §10.6). On adoption, staging is re-provisioned on adopter-owned infrastructure; the Azure for
 Students subscription is not transferable.
+
+**Staging demonstration data — owner decision (Rebaseline R2, 2026-11-06;
+`OWNER-DECISION-2026-11-06-R2-STAGING-DEMO`), for pre-adoption staging only.** So that the private
+journeys — My Minhaj, Teacher, classes, messages, membership and giving — can be reviewed with
+something in them, staging may hold clearly synthetic demonstration data that an operator puts
+there. It supersedes, **for this staging environment only**, the earlier rule that no demo data
+exists anywhere (PRODUCT_SCOPE.md, *Pre-adoption deployment*; MIGRATION_STRATEGY.md §10.1.0;
+SECURITY_BASELINE.md §8.3, §21.5; ARCHITECTURE.md §10.2, §10.6).
+
+- **Environment data, never an application mode.** No flag, branch or "demo mode" exists in product
+  code; the personas are ordinary accounts and their classes, enrolments, messages, membership
+  application and donations ordinary records made through the ordinary audited services. An
+  operator runs `docker/staging/bin/demo.sh seed | status | reset`, which refuses unless the host
+  proves it is staging, the deployed web service is explicitly non-indexable and the process
+  declares exactly the staging deployment; the owner-side command refuses again on the connected
+  database's own name. Production and an indexable deployment can never run it.
+- **Synthetic and contained.** Three fictional personas — a student, a teacher and a member, each
+  named "… Example (demo …)" — on the reserved `@demo.minhaj.invalid` domain: no real person's or
+  scholar's name and no personal data. Their passwords are generated from the host's CSPRNG into a
+  root-only file on the VM and reach the command on standard input only — never printed, logged or
+  committed. **No mail is sent** (addresses are pre-verified and the email transport refuses any
+  `.invalid` recipient) and **no money moves** (donations use the Phase-27 provider simulator,
+  in-process on loopback inside the operations run, never the public web service).
+- **No seeded privilege.** The demo teaching role is created and granted by a staging administrator
+  through Identity's audited administration under that administrator's live
+  `privilege-administration` step-up — never seeded, never self-granted.
+- **Idempotent and resettable.** A second seed changes nothing; `reset` closes the personas through
+  Identity's own account closure, runs every context's closed-account disposition and archives the
+  demo catalogue, touching nothing it did not create; a later seed uses a new persona generation.
+
+**Trade-offs accepted with it.** The activations the demo needs — live learning, the Messaging
+`support` and `teacher-student` capabilities (never `student-student`, §2.5) and Donations'
+`fixture` environment for the demo merchant label — are written by the owner principal with
+authority `fixture`, and **activation rows are immutable by trigger**: `reset` does not remove them.
+In particular the **fixture `DonationActivation` blocks any later sandbox activation on this
+staging database until the database itself is reset** (§5.4). Public giving stays off — no payment
+provider is configured for the web service, so Donate is not promoted. A **public demo teacher
+Person** (needed to teach the demo course) is visible in the People directory, and the **"Demo
+membership (staging)" type** makes Membership appear in staging's navigation; both are labelled as
+demonstration content, and neither is MQI policy or a real person.
+
+**What it is not:** content, activation or production readiness; a decision about live learning,
+messaging policy (§2.1, §2.5), membership or payments (§5.4); or a substitute for any of them. The
+demo data is promoted nowhere — promotion bundles exclude accounts and private data.
 
 ### 4.3 Production hosting
 **Owner:** Minhaj · **Gates:** Phase 34 · **Priority:** High
@@ -850,6 +1031,13 @@ arrangements.
 > nor any Donations key can write. The persistent database holds no activation row, no campaign and no
 > donation. `donations.refund` is externally gated and held by nobody; naming its holders is part of
 > this decision.
+>
+> **Rebaseline R2 (2026-11-06) — STILL OPEN.** The staging demonstration data (§4.2) writes, on
+> pre-adoption staging only, a `fixture`-authority `DonationActivation` for a non-secret demo
+> merchant label, and records demo donations against the provider simulator — no money moves and
+> public giving stays off. The row is immutable, so it blocks any later sandbox activation on that
+> staging database until the database is reset. Nothing here selects a provider, merchant account,
+> currency, region or refund holder.
 
 **Category C/E · Gate: activation for Phase 27; never implementation.**
 
@@ -1083,6 +1271,19 @@ decision of Minhaj-ul-Quran International, and none closes an entry above:
 | **Content-aware navigation** — a destination is promoted only with published content or an open service; every route stays reachable by address | INFORMATION_ARCHITECTURE.md §2.2, §4 |
 | **Readiness vocabulary** — never a bare "complete"; readiness is reported in six separate dimensions: **Engineering**, **Product**, **Content**, **Activation**, **Production**, **Flagship/presentation** | PRODUCT_SCOPE.md, *Product status and acceptance*; DELIVERY_PLAN.md (Rebaseline R1 record) |
 
+**Owner decisions recorded at Rebaseline R2 (2026-11-06, Haseeb, project owner).** Again product
+decisions for the independently developed platform, for pre-adoption staging where so marked; none
+is a decision of Minhaj-ul-Quran International, and none closes an entry above:
+
+| Decided | Where |
+|---|---|
+| **R2 scope widened to every surface** — public, My Minhaj, Teacher and Admin — in one macro. Supersedes the R1 record's split "home and landings in R2; My Minhaj, Teacher and Admin in R3/R4" | DELIVERY_PLAN.md (Rebaseline R1 and R2 records) |
+| **Grouped navigation** — six fixed header groups (Quran · Knowledge · Watch & Listen · Learn · News & Events · About MQI), each listing only its present destinations, a utility strip, six footer columns and the official channels. Supersedes R1's ranked bar of at most six (`PRIMARY_LIMIT`) and "More"; content-aware presence still hides genuinely empty destinations | INFORMATION_ARCHITECTURE.md §1.5, §2, §4 |
+| **Comprehensive pre-adoption presentation corpus** (staging only) | §3.9; MIGRATION_STRATEGY.md §19 |
+| **Quran staging reference preview** — Tanzil Uthmani 1.1 verbatim (CC BY 3.0) with Irfan-ul-Quran, labelled, gated and never indexable; Bismillah and Arabic-default rules (staging only; §1.1–§1.2 stay OPEN) | §1.1, §1.2; DOMAIN_MODEL.md §8.4; SECURITY_BASELINE.md §5.1 |
+| **No external hadith corpus**; Hadith presents MQI's hadith works (§1.3 stays OPEN) | §1.3 |
+| **Staging demonstration data** as operator-run environment data, never an application mode (staging only) | §4.2 |
+
 ---
 
 ## 9. Blocking summary
@@ -1092,9 +1293,9 @@ gates. A decision may gate more than one thing.
 
 | # | Decision | Cat. | Gate type | Gates phase | Consequence if unresolved |
 |---|---|---|---|---|---|
-| 1.1 | Authoritative Quran text source | **D** | Content acceptance · activation | 18 | **No real corpus is imported or published.** Engineering implementation proceeds on non-authoritative fixtures |
-| 1.2 | Approved translations, tafsir, reciters | **D** | Content acceptance | 18 | Those layered works are not published |
-| 1.3 | Authoritative Hadith sources and grading authority | **D** | Content acceptance · activation | 19 | **No real corpus is published.** Engineering implementation proceeds on fixtures |
+| 1.1 | Authoritative Quran text source | **D** | Content acceptance · activation | 18 | **No real corpus is imported or published** as approved. Engineering implementation proceeds on non-authoritative fixtures. **Since Rebaseline R2 (2026-11-06)** a labelled, gated, never-indexable **reference** preview (Tanzil Uthmani 1.1, CC BY 3.0) is admitted on pre-adoption staging only by owner decision (§1.1) — not an answer to this entry, which stays OPEN |
+| 1.2 | Approved translations, tafsir, reciters | **D** | Content acceptance | 18 | Those layered works are not published as approved. **Since Rebaseline R2** Irfan-ul-Quran appears in staging's reference preview only (§1.2); no tafsir or reciter; the entry stays OPEN |
+| 1.3 | Authoritative Hadith sources and grading authority | **D** | Content acceptance · activation | 19 | **No real corpus is published.** Engineering implementation proceeds on fixtures. External hadith corpora declined by the owner (Rebaseline R2); the Hadith landing presents MQI's hadith works (§1.3) |
 | 1.4 | Authorised Fatwa scholars | **D** | Content acceptance · activation | 20 | **No real grant is issued and no real Fatwa published.** Engineering implementation proceeds on synthetic material |
 | 1.5 | Religious review capacity | **D** | Content acceptance | 18, 19, 30 | Publication throughput, not engineering progress |
 | 1.6 | Source-conflict escalation path | **D** | Content acceptance | 30 | Conflicts are surfaced and blocked, never silently resolved |
@@ -1104,22 +1305,23 @@ gates. A decision may gate more than one thing.
 | 2.3.1 | Correspondence retention period | **D** | Activation | 6 | Public intake stays disabled until the privacy/legal and support owners approve a period |
 | 2.4 | Content licensing and attribution | **D** | Content acceptance | 8, 18, 19, 30 | Affected material is not published or migrated |
 | 2.5 | Student↔student messaging policy | **D** | Activation | 24 | Disabled by default |
-| 3.1 | Written migration authorisation per source | **D** | **Implementation of live-source work**; activation | **30 only** — the phase-start / real-source-contact gate | **No live ingestion.** At Phase-29 exit the framework was delivered on fixtures only and no source was authorised (historical, superseded by Phase 30). **Since 2026-10-27 the seven anticipated sources are owner-attested for pre-adoption staging only** (§3.1); per-source records by Minhaj stay OPEN. Minimum record: §3.1.1 |
+| 3.1 | Written migration authorisation per source | **D** | **Implementation of live-source work**; activation | **30 only** — the phase-start / real-source-contact gate | **No live ingestion.** At Phase-29 exit the framework was delivered on fixtures only and no source was authorised (historical, superseded by Phase 30). **Since 2026-10-27 the seven anticipated sources are owner-attested for pre-adoption staging only** (§3.1), extended on 2026-10-29 (§3.7) and on 2026-11-06 to the comprehensive presentation corpus (§3.9); per-source records by Minhaj stay OPEN. Minimum record: §3.1.1 |
 | 3.2 | Source, API or export access | **C** | Content acceptance quality | 30 — **not a universal start blocker** | Authorised public-content ingestion, higher parsing effort; **an export is a source, never the target** (MIGRATION_STRATEGY.md §1.3) |
 | 3.3 | Migration scope per source | **C** | Content acceptance | 30 — per-source ingestion | Scope undetermined; out-of-scope content is not ingested |
 | 3.4 | Legacy domain control, production promotion and cutover | **C/E** | Launch | **35 only** | Legacy links break at launch; **no effect on Phase 30** |
 | 3.5 | Staging migration publication authority (`migration.publish` holder) | **C/D** | Content acceptance | **30 exit** | Migrated content is staged and reviewed but not published in staging. "Nobody holds the grant" was true until 2026-10-28 (historical, superseded by Phase 30): **on pre-adoption staging only a holder exists** by the owner's authorisation (§3.5); Minhaj's naming of a holder stays OPEN |
 | 3.6 | Phase-30 gates by timing | — | (classification of 3.1–3.5, 1.1–1.6, 2.4) | 30 | — |
 | 3.7 | Pre-adoption review completeness (owner decision, Phase 30-R) | — | Owner, pre-adoption staging only | 30 (Stage 1A) | Decided for staging; Minhaj acceptance, brand pack and production licensing stay open |
-| 3.8 | Personal-data flag clearance; Collections from curated archives (Phase 30-RF findings) | **C** | Owner decision, then implementation | 30 (Stage 1A/1B) | **Decided for pre-adoption staging and implemented (Phase 30-RD).** Minhaj's acceptance and any production holder of `migration.clearPersonalData` stay open |
+| 3.8 | Personal-data flag clearance; Collections from curated archives (Phase 30-RF findings) | **C** | Owner decision, then implementation | 30 (Stage 1A/1B) | **Decided for pre-adoption staging and implemented (Phase 30-RD)**; extended to all fourteen genuine `lkcatid` archives by Rebaseline R2 (§3.8, §3.9). Minhaj's acceptance and any production holder of `migration.clearPersonalData` stay open |
+| 3.9 | Comprehensive pre-adoption presentation corpus (owner attestation, Rebaseline R2) | — | Owner, pre-adoption staging only | Pre-adoption staging | Decided for staging; deferred hosts need their own registration (minhajwelfare.org its own authorisation); Minhaj acceptance, scope, production licensing and adoption stay open |
 | 4.1 | **Staging/production** SQL Server infrastructure and ownership | **E** | Implementation (28, 34) · launch | **28, 34** | **Staging rows resolved for pre-adoption staging (Phase 28).** Production remains blocked until decided (34). **Phase 1 proceeds on local Developer edition** |
-| 4.2 | Staging environment | **E** | Implementation | 28 | **Resolved for pre-adoption staging (Phase 28)** — `minhaj.haseebliaqat.me`; re-provisioned on adopter-owned infrastructure at handover |
+| 4.2 | Staging environment | **E** | Implementation | 28 | **Resolved for pre-adoption staging (Phase 28)** — `minhaj.haseebliaqat.me`; re-provisioned on adopter-owned infrastructure at handover. **Since Rebaseline R2** it may hold operator-run synthetic demonstration data (§4.2) — environment data, never an application mode; its fixture activations are immutable until a database reset |
 | 4.3 | Production hosting | **E** | Launch | 34 | Deployment blocked |
 | 4.4 | Backup, retention and recovery targets | **C/E** | Launch | 28, 34 | **Staging: interim daily / RPO 24 h / RTO 4 h / 14 days (Phase 28).** Production: conservative defaults until decided; **local restore rehearsal proceeds** |
 | 5.1 | Transactional email provider **evidence** | **B** | **Implementation** | ~~2, and transitively everything downstream of 2~~ | **CLOSED ON EVIDENCE.** Domain, DKIM, sending/SPF configuration, DMARC, restricted credential and a real controlled-inbox delivery all demonstrated. **Official adopter-controlled production email remains a separate later activation** |
 | 5.2 | Google **OAuth application credentials** | **C/E** | Activation | **2G** | **Google sign-in blocked.** Base auth (2) and the **manual Meet flow (23)** proceed without them |
 | 5.3 | Teachers can create/use Google Meet meetings | **C** | Activation | 23 | Live classes not activated — **an organisational capability, not an API credential** |
-| 5.4 | Payment provider and merchant account | **C/E** | Activation | **27 only** | **Sandbox proves the software; production needs the merchant account.** Membership proceeds |
+| 5.4 | Payment provider and merchant account | **C/E** | Activation | **27 only** | **Sandbox proves the software; production needs the merchant account.** Membership proceeds. On staging a demo `fixture` activation exists since Rebaseline R2 (§4.2, §5.4); public giving stays off |
 | 6.1 | Canonical organisational facts | **D** | Content acceptance | 6 publishes | Placeholders only; **never published as configuration** |
 | 6.2 | Centre and global network data | **C** | Content acceptance | 16 | Find a Centre has no authoritative data |
 | 6.3 | Contributor records and capability grants | **D** | Activation · content acceptance | 5, 20, 23 | No real grants issued |
@@ -1172,3 +1374,11 @@ without it (§3.6). (§5.1 previously held this place; it is closed on evidence.
 > the organisation is unchanged: Minhaj's own per-source records (§3.1.1), its naming of a
 > publication holder (§3.5), religious authority (§1), the brand pack (§6.4) and every production
 > and launch decision. Stage 1B and Phases 31–35 have not started.
+
+> **Reconciled at Rebaseline R2 (2026-11-06).** The owner's pre-adoption decisions of R2 — the
+> comprehensive presentation corpus (§3.9), the Quran staging reference preview (§1.1, §1.2) and the
+> staging demonstration data (§4.2) — apply to pre-adoption staging only and close none of the
+> entries above: religious authority (§1.1–§1.4) stays OPEN, no hadith or fatwa is published, and
+> Minhaj's per-source records, publication holder, brand pack, payment provider and every
+> production and launch decision stay with the organisation. Stage 1B and Phases 31–35 have not
+> started.
