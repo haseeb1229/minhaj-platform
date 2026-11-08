@@ -37,6 +37,19 @@ export const dynamic = 'force-dynamic';
 const FEATURED = 3;
 const LEADERS = 4;
 
+/**
+ * One content read, failing closed: a runtime that cannot be composed (it
+ * throws before any promise exists) and a read that rejects both answer
+ * `empty`, so only that section is withheld.
+ */
+async function orEmpty<T>(read: () => Promise<T>, empty: T): Promise<T> {
+  try {
+    return await read();
+  } catch {
+    return empty;
+  }
+}
+
 /** The Page a visitor most needs first, when it is published. */
 const FIRST = ['/explore/about/introduction', '/explore/shaykh-ul-islam/biography'];
 
@@ -64,12 +77,19 @@ export default async function ExplorePage({
   const locale = await requireLocale(params);
   setRequestLocale(locale);
 
+  // FAIL CLOSED, SECTION BY SECTION: Explore is the organisation's front door
+  // and its index of sections renders from code alone, so a content read that
+  // fails hides only its own section (as the shell's presence snapshot does),
+  // never the whole landing.
   const [t, local, profile, pages, people] = await Promise.all([
     getTranslations({ locale, namespace: 'shell' }),
     getTranslations({ locale, namespace: 'exploreLanding' }),
     getTranslations({ locale, namespace: 'people' }),
-    editorialReadRuntime().explorePages(),
-    peopleReadRuntime().people.publicPeople({ locale }),
+    orEmpty(() => editorialReadRuntime().explorePages(), []),
+    orEmpty(() => peopleReadRuntime().people.publicPeople({ locale }), {
+      items: [],
+      more: false,
+    }),
   ]);
 
   // The organisation's own Pages, the ones a visitor needs first leading, and

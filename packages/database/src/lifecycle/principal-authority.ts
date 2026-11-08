@@ -388,6 +388,10 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[gallerylabel]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[galleryitem]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[galleryslughistory]': ['SELECT', 'INSERT'],
+  // Rebaseline R2: Storage's link from a public picture to each of its WebP
+  // derivatives. Written when a width is rendered and removed when the source
+  // is released; never updated in place (UPDATE and ALTER are denied).
+  '[dbo].[assetderivative]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[article]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[page]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[articlerevision]': ['SELECT', 'INSERT'],
