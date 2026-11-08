@@ -58,6 +58,7 @@ function baseRootManifest(): Manifest {
     engines: { node: lockedNode },
     overrides: { 'deepmerge-ts': '8.0.0', mysql2: '3.23.1' },
     devDependencies: {
+      '@axe-core/playwright': '4.14.0',
       '@playwright/test': '1.55.1',
       cheerio: '1.2.0',
       eslint: '^10.9.1',
@@ -104,6 +105,12 @@ function baseWorkspaces(): { name: string; directory: string; manifest: Manifest
       manifest: { dependencies: { pino: '10.3.1' } },
     },
     {
+      // Rebaseline R2: Storage declares the image decoder for its derivatives.
+      name: '@minhaj/storage',
+      directory: 'packages/storage',
+      manifest: { dependencies: { sharp: '0.35.5' } },
+    },
+    {
       name: '@minhaj/realtime',
       directory: 'apps/realtime',
       manifest: { dependencies: { 'socket.io': '4.8.3' } },
@@ -130,6 +137,8 @@ function baseLock(): { packages: Record<string, { version?: string }> } {
       'node_modules/socket.io': { version: '4.8.3' },
       'node_modules/socket.io-client': { version: '4.8.3' },
       'node_modules/cheerio': { version: '1.2.0' },
+      'node_modules/@axe-core/playwright': { version: '4.14.0' },
+      'node_modules/sharp': { version: '0.35.5' },
       'node_modules/typescript': { version: '5.9.3' },
       'node_modules/zod': { version: '4.6.7' },
       'node_modules/vitest': { version: '4.1.11' },
@@ -878,6 +887,38 @@ describe('F13.9 — the transcribed policy matches TECH_STACK.md', () => {
     });
     expect(absent.join('\n')).toMatch(/cheerio/);
     expect(drifted.join('\n')).toMatch(/cheerio/);
+  });
+
+  it('locks @axe-core/playwright EXACTLY at 4.14.0 for the accessibility smoke (Rebaseline R2)', () => {
+    expect(policyFor('@axe-core/playwright')).toEqual(
+      expect.objectContaining({ kind: 'exact', expected: '4.14.0' }),
+    );
+    expect(policyFor('@axe-core/playwright')?.introduced).toMatch(/Rebaseline R2/);
+    const absent = failuresFor((state) => {
+      delete state.rootManifest.devDependencies?.['@axe-core/playwright'];
+      delete state.lock.packages['node_modules/@axe-core/playwright'];
+    });
+    const drifted = failuresFor((state) => {
+      state.rootManifest.devDependencies!['@axe-core/playwright'] = '^4.14.0';
+      state.lock.packages['node_modules/@axe-core/playwright'] = { version: '4.14.1' };
+    });
+    expect(absent.join('\n')).toMatch(/@axe-core\/playwright/);
+    expect(drifted.join('\n')).toMatch(/@axe-core\/playwright/);
+  });
+
+  it('locks sharp EXACTLY at 0.35.5 for Storage derivatives (Rebaseline R2), failing on drift', () => {
+    expect(policyFor('sharp')).toEqual(
+      expect.objectContaining({ kind: 'exact', expected: '0.35.5' }),
+    );
+    expect(policyFor('sharp')?.introduced).toMatch(/Rebaseline R2/);
+    const drifted = failuresFor((state) => {
+      const storage = state.workspaces.find(
+        (workspace) => workspace.directory === 'packages/storage',
+      )!.manifest;
+      storage.dependencies!['sharp'] = '^0.35.5';
+      state.lock.packages['node_modules/sharp'] = { version: '0.35.6' };
+    });
+    expect(drifted.join('\n')).toMatch(/sharp/);
   });
 
   it('accepts the installed 4.14.x patch', () => {

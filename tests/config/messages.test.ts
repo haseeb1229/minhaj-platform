@@ -103,13 +103,14 @@ describe('the catalogues agree on their keys', () => {
     // replaced the Phase-0B foundation page, so the keys it used are gone. The
     // claim is unchanged, and it is made against MORE prose than before.
     for (const key of [
-      'shell.home.lede',
-      // The flagship portal retired the build-status paragraph; its quiet
-      // pre-adoption note is the home prose that replaced it.
-      'shell.home.preAdoption',
-      'shell.home.search.label',
+      // R2: the home page opens on its own heading and lede, and closes on
+      // the My Minhaj invitation; the pre-adoption note lives in the footer.
+      'shell.home.hero.title',
+      'shell.home.hero.lede',
+      'shell.home.account.body',
       'shell.nav.explore',
-      'shell.nav.about',
+      'shell.nav.items.about.title',
+      'shell.nav.intros.knowledge',
       'shell.nav.searchPlaceholder',
       'shell.footer.description',
       'shell.reserved.body',
@@ -155,7 +156,7 @@ describe('the catalogues agree on their keys', () => {
       const prose = Object.fromEntries(leaves(await readCatalogue(locale)));
 
       for (const key of [
-        'shell.home.lede',
+        'shell.home.hero.lede',
         'shell.reserved.heading',
         'shell.footer.preAdoption',
         'shell.nav.myMinhaj',

@@ -203,6 +203,48 @@ describe('Phase 28 — the staging stack (compose)', () => {
     );
   });
 
+  it('admits the Quran reference preview on the web service alone, beside a non-indexable build', async () => {
+    // Rebaseline R2: staging, and only staging, shows the licensed reference
+    // text. It is set where indexing is pinned off, and nowhere else.
+    const compose = await load();
+    const web = service(compose, 'web');
+    expect(web).toContain('RELIGIOUS_REFERENCE_PREVIEW: enabled');
+    expect(web).toContain("PUBLIC_INDEXING_ENABLED: 'false'");
+    expect(compose.match(/RELIGIOUS_REFERENCE_PREVIEW:/g)).toHaveLength(1);
+  });
+
+  it('mounts the operator’s Quran reference files read-only into the operations image only', async () => {
+    const script = await readFile(
+      path.join(repoRoot, 'docker', 'staging', 'bin', 'quran-reference.sh'),
+      'utf8',
+    );
+    expect(script).toContain('-v "$IMPORT_DIR:$MOUNTED:ro" ops');
+    expect(script).toContain('packages/database/scripts/staging-quran-reference.ts');
+    expect(script).toContain('staging_preflight');
+    expect(script).toContain('host_lock');
+  });
+
+  it('runs the demo data only on a proven, non-indexable staging host, with passwords on stdin from a root-only file', async () => {
+    const script = await readFile(
+      path.join(repoRoot, 'docker', 'staging', 'bin', 'demo.sh'),
+      'utf8',
+    );
+    expect(script).toContain('staging_preflight');
+    expect(script).toContain('host_lock');
+    expect(script).toContain(
+      'readonly DEMO_CREDENTIALS=/etc/minhaj/secrets/demo-accounts.txt',
+    );
+    expect(script).toContain('assert_root_only "$DEMO_CREDENTIALS"');
+    expect(script).toContain('/dev/urandom');
+    expect(script).toContain('demo_ops "$@" < "$DEMO_CREDENTIALS"');
+    expect(script).toContain('-e PUBLIC_INDEXING_ENABLED=false ops');
+    expect(script).toContain('[ "$value" = false ] || die');
+    // The passwords never reach argv, the environment or the output.
+    expect(script).not.toMatch(
+      /printf '%s\\n' "\$password"|echo "\$password"|-e [A-Z_]*PASSWORD/,
+    );
+  });
+
   it('keeps SQL Server, the scanner and operator commands on an internal network', async () => {
     const compose = await load();
     expect(compose).toMatch(/^ {2}backend:\n\s+internal: true$/m);

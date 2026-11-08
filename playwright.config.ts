@@ -50,7 +50,18 @@ export default defineConfig({
 
   // A test that hangs must fail rather than occupy a runner.
   timeout: 60_000,
-  expect: { timeout: 10_000 },
+  expect: {
+    timeout: 10_000,
+    // `visual.spec.ts` (Rebaseline R2). Animations are stopped and the caret
+    // hidden so a comparison sees the rendered state, not a frame of motion;
+    // the small pixel allowance absorbs anti-aliasing, never a layout change.
+    toHaveScreenshot: { animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.01 },
+  },
+
+  // Screenshot baselines are rendered on LINUX only (the visual spec skips
+  // everywhere else), so the path carries no platform suffix: one committed
+  // baseline per surface, beside the suite, reviewed like any other file.
+  snapshotPathTemplate: '{testDir}/__screenshots__/{testFileName}/{arg}{ext}',
 
   // Fail the run rather than pass it, if somebody leaves a `test.only` behind.
   forbidOnly: process.env['CI'] !== undefined,

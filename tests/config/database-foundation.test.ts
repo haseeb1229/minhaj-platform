@@ -138,6 +138,9 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'ContactInquiry',
       'Feedback',
       'Asset',
+      // Rebaseline R2 — Storage's link from a still image to the Asset holding
+      // one of its WebP widths. Layer 0, like Asset: no owner, no target pair.
+      'AssetDerivative',
       // Phase 8 — Library. Work, its Editions, genuine BookTranslation relations
       // and SalePoint, with typed relation sets and the permanent slug namespace.
       'Work',

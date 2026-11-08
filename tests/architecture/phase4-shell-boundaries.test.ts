@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -81,6 +82,10 @@ const CONTENT_ROUTE_FILES = [
   // Phase 8. Every Library surface that reads Works, Editions, facets or sale
   // points is data an administrator changes. The Library LANDING page reads no
   // data at all and stays in the prerendered graph, deliberately absent here.
+  // R2: the Library landing is cover-led — the newest books, its largest
+  // topics' shelves and the latest magazine issues, read per request through
+  // the Library's public reader — so it left the prerendered shell for here.
+  'apps/web/src/app/[locale]/(public)/library/page.tsx',
   'apps/web/src/app/[locale]/(public)/library/books/page.tsx',
   'apps/web/src/app/[locale]/(public)/library/books/[slug]/page.tsx',
   'apps/web/src/app/[locale]/(public)/library/authors/page.tsx',
@@ -633,7 +638,6 @@ describe('the anonymous public tree reads no session-derived state', () => {
     for (const file of [
       'apps/web/src/app/[locale]/admin/layout.tsx',
       'apps/web/src/app/[locale]/my/page.tsx',
-      'apps/web/src/app/[locale]/admin/system/navigation/page.tsx',
     ]) {
       const source = await readFile(path.join(repoRoot, file), 'utf8');
 
@@ -641,6 +645,16 @@ describe('the anonymous public tree reads no session-derived state', () => {
       expect(source, file).toContain('robots');
       expect(source, file).toContain('index: false');
     }
+
+    // R2 (audit F15): an administrative page's noindex arrives with its own
+    // title through `adminPageMetadata`, whose behaviour test proves it
+    // returns both (tests/shell/admin-metadata.test.ts).
+    const navigation = await readFile(
+      path.join(repoRoot, 'apps/web/src/app/[locale]/admin/system/navigation/page.tsx'),
+      'utf8',
+    );
+    expect(navigation).toContain('force-dynamic');
+    expect(navigation).toContain('generateMetadata = adminPageMetadata(');
   });
 });
 
@@ -670,10 +684,14 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     const contentClient = [...content.modules]
       .filter(([, source]) => /^\s*['"]use client['"]/m.test(source))
       .map(([file]) => relative(file));
+    // R2: the mega-navigation, the search palette and the shared dialog
+    // primitive (which the phone drawer now wears, so `mobile-nav.tsx` is a
+    // server wrapper rather than an island of its own).
     for (const island of [
       'apps/web/src/components/locale-switcher-links.tsx',
       'apps/web/src/components/shell/disclosure-menu.tsx',
-      'apps/web/src/components/shell/mobile-nav.tsx',
+      'apps/web/src/components/shell/search-palette.tsx',
+      'apps/web/src/components/ui/dialog.tsx',
       'apps/web/src/components/shell/nav-link.tsx',
       'apps/web/src/components/shell/account-entry.tsx',
     ])
@@ -681,7 +699,10 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     for (const shellFile of [
       'apps/web/src/components/shell/site-header.tsx',
       'apps/web/src/components/shell/site-footer.tsx',
+      'apps/web/src/components/shell/mobile-nav.tsx',
       'apps/web/src/components/shell/brand-wordmark.tsx',
+      // The server primitives' barrel never carries a client island with it.
+      'apps/web/src/components/ui/index.tsx',
     ])
       expect(contentClient, shellFile).not.toContain(shellFile);
   });
@@ -764,7 +785,7 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     // PHASE 10 — THE ONE FILE THAT MAY SET A FRAME SOURCE. The privacy-gated
     // player (`components/media/player.tsx`) renders an `<iframe src=…>` — but
     // only in the state a visitor's own click creates, and the address comes
-    // from `providerEmbedUrl` in `@minhaj/contracts/media`, never a literal.
+    // from `providerPlaybackUrl` in `@minhaj/contracts/media`, never a literal.
     // Its exception is `src=` and nothing else, and the test below pins what
     // that `src` may be. Provider URL literals live in the contracts module,
     // outside this app tree, so the external-origin rule still holds here.
@@ -790,32 +811,76 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     // route it derives from the recitation, segment and asset identifiers —
     // pinned by its own test below.
     const RECITATION_PLAYER = 'apps/web/src/components/quran/recitation-player.tsx';
-    // PHASE 30-R — THREE MORE FILES THAT MAY SHOW AN IMAGE, each only its own
-    // domain's FIRST-PARTY two-allow route: a contributor's portrait, a Library
-    // cover and a Video's first-party poster. Excepted from `<img` and `src=`
-    // and nothing else, and every source is pinned by the test below.
+    // PHASE 30-R — TWO MORE FILES THAT MAY SHOW AN IMAGE, each only its own
+    // domain's FIRST-PARTY two-allow route: a contributor's portrait and a
+    // Library cover. Excepted from `<img` and `src=` and nothing else, and every
+    // source is pinned by the test below. (A Video's first-party poster is drawn
+    // by the shared image primitive since R2; Watch sets no source itself.)
     const PORTRAIT = 'apps/web/src/components/people/portrait.tsx';
     const COVER = 'apps/web/src/components/library/cover.tsx';
-    const WATCH = 'apps/web/src/components/media/watch.tsx';
     // An Editorial record's lead image, only through Editorial's own route
     // (pinned in `phase13-news-boundaries.test.ts`).
     const LEAD = 'apps/web/src/components/editorial/lead-image.tsx';
     // R1 — the organisation's official mark, once, in the footer: its one
     // source is the statically imported first-party file (pinned below).
     const BRAND = 'apps/web/src/components/shell/brand-lockup.tsx';
-    const FIRST_PARTY_IMAGES = [PORTRAIT, COVER, WATCH, LEAD, BRAND];
+    // R2 — THE SHARED RESPONSIVE IMAGE: the one primitive every page family's
+    // pictures go through. Its `src` and its `srcSet` are only what the
+    // first-party guard admits (`/assets/…`, pinned by its own test below and
+    // by `tests/shell/ui-primitives.test.ts`), so it is excepted from `<img`,
+    // `src=` and `srcSet` and nothing else.
+    const IMAGE = 'apps/web/src/components/ui/image.tsx';
+    const FIRST_PARTY_IMAGES = [PORTRAIT, COVER, LEAD, BRAND, IMAGE];
+    // R2 — THE ORGANISATION'S OFFICIAL CHANNELS: outbound links in the footer,
+    // followed only when a visitor chooses to, like the DOI resolver. Exactly
+    // these addresses, in exactly this module, and nowhere else.
+    const CHANNELS = 'apps/web/src/shell/official-channels.ts';
+    const CHANNEL_URLS = [
+      'https://www.youtube.com/DrQadri',
+      'https://www.facebook.com/MinhajulQuran',
+      'https://twitter.com/TahirulQadri',
+      'https://apps.apple.com/us/developer/minhaj-publications/id998868018',
+      'https://play.google.com/store/apps/dev?id=6490820456874948658',
+    ];
+    // R2 — THE QURAN REFERENCE PREVIEW'S ATTRIBUTION: the Tanzil Project (its
+    // CC BY 3.0 terms require a link), the licence and the Irfan-ul-Quran
+    // site — outbound links in "About this text", exactly these, only here.
+    const REFERENCE_SOURCES = 'apps/web/src/components/quran/reference-sources.ts';
+    const REFERENCE_URLS = [
+      'https://tanzil.net/',
+      'https://creativecommons.org/licenses/by/3.0/',
+      'https://www.irfan-ul-quran.com/',
+    ];
+    // R2 — MQI'S OWN FATWA WEBSITE, linked outbound from the Fatwa landing
+    // while this platform's service is not open. Exactly this, only here.
+    const FATWA_SITE = 'apps/web/src/components/fatwa/official-site.ts';
+    const FATWA_SITE_URL = 'https://thefatwa.com/urdu/index.html';
     const { modules } = await contentGraph();
 
-    for (const expected of [PLAYER, AUDIO_PLAYER, PHOTOS, VIEWER, RECITATION_PLAYER]) {
+    for (const expected of [
+      PLAYER,
+      AUDIO_PLAYER,
+      PHOTOS,
+      VIEWER,
+      RECITATION_PLAYER,
+      IMAGE,
+      CHANNELS,
+    ]) {
       expect([...modules.keys()].map(relative)).toContain(expected);
     }
 
     for (const [file, source] of modules) {
       if (!file.startsWith(APP_SRC)) continue;
 
-      const body = code(source)
+      let body = code(source)
         .replaceAll('https://schema.org', '')
         .replaceAll('https://doi.org/', '');
+      if (relative(file) === CHANNELS)
+        for (const url of CHANNEL_URLS) body = body.replaceAll(`'${url}'`, '');
+      if (relative(file) === REFERENCE_SOURCES)
+        for (const url of REFERENCE_URLS) body = body.replaceAll(`'${url}'`, '');
+      if (relative(file) === FATWA_SITE)
+        body = body.replaceAll(`'${FATWA_SITE_URL}'`, '');
 
       expect(body, relative(file)).not.toMatch(/https?:\/\/(?!127\.0\.0\.1)/);
       expect(body, relative(file)).not.toContain('next/font');
@@ -829,6 +894,14 @@ describe('the public shell is server-rendered, with narrow client islands', () =
         if (
           (fetching === 'src=' || fetching === '<img') &&
           [PHOTOS, VIEWER, ...FIRST_PARTY_IMAGES].includes(relative(file))
+        )
+          continue;
+        // R2 — a first-party picture's `srcSet` lists only that picture's own
+        // WebP derivatives, built by `derivativeSrcSet`/`derivativeSources`
+        // from the same guarded route (pinned per file by the tests below).
+        if (
+          fetching === 'srcSet' &&
+          [PHOTOS, PORTRAIT, COVER, LEAD, IMAGE].includes(relative(file))
         )
           continue;
         expect(code(source), `${relative(file)} ${fetching}`).not.toContain(fetching);
@@ -861,6 +934,12 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     expect(photos).toContain('src: photoAssetPath(photo.id, photo.assetId)');
     expect(viewer.match(/src=/g) ?? []).toEqual(['src=']);
     expect(viewer).toContain('src={photo.src}');
+    // R2 — a tile's `srcSet` is only that photograph's own derivatives, built
+    // from the same two-allow route; the viewer keeps the original.
+    expect(photos.match(/derivativeSrcSet\([^)]*\)/g) ?? []).toEqual([
+      'derivativeSrcSet(path, width)',
+    ]);
+    expect(photos.match(/srcSet=/g) ?? []).toEqual([]);
 
     // No slideshow, no timer, no storage, no markup injection, no other origin.
     for (const forbidden of [
@@ -872,12 +951,12 @@ describe('the public shell is server-rendered, with narrow client islands', () =
       'sessionStorage',
       'document.cookie',
       'dangerouslySetInnerHTML',
-      'srcSet',
       'next/image',
     ]) {
       expect(viewer, forbidden).not.toContain(forbidden);
       expect(photos, forbidden).not.toContain(forbidden);
     }
+    expect(viewer, 'srcSet').not.toContain('srcSet');
     // The browser's own modal dialog, opened modally.
     expect(viewer).toContain('showModal()');
   });
@@ -889,28 +968,120 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     const cover = await read('apps/web/src/components/library/cover.tsx');
     const watch = await read('apps/web/src/components/media/watch.tsx');
 
-    // A portrait's one source is People's own route for that Person and asset.
-    expect(portrait.match(/src=\{[^}]*\}/g) ?? []).toEqual([
-      'src={portraitPath(personId, portrait.assetId)}',
-    ]);
+    // A portrait's one source is People's own route for that Person and asset,
+    // and its `srcSet` (R2) only that route's own derivatives.
+    expect(portrait.match(/src=\{[^}]*\}/g) ?? []).toEqual(['src={path}']);
+    expect(portrait).toContain('const path = portraitPath(personId, portrait.assetId);');
     expect(portrait).toContain('return `/assets/people/portraits/');
+    expect(portrait.match(/derivativeSrcSet\([^)]*\)/g) ?? []).toEqual([
+      'derivativeSrcSet(path, portrait.width)',
+    ]);
+    expect(cover.match(/derivativeSrcSet\([^)]*\)/g) ?? []).toEqual([
+      'derivativeSrcSet(path, cover.width)',
+    ]);
     // A cover's one source is what its caller built from Library's two cover
     // routes — the only path builders the module defines.
     expect(cover.match(/src=\{[^}]*\}/g) ?? []).toEqual(['src={path}']);
     expect(cover).toContain('return `/assets/library/covers/editions/');
     expect(cover).toContain('return `/assets/library/covers/issues/');
-    // Watch's one image source is Media's own poster route.
-    expect(watch.match(/src=\{[^}]*\}/g) ?? []).toEqual([
-      'src={videoPosterPath(videoId, poster.assetId)}',
+    // Watch sets NO image source of its own (R2): every poster is Media's own
+    // route, handed to the shared primitive as its `path`, never a literal.
+    expect(watch.match(/src=/g) ?? []).toEqual([]);
+    expect(watch).not.toContain('<img');
+    expect(watch.match(/path: videoPosterPath\([^)]*\)/g) ?? []).toEqual([
+      'path: videoPosterPath(video.id, video.poster.assetId)',
     ]);
     // The organisation's mark: one source, the bundled logo file itself.
     const brand = await read('apps/web/src/components/shell/brand-lockup.tsx');
     expect(brand.match(/src=\{[^}]*\}/g) ?? []).toEqual(['src={logo.src}']);
     expect(brand).toContain("import logo from '@/shell/brand/mqi-logo.png';");
     for (const source of [portrait, cover, watch, brand]) {
-      for (const forbidden of ['srcSet', 'next/image', 'thumbnailUrl}', 'autoPlay']) {
+      for (const forbidden of ['next/image', 'thumbnailUrl}', 'autoPlay']) {
         expect(source, forbidden).not.toContain(forbidden);
       }
+    }
+    for (const source of [watch, brand]) expect(source).not.toContain('srcSet');
+  });
+
+  it('lets the shared image primitive show ONLY what the first-party guard admits', async () => {
+    // R2. `ResponsiveImage` is the one place a page family's picture is drawn.
+    // Its single `src` is the guard's answer, never the caller's string, and
+    // its `srcSet` is built only from guarded derivatives; a refused address
+    // renders no image at all. The guard's own cases are in
+    // `tests/shell/ui-primitives.test.ts`.
+    const image = code(
+      await readFile(path.join(repoRoot, 'apps/web/src/components/ui/image.tsx'), 'utf8'),
+    );
+    expect(image.match(/src=\{[^}]*\}/g) ?? []).toEqual(['src={path}']);
+    expect(image).toContain('const path = firstPartyImagePath(requested);');
+    expect(image).toContain('if (path === null) return null;');
+    expect(image).toContain(
+      'const set = imageSrcSet(derivatives ?? derivativeSources(path, width));',
+    );
+    expect(image.match(/srcSet: [a-zA-Z]+/g) ?? []).toEqual(['srcSet: set']);
+    for (const forbidden of [
+      'next/image',
+      'dangerouslySetInnerHTML',
+      'style=',
+      'autoPlay',
+    ])
+      expect(image, forbidden).not.toContain(forbidden);
+
+    const guard = code(
+      await readFile(
+        path.join(repoRoot, 'apps/web/src/components/ui/image-source.ts'),
+        'utf8',
+      ),
+    );
+    expect(guard).toContain("if (!src.startsWith('/assets/')) return null;");
+  });
+
+  it('links the official channels outbound only, from the footer alone', async () => {
+    // R2. The addresses are minhaj.org's own footer links. They are plain
+    // outbound anchors: nothing embeds, fetches or tracks them, and only the
+    // footer names the module.
+    const footer = code(
+      await readFile(
+        path.join(repoRoot, 'apps/web/src/components/shell/site-footer.tsx'),
+        'utf8',
+      ),
+    );
+    expect(footer).toContain("from '@/shell/official-channels'");
+    expect(footer).toContain('href={channel.href}');
+    expect(footer).toContain('rel="external noopener noreferrer"');
+    const { modules } = await contentGraph();
+    for (const [file, source] of modules) {
+      if (!file.startsWith(APP_SRC) || relative(file).endsWith('site-footer.tsx'))
+        continue;
+      expect(code(source), relative(file)).not.toContain('official-channels');
+    }
+  });
+
+  it('keeps every client island out of the server primitives’ barrel', async () => {
+    // R2. `@/components/ui` is imported by prerendered pages. A client island
+    // re-exported from it would join every one of their graphs, so Dialog,
+    // Tabs and Shelf are imported from their own modules only.
+    const barrel = await readFile(
+      path.join(repoRoot, 'apps/web/src/components/ui/index.tsx'),
+      'utf8',
+    );
+    const reexported = [...barrel.matchAll(/from '\.\/([a-z-]+)'/g)].map(
+      (match) => match[1],
+    );
+    expect(reexported.length).toBeGreaterThan(5);
+    for (const module of reexported) {
+      const file = (['.tsx', '.ts'] as const)
+        .map((extension) =>
+          path.join(
+            repoRoot,
+            'apps/web/src/components/ui',
+            `${String(module)}${extension}`,
+          ),
+        )
+        .find((candidate) => existsSync(candidate));
+      expect(file, String(module)).toBeDefined();
+      const source = await readFile(String(file), 'utf8');
+      expect(source.trimStart(), String(module)).not.toMatch(/^['"]use client['"]/);
     }
   });
 
@@ -987,15 +1158,22 @@ describe('the public shell is server-rendered, with narrow client islands', () =
       ),
     );
 
-    // Exactly one frame source, and it is the contract's derivation.
+    // Exactly one frame source, and it is the contract's derivation — the
+    // privacy-enhanced embed the visitor's own Play press asks for (R2, F08).
     expect(source.match(/src=/g) ?? []).toHaveLength(1);
-    expect(source).toContain('src={providerEmbedUrl(provider, providerVideoId)}');
+    expect(source).toContain('src={providerPlaybackUrl(provider, providerVideoId)}');
     // The frame exists only in the state the visitor's click sets.
-    expect(source).toMatch(/\{loaded \? \(/);
-    expect(source).toContain('onClick={() => setLoaded(true)}');
-    // No autoplay, no remote image, no script, no stored consent state.
+    expect(source).toMatch(/\{playing \? \(/);
+    expect(source).toContain('onClick={() => setPlaying(true)}');
+    // `autoplay` appears ONCE: the frame's own allowance, which only that
+    // click-created frame carries. Nothing on the page autoplays by itself.
+    expect(source.match(/autoplay/gi) ?? []).toHaveLength(1);
+    expect(source).toContain(
+      'allow="autoplay; encrypted-media; picture-in-picture; fullscreen"',
+    );
+    // No autoPlay attribute, no remote image, no script, no stored consent state.
     for (const forbidden of [
-      'autoplay',
+      'autoPlay',
       '<img',
       '<script',
       'localStorage',
@@ -1431,14 +1609,17 @@ describe('the base security headers', () => {
     );
     expect(config).toContain('"frame-src \'none\'"');
     // Every route-scoped shape is written ONCE, locale-free, and expanded by
-    // one helper into exactly its unprefixed English address and its `/ur` and
-    // `/ar` forms (ROUTE_MAP.md §1.1, R1). `/en/…` never renders — the proxy
-    // redirects it — so no shape names it, and no helper may widen a shape to
-    // an arbitrary first segment.
+    // one helper into exactly its unprefixed English address and its prefixed
+    // forms (ROUTE_MAP.md §1.1, R1). R2 adds `en` to that CLOSED set: a
+    // visitor's `/en/…` still never renders (the proxy answers 301), but when
+    // Next serves the English rewrite as a second, proxied request, that hop's
+    // headers are matched against `/en/…` — without it a player route fell back
+    // to `frame-src 'none'`. No helper may widen a shape to an arbitrary first
+    // segment, and the alternation names exactly the three interface locales.
     expect(config).toMatch(
-      /function inEveryLocale\(path: string\): readonly string\[\] \{\s*return \[path, `\/:locale\(ur\|ar\)\$\{path\}`\];\s*\}/,
+      /function inEveryLocale\(path: string\): readonly string\[\] \{\s*return \[path, `\/:locale\(en\|ur\|ar\)\$\{path\}`\];\s*\}/,
     );
-    expect(config).not.toMatch(/:locale\([^)]*\ben\b/);
+    expect(config.match(/:locale\(([^)]*)\)/g) ?? []).toEqual([':locale(en|ur|ar)']);
     expect(config).toContain("...inEveryLocale('/watch/videos/:slug'),");
     expect(config).toContain("...inEveryLocale('/admin/media/videos/:id'),");
     // Phase 27 adds four exact shapes and nothing broader: the two pages that
@@ -1454,7 +1635,20 @@ describe('the base security headers', () => {
       expect(config, route).toContain(route);
     expect(config.match(/inEveryLocale\('/g) ?? []).toHaveLength(6);
     expect(config.match(/:locale\(/g) ?? []).toHaveLength(1);
-    expect(config).toContain('autoplay=()');
+    // `autoplay` stays refused on every page; only the player routes delegate
+    // it (R2, audit F08), to themselves and exactly the two embed origins from
+    // the contract — and they receive the override alongside their frame policy.
+    expect(config).toContain(
+      'const PERMISSIONS_POLICY = `${DECLINED_CAPABILITIES}, autoplay=()`;',
+    );
+    expect(config).toContain("{ key: 'Permissions-Policy', value: PERMISSIONS_POLICY },");
+    expect(config).toMatch(
+      /autoplay=\(self \$\{VIDEO_PROVIDERS\.map\(\s*\(provider\) => `"\$\{PROVIDER_EMBED_ORIGINS\[provider\]\}"`,\s*\)\.join\(' '\)\}\)/,
+    );
+    expect(config.match(/value: PLAYER_PERMISSIONS_POLICY/g) ?? []).toHaveLength(1);
+    expect(config).toMatch(
+      /\.\.\.PLAYER_ROUTES\.map\(\(source\) => \(\{\s*source,\s*headers: \[\s*\{ key: 'Content-Security-Policy', value: PLAYER_CONTENT_SECURITY_POLICY \},\s*\{ key: 'Permissions-Policy', value: PLAYER_PERMISSIONS_POLICY \},\s*\],/,
+    );
     for (const origin of [
       'youtube',
       'vimeo',

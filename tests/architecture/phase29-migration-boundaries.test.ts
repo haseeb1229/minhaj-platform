@@ -243,8 +243,15 @@ describe('scripts/migration holds no database capability of its own', () => {
     const compose = proof.indexOf('composeMigrationRunner()', guard);
     expect(guard).toBeGreaterThan(0);
     expect(compose).toBeGreaterThan(guard);
-    expect(proof).toContain("database === 'MinhajStaging' && host === 'sqlserver'");
-    expect(proof).toContain('/^MinhajPhase1Test_[0-9a-f]{32}$/');
+    // R2: the target rule is shared with the Quran reference tool, so it lives
+    // in the tooling's common CLI module — imported, never re-implemented.
+    expect(proof).toMatch(/import \{[^}]*\bapprovedTarget\b[^}]*\} from '\.\/cli\.ts'/u);
+    expect(proof).not.toMatch(/function approvedTarget/u);
+    const cli = withoutComments(await read(`${TOOLING}/cli.ts`));
+    expect(cli).toContain(
+      "database === 'MinhajStaging' && host === 'sqlserver' && port === '1433'",
+    );
+    expect(cli).toContain('/^MinhajPhase1Test_[0-9a-f]{32}$/');
     // The fixture server it starts listens on loopback only, and the fetcher
     // it uses resolves nothing but `*.fixture.invalid`.
     expect(proof).toContain('createFixtureFetcher(source, server.endpoint)');
@@ -541,6 +548,15 @@ describe('migration.publish is externally gated and step-up scoped', () => {
         file.startsWith('apps/web/src/app/[locale]/admin/migration/')
       )
         continue;
+      // R2 (F35): the purpose-bound step-up return map names the purpose only
+      // to NARROW where a confirmed grant returns to — the manifests pages —
+      // and spends nothing.
+      if (file === `${COMPOSITION}/return-to.ts`) {
+        const returnTo = withoutComments(await read(file));
+        expect(returnTo.match(/'migration-publication'/gu)).toHaveLength(1);
+        expect(returnTo).not.toMatch(/requirePrivilegedA|grantStepUp|verifyPublisher/u);
+        continue;
+      }
       expect(withoutComments(await read(file)), file).not.toContain(
         "'migration-publication'",
       );

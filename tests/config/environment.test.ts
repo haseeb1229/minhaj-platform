@@ -474,3 +474,54 @@ describe('B7 — the contracts root stays browser-safe', () => {
     ).rejects.toThrow(/server-only/);
   });
 });
+
+/**
+ * Rebaseline R2 — the staging Quran reference preview. Admitted only by an
+ * exact `enabled`, and never beside public indexing: the two together are a
+ * misconfiguration refused at startup, naming the variable and never a value.
+ */
+describe('RELIGIOUS_REFERENCE_PREVIEW', () => {
+  it('is absent by default, so a deployment that configures nothing admits no preview', () => {
+    expect(parseServerEnv({}).RELIGIOUS_REFERENCE_PREVIEW).toBeUndefined();
+  });
+
+  it('accepts exactly `enabled` on a non-indexable deployment', () => {
+    expect(
+      parseServerEnv({ RELIGIOUS_REFERENCE_PREVIEW: 'enabled' })
+        .RELIGIOUS_REFERENCE_PREVIEW,
+    ).toBe('enabled');
+    expect(
+      parseServerEnv({
+        RELIGIOUS_REFERENCE_PREVIEW: 'enabled',
+        PUBLIC_INDEXING_ENABLED: 'false',
+      }).RELIGIOUS_REFERENCE_PREVIEW,
+    ).toBe('enabled');
+  });
+
+  it('refuses any other value rather than reading it as off', () => {
+    for (const value of ['true', 'ENABLED', 'on', '1', 'disabled'])
+      expect(() => parseServerEnv({ RELIGIOUS_REFERENCE_PREVIEW: value }), value).toThrow(
+        /RELIGIOUS_REFERENCE_PREVIEW/,
+      );
+  });
+
+  it('refuses the preview beside public indexing', () => {
+    expect(() =>
+      parseServerEnv({
+        RELIGIOUS_REFERENCE_PREVIEW: 'enabled',
+        PUBLIC_INDEXING_ENABLED: 'true',
+      }),
+    ).toThrow(
+      /RELIGIOUS_REFERENCE_PREVIEW: must not be enabled while PUBLIC_INDEXING_ENABLED/,
+    );
+    // Indexing alone is still a valid configuration.
+    expect(
+      parseServerEnv({ PUBLIC_INDEXING_ENABLED: 'true' }).PUBLIC_INDEXING_ENABLED,
+    ).toBe(true);
+  });
+
+  it('is not part of the prerender projection a public build reads', () => {
+    expect(prerenderEnvKeys).not.toContain('RELIGIOUS_REFERENCE_PREVIEW');
+    expect(serverEnvKeys).toContain('RELIGIOUS_REFERENCE_PREVIEW');
+  });
+});

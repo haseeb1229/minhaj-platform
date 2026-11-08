@@ -277,8 +277,18 @@ describe('the public News tree claims nothing it does not have', () => {
     const lead = uncommented(
       await read('apps/web/src/components/editorial/lead-image.tsx'),
     );
+    // R2: each draws `path`, Editorial's own route, and lists only that
+    // route's own WebP derivatives in its `srcSet`.
     const sources = lead.match(/\bsrc=\{[^}]*\}/gu) ?? [];
-    expect(sources).toEqual(['src={leadImagePath(image)}', 'src={leadImagePath(image)}']);
+    expect(sources).toEqual(['src={path}', 'src={path}']);
+    expect(lead.match(/const path = [^;]*;/gu) ?? []).toEqual([
+      'const path = leadImagePath(image);',
+      'const path = leadImagePath(image);',
+    ]);
+    expect(lead.match(/derivativeSrcSet\([^)]*\)/gu) ?? []).toEqual([
+      'derivativeSrcSet(path, image.width)',
+      'derivativeSrcSet(path, image.width)',
+    ]);
     expect(lead).not.toMatch(/https?:\/\/|next\/image|<iframe\b/u);
   });
 });

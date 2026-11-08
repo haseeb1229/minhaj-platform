@@ -194,7 +194,6 @@ describe('the render and routing tree stays statically renderable', () => {
     // — server-rendered from first-party routes, with no request-time API.
     'apps/web/src/components/library/cover.tsx',
     'apps/web/src/components/people/portrait.tsx',
-    'apps/web/src/components/people/person-card.tsx',
     'apps/web/src/components/library/frame.tsx',
     'apps/web/src/components/library/presentation.ts',
     'apps/web/src/components/library/reader-controls.tsx',
@@ -206,6 +205,8 @@ describe('the render and routing tree stays statically renderable', () => {
     // Phase 17. A pure highlighter the dynamic search route renders with; the
     // module itself reads no request state.
     'apps/web/src/components/search/highlight.ts',
+    // R2: the results page's type facets and their count, pure.
+    'apps/web/src/components/search/facets.ts',
     // Phase 18. The shared highlighted-text renderer and the pure Quran-result
     // labels, used by the unified and the Quran search pages.
     'apps/web/src/components/search/highlighted.tsx',
@@ -279,7 +280,6 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/learning-island/learning-island.tsx',
     'apps/web/src/components/learning-island/requests.ts',
     'apps/web/src/components/my-learning/action-support.ts',
-    'apps/web/src/components/my-learning/nav.ts',
     'apps/web/src/components/my-learning/parts.tsx',
     'apps/web/src/components/my-learning/presentation.ts',
     'apps/web/src/components/my-learning/read.ts',
@@ -303,8 +303,17 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/teacher/read.ts',
     'apps/web/src/components/teacher/report-table.tsx',
     'apps/web/src/components/teacher/schedule-form.tsx',
-    'apps/web/src/components/teacher/session-card.tsx',
     'apps/web/src/components/teacher/student-list.tsx',
+    // R2. The redesigned Teacher area: the week and class-stage rules and the
+    // learner-progress filter (pure), the schedule views, the page titles, and
+    // the student directory island, which reads nothing after hydration — it
+    // only narrows the page the guarded `/teacher` route already rendered.
+    'apps/web/src/components/teacher/class-stage.ts',
+    'apps/web/src/components/teacher/metadata.ts',
+    'apps/web/src/components/teacher/schedule.tsx',
+    'apps/web/src/components/teacher/student-directory.tsx',
+    'apps/web/src/components/teacher/student-progress.ts',
+    'apps/web/src/components/teacher/week.ts',
     // Phase 24. Messaging's shared parts. The conversation screen and its
     // reads are reached only from the guarded `/my`, `/teacher` and
     // `/admin/messaging` pages, which resolve the session first; the client
@@ -356,7 +365,6 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/personal-island/personal-island.tsx',
     'apps/web/src/components/personal-island/requests.ts',
     'apps/web/src/components/personal/action-support.ts',
-    'apps/web/src/components/personal/nav.ts',
     'apps/web/src/components/personal/parts.tsx',
     'apps/web/src/components/personal/presentation.ts',
     'apps/web/src/components/personal/read.ts',
@@ -376,9 +384,75 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/global/centre.tsx',
     'apps/web/src/components/global/directory.tsx',
     'apps/web/src/components/global/presentation.ts',
+    // R2: the Countries grid's world-region grouping, a pure table.
+    'apps/web/src/components/global/world-region.ts',
+    // R2: the Explore family's cards (published Pages and leaders).
+    'apps/web/src/components/explore/cards.tsx',
+    // R2: the content-language badge and interface-language-first ordering.
+    'apps/web/src/components/content-language.ts',
     'apps/web/src/components/locale-switcher.tsx',
     'apps/web/src/components/locale-switcher-links.tsx',
     'apps/web/src/components/ui/index.tsx',
+    // R2: the primitives, split by family, with their client islands (dialog,
+    // tabs, shelf) and the pure keyboard/scroll and image-address rules.
+    'apps/web/src/components/ui/cards.tsx',
+    'apps/web/src/components/ui/composition.tsx',
+    'apps/web/src/components/ui/data.tsx',
+    'apps/web/src/components/ui/dialog.tsx',
+    'apps/web/src/components/ui/feedback.tsx',
+    'apps/web/src/components/ui/forms.tsx',
+    'apps/web/src/components/ui/hero.tsx',
+    'apps/web/src/components/ui/icon.tsx',
+    'apps/web/src/components/ui/image-source.ts',
+    'apps/web/src/components/ui/image.tsx',
+    'apps/web/src/components/ui/indicators.tsx',
+    'apps/web/src/components/ui/interaction.ts',
+    'apps/web/src/components/ui/layout.tsx',
+    'apps/web/src/components/ui/link-tabs.tsx',
+    'apps/web/src/components/ui/pager.tsx',
+    'apps/web/src/components/ui/shelf.tsx',
+    'apps/web/src/components/ui/tabs.tsx',
+    'apps/web/src/components/ui/confirm-action.tsx',
+    'apps/web/src/components/ui/image-derivatives.ts',
+    'apps/web/src/components/ui/step-up-event.ts',
+    'apps/web/src/components/editorial/revision-diff.ts',
+    'apps/web/src/components/editorial/revision-diff-view.tsx',
+    // R2: the home page's modules, the Library landing and its cards, the
+    // long-form reading layout, the Quran reader's islands and pure helpers,
+    // the outbound source/site modules, and My Minhaj's own frame.
+    'apps/web/src/components/home/collections.tsx',
+    'apps/web/src/components/home/global.tsx',
+    'apps/web/src/components/home/hero.tsx',
+    'apps/web/src/components/home/leadership.tsx',
+    'apps/web/src/components/home/learn.tsx',
+    'apps/web/src/components/home/library.tsx',
+    'apps/web/src/components/home/my-minhaj.tsx',
+    'apps/web/src/components/home/news.tsx',
+    'apps/web/src/components/home/presentation.ts',
+    'apps/web/src/components/home/quran.tsx',
+    'apps/web/src/components/home/section.tsx',
+    'apps/web/src/components/home/watch.tsx',
+    'apps/web/src/components/library/cards.tsx',
+    'apps/web/src/components/library/landing.tsx',
+    'apps/web/src/components/editorial/long-form.ts',
+    'apps/web/src/components/editorial/reading.tsx',
+    'apps/web/src/components/fatwa/official-site.ts',
+    'apps/web/src/components/quran/citation.ts',
+    'apps/web/src/components/quran/landing-islands.tsx',
+    'apps/web/src/components/quran/quick-jump.ts',
+    'apps/web/src/components/quran/reader-controls.tsx',
+    'apps/web/src/components/quran/reader-preferences.ts',
+    'apps/web/src/components/quran/reference-sources.ts',
+    'apps/web/src/components/quran/scripture.tsx',
+    'apps/web/src/components/my/dashboard.ts',
+    'apps/web/src/components/my/frame.tsx',
+    'apps/web/src/components/my/metadata.ts',
+    'apps/web/src/components/my/my-nav.tsx',
+    'apps/web/src/components/my/sections.ts',
+    'apps/web/src/components/my/targets.tsx',
+    'apps/web/src/components/my/time-zone-picker.tsx',
+    'apps/web/src/components/my/time-zones.ts',
+    'apps/web/src/components/my/time.ts',
     // The private workspaces' frame — My Minhaj, the Teacher area and the
     // administration: the shell, the page header and cards, the navigation
     // island and its pure current-entry rule.
@@ -403,6 +477,10 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/shell/publication-status.tsx',
     'apps/web/src/components/shell/disclosure-menu.tsx',
     'apps/web/src/components/shell/mobile-nav.tsx',
+    // R2: the search palette island and the mega panels' featured records,
+    // read through the public composition roots.
+    'apps/web/src/components/shell/search-palette.tsx',
+    'apps/web/src/components/shell/navigation-features.ts',
   ];
 
   it.each(renderTree)('%s does not force dynamic rendering', async (file) => {

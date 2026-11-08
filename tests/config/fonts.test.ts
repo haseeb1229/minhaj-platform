@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,8 +12,9 @@ import { describe, expect, it } from 'vitest';
  * is narrow, and this test holds it there: exactly one module declares fonts,
  * only through `next/font/local`; nothing fetches a face from Google or any other
  * origin; every shipped file sits beside the SIL Open Font License 1.1 text; and
- * no face of unclear licence, nor a Quran face before an approved corpus, is
- * shipped.
+ * no face of unclear licence is shipped. The one Quran face (R2, the staging
+ * reference preview) is SIL's own Scheherazade New file, applied to Quran text
+ * alone.
  */
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const SRC = path.join(repoRoot, 'apps/web/src');
@@ -73,7 +75,7 @@ describe('the shipped typefaces', () => {
     expect(shipped.sort()).toEqual([...referenced].sort());
   });
 
-  it('ships no face of unclear licence and no Quran face before an approved corpus', async () => {
+  it('ships no face of unclear licence, and no Quran face but SIL’s Scheherazade New', async () => {
     const names = (await filesUnder(FONTS_DIR)).map((file) =>
       relative(file).toLowerCase(),
     );
@@ -83,6 +85,65 @@ describe('the shipped typefaces', () => {
         forbidden,
       ).toBe(false);
     }
+  });
+
+  it('ships the Quran face as SIL released it, with its reserved names in the licence', async () => {
+    // R2 (the staging reference preview): Scheherazade New 4.500, SIL Global's
+    // own `web/ScheherazadeNew-Regular.woff2`, byte for byte. A different file
+    // is a different (or modified) font and needs its own licence review.
+    const directory = path.join(FONTS_DIR, 'scheherazade-new');
+    const face = await readFile(path.join(directory, 'ScheherazadeNew-Regular.woff2'));
+    expect(createHash('sha256').update(face).digest('hex')).toBe(
+      'fd12c322cd8a0033d5c30b0a9fc0432e1d51288cd065f3f04a85a7974f1de3b7',
+    );
+    const licence = await readFile(path.join(directory, 'OFL.txt'), 'utf8');
+    expect(licence).toContain('Reserved Font Names "Scheherazade" and "SIL"');
+  });
+
+  it('sets the Quran face on Quran text alone, never on interface Arabic', async () => {
+    const module = await readFile(path.join(repoRoot, FONTS_MODULE), 'utf8');
+    expect(module).toContain("variable: '--font-face-quran'");
+    const css = await readFile(path.join(SRC, 'styles/globals.css'), 'utf8');
+    // Defined once as a role, and applied by exactly one rule: Quran text
+    // (`.quran-text`) and — R2, the reader redesign — what a Quran page sets
+    // beside it in the same face (`.quran-name`: a Surah's Arabic name and the
+    // presentational ayah-end mark). Never a bare `[lang|='ar']` selector.
+    const uses = [...css.matchAll(/var\(--font-quran\)/g)];
+    expect(uses).toHaveLength(1);
+    const rule = css.slice(css.lastIndexOf('}', uses[0]!.index) + 1, uses[0]!.index);
+    expect(rule.trim()).toMatch(
+      /^(?:\/\*[\s\S]*?\*\/\s*)?\[lang\|='ar'\]:is\(\.quran-text, \.quran-name\) \{\s*font-family:$/,
+    );
+    expect(css).not.toMatch(/var\(--font-face-quran\)[\s\S]*var\(--font-face-quran\)/);
+
+    // Applied in markup only where Quran text is rendered, and always with
+    // `translate="no"` so a page translator leaves scripture alone.
+    const appliers: string[] = [];
+    for (const file of await filesUnder(SRC)) {
+      if (!/\.tsx$/.test(file)) continue;
+      const source = await readFile(file, 'utf8');
+      if (!source.includes('quran-text')) continue;
+      appliers.push(relative(file));
+      expect(source, relative(file)).toMatch(/translate[=:]\s*['"{]*no/);
+    }
+    expect(appliers.sort()).toEqual([
+      'apps/web/src/app/[locale]/(public)/search/page.tsx',
+      'apps/web/src/components/quran/reader.tsx',
+      'apps/web/src/components/quran/scripture.tsx',
+      'apps/web/src/components/quran/search.tsx',
+    ]);
+
+    // The Quran face's other use stays on Quran pages: names and marks only.
+    const named: string[] = [];
+    for (const file of await filesUnder(SRC)) {
+      if (!/\.tsx$/.test(file)) continue;
+      if ((await readFile(file, 'utf8')).includes('quran-name'))
+        named.push(relative(file));
+    }
+    expect(named.sort()).toEqual([
+      'apps/web/src/components/quran/reader.tsx',
+      'apps/web/src/components/quran/scripture.tsx',
+    ]);
   });
 
   it('preloads only the Latin faces, so an English page never downloads an Arabic-script face it does not show', async () => {
@@ -96,5 +157,6 @@ describe('the shipped typefaces', () => {
     expect(preloadOf('instrument-sans')).toBe('true');
     expect(preloadOf('gulzar')).toBe('false');
     expect(preloadOf('noto-naskh-arabic')).toBe('false');
+    expect(preloadOf('scheherazade-new')).toBe('false');
   });
 });

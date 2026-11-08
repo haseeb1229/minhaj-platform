@@ -125,11 +125,15 @@ describe('storage depends on no context and on no Identity', () => {
       dependencies: Record<string, string>;
     };
 
+    // R2 adds exactly one external dependency, `sharp`, pinned exactly, for
+    // the public pictures' WebP derivatives — Storage owns the decoding.
     expect(Object.keys(manifest.dependencies).sort()).toEqual([
       '@minhaj/contracts',
       'server-only',
+      'sharp',
       'zod',
     ]);
+    expect(manifest.dependencies['sharp']).toMatch(/^\d+\.\d+\.\d+$/u);
   });
 
   it('is server-only, with a browser condition that fails the build', async () => {

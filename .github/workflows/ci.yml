@@ -811,6 +811,18 @@ jobs:
           node scripts/assert-membership-proofs.mjs membership-report.json
 
       # -----------------------------------------------------------------
+      # The permission catalogue and step-up vocabulary, read from the live
+      # database: every delivered key and purpose is catalogued exactly once
+      # and every externally gated key is held by no role. They skip without
+      # a database and once drifted unseen behind Phase 30-RD, so they run
+      # here and the assertion below fails the job if any did not run.
+      # -----------------------------------------------------------------
+      - name: Authorisation catalogue proof (real SQL Server)
+        run: |
+          npx vitest run tests/identity/authorization.integration.test.ts tests/taxonomy/authorization.integration.test.ts --reporter=json --outputFile=authorization-report.json
+          node scripts/assert-authorization-proofs.mjs authorization-report.json
+
+      # -----------------------------------------------------------------
       # Phase 27 — Donations' live proofs.
       #
       # Real SQL Server, as the least-privilege runtime principal, with the

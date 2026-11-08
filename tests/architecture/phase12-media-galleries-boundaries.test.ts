@@ -315,8 +315,13 @@ describe('the photograph upload is a Class-A route, and changes nothing else', (
       'packages/database/package.json',
     ]) {
       const source = await read(manifest);
+      // R2 decided ONE image-processing dependency: `sharp`, owned by Storage
+      // alone, for responsive WebP derivatives of already-public pictures
+      // (TECH_STACK.md dependency review; SECURITY_BASELINE.md §10). It is
+      // still forbidden in every other manifest.
+      if (manifest !== 'packages/storage/package.json')
+        expect(source, `${manifest} depends on sharp`).not.toContain('"sharp');
       for (const forbidden of [
-        'sharp',
         'jimp',
         'image-size',
         'exif',

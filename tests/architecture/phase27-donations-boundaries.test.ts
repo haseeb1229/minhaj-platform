@@ -748,7 +748,17 @@ describe('Donations adds exactly three keys and one step-up purpose', () => {
     expect(users.sort()).toEqual([
       `${APP}/[locale]/admin/donations/actions.ts`,
       `${APP}/[locale]/admin/donations/shared.tsx`,
+      // R2 (F35): the purpose-bound step-up return map. It only NARROWS where a
+      // confirmed refund grant may send the person back to — the donation
+      // record page — and grants nothing.
+      `apps/web/src/composition/return-to.ts`,
     ]);
+    const returnTo = withoutComments(await read(`apps/web/src/composition/return-to.ts`));
+    expect(returnTo.match(/'donation-refund'/gu)).toHaveLength(1);
+    expect(returnTo).toContain(
+      "'donation-refund': [new RegExp(`^/admin/donations/${RECORD}$`)],",
+    );
+    expect(returnTo).not.toMatch(/requirePrivilegedActor|grantStepUp/u);
     const actions = withoutComments(
       await read(`${APP}/[locale]/admin/donations/actions.ts`),
     );

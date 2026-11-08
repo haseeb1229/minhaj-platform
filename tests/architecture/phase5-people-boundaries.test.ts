@@ -644,6 +644,14 @@ describe('the contract and the database agree on the bounds they share', () => {
         ],
         numbers: ['51374', '51379', '51380'],
       },
+      // Rebaseline R2 widens two Phase-18 Quran triggers for the `reference`
+      // authority, keeping their numbers; 51198 is Phase 18's own
+      // authority-mixing refusal, raised now by the canonical-change trigger too.
+      '20261106000001_r2_quran_reference_preview': {
+        owner: '20261002000000_phase18_quran',
+        triggers: ['QuranActivationIntegrity', 'AyahCanonicalChange'],
+        numbers: ['51181', '51182', '51185', '51198'],
+      },
     };
 
     const numbers = new Map<string, string[]>();

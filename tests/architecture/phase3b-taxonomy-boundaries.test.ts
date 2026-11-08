@@ -433,16 +433,31 @@ describe('Phase 3B — the migration pays for the privilege change it makes', ()
 describe('Phase 3B — every taxonomy surface passes the gate', () => {
   it('guards every page with a server-side permission check', async () => {
     const pages = await walk(TAXONOMY_ROUTES, (name) => name === 'page.tsx');
-    expect(pages.length).toBe(4);
+    expect(pages.length).toBe(5);
+
+    // R2 (audit F30): the area root renders nothing; it re-resolves the
+    // session and the reader's permissions server-side and redirects to the
+    // first taxonomy surface they may open, or answers 404 (`../area-root`).
+    const root = `${TAXONOMY_ROUTES}/page.tsx`;
+    expect(pages).toContain(root);
+    const rootSource = code(await sourceOf(root));
+    expect(rootSource).toContain('enterArea(params, ');
+    expect(rootSource).toContain("export const dynamic = 'force-dynamic'");
 
     for (const page of pages) {
+      if (page === root) continue;
       const source = code(await sourceOf(page));
 
       expect(source, `${page} must check a permission server-side`).toContain(
         'requireAdminPage(',
       );
       expect(source, `${page} must require taxonomy.read`).toContain("'taxonomy.read'");
-      expect(source, `${page} must be noindex`).toContain('robots: { index: false');
+      // R2 (audit F15): the noindex arrives with the page's own title through
+      // `adminPageMetadata`, whose behaviour test proves it returns both
+      // (tests/shell/admin-metadata.test.ts).
+      expect(source, `${page} must be noindex`).toContain(
+        'generateMetadata = adminPageMetadata(',
+      );
       expect(source, `${page} must not be cached`).toContain(
         "export const dynamic = 'force-dynamic'",
       );
