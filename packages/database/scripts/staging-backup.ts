@@ -29,9 +29,19 @@ import {
  * header (`RESTORE HEADERONLY` BackupSize).
  */
 
+/**
+ * A full backup of the staging database, and its read-back, are single
+ * statements whose length grows with the corpus — far past the driver's
+ * 15-second default once the R2 corpus is staged. Thirty minutes bounds them.
+ */
+const BACKUP_REQUEST_TIMEOUT_MS = 1_800_000;
+
 await runStagingCommand('staging:db:backup', async () => {
   const command = startStagingCommand();
-  const { master } = await openVerifiedMaster(command, { requireFingerprint: true });
+  const { master } = await openVerifiedMaster(command, {
+    requireFingerprint: true,
+    requestTimeoutMs: BACKUP_REQUEST_TIMEOUT_MS,
+  });
 
   try {
     const target = newBackupTarget(STAGING_BACKUP_NAMING);

@@ -87,9 +87,14 @@ export function startStagingCommand(): StagingCommand {
  */
 export async function openVerifiedMaster(
   command: StagingCommand,
-  options: { requireFingerprint: boolean },
+  options: { requireFingerprint: boolean; readonly requestTimeoutMs?: number },
 ): Promise<{ master: SqlSession; server: StagingServerFacts }> {
-  const master = await openSession({ ...command.connection, database: 'master' });
+  const master = await openSession(
+    { ...command.connection, database: 'master' },
+    options.requestTimeoutMs === undefined
+      ? {}
+      : { requestTimeoutMs: options.requestTimeoutMs },
+  );
   try {
     const server = await assertStagingServer(master);
     if (options.requireFingerprint) {
