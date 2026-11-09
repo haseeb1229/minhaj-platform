@@ -164,7 +164,11 @@ function SurahTitle({
       {name === null ? null : (
         <>
           {' · '}
-          <span lang={name.locale} dir={directionOf(name.locale)}>
+          <span
+            lang={name.locale}
+            dir={directionOf(name.locale)}
+            className="wrap-anywhere"
+          >
             {name.text}
           </span>
         </>

@@ -614,11 +614,11 @@ export async function verifyRestoredPhase18(
           WHERE r.[key]=N'platform-administrator'
             AND rp.[permissionKey] IN (N'quran.read', N'quran.administer', N'quran.editCanonical')) AS [bundled];`,
   );
-  // 39 CHECKs, 41 foreign keys and 25 triggers, exactly as the migration
-  // creates them: a restore that silently lost one would otherwise read as
+  // 40 CHECKs (39 from Phase 18, and Quran Part 2's non-empty SurahName.meaning),
+  // 41 foreign keys and 25 triggers, exactly as the migrations create them: a restore that silently lost one would otherwise read as
   // "none untrusted".
   if (
-    Number(counts?.checks ?? 0) !== 39 ||
+    Number(counts?.checks ?? 0) !== 40 ||
     Number(counts?.keys ?? 0) !== 41 ||
     Number(counts?.triggers ?? 0) !== 25 ||
     Number(counts?.procedures ?? 0) !== PROCEDURES.length ||

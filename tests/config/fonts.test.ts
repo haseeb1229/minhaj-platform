@@ -145,6 +145,8 @@ describe('the shipped typefaces', () => {
     expect(named.sort()).toEqual([
       'apps/web/src/components/quran/reader.tsx',
       'apps/web/src/components/quran/scripture.tsx',
+      // Quran Part 2: each Surah index row's Arabic name.
+      'apps/web/src/components/quran/surah-index-island.tsx',
     ]);
   });
 
