@@ -217,6 +217,8 @@ live('Phase 18 recitation audio against real SQL Server, Storage and ClamAV', ()
         style: null,
         attribution: null,
         sourceId: source.id,
+        // Quran Part 5: the language the listener hears.
+        languageCode: 'ar',
       },
     });
     const first = await service.addRecitationSegment(administrator, {
