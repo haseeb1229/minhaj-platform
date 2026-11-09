@@ -8,7 +8,9 @@ import {
   SEARCH_RESULT_CEILING,
   SEARCH_SCOPE_KINDS,
   SEARCH_STAMP_MAX_LENGTH,
+  SEARCH_WITHIN_MAX,
   searchDocumentSourceSchema,
+  searchResourceIdSchema,
   type IndexDocument,
   type SearchClaim,
   type SearchFailureCategory,
@@ -319,6 +321,13 @@ export function createSearchService(dependencies: SearchServiceDependencies) {
      * it is never disguised as an empty result, which would tell the visitor
      * something false about the corpus.
      *
+     * `within` RESTRICTS, IT NEVER WIDENS. A server-side page may name the
+     * only resources that may answer — the Quran search's Surah and Juz
+     * filters, built from the owner's own structure, never from a visitor's
+     * list. It is checked here (bounded, each a resource identifier); an empty
+     * restriction answers nothing without a database round trip, and a
+     * malformed one is a defect, reported and shown as unavailable.
+     *
      * AN UNDERFILLED PAGE IS HONEST, NOT REFILLED. Rows withheld by the
      * visibility recheck are dropped and the page is shown short; there is no
      * loop reaching for more, because each reach would repeat the full-text
@@ -326,7 +335,7 @@ export function createSearchService(dependencies: SearchServiceDependencies) {
      */
     async search(
       raw: Readonly<Record<string, string | readonly string[] | undefined>>,
-      context: { readonly locale: string },
+      context: { readonly locale: string; readonly within?: readonly string[] },
     ): Promise<SearchOutcome> {
       const parsed = parseSearchParams(raw);
       if (parsed.state === 'empty') return { state: 'initial', form: parsed.form };
@@ -335,8 +344,33 @@ export function createSearchService(dependencies: SearchServiceDependencies) {
       }
 
       const { form, search } = parsed;
+      const within = context.within ?? null;
 
       try {
+        if (within !== null) {
+          if (
+            within.length > SEARCH_WITHIN_MAX ||
+            !within.every((id) => searchResourceIdSchema.safeParse(id).success)
+          ) {
+            throw new Error('A search restriction is outside its bound.');
+          }
+          if (within.length === 0) {
+            return {
+              state: 'results',
+              form,
+              topic: null,
+              results: {
+                hits: [],
+                total: 0,
+                capped: false,
+                page: search.page,
+                pageCount: 1,
+                withheld: 0,
+              },
+            };
+          }
+        }
+
         const topic =
           search.topicSlug === null
             ? null
@@ -352,6 +386,7 @@ export function createSearchService(dependencies: SearchServiceDependencies) {
           contentLanguage: search.contentLanguage,
           fromYear: search.fromYear,
           toYear: search.toYear,
+          resourceIds: within === null ? null : [...new Set(within)],
           preferredLanguage: context.locale,
           offset: (search.page - 1) * SEARCH_PAGE_SIZE,
           limit: SEARCH_PAGE_SIZE,

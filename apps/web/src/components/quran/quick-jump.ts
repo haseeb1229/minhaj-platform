@@ -118,6 +118,53 @@ const PAGE_PATTERN = /^(?:page|pg|p|safha|safhah|صفحہ|صفحه|صفحة|ال
 /** "18:10", "18 10", "18.10", "18-10", "18/10", "18،10". */
 const CITATION_PATTERN = /^(\d{1,3})\s*(?:[:.\-/,،]\s*|\s+)(\d{1,3})$/u;
 
+/** "Surah 18", "surah 18:10", "سورة 2" — the word set aside, the rest read again (Quran Part 4). */
+const SURAH_KEYWORD = /^(?:surah|surat|sura|soorah|سورة|سوره|سورہ|سورت)\s*/u;
+
+/** "Al-Baqarah 255", "البقرة ٢٥٥", "kahf:10" — a name, then an Ayah number (Quran Part 4). */
+const NAMED_CITATION = /^(.*[^\d\s:.\-/,،])\s*(?:[:.\-/,،]\s*|\s+)(\d{1,3})$/u;
+
+/**
+ * How a name must match: `loose` — the quick jump's — the whole name, then
+ * its start, then (for three letters or more) anywhere in it; `whole` — the
+ * Quran search's, where every query is also a text search — the whole name,
+ * or one of four letters or more that begins the other ("baqarah" and the
+ * recorded "Al-Baqara"), so an ordinary word is not mistaken for a name.
+ */
+export type NameMatch = 'loose' | 'whole';
+
+/** The Surah a typed name names, or `null` — the lowest-numbered wins a tie. */
+function surahNamed(
+  raw: string,
+  index: readonly JumpSurah[],
+  mode: NameMatch,
+): JumpSurah | null {
+  const wanted = foldName(raw);
+  if (wanted.length < 2) return null;
+  const folded = index.map((surah) => ({
+    surah,
+    names: surah.names.map(foldName).filter((name) => name !== ''),
+  }));
+  const tests: readonly ((name: string) => boolean)[] =
+    mode === 'whole'
+      ? [
+          (name) => name === wanted,
+          (name) =>
+            Math.min(name.length, wanted.length) >= 4 &&
+            (name.startsWith(wanted) || wanted.startsWith(name)),
+        ]
+      : [
+          (name) => name === wanted,
+          (name) => name.startsWith(wanted),
+          ...(wanted.length >= 3 ? [(name: string) => name.includes(wanted)] : []),
+        ];
+  for (const test of tests) {
+    const found = folded.find((entry) => entry.names.some(test));
+    if (found !== undefined) return found.surah;
+  }
+  return null;
+}
+
 /**
  * One place in the Quran, or `unknown` — never a guess beyond the index.
  * `lastPage` is the highest mushaf page the corpus records (0: none), so a
@@ -130,6 +177,7 @@ export function parseQuickJump(
   index: readonly JumpSurah[],
   lastPage = 0,
   hizbs: ReadonlyMap<number, number> = NO_HIZB,
+  names: NameMatch = 'loose',
 ): QuickJump {
   if (raw.length > QUICK_JUMP_MAX_LENGTH) return UNKNOWN;
   const input = asciiDigits(raw).trim().replace(/\s+/g, ' ').toLowerCase();
@@ -171,25 +219,26 @@ export function parseQuickJump(
     return number >= 1 && number <= lastPage ? { kind: 'page', page: number } : UNKNOWN;
   }
 
-  const wanted = foldName(input);
-  if (wanted.length < 2) return UNKNOWN;
-  const folded = index.map((surah) => ({
-    number: surah.number,
-    names: surah.names.map(foldName).filter((name) => name !== ''),
-  }));
-  // The whole name first, then the start of one, then — for three letters or
-  // more — anywhere in one. The lowest-numbered Surah wins a tie, so the same
-  // input always opens the same place.
-  const tests: readonly ((name: string) => boolean)[] = [
-    (name) => name === wanted,
-    (name) => name.startsWith(wanted),
-    ...(wanted.length >= 3 ? [(name: string) => name.includes(wanted)] : []),
-  ];
-  for (const test of tests) {
-    const found = folded.find((surah) => surah.names.some(test));
-    if (found !== undefined) return { kind: 'surah', surah: found.number };
+  const keyword = SURAH_KEYWORD.exec(input);
+  if (keyword !== null && keyword[0].length > 0 && keyword[0].length < input.length) {
+    return parseQuickJump(input.slice(keyword[0].length), index, lastPage, hizbs, names);
   }
-  return UNKNOWN;
+
+  // A name and an Ayah number. The whole name first, then the start of one,
+  // then — loosely, for three letters or more — anywhere in one; the
+  // lowest-numbered Surah wins a tie, so the same input opens the same place.
+  const named = NAMED_CITATION.exec(input);
+  if (named !== null) {
+    const surah = surahNamed(named[1] ?? '', index, names);
+    const ayah = Number(named[2]);
+    if (surah !== null)
+      return ayah >= 1 && ayah <= surah.ayahCount
+        ? { kind: 'ayah', surah: surah.number, ayah }
+        : UNKNOWN;
+  }
+
+  const surah = surahNamed(input, index, names);
+  return surah === null ? UNKNOWN : { kind: 'surah', surah: surah.number };
 }
 
 /**

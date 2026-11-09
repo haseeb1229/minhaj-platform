@@ -1,4 +1,7 @@
 import {
+  foldForMatching,
+  MATCH_WORD,
+  readingWords,
   SEARCH_BODY_MAX_LENGTH,
   SEARCH_MAX_TERMS,
   SEARCH_QUERY_MAX_LENGTH,
@@ -19,38 +22,16 @@ import {
  * diacritics, its case and its joiners exactly as the owner published it.
  */
 
-/**
- * Arabic-script combining marks: harakat, tanwin, shadda, sukun, the
- * superscript alef and the Quranic annotation signs.
- *
- * Removed for MATCHING because they are optional in ordinary writing — the same
- * word appears with and without them — and because the Urdu word breaker keeps
- * them attached (measured: "تعلیمِ" with its izafat kasra does not match
- * "تعلیم" under it). Removing them from both sides makes that difference
- * disappear for every breaker at once.
- */
-const ARABIC_SCRIPT_MARKS =
-  /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED]/gu;
-
-/**
- * Characters that join or stretch a word without changing it: the zero-width
- * non-joiner and joiner Urdu uses inside compounds (کتاب, then U+200C, then خانہ), and tatweel.
- * Removed so a word typed with or without them is one word.
- */
-// An alternation rather than a character class: a zero-width joiner inside a
-// class reads as a joined sequence, which is not what is meant.
-const JOINERS = /\u200C|\u200D|\u0640/gu;
-
 /** A word: letters, combining marks and digits. Everything else separates. */
-const WORD = /[\p{L}\p{M}\p{N}]+/gu;
+const WORD = MATCH_WORD;
 
-export function foldForMatching(text: string): string {
-  return text
-    .normalize('NFC')
-    .replace(ARABIC_SCRIPT_MARKS, '')
-    .replace(JOINERS, '')
-    .toLowerCase();
-}
+/**
+ * The plain fold (`@minhaj/contracts/search` `fold.ts`): NFC, lower case,
+ * Arabic-script harakat and Quranic marks, joiners, tatweel and the hamza on
+ * the line removed, and the Arabic-script letters ordinary typing writes
+ * interchangeably unified. Re-exported so every caller here names one fold.
+ */
+export { foldForMatching };
 
 /** Why a query cannot be run as typed. Each is something the visitor can fix. */
 export type QueryIssue =
@@ -124,15 +105,36 @@ export function displayTitle(text: string): string {
  * The text a document is matched by: its title, summary and body, bounded and
  * folded. The title leads, so a short document whose title names the query is
  * dense in it — which is what ranks it above a long one that mentions it once.
+ *
+ * THE UTHMANI READING IS ADDED, NEVER SUBSTITUTED (Quran Part 4). Where a text
+ * writes long vowels as Quranic marks — the dagger alef, a waw carrying it, a
+ * small waw or yeh, a hamza on a tatweel — the words its READING spells
+ * differently (`readingWords`: الكتاب beside الكتب, الصلاه beside الصلوه) follow
+ * the folded text on a line of their own, inside the same bound. A query is
+ * folded plainly, so it meets the word whichever way ordinary spelling writes
+ * it. A text with no such marks gains nothing.
  */
 export function matchingText(input: {
   readonly title: string;
   readonly summary: string;
   readonly body: string;
 }): string {
-  const combined = [input.title, input.summary, input.body]
-    .map(collapse)
-    .filter((part) => part !== '')
-    .join('\n');
-  return foldForMatching(truncate(combined, SEARCH_BODY_MAX_LENGTH));
+  const combined = truncate(
+    [input.title, input.summary, input.body]
+      .map(collapse)
+      .filter((part) => part !== '')
+      .join('\n'),
+    SEARCH_BODY_MAX_LENGTH,
+  );
+  const folded = foldForMatching(combined);
+
+  let budget = SEARCH_BODY_MAX_LENGTH - [...folded].length - 1;
+  const added: string[] = [];
+  for (const word of readingWords(combined)) {
+    const cost = [...word].length + 1;
+    if (cost > budget) break;
+    added.push(word);
+    budget -= cost;
+  }
+  return added.length === 0 ? folded : `${folded}\n${added.join(' ')}`;
 }

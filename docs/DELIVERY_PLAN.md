@@ -2985,6 +2985,47 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > unknown windows, Urdu and Arabic, 320 px, axe). *CI and staging evidence are recorded when they
 > exist.*
 
+> **Quran Part 4 — search (owner direction 2026-11-09; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (ROUTE_MAP.md §3.3; DOMAIN_MODEL.md
+> §8.4; ARCHITECTURE.md §4.3; TECH_STACK.md §10). **No migration, no import, no new source**; the
+> derived index must be **rebuilt** once the release is deployed, because every Arabic-script
+> document's matching copy changes.
+>
+> - **Arabic typed in ordinary spelling finds the Uthmani text — by folding the index, never the
+>   text.** Option (i), importing Tanzil Simple-Clean as a search-only companion, was weighed and
+>   not taken (a new Quran table, a second registered import and alignment proof, and nothing for
+>   the fixture or a future approved corpus); option (ii) is delivered: Search's one matching fold
+>   (`@minhaj/contracts/search`, `fold.ts`) now unifies the Arabic-script letters ordinary typing
+>   writes interchangeably, and an indexed text also carries the words its Uthmani marks spell. It
+>   applies to every kind, so the Phase-17 Urdu/Arabic yeh limitation is resolved too. Measured on the
+>   full Tanzil Uthmani 1.1 text against Simple-Clean as the yardstick: 99.5 % of ordinary-spelling
+>   words found in their own Ayah's indexed copy (68.3 % before). The hamza on the line stays a
+>   letter (dropping it broke the Arabic breaker's `قراء`/`للقراء` match, measured).
+> - **Citation and name detection.** Part 1's quick jump gains "Surah 18", "surah 2:255" and a name
+>   with an Ayah number ("Al-Baqarah 255", "البقرة ٢٥٥"), and a WHOLE-name mode for the search page;
+>   a query that names a place is offered first ("Go straight there"), text matches beneath.
+> - **Filters** — Surah, Juz and text language (the Arabic, or each language of the public
+>   translations and transliterations, naming their works) — as GET parameters, no-JS first, refused
+>   in words when the reader does not hold them, with chips, "Clear all filters", a stated count and
+>   paging that keeps them. Surah and Juz become Search's new server-side restriction
+>   (`within`, at most 1,000 identifiers, built from the reader's counts and ranges), which lifts the
+>   per-breaker ranking cap for that query so a frequent word is never cut off before the filter.
+> - **Results**: Surah display name and citation, the Arabic in the Quran face with the typed words
+>   marked in place (a fold-aware, whole-word highlighter, segments cut from the original text), the
+>   matching translation snippets in their own languages, "Open the Ayah" and "Read in its Surah";
+>   suggestions when nothing matches.
+>
+> **Proof:** `tests/search/text.test.ts` (the fold, Uthmani-orthography words typed plainly),
+> `tests/search/highlight.test.ts`, `tests/search/service.test.ts` (the restriction),
+> `tests/quran/search-view.test.ts` (filters, restriction, layers, snippets, citation and name
+> detection), `tests/quran/search-projection.test.ts`; on real SQL Server FTS
+> `tests/search/quran.integration.test.ts` (plain typing finds a neutral Uthmani-orthography
+> fixture phrase; the restriction) and `tests/search/search.integration.test.ts` (the yeh fold); the
+> browser journey (`tests/browser/quran.spec.ts`) gains plain-typed Arabic, the citation and name
+> card, the filters without script, Urdu and Arabic, 320 px and axe. **Staging:** deploy, then
+> rebuild the index from `/admin/system/search` ("Rebuild", `search.operate`); the web service's
+> sweep works it through. *CI and staging evidence are recorded when they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

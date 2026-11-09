@@ -147,6 +147,8 @@ describe('the shipped typefaces', () => {
       'apps/web/src/components/quran/juz-index-island.tsx',
       'apps/web/src/components/quran/reader.tsx',
       'apps/web/src/components/quran/scripture.tsx',
+      // Quran Part 4: a search result's Surah name, where it is the Arabic one.
+      'apps/web/src/components/quran/search.tsx',
       // Quran Part 2: each Surah index row's Arabic name.
       'apps/web/src/components/quran/surah-index-island.tsx',
     ]);

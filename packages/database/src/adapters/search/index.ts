@@ -10,6 +10,8 @@ import {
   SEARCH_PREFIX_MIN_LENGTH,
   SEARCH_RESULT_CEILING,
   SEARCH_TERM_MAX_LENGTH,
+  SEARCH_WITHIN_MAX,
+  searchResourceIdSchema,
   type IndexDocument,
   type IndexedScopeState,
   type IndexRow,
@@ -71,6 +73,9 @@ function columnFor(textLanguage: string): MatchColumn {
       return 'matchOther';
   }
 }
+
+/** No ranking cap: what a restricted query ranks is bounded by its restriction. */
+const MAX_INT = 2_147_483_647;
 
 /** Letters, combining marks and digits — and nothing else, ever. */
 const TERM = /^[\p{L}\p{M}\p{N}]+$/u;
@@ -415,9 +420,30 @@ export function createSearchIndex(): SearchIndexPort {
      * DETERMINISTIC ORDER: relevance, then genuine publication year (newest
      * first, undated last), then kind and identifier as the total tie-breaker,
      * so a page boundary can neither repeat nor skip a result.
+     *
+     * A RESTRICTION TO NAMED RESOURCES (`resourceIds`, Quran Part 4) is a
+     * parameterised list, never more than `SEARCH_WITHIN_MAX`. It lifts the
+     * per-breaker ranking cap: the restriction then bounds what can be
+     * returned, and a capped ranking would cut a frequent word off before the
+     * restriction was applied — a Surah filter answering "nothing" for a word
+     * its Surah holds.
      */
     async query(query) {
       assertTerms(query.terms);
+      const within = query.resourceIds;
+      if (
+        within !== null &&
+        (within.length === 0 ||
+          within.length > SEARCH_WITHIN_MAX ||
+          within.some((id) => !searchResourceIdSchema.safeParse(id).success))
+      ) {
+        throw new Error('A search restriction is outside its bound.');
+      }
+      const cap = within === null ? SEARCH_RESULT_CEILING : MAX_INT;
+      const restricted =
+        within === null
+          ? Prisma.sql`1 = 1`
+          : Prisma.sql`d.[resourceId] IN (${Prisma.join([...within])})`;
 
       const english = conditionFor('matchEnglish', query.terms);
       const arabic = conditionFor('matchArabic', query.terms);
@@ -434,16 +460,16 @@ export function createSearchIndex(): SearchIndexPort {
       const rows = await database.$queryRaw<MatchedRow[]>`
         WITH matched AS (
           SELECT [KEY] AS [id], [RANK] AS [rank]
-            FROM CONTAINSTABLE([dbo].[SearchDocument], [matchEnglish], ${english}, LANGUAGE 1033, ${SEARCH_RESULT_CEILING})
+            FROM CONTAINSTABLE([dbo].[SearchDocument], [matchEnglish], ${english}, LANGUAGE 1033, ${cap})
           UNION ALL
           SELECT [KEY], [RANK]
-            FROM CONTAINSTABLE([dbo].[SearchDocument], [matchArabic], ${arabic}, LANGUAGE 1025, ${SEARCH_RESULT_CEILING})
+            FROM CONTAINSTABLE([dbo].[SearchDocument], [matchArabic], ${arabic}, LANGUAGE 1025, ${cap})
           UNION ALL
           SELECT [KEY], [RANK]
-            FROM CONTAINSTABLE([dbo].[SearchDocument], [matchUrdu], ${urdu}, LANGUAGE 1056, ${SEARCH_RESULT_CEILING})
+            FROM CONTAINSTABLE([dbo].[SearchDocument], [matchUrdu], ${urdu}, LANGUAGE 1056, ${cap})
           UNION ALL
           SELECT [KEY], [RANK]
-            FROM CONTAINSTABLE([dbo].[SearchDocument], [matchOther], ${other}, LANGUAGE 0, ${SEARCH_RESULT_CEILING})
+            FROM CONTAINSTABLE([dbo].[SearchDocument], [matchOther], ${other}, LANGUAGE 0, ${cap})
         ),
         filtered AS (
           SELECT d.[kind], d.[resourceId], d.[textLanguage], d.[contentLanguage],
@@ -458,6 +484,7 @@ export function createSearchIndex(): SearchIndexPort {
           FROM matched m
           JOIN [dbo].[SearchDocument] d ON d.[id] = m.[id]
           WHERE ${kinds}
+            AND ${restricted}
             AND (${query.topicId} IS NULL OR EXISTS (
                   SELECT 1 FROM [dbo].[SearchDocumentTopic] t
                   WHERE t.[documentId] = d.[id] AND t.[topicId] = ${query.topicId}))

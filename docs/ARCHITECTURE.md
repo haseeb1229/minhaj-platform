@@ -612,6 +612,27 @@ recorded limitations are in TECH_STACK.md §10.
   Phase 13 added Editorial's four News families — `news-article`, `press-release`,
   `statement` and `media-coverage` — each its own kind and scope, resolved to its own canonical
   family by Editorial's published predicate.
+- **One matching fold, shared with the results pages (Quran Part 4, 2026-11-09).** The fold
+  lives in the Layer-0 vocabulary (`@minhaj/contracts/search`, `fold.ts`) so the service (index
+  and query) and the pages' highlighter run one implementation. The PLAIN fold — NFC, lower case,
+  Arabic-script harakat and Quranic marks, joiners and tatweel removed, and the Arabic-script
+  letters ordinary typing writes interchangeably unified (alef forms and the alef wasla; alef
+  maqsura, Arabic and Urdu/Farsi yeh and yeh with hamza; waw with hamza; keheh and kaf; taa marbuta
+  and the heh forms) — folds every query and every indexed text. An indexed text also carries, on a
+  line of its own and inside the body bound, the words its READING spells differently: the Uthmani
+  marks that stand for letters (the dagger alef, a waw carrying it, the small waw and yeh, a hamza
+  on a tatweel or seated by ordinary spelling, the joined vocative) read as those letters. Nothing
+  folded is displayed or stored as content; owners' projections hand over their text verbatim (the
+  Quran projection still normalises nothing). Changing the fold changes every derived copy, so it
+  ships with a **rebuild** (§4.3, rebuild and reconciliation; the admin `/admin/system/search`
+  action).
+- **A server-side restriction to named resources (Quran Part 4).** A page may pass the search
+  service `within` — at most `SEARCH_WITHIN_MAX` (1,000) resource identifiers it built from an
+  owner's own structure, never a visitor's list (the Quran search's Surah and Juz filters). The
+  service checks it, answers an empty one with no results and no query, and the adapter applies it
+  as a parameterised `IN` list and lifts its per-breaker ranking cap for that query, because the
+  restriction then bounds what can be returned and a capped ranking would cut a frequent word off
+  before the restriction applied.
 
 ### 4.4 Authentication and authorisation
 

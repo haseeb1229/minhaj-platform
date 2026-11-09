@@ -467,6 +467,9 @@ describe('the render and routing tree stays statically renderable', () => {
     // (opening words, windows, the index filter).
     'apps/web/src/components/quran/juz-index-island.tsx',
     'apps/web/src/components/quran/juz-layout.ts',
+    // Quran Part 4: the search page's pure filter, restriction, layer and
+    // snippet rules.
+    'apps/web/src/components/quran/search-view.ts',
     'apps/web/src/components/my/dashboard.ts',
     'apps/web/src/components/my/frame.tsx',
     'apps/web/src/components/my/metadata.ts',

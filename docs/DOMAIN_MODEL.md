@@ -963,7 +963,9 @@ relation if ever needed; none is invented.
 may hold documents), identity `"{surah}:{ayah}"`. An Ayah's documents are its canonical Arabic and
 one document per language of its public translation and transliteration texts, so several works
 matching never multiply the canonical result and a translation is never presented as the Arabic.
-Tafsir bodies are not indexed. Nothing is indexed while the corpus is inactive.
+Tafsir bodies are not indexed. Nothing is indexed while the corpus is inactive. The projection
+hands Search every text verbatim; how a derived copy is MATCHED (Quran Part 4) is Search's own fold
+(§8.4), never a change to Quran's text.
 
 **No Personalisation state.** Reading progress, bookmarks and notes are Phase 21's; nothing here
 anticipates them.
@@ -1061,6 +1063,25 @@ files; neither is justified for navigation, so the Juz page navigates by hizb (a
 hizb that break between stored pages), and the text's own ۞ sign remains the reader's quarter mark.
 A future need for quarter navigation is an owner decision on which file is authoritative, then a
 registered-source import with the same SHA-256 verification as the names.
+
+**Search (Quran Part 4, 2026-11-09). No schema change, no import, no new source.** Plain-typed
+Arabic ("الله", "الصلاة", "الرحمن") must find the Uthmani text, whose orthography writes some long
+vowels as marks. Two ways were weighed. (i) Import Tanzil's own Simple-Clean text as a search-only
+companion — the source register's preference for a derived search copy — which would need a new
+Quran table beside the canonical one, a registered-source import with its own digest, an alignment
+proof against the active corpus, and a different companion (or none) for every other corpus: the
+fixture corpus, and an approved corpus whose source need not be Tanzil. (ii) Fold the INDEXED COPY
+and the query alike in Search's own matching fold (ARCHITECTURE.md §4.3), which works for whatever
+corpus is active. **(ii) is the decision**: the Quran projection still hands Search each text
+verbatim; nothing is stored as Quran text, displayed or exported; the canonical rows, their exact
+comparison and their revision records are untouched; and Search already held a mark-stripped
+matching copy of every Ayah since Phase 18. Measured offline against the full Tanzil Uthmani 1.1
+text, with Simple-Clean used only as the yardstick of ordinary spelling, 99.5 % of Simple-Clean's
+words are words the same Ayah's indexed copy carries (TECH_STACK.md §10). The Simple-Clean file was
+downloaded once for that measurement (SHA-256 `140787b7c399b11d54bfa72c237075916084232efa8a4cddf704cc8a2a74b1fe`, kept outside the repository) and
+is not admitted as a source. The Quran search page restricts a query to a Surah or Juz through
+Search's server-side restriction, built from the reader's own counts and Juz ranges (ROUTE_MAP.md
+§3.3).
 
 **Irreversible on its database.** Canonical Quran is a singleton store that is never deleted, and
 only one corpus is ever accepted: a staging database that holds the reference corpus keeps it until

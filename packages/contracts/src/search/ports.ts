@@ -88,6 +88,14 @@ export interface IndexQuery {
   readonly fromYear: number | null;
   readonly toYear: number | null;
   /**
+   * When set, only these resources may answer — at most
+   * `SEARCH_WITHIN_MAX`, named by the server-side page that searches, never
+   * by a visitor (the Quran search's Surah and Juz filters, Quran Part 4).
+   * The restriction, not the ranking ceiling, then bounds what is ranked, so
+   * a frequent word is never cut off before the restriction is applied.
+   */
+  readonly resourceIds: readonly string[] | null;
+  /**
    * The interface locale. When one resource matches in several languages, the
    * variant written in the reader's own interface language is preferred as its
    * single result — a presentation preference that hides nothing.

@@ -94,15 +94,22 @@ const URDU_TEXT = 'متن';
 const canonicalText = (tag: string, surah: number, ayah: number, word: string) =>
   `NON_QURAN_FIXTURE_${tag}_${surah}_${ayah} ${NEUTRAL} ${word}`;
 
+/**
+ * Quran Part 4: a neutral, invented phrase ("this is the key of life") written
+ * with the Uthmani encoding's conventions — the dagger alef on a tatweel, the
+ * alef wasla, a waw carrying the dagger alef. Never an Ayah; carried by 2:4.
+ */
+const UTHMANI_SHAPED = 'هَـٰذَا مِفْتَـٰحُ ٱلْحَيَوٰةِ';
+
 const corpus = (): FixtureAyah[] =>
   STRUCTURE.map((entry) => ({
     ...entry,
-    text: canonicalText(
+    text: `${canonicalText(
       'CANONICAL',
       entry.surah,
       entry.ayah,
       CANONICAL_WORD[`${entry.surah}:${entry.ayah}`]!,
-    ),
+    )}${entry.surah === 2 && entry.ayah === 4 ? ` ${UTHMANI_SHAPED}` : ''}`,
   }));
 
 live('Phase 18 Quran in Search (real SQL Server FTS)', () => {
@@ -477,14 +484,17 @@ live('Phase 18 Quran in Search (real SQL Server FTS)', () => {
         );
       });
 
-      it('records the known limitation: Arabic yeh and Urdu yeh are different words', async () => {
-        // "غير" is stored with the ARABIC yeh (U+064A). Typed with the Urdu/Farsi
-        // yeh (U+06CC) it is a different word to every SQL Server breaker — the
-        // V1 limitation TECH_STACK.md §10 records, asserted so a change is seen.
+      it('folds the Arabic and the Urdu yeh to one letter, so either spelling finds the word (Quran Part 4)', async () => {
+        // "غير" is stored with the ARABIC yeh (U+064A). Until Quran Part 4 the
+        // Urdu/Farsi yeh (U+06CC) made it a different word to every breaker (the
+        // V1 limitation TECH_STACK.md §10 recorded); the matching fold now
+        // writes both as one letter in the index and in the query.
         expect(await citations('غير', { type: 'quran-ayah' })).toHaveLength(
           STRUCTURE.length,
         );
-        expect(await citations('غیر', { type: 'quran-ayah' })).toEqual([]);
+        expect(await citations('غیر', { type: 'quran-ayah' })).toHaveLength(
+          STRUCTURE.length,
+        );
 
         // And the other way: the Urdu word "آزمائشی" is stored with the Urdu
         // yeh, in the Urdu layer documents of 1:1 and 2:2.
@@ -494,7 +504,7 @@ live('Phase 18 Quran in Search (real SQL Server FTS)', () => {
         ]);
         expect(
           await citations(URDU_TEST.replace('ی', 'ي'), { type: 'quran-ayah' }),
-        ).toEqual([]);
+        ).toEqual(['1:1', '2:2']);
         const urdu = await find(URDU_TEXT, { type: 'quran-ayah' }, 'ur');
         expect(urdu.hits.map((hit) => [hit.resourceId, hit.textLanguage])).toEqual(
           expect.arrayContaining([
@@ -502,6 +512,44 @@ live('Phase 18 Quran in Search (real SQL Server FTS)', () => {
             ['2:2', 'ur'],
           ]),
         );
+      });
+    });
+
+    describe('Quran Part 4 — ordinary typing, and a restriction to named Ayat', () => {
+      it('finds the Uthmani-orthography text by its words typed in ordinary spelling', async () => {
+        // Through the real Arabic breaker: the plain words (هذا), the words the
+        // Uthmani reading spells out (مفتاح, الحياة), and the text pasted with
+        // its marks all find the one Ayah that carries the phrase.
+        for (const typed of [
+          'هذا',
+          'مفتاح',
+          'الحياة',
+          'حياة',
+          'ٱلْحَيَوٰةِ',
+          'هذا مفتاح',
+        ]) {
+          expect(await citations(typed, { type: 'quran-ayah' }), typed).toEqual(['2:4']);
+        }
+        // What the result DISPLAYS is the stored text, never the folded copy.
+        const hits = (await find('مفتاح', { type: 'quran-ayah' }, 'ar')).hits;
+        const [shown] = await displayed(hits);
+        expect(shown?.display?.text).toBe(primary.ayat[6]!.text);
+      });
+
+      it('answers only from the named Ayat, however frequent the word', async () => {
+        // "اختبار" is in every canonical text; restricted to Surah 2's first
+        // two Ayat, only they answer — and an empty restriction answers none.
+        const restricted = async (within: readonly string[]) => {
+          const outcome = await h.search.search(
+            { q: 'اختبار', type: 'quran-ayah' },
+            { locale: 'ar', within },
+          );
+          if (outcome.state !== 'results') throw new Error(outcome.state);
+          return outcome.results.hits.map((hit) => hit.resourceId).sort();
+        };
+        expect(await restricted(['2:1', '2:2'])).toEqual(['2:1', '2:2']);
+        expect(await restricted(['9:9'])).toEqual([]);
+        expect(await restricted([])).toEqual([]);
       });
     });
 

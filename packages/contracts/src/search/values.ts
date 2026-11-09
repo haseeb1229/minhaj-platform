@@ -225,6 +225,14 @@ export const SEARCH_MAX_PAGE = 50;
  */
 export const SEARCH_RESULT_CEILING = SEARCH_PAGE_SIZE * SEARCH_MAX_PAGE;
 
+/**
+ * The most resources one search may be restricted to (`IndexQuery.resourceIds`).
+ * The largest a page asks for is one Juz or one Surah of a Quran corpus — a
+ * few hundred ayat; the bound keeps a restriction one bounded, parameterised
+ * list.
+ */
+export const SEARCH_WITHIN_MAX = 1_000;
+
 export const SEARCH_YEAR_MIN = 1;
 export const SEARCH_YEAR_MAX = 9999;
 

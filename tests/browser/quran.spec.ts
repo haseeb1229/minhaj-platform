@@ -117,10 +117,21 @@ const STRUCTURE: readonly (readonly [number, number, number, number, number])[] 
 /** The highest made-up page above. */
 const LAST_PAGE = 6;
 
+/**
+ * Quran Part 4: a neutral, invented phrase ("this is the key of life") written
+ * with the Uthmani encoding's conventions — the dagger alef on a tatweel, the
+ * alef wasla, a waw carrying the dagger alef. Never an Ayah. Carried by 3:42
+ * alone, past the first reading window, so its place in the Surah is `?from=41`.
+ */
+const UTHMANI_SHAPED = 'هَـٰذَا مِفْتَـٰحُ ٱلْحَيَوٰةِ';
+/** Its last word as stored, and as ordinary typing writes it. */
+const UTHMANI_WORD = 'ٱلْحَيَوٰةِ';
+const TYPED_WORD = 'الحياة';
+
 const canonicalText = (surah: number, ayah: number) =>
   `NON_QURAN_FIXTURE_CANONICAL_${String(surah)}_${String(ayah)} ${NEUTRAL}${
     surah === 1 && ayah === 1 ? ` ${BEH_FATHA}` : ''
-  }`;
+  }${surah === 3 && ayah === 42 ? ` ${UTHMANI_SHAPED}` : ''}`;
 
 /** The correction source's text for 1:1 — what the correction may change it to. */
 const CORRECTED = `NON_QURAN_FIXTURE_CORRECTED_1_1 ${NEUTRAL} ${BEH_KASRA}`;
@@ -1707,6 +1718,245 @@ test.describe('a fixture corpus', () => {
     await expect(hit).toHaveAttribute('href', '/quran/surah/1/2');
     await expect(page.getByRole('main')).toContainText(translationText(1, 2));
     await expect(page.getByRole('link', { name: 'Surah 1, Ayah 1' })).toHaveCount(0);
+  });
+
+  /* -------------------------------------------------------------------------
+   * Quran Part 4 — search
+   * ----------------------------------------------------------------------- */
+
+  /** Opens a Quran search address, polling while the sweep may still be indexing. */
+  async function searched(page: Page, target: string, expected: string): Promise<void> {
+    await expect
+      .poll(
+        async () => {
+          const response = await page.goto(target);
+          expect(response?.status(), target).toBe(200);
+          await page.getByRole('heading', { level: 1 }).waitFor();
+          return page.getByRole('main').innerText();
+        },
+        { timeout: 120_000, intervals: [1_000, 2_000, 3_000] },
+      )
+      .toContain(expected);
+  }
+
+  test('Part 4: Arabic typed in ordinary spelling finds the Uthmani-shaped text, marked in place, and a citation or a name goes straight there', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    await searched(
+      page,
+      `/quran/search?q=${encodeURIComponent(TYPED_WORD)}`,
+      'Surah 3, Ayah 42',
+    );
+    const main = page.getByRole('main');
+    await expect(main.getByRole('status')).toHaveText(`1 result for “${TYPED_WORD}”`);
+    const results = main.getByRole('list', { name: 'Ayat that match' });
+    await expect(results.getByRole('listitem')).toHaveCount(1);
+    const hit = results.getByRole('article', { name: /Surah 3, Ayah 42/ });
+    // The Surah's display name and the citation name the result.
+    await expect(hit.getByRole('heading', { level: 3 })).toContainText(
+      'NON_QURAN_FIXTURE Surah Three',
+    );
+    // The Arabic is the stored text, exactly, in the Quran face — and the word
+    // typed in ordinary spelling is marked where the Uthmani text writes it.
+    const arabic = hit.locator('p[lang="ar"]');
+    await expect(arabic).toHaveAttribute('dir', 'rtl');
+    await expect(arabic).toHaveAttribute('translate', 'no');
+    await expect(arabic).toHaveClass(/quran-text/);
+    await expect(arabic).toHaveText(canonicalText(3, 42));
+    await expect(arabic.locator('mark')).toHaveText([UTHMANI_WORD]);
+    // The ways on: the Ayah, and its place in its Surah's reading window.
+    await expect(hit.getByRole('link', { name: 'Open the Ayah' })).toHaveAttribute(
+      'href',
+      '/quran/surah/3/42',
+    );
+    await expect(hit.getByRole('link', { name: 'Read in its Surah' })).toHaveAttribute(
+      'href',
+      '/quran/surah/3?from=41#ayah-3-42',
+    );
+    // The page names the English translation it shows, as its own language.
+    await expect(
+      hit.getByRole('group', { name: `Translation: ${NAME.translation}` }),
+    ).toBeVisible();
+
+    // The same Ayah, from the word pasted with its marks, and from two words.
+    for (const typed of [UTHMANI_WORD, 'هذا مفتاح']) {
+      await page.goto(`/quran/search?q=${encodeURIComponent(typed)}`);
+      await expect(
+        main.getByRole('link', { name: /Surah 3, Ayah 42/ }).first(),
+      ).toHaveAttribute('href', '/quran/surah/3/42');
+    }
+
+    // A citation — in any digits — goes straight there, its Arabic shown as stored.
+    for (const typed of ['2:3', '۲:۳']) {
+      await page.goto(`/quran/search?q=${encodeURIComponent(typed)}`);
+      const jump = main.getByRole('region', { name: 'Go straight there' });
+      await expect(jump.getByRole('link', { name: /Surah 2, Ayah 3/ })).toHaveAttribute(
+        'href',
+        '/quran/surah/2/3',
+      );
+      await expect(jump.locator('p[lang="ar"]')).toHaveText(canonicalText(2, 3));
+      await expect(
+        jump.getByRole('link', { name: 'Read it in its Surah' }),
+      ).toHaveAttribute('href', '/quran/surah/2#ayah-2-3');
+    }
+
+    // A recorded Surah name goes to the Surah; an Ayah past its count is no place.
+    await page.goto(
+      `/quran/search?q=${encodeURIComponent('NON_QURAN_FIXTURE Surah Three')}`,
+    );
+    await expect(
+      main.getByRole('region', { name: 'Go straight there' }).getByRole('link'),
+    ).toHaveAttribute('href', '/quran/surah/3');
+    await page.goto('/quran/search?q=2%3A9');
+    await expect(main.getByRole('region', { name: 'Go straight there' })).toHaveCount(0);
+  });
+
+  test('Part 4: filters by Surah, Juz and text work without script — chips, clear all, refusals and paging', async ({
+    browser,
+    clientAddress,
+  }) => {
+    test.setTimeout(180_000);
+    const context = await browser.newContext({
+      baseURL: baseUrl(),
+      javaScriptEnabled: false,
+      extraHTTPHeaders: { 'x-forwarded-for': clientAddress },
+    });
+    contexts.push(context);
+    const page = await context.newPage();
+    const main = page.getByRole('main');
+    const all = STRUCTURE.length;
+
+    // Every Ayah carries the neutral phrase.
+    await searched(
+      page,
+      `/quran/search?q=${encodeURIComponent('اختبار')}`,
+      `${String(all)} results`,
+    );
+
+    // The filters are a plain GET form: open them, choose, submit.
+    await main.locator('summary', { hasText: 'Filters' }).click();
+    await main.getByLabel('Surah', { exact: true }).selectOption('3');
+    await main.getByRole('button', { name: 'Search' }).click();
+    await expect(page).toHaveURL(/[?&]surah=3(?:&|$)/);
+    await expect(main.getByRole('status')).toHaveText(`45 results for “اختبار”`);
+    const chip = main.getByRole('link', {
+      name: 'Remove filter: Surah 3 · NON_QURAN_FIXTURE Surah Three',
+    });
+    await expect(chip).toBeVisible();
+    // Paging keeps the filter.
+    await expect(main.getByRole('link', { name: 'Next page' })).toHaveAttribute(
+      'href',
+      `/quran/search?q=${encodeURIComponent('اختبار')}&surah=3&page=2`,
+    );
+    const citations = await main
+      .getByRole('list', { name: 'Ayat that match' })
+      .getByRole('heading', { level: 3 })
+      .allInnerTexts();
+    expect(citations.every((text) => /Surah 3, Ayah \d+/.test(text))).toBe(true);
+    // Removing the chip removes only its filter.
+    await chip.click();
+    await expect(page).toHaveURL(`/quran/search?q=${encodeURIComponent('اختبار')}`);
+
+    // Surah and Juz together, and "clear all".
+    await page.goto(`/quran/search?q=${encodeURIComponent('اختبار')}&surah=2&juz=2`);
+    await expect(main.getByRole('status')).toHaveText(`2 results for “اختبار”`);
+    await main.getByRole('link', { name: 'Clear all filters' }).click();
+    await expect(page).toHaveURL(`/quran/search?q=${encodeURIComponent('اختبار')}`);
+
+    // The text filter: a translation's words in its own language only.
+    await page.goto(`/quran/search?q=${WORD}&language=en`);
+    await expect(main.getByRole('status')).toHaveText(`1 result for “${WORD}”`);
+    await page.goto(`/quran/search?q=${WORD}&language=ar`);
+    await expect(main.getByRole('status')).toHaveText(`No Ayah matches “${WORD}”.`);
+    await expect(
+      main.getByRole('link', { name: 'Search without filters' }),
+    ).toHaveAttribute('href', `/quran/search?q=${WORD}`);
+
+    // Refused in words, never widened: a Surah or a language that does not exist,
+    // and two filters that do not overlap.
+    await page.goto('/quran/search?q=word&surah=9&language=fr');
+    await expect(main.getByRole('alert')).toContainText(
+      'There is no Surah 9 to search in.',
+    );
+    await expect(main.getByRole('alert')).toContainText(
+      'No public text is written in “fr”.',
+    );
+    await expect(main.getByRole('list', { name: 'Ayat that match' })).toHaveCount(0);
+    await page.goto(`/quran/search?q=${encodeURIComponent('اختبار')}&surah=1&juz=2`);
+    await expect(
+      main.getByRole('status').filter({ hasText: 'Surah 1 has no Ayah in Juz 2' }),
+    ).toBeVisible();
+
+    // An Arabic query that finds nothing is offered the spelling hint.
+    await page.goto(`/quran/search?q=${encodeURIComponent('زخرفةمعدومة')}`);
+    await expect(main).toContainText('Arabic is matched without diacritics');
+  });
+
+  test('Part 4: search reads right-to-left in Urdu and Arabic, never scrolls sideways at 320px, and has no serious accessibility finding', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(240_000);
+    await searched(
+      page,
+      `/ur/quran/search?q=${encodeURIComponent(TYPED_WORD)}`,
+      'NON_QURAN_FIXTURE_CANONICAL_3_42',
+    );
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    const hit = page
+      .getByRole('main')
+      .getByRole('article')
+      .filter({ hasText: 'NON_QURAN_FIXTURE_CANONICAL_3_42' });
+    await expect(hit.locator('p[lang="ar"] mark')).toHaveText([UTHMANI_WORD]);
+    // The Urdu interface shows the Urdu translation, in its own language.
+    await expect(hit.locator('p[lang="ur"]')).toContainText(urduText(3, 42));
+
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 800 });
+      for (const target of [
+        `/quran/search?q=${encodeURIComponent('آزمائشی')}&surah=3&language=ur`,
+        `/ur/quran/search?q=${encodeURIComponent(TYPED_WORD)}`,
+        `/ar/quran/search?q=${encodeURIComponent('2:3')}`,
+      ]) {
+        await page.goto(target);
+        await page.getByRole('heading', { level: 1 }).waitFor();
+        const { overflow, offenders } = await overflowOf(page);
+        expect(
+          overflow,
+          `${String(width)}px ${target} — beyond the viewport: ${offenders.join(', ')}`,
+        ).toBeLessThanOrEqual(0);
+      }
+    }
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    for (const target of [
+      `/quran/search?q=${encodeURIComponent(TYPED_WORD)}&surah=3`,
+      `/ar/quran/search?q=${encodeURIComponent('2:3')}`,
+    ]) {
+      await page.goto(target);
+      await page.getByRole('heading', { level: 1 }).waitFor();
+      await page
+        .getByRole('main')
+        .locator('details')
+        .evaluate((element) => {
+          (element as HTMLDetailsElement).open = true;
+        });
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      const blocking = results.violations.filter(
+        (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+      );
+      for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+        testInfo.annotations.push({
+          type: 'axe',
+          description: `${target}: ${finding.id} (${String(finding.impact)})`,
+        });
+      expect(
+        blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+        target,
+      ).toEqual([]);
+    }
   });
 });
 

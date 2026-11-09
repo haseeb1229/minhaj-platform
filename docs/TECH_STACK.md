@@ -445,7 +445,12 @@ The abstraction exists precisely so this decision stays reversible.
 > Neutral (0) for every other language. The catalogue is accent-insensitive and the index is
 > built with `STOPLIST OFF`. Matching text — never displayed text — is folded identically at
 > index and query time: NFC, Arabic-script harakat and Quranic annotation marks removed,
-> ZWNJ/ZWJ and tatweel removed, lower-cased.
+> ZWNJ/ZWJ and tatweel removed, lower-cased — and, since Quran Part 4 (2026-11-09), the
+> Arabic-script letters ordinary typing writes interchangeably unified (alef forms and alef wasla;
+> alef maqsura, Arabic and Urdu/Farsi yeh and yeh with hamza; waw with hamza; keheh and kaf; taa
+> marbuta and the heh forms), with the words an indexed text's Uthmani marks spell added beside it
+> (ARCHITECTURE.md §4.3). The hamza on the line is deliberately kept: removing it was measured to
+> break the Arabic breaker's match of `قراء` in `للقراء`.
 >
 > **What was measured, with controlled non-religious fixtures** (library and reading-room prose;
 > no Quran, Hadith or religious text), and is now a CI proof (`tests/search`):
@@ -455,14 +460,15 @@ The abstraction exists precisely so this decision stays reversible.
 > | Arabic: definite article (`مكتبة` ↔ `المكتبة`), attached prepositions (`قراء` ↔ `للقراء`), ة/ه (`مكتبه`), harakat in text or query | **Matches — only under the Arabic breaker.** Every other breaker fails these, which is why Arabic text must be tokenised by it |
 > | Urdu: whole words, plurals by prefix (`کتاب` → `کتابیں`), izafat (`تعلیم` ↔ `تعلیمِ`, after folding), ZWNJ compounds, loanwords (`لائبریری`), multi-term AND | **Matches** |
 > | Urdu keheh/Arabic kaf (`کتاب` ↔ `كتاب`) | **Matches** (normalised by the engine) |
-> | Urdu yeh typed as Arabic yeh (`نئی` ↔ `نئي`) | **Does not match — a known V1 limitation**, recorded here and asserted by the proof so a change is noticed |
+> | Urdu yeh typed as Arabic yeh (`نئی` ↔ `نئي`) | **Matches since Quran Part 4** (the fold unifies the two letters); at Phase-17 exit it did not — the V1 limitation this row recorded, now historical, resolved. The proof asserts the match |
+> | Quran Part 4: the Uthmani text typed in ordinary spelling (`الله`, `الصلاة`, `الرحمن`, `الكتاب`, `هذا`), measured on neutral Uthmani-orthography fixture words through the real Arabic breaker | **Matches** — the plain fold and the added reading. Measured offline against the full Tanzil Uthmani 1.1 text, with Tanzil's own Simple-Clean text as the yardstick of ordinary spelling: 99.5 % of Simple-Clean's 77,800 words (99.1 % of its distinct words) are words the same Ayah's indexed copy carries (90.7 % with the plain fold alone; 68.3 % before Part 4). The rest are rare spellings (the silent alef of أولو, a few hamza seats) |
 > | English inflection (`library` ↔ `libraries`) and prefixes (`librar*`) | **Matches** |
 > | Mixed script: Urdu or Arabic words inside an English document | **Matches** |
 >
 > **Conclusion: V1 quality is acceptable** for the initial inventory. No stemming exists for
-> Urdu beyond prefix matching, and the yeh variant above is not folded; both are candidates for
-> reconsideration if Phase 31's completeness validation against the migrated corpus shows them to
-> matter. No search queries are recorded to find out — there is no search analytics. The
+> Urdu beyond prefix matching (at Phase-17 exit the yeh variant above was not folded either; Quran
+> Part 4 folded it); Urdu stemming remains a candidate for reconsideration if Phase 31's
+> completeness validation against the migrated corpus shows it to matter. No search queries are recorded to find out — there is no search analytics. The
 > abstraction keeps that reconsideration an adapter change.
 
 **StorageService abstraction** — LOCKED. Local/company filesystem for V1; S3-compatible via

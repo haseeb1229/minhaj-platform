@@ -178,6 +178,18 @@ describe('quran search passes only its own parameters, with the kind fixed', () 
     ).toEqual({ q: 'one', type: 'quran-ayah' });
     expect(quranSearchRequest({})).toEqual({ q: '', type: 'quran-ayah' });
   });
+
+  it('passes a text language only as the page resolved it, never as the URL wrote it', () => {
+    expect(quranSearchRequest({ q: 'word', language: 'fr' }, 'ur')).toEqual({
+      q: 'word',
+      type: 'quran-ayah',
+      language: 'ur',
+    });
+    expect(quranSearchRequest({ q: 'word', language: 'ur' }, null)).toEqual({
+      q: 'word',
+      type: 'quran-ayah',
+    });
+  });
 });
 
 describe('paging is bounded and deterministic', () => {

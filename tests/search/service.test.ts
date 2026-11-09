@@ -249,9 +249,59 @@ describe('search — the stale-index rule', () => {
     expect(fake.queries[0]).toMatchObject({
       terms: ['book', 'or'],
       topicId: 't-1',
+      resourceIds: null,
       preferredLanguage: 'ur',
       offset: 40,
       limit: 20,
+    });
+  });
+
+  describe('a server-side restriction (Quran Part 4)', () => {
+    function restricted() {
+      const fake = fakeIndex();
+      const reports: string[] = [];
+      const service = createSearchService({
+        index: fake.index,
+        sources: sources(),
+        targets: targets(() => new Map(), []),
+        resolveTopic: async () => null,
+        report: (operation) => void reports.push(operation),
+      });
+      return { fake, reports, service };
+    }
+
+    it('passes the named resources on, each once, and nothing a URL wrote', async () => {
+      const { fake, service } = restricted();
+      await service.search(
+        { q: 'word', type: 'quran-ayah', resourceIds: '9:9' },
+        { locale: 'en', within: ['2:1', '2:2', '2:1'] },
+      );
+      expect(fake.queries[0]?.resourceIds).toEqual(['2:1', '2:2']);
+
+      await service.search({ q: 'word', resourceIds: '9:9' }, { locale: 'en' });
+      expect(fake.queries[1]?.resourceIds).toBeNull();
+    });
+
+    it('answers an empty restriction with no results and no query', async () => {
+      const { fake, service } = restricted();
+      const outcome = await service.search({ q: 'word' }, { locale: 'en', within: [] });
+      expect(outcome.state).toBe('results');
+      expect(outcome.state === 'results' && outcome.results.total).toBe(0);
+      expect(fake.queries).toEqual([]);
+    });
+
+    it('treats a malformed or oversized restriction as a defect: reported, unavailable', async () => {
+      const { fake, reports, service } = restricted();
+      for (const within of [
+        ['x'.repeat(37)],
+        Array.from({ length: 1_001 }, (_, i) => `1:${i}`),
+      ]) {
+        expect(
+          (await service.search({ q: 'word' }, { locale: 'en', within })).state,
+        ).toBe('unavailable');
+      }
+      expect(fake.queries).toEqual([]);
+      expect(reports).toEqual(['search.query', 'search.query']);
     });
   });
 });

@@ -241,3 +241,39 @@ describe('target', () => {
     expect(asked).toEqual([]);
   });
 });
+
+/**
+ * Quran Part 4 — the projection hands Search the canonical text VERBATIM, and
+ * Search's own fold makes it findable by ordinary typing. The sample is a
+ * neutral, invented phrase ("this is the key of life") written with the
+ * Uthmani encoding's conventions — the dagger alef on a tatweel, the alef
+ * wasla, a waw carrying the dagger alef — never an Ayah.
+ */
+describe('an Uthmani-orthography text is projected verbatim and found as typed', () => {
+  const UTHMANI_SHAPED = 'هَـٰذَا مِفْتَـٰحُ ٱلْحَيَوٰةِ';
+
+  it('projects the stored text unchanged, and the index matches the typed words', async () => {
+    const { matchingText, queryTerms } =
+      await import('../../packages/search/src/text.ts');
+    const text = `NON_QURAN_FIXTURE_CANONICAL_2_3 ${UTHMANI_SHAPED}`;
+    const { projection } = harness({ record: record({ text }) });
+    const projected = await projection.source.project('2:3');
+    const arabic = projected?.documents.find((doc) => doc.textLanguage === 'ar');
+    expect(arabic?.summary).toBe(text);
+
+    const indexed = new Set(
+      matchingText({
+        title: arabic?.title ?? '',
+        summary: arabic?.summary ?? '',
+        body: arabic?.body ?? '',
+      }).match(/[\p{L}\p{M}\p{N}]+/gu),
+    );
+    for (const typed of ['هذا', 'مفتاح', 'الحياة', 'الحياه', 'ٱلْحَيَوٰةِ']) {
+      const terms = queryTerms(typed);
+      expect(
+        'terms' in terms && terms.terms.every((term) => indexed.has(term)),
+        typed,
+      ).toBe(true);
+    }
+  });
+});

@@ -432,13 +432,21 @@ function single(query: Query, name: string): string {
   return typeof first === 'string' ? first : '';
 }
 
-/** The only parameters this page passes to Search — and the type, fixed. */
-export function quranSearchRequest(query: Query): Record<string, string> {
+/**
+ * The only parameters this page passes to Search — and the type, fixed. The
+ * text-language filter is passed only as the page resolved it against the
+ * languages of the public texts (Quran Part 4), never as the URL wrote it.
+ */
+export function quranSearchRequest(
+  query: Query,
+  language: string | null = null,
+): Record<string, string> {
   const q = single(query, 'q');
   const page = single(query, 'page');
   return {
     q,
     type: 'quran-ayah',
     ...(page === '' ? {} : { page }),
+    ...(language === null ? {} : { language }),
   };
 }

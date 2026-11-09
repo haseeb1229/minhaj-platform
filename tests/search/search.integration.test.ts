@@ -388,14 +388,16 @@ live('Phase 17 Search foundation against real SQL Server FTS', () => {
       );
     });
 
-    it('records the known limitation: Arabic-letter yeh does not match Urdu yeh', async () => {
+    it('folds the Arabic-letter yeh and the Urdu yeh to one letter (Quran Part 4)', async () => {
       // "نئی" is written with the Farsi/Urdu yeh (U+06CC). Typed with the Arabic
-      // yeh (U+064A) it is a different word to every SQL Server breaker —
-      // recorded in TECH_STACK.md §10 rather than papered over.
-      expect(await titles('نئی', { type: 'article' })).toContain(
-        'آزمائشی متن: شہر کا کتب خانہ',
-      );
-      expect(await titles('نئي', { type: 'article' })).toEqual([]);
+      // yeh (U+064A) it was a different word to every SQL Server breaker — the
+      // V1 limitation TECH_STACK.md §10 recorded — until the matching fold
+      // wrote both as one letter, in the index and in the query alike.
+      for (const typed of ['نئی', 'نئي']) {
+        expect(await titles(typed, { type: 'article' }), typed).toContain(
+          'آزمائشی متن: شہر کا کتب خانہ',
+        );
+      }
     });
   });
 

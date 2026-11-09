@@ -287,7 +287,7 @@ it reserves is unpublished. No route changes.
 | `/quran/surah/{surahNumber}/{ayahNumber}` | **Canonical ayah citation URL** |
 | `/quran/page/{pageNumber}` | One mushaf page, as text (Quran Part 1) — 404 for a page no public Ayah carries |
 | `/quran/juz` · `/quran/juz/{juzNumber}` | Juz index (`?q` filter by number or hizb — Quran Part 3) and view — `?hizb` and `?part` name the reading window (Quran Part 3; the Phase-18 `?offset` paging is historical) |
-| `/quran/search` | Quran search — `noindex` |
+| `/quran/search` | Quran search — `noindex`; `?q`, `?page`, and the filters `?surah`, `?juz`, `?language` (Quran Part 4) |
 | `/quran/translations` · `/{slug}` | Translation works |
 | `/quran/tafsir` · `/{slug}` | Tafsir works |
 | `/quran/transliteration` · `/quran/tajweed` · `/quran/tajweed/{rule}` | Study aids |
@@ -460,6 +460,41 @@ attribution and fixture rule above is unchanged.
 - **The quick jump accepts "hizb 30"** (حزب, الحزب) for a hizb the corpus records, opening
   `/quran/juz/{n}?hizb=30` in the Juz the reader says it begins in — an address built from the
   confirmed numbers, never from the typed text.
+
+**Quran Part 4 — search (owner direction 2026-11-09; DELIVERY_PLAN.md, the Quran Part 4 record).**
+No new route; `/quran/search` stays `noindex`, signed out, uncached and throttled by the request
+proxy exactly as `/search`, and every corpus-state, attribution and fixture rule above is unchanged.
+
+- **Arabic is found however it is typed.** Matching folds the INDEXED COPY and the query alike —
+  harakat and Quranic marks, alef forms and the alef wasla, alef maqsura and the Arabic and
+  Urdu/Farsi yeh, keheh and kaf, taa marbuta and the heh forms — and an indexed text also carries
+  the words its Uthmani marks spell (the dagger alef, a waw carrying it, the small yeh and waw, a
+  hamza on a tatweel), so "الله", "الصلاة", "الرحمن" and "الكتاب" typed plainly find the Uthmani
+  text (ARCHITECTURE.md §4.3; TECH_STACK.md §10). The stored text is never what changes: a result
+  shows the current text exactly as stored, with the typed words marked in place.
+- **Filters, as GET parameters, working without JavaScript.** `?surah={n}` and `?juz={n}` are
+  canonical decimal numbers the reader confirms; each becomes a restriction to that Surah's or that
+  Juz's citations (both at once intersect), built from the reader's counts and ranges — never a
+  list the address carries. `?language=` is `ar` (the Quran text) or a language a public
+  translation or transliteration is written in, each option naming its works. A value the reader
+  does not hold is refused in words and nothing is searched; a Surah and Juz that do not overlap are
+  said to. Active filters are chips (each a link removing only itself), with "Clear all filters";
+  paging keeps the filters; the count is the page's status.
+- **A citation or a name goes straight there.** A query that is a citation ("2:255", "۲:۲۵۵", "2
+  255"), "Surah 18", a Surah's recorded name or meaning in any script, a name with an Ayah number
+  ("Al-Baqarah 255", "البقرة ٢٥٥"), "Juz 15", "Hizb 30" or "page 50" is parsed against the
+  reader's own index (Part 1's quick jump; on this page a name must be a WHOLE name, or a spelling
+  of four letters or more that begins the recorded one, so an ordinary word is never mistaken for a
+  name) and offered first as "Go straight there" — an Ayah with its Arabic as stored and its place in
+  its Surah, Ayat al-Kursi named as the landing names it. Text matches still follow.
+- **Each result is one Ayah**: its Surah's display name and "Surah n, Ayah m" as the heading link
+  (the address the owner resolved now), the Arabic in the Quran face (`lang="ar" dir="rtl"
+  translate="no"`), and beneath it the public translation and transliteration snippets the typed
+  words mark — otherwise the hit's own language, otherwise the interface language's — each in a
+  group named by its work and marked with its own language, a long one cut around its first match
+  and said to be cut; then "Open the Ayah" and "Read in its Surah" (`/quran/surah/{s}?from={w}#ayah-{s}-{a}`).
+  Nothing matched: suggestions (the Arabic spelling hint for an Arabic-script query, fewer words or
+  a translation's words, and "Search without filters").
 
 ### 3.4 Hadith
 
