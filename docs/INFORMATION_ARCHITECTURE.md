@@ -423,6 +423,19 @@ signed-in additions remain Phase 21's. Since Rebaseline R2 a deployment that adm
 this platform, never indexed — OPEN_DECISIONS.md §1.1; ROUTE_MAP.md §3.3); the landing then leads
 with the Surah index, a quick jump (`/quran/read?q=`) and the device's "continue reading".
 
+**Quran Part 1 — Read Quran (owner direction 2026-11-09; ROUTE_MAP.md §3.3).** The menu's first
+entry, "Read Quran", is now a start page: "Continue where you stopped" (the signed-in person's own
+reading position, loaded privately after the page, else the last place read on this device), the
+quick jump, a few well-loved places to begin (offered only where the corpus holds them), and the
+Surah, Juz and mushaf-page indexes. Reading itself has three modes over the same text —
+Translation, Reading (the Arabic alone, flowing; tapping an Ayah shows its translation) and Mushaf
+page (grouped by the source's pages, with `/quran/page/{n}` to read page by page) — and a settings
+sheet (mode, which translations and how they sit, text sizes, line spacing), all remembered in the
+browser. The Surah page now reads in windows of 40 ayat that load as the reader goes, and saving or
+noting an Ayah opens the signed-in controls in place rather than leaving the Surah. The menu itself
+is unchanged; the later Quran items (the indexes, search, recitations, tafsir, tajweed, related
+views) are separate parts of the same programme.
+
 ### 3.3 Hadith
 
 | Browse | Study | Explore | Learn |

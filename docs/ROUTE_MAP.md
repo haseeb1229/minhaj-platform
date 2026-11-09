@@ -283,8 +283,9 @@ it reserves is unpublished. No route changes.
 |---|---|
 | `/quran` | Landing |
 | `/quran/read` | Reader entry — resumes progress when signed in *(uncached island)* |
-| `/quran/surah` · `/quran/surah/{surahNumber}` | Surah index and view — `?translation, tafsir, reciter, transliteration` |
+| `/quran/surah` · `/quran/surah/{surahNumber}` | Surah index and view — `?translation, tafsir, reciter, transliteration`; `?from` names the reading window (Quran Part 1) |
 | `/quran/surah/{surahNumber}/{ayahNumber}` | **Canonical ayah citation URL** |
+| `/quran/page/{pageNumber}` | One mushaf page, as text (Quran Part 1) — 404 for a page no public Ayah carries |
 | `/quran/juz` · `/quran/juz/{juzNumber}` | Juz index and view |
 | `/quran/search` | Quran search — `noindex` |
 | `/quran/translations` · `/{slug}` | Translation works |
@@ -346,6 +347,46 @@ banner on every Ayah). Unlike fixture mode, a reference corpus is a navigation d
 **Owner direction 2026-11-08.** The `/quran` landing's hero again carries the full-text search
 form (a GET form to `/quran/search?q=`, working without JavaScript) beneath R2's quick jump, and its
 Read, Study and Explore groups carry their introductions again. No route changes.
+
+**Quran Part 1 — the reading experience (owner direction 2026-11-09; DELIVERY_PLAN.md, the Quran
+Part 1 record).** One new route and a changed Surah view; every corpus-state, `noindex`, attribution
+and fixture rule above is unchanged.
+
+- **`/quran/surah/{surahNumber}` reads in windows of 40 ayat.** The page server-renders one window,
+  complete without JavaScript; `?from={n}` (a canonical decimal Ayah number inside the Surah — any
+  other value is the first window) opens the window that holds Ayah `n`, and windows start at fixed
+  places (1, 41, 81 …), so each has one address. The next window is a plain link the reader's island
+  fetches (the same public address, parsed inertly) and appends as the reader nears it; earlier
+  windows are a link back. **Every Ayah element is `id="ayah-{surah}-{ayah}"`** on every listing (the
+  R2 Surah page's `ayah-{n}` is historical; the island still honours it). A fragment the server never
+  sees — `/quran/surah/2#ayah-2-255` — is landed by the island, which moves to that Ayah's window;
+  the canonical address stays the bare Surah address, and the canonical citation
+  `/quran/surah/2/255` is unchanged. Al-Baqarah no longer ships 286 ayat with two translations in one
+  document. No corpus read is cached: each window is one bounded read per layer.
+- **`/quran/page/{pageNumber}`** — the ayat whose stored `page` is that number (the Tanzil
+  metadata's Medina mushaf pages on the reference preview), in canonical order, grouped by Surah with
+  each Surah's opening and the Bismillah rule above, a "Page 50 · Juz 3 · Hizb 5" header, and the
+  previous and next page. Text only — no mushaf image (none is licensed). A page outside the corpus's
+  range, any page of a corpus that records none, and any page while no corpus is active are 404. The
+  reading preferences are query values; the canonical URL is the bare page address.
+- **Three reading modes over one document** — Translation (verse by verse), Reading (the Arabic
+  alone, flowing, each Ayah closed by its presentational end mark and one button that opens its
+  translation in a sheet) and Mushaf (the same flow under page headers). The mode, which of the
+  rendered translations show (up to four public works, stacked or side by side), both text sizes and
+  the line spacing are the visitor's presentation preferences in `localStorage`, applied before the
+  first paint by a fixed inline script on the reader element; the no-JS GET form remains. No mode is
+  part of any address.
+- **Division markers** — where a Juz, a hizb or a mushaf page begins (from the stored numbers only)
+  and sajdah ayat, inline. Rub' al-hizb quarters are not stored apart from the text, which carries
+  its own ۞ sign.
+- **`/quran/read` is a start page**: "Continue where you stopped" (an island: the signed-in person's
+  own position from `GET /api/my/quran-position` after render, else this browser's last place), the
+  quick jump (now also "page 50"), popular starting points as fixed citations offered only where the
+  corpus holds them (1, 18, 36, 67 and 2:255, with the corpus's own recorded names), and the Surah,
+  Juz and page indexes. `?page={n}` opens a recorded page; `?surah=&ayah=&place=surah` (the Surah
+  page's "Go to an Ayah") opens that Ayah in its Surah's window rather than its citation page. Every
+  address it produces is built from numbers the reader confirmed. The page is the same document for
+  every visitor.
 
 ### 3.4 Hadith
 
@@ -973,7 +1014,7 @@ owning phase's handlers and tests, not this table.
 | Auth | `/api/auth/*` | Delegated to the authentication library |
 | Search | `/api/search/*` | Search, suggestions, typeahead |
 | Content read | `/api/content/*` | Public read for progressive enhancement |
-| Personal | `/api/my/*` | Authenticated personal actions. Phase 21: `target-state` (GET) and `bookmarks`, `notes`, `collection-items`, `history`, `quran-progress` (POST) serve the private island on public content pages after hydration, and `export` (GET) returns the person's Personalisation data as a JSON download. Phase 22: `learning/state` (GET) and `learning/enrolments`, `learning/trials` (POST) serve a Course page's private island, and `export/learning` (GET) returns the person's Learning data. Phase 26: `export/membership` (GET) returns the person's Membership applications and Memberships. Phase 27: `export/donations` (GET) returns the person's linked donations. Rebaseline R1: `account-state` (GET, same-origin only) answers only `{ signedIn: boolean }` for the shared header's account island, so the public HTML stays identical for everyone. Every response is private and `no-store`; every POST requires the configured origin, `Sec-Fetch-Site: same-origin` where sent and the `x-minhaj-intent: personal` header (SECURITY_BASELINE.md §7.1 rule 6) |
+| Personal | `/api/my/*` | Authenticated personal actions. Phase 21: `target-state` (GET) and `bookmarks`, `notes`, `collection-items`, `history`, `quran-progress` (POST) serve the private island on public content pages after hydration, and `export` (GET) returns the person's Personalisation data as a JSON download. Phase 22: `learning/state` (GET) and `learning/enrolments`, `learning/trials` (POST) serve a Course page's private island, and `export/learning` (GET) returns the person's Learning data. Phase 26: `export/membership` (GET) returns the person's Membership applications and Memberships. Phase 27: `export/donations` (GET) returns the person's linked donations. Rebaseline R1: `account-state` (GET, same-origin only) answers only `{ signedIn: boolean }` for the shared header's account island, so the public HTML stays identical for everyone. Quran Part 1: `quran-position` (GET, same-origin only, no query) answers only `{ signedIn: false }` or `{ signedIn: true, position: { surah, ayah } | null }` for the session's own account, for the reader's "Continue where you stopped" card. Every response is private and `no-store`; every POST requires the configured origin, `Sec-Fetch-Site: same-origin` where sent and the `x-minhaj-intent: personal` header (SECURITY_BASELINE.md §7.1 rule 6) |
 | Messaging REST | `/api/messaging/*` | Phase 24: `conversations/{id}/messages?after={sequence}` (GET) — durable catch-up after a sequence the reader holds, the source Phase 25 reconnection uses; `conversations/{id}/attachments` (POST) — one attachment's streamed raw body, JPEG, PNG or PDF up to 5 MiB, Class A with `x-minhaj-intent: messaging-attachment`; `attachments/{id}/discard` (POST) — release an unsent upload. Every response private and `no-store`; current access re-decided on every request |
 | Teacher / Admin | `/api/teacher/*` · `/api/admin/*` | Role-gated operations |
 | Migration | `/api/admin/migration/*` | Import control and status. Phase 29 delivers two private reads, GET only: `runs/{id}` — one run's state, discovery, reconciliation and item counts as JSON under `migration.read` (identifiers, states and numbers only); `snapshots/{id}` — one raw snapshot's bytes under `migration.administer`, an audited read sent as an inert attachment (`application/octet-stream`, `nosniff`, `sandbox; default-src 'none'`, `private, no-store`; SECURITY_BASELINE.md §10.5). A cross-site Fetch-Metadata request is refused first and every refusal is the same empty 404. Runs and promotions are started by the command line, mutations are Server Actions; nothing here changes state. Rebaseline R2 adds `assets/{provenanceId}` (GET) — the administrative preview of one acquisition's metadata-stripped **public copy** under a live `migration.administer`, never the acquired evidence bytes or any other asset, served inline with its verified image type, `nosniff`, a sandboxing policy and `private, no-store`; every refusal is the same empty 404 (SECURITY_BASELINE.md §10.11) |

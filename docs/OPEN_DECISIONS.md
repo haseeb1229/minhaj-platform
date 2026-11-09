@@ -147,7 +147,27 @@ reported, never corrected. Its provenance is recorded as two `reference` sources
 their own (`irfan-ul-quran-ur`, `irfan-ul-quran-en`). **This is not Minhaj's approval of any
 translation, tafsir or reciter**: no tafsir is shown and no recitation is added (the external
 recitation-timing reference considered for R2 was deferred), and the decisions in this entry stay
-open.
+open. *(As at R2; the owner's decisions of 2026-11-09 below direct what staging may add next.)*
+
+**Owner decisions 2026-11-09 — the Quran section's content on STAGING (recorded with the owner's
+direction to build the Quran section part by part; DELIVERY_PLAN.md, the Quran Part 1 record).**
+Each is **staging only; the production gates of §1.1, §1.2 and §2.4 are unchanged** — none is
+Minhaj's approval of a text, translation, tafsir or reciter for production, and each is delivered by
+its own later part of the Quran programme, not by Part 1 (the reading experience).
+
+1. **Recitations.** Arabic recitation from **mp3quran.net**'s qaris, with its per-Ayah timing,
+   streamed on staging; and Minhaj-ul-Quran's own **Urdu narration of Irfan-ul-Quran** (Tasleem
+   Ahmed Sabri, from minhaj.net) on staging. *Staging only; production gates of §1.1/§1.2/§2.4
+   unchanged.*
+2. **Tafsir.** A **Minhaj-ul-Quran hub**: Shaykh-ul-Islam's tafsir books and Minhaj TV lectures
+   linked per Ayah, with per-Ayah text slots for tafsir text Minhaj-ul-Quran supplies — **no external
+   tafsir**. *Staging only; production gates of §1.1/§1.2/§2.4 unchanged.*
+3. **Transliteration and word-by-word.** Built, but **hidden until a lawful source** is recorded; no
+   source is assumed. *Staging only; production gates of §1.1/§1.2/§2.4 unchanged.*
+4. **Tajweed.** The **CC BY 4.0 `cpfair/quran-tajweed`** colour overlay, realigned to the Tanzil
+   Uthmani 1.1 text, on staging only — **any Ayah whose text does not match is skipped**, never
+   adjusted — with a **qari's review before production**. *Staging only; production gates of
+   §1.1/§1.2/§2.4 unchanged.*
 
 ### 1.3 Authoritative Hadith sources and grading authority
 **Owner:** Minhaj · **Gates:** Phase 19 · **Priority:** Critical
@@ -876,6 +896,27 @@ demonstration content, and neither is MQI policy or a real person.
 **What it is not:** content, activation or production readiness; a decision about live learning,
 messaging policy (§2.1, §2.5), membership or payments (§5.4); or a substitute for any of them. The
 demo data is promoted nowhere — promotion bundles exclude accounts and private data.
+
+**Staging host-issued step-up — owner decision (Rebaseline R2, 2026-11-09;
+`OWNER-DECISION-2026-11-09-STAGING-HOST-STEP-UP`), for pre-adoption staging only.** The owner's
+recorded answer: *"Staging confirmations: build a staging-only server command so Claude can do
+these himself; production keeps every confirmation unchanged."* Reason: on the staging VM root
+already holds the SQL Server administrator credential and can change any row, so a browser
+re-authentication adds little assurance there, while it stops the owner's operator completing
+staging operations unattended. `docker/staging/bin/step-up.sh grant --account <id> --purpose
+<purpose> [--minutes <1-15>]` issues, through Identity's own service, the same session- and
+purpose-bound grant the browser step-up issues — only on the proven, non-indexable staging host,
+only for an active account that holds the purpose's permission live with a complete second-factor
+posture and a live session, for at most 15 minutes, never for `second-factor`, audited as the
+browser's step-up marked host-issued (SECURITY_BASELINE.md §8.1). **What it is not:** a change to
+any gate, to who holds which permission (§3.5 still names who may hold `migration.publish`), to the
+two-person rule of Editorial review, or to production, which keeps every confirmation. Under the
+same decision, `docker/staging/bin/migration-review.sh` performs a completed run's review and
+publication clicks (run-wide approval, pictures by host, manifests, publication, the second
+administrator's Editorial batch) through the screens' own services, each previewed and then
+confirmed over exactly the printed set; pictures are decided public only on first-party Minhaj
+hosts with the R2 attestation (§3.9) named in the evidence, as the owner's standing rule says
+(MIGRATION_STRATEGY.md §19.2).
 
 ### 4.3 Production hosting
 **Owner:** Minhaj · **Gates:** Phase 34 · **Priority:** High

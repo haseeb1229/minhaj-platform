@@ -1496,3 +1496,75 @@ After each run: the run-wide approval, pictures by host, manifests of 100, each 
 under step-up, then the second administrator's Editorial queue selections. The contact page (1797)
 is expected to be flagged for its organisational contact details and to go through the 30-RD
 clearance (§17); its first picture (a "read in Urdu" button) stays restricted.
+
+### 19.2 Review and publication on staging by host command
+
+> **Staging only.** Under OWNER-DECISION-2026-11-09-STAGING-HOST-STEP-UP (OPEN_DECISIONS.md §4.2;
+> SECURITY_BASELINE.md §8.1) the operator may perform, on the proven staging host and as the named
+> administrators, the acts of §19 a person otherwise clicks in `/admin/migration` and
+> `/admin/editorial`. Production keeps every browser act and confirmation unchanged and never runs
+> this.
+
+`docker/staging/bin/migration-review.sh <act> …` runs `staging-migration-review` in the exact-SHA
+operations image after root, the staging host proof, the deployed web service's non-indexable
+posture and the host lock; the command refuses again unless the process declares exactly staging
+and `PUBLIC_INDEXING_ENABLED=false`, runs the whole staging guard, and starts the review tool
+(`scripts/review/review-runtime.ts`, root `apps/web/src/composition/staging-review-runner.ts`) as
+the **runtime principal**. The tool calls the **same services** the screens call — Migration's
+decision, publication and read services and Editorial's batch — so every rule of §19 holds
+unchanged: the count-and-fingerprint confirmation, `run-unreconciled`, 10,000 candidates and 150
+decisions per act, the open-duplicate question before each approval, manifests of 100, one audit
+row per item in the named person's name.
+
+| Act | Who acts | What it does |
+|---|---|---|
+| `status --operator <id> (--run <runId> \| --source <key>)` | `migration.read` (`content.read` for the queues) | Counts what awaits each act; the run's draft and publishing manifests by id and version |
+| `approve-run --run <runId> --operator <id> [--note …]` | `migration.administer` | Preview: the run's counts and the whole set's size and fingerprint. With `--confirm-count N --confirm-fingerprint F`: the run-wide approval over exactly that set |
+| `rights --run <runId> --host <host> --operator <id>` | `migration.administer` | Preview per host; with `--licence`, `--evidence`, `--rights-holder` and the confirmation, the pictures-by-host decision |
+| `manifest --run <runId> --operator <id>` | `migration.administer` | Preview; with the confirmation, a draft manifest of the next 100 |
+| `publish --manifest <id> --operator <id>` | `migration.publish` + live `migration-publication` step-up | Preview: state and version. With `--confirm-version V`: publication by the publisher Identity's gate mints for the session the grant is bound to (`step-up.sh grant --purpose migration-publication` first; the one live session holding it is found when `--session` is not named) |
+| `editorial --kind <kind> --approver <secondAdminId>` | `content.review` + `content.publish` | Preview: the first page of that kind's review queue (at most 25), size and fingerprint. With the confirmation: Editorial's approve-and-publish, self-approval refused per record |
+
+**Pictures — the standing rule.** Only hosts of Minhaj-ul-Quran International's own domains
+(`minhaj.org`, `minhaj.net`, `minhaj.info`, `minhaj.tv`, `minhajbooks.com`, `minhajoverseas.com`,
+`irfan-ul-quran.com`, `thefatwa.com`, or a subdomain) are decided public, and their evidence must
+name `OWNER-ATTESTATION-2026-11-06-R2-COMPREHENSIVE-PRESENTATION-CORPUS`. Any other host stays
+restricted unless `--decide-non-first-party-host` repeats that exact host. The licence, evidence and
+holder are always explicit arguments; nothing defaults. Migration's service still admits only
+restricted acquisitions on a registered host, claimed `organisation-owned` with evidence, with a
+public copy.
+
+**Search.** An Editorial publication (and a target's publication) writes its search request in the
+same transaction; the web service's own sweep indexes it within about thirty seconds. The host
+command runs no second search processor: one built from the operations image's environment would
+project every due scope, other domains' included, under a configuration the web does not have (the
+reference-preview admission among it).
+
+**One completed run, end to end** (placeholders for identifiers). Each act is run twice: first as
+printed (a preview), then with the count and fingerprint — or version — the preview printed. An act
+that leaves `remaining` above 0 (150 per act) or a further manifest candidate is previewed and
+confirmed again:
+
+```sh
+migration-review.sh status      --operator <adminA> --run <runId>
+migration-review.sh approve-run --run <runId> --operator <adminA>
+migration-review.sh approve-run --run <runId> --operator <adminA> --confirm-count <n> --confirm-fingerprint <f>
+# per host `status` lists with candidates:
+migration-review.sh rights      --run <runId> --host <host> --operator <adminA>
+migration-review.sh rights      --run <runId> --host <host> --operator <adminA> \
+  --licence organisation-owned --rights-holder 'Minhaj-ul-Quran International' \
+  --evidence '<the page notice>; OWNER-ATTESTATION-2026-11-06-R2-COMPREHENSIVE-PRESENTATION-CORPUS' \
+  --confirm-count <n> --confirm-fingerprint <f>
+migration-review.sh manifest    --run <runId> --operator <adminA>
+migration-review.sh manifest    --run <runId> --operator <adminA> --confirm-count <n> --confirm-fingerprint <f>
+step-up.sh grant --account <adminA> --purpose migration-publication --minutes 15
+migration-review.sh publish     --manifest <manifestId> --operator <adminA>
+migration-review.sh publish     --manifest <manifestId> --operator <adminA> --confirm-version <v>
+# per kind with records in review (the second administrator, never the author):
+migration-review.sh editorial   --kind <kind> --approver <adminB>
+migration-review.sh editorial   --kind <kind> --approver <adminB> --confirm-count <n> --confirm-fingerprint <f>
+```
+
+The administrators sign in once in the ordinary way (the grant binds to a live session). The command
+holds the host lock, so it does not run beside an ingest run: issue the step-up after an ingest, not
+before it.

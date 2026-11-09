@@ -608,6 +608,44 @@ the posture and the grant in full, exactly as for a first submission. A step-up 
 to the page the person was working on only through `safeStepUpReturnTo`, which is **purpose-bound**
 (§9.3).
 
+**Staging host-issued step-up — the one exception, staging only (owner decision
+`OWNER-DECISION-2026-11-09-STAGING-HOST-STEP-UP`, OPEN_DECISIONS.md §4.2).** On the proven staging
+host — where root already holds the SQL Server administrator credential and could change any row —
+the operator may issue the **same** grant the browser step-up issues, so the operator commands whose
+gates re-check the grant live (the Quran reference import, migration publication) run unattended.
+**Production keeps every confirmation unchanged.** The exception is bounded by all of:
+
+- **Where.** `bin/step-up.sh grant --account <id> --purpose <purpose> [--minutes <1-15>]` runs only
+  as root, after the full staging host proof (§21.5) and against a deployed web service that is
+  explicitly non-indexable; `staging-step-up` refuses again before any connection unless the
+  process declares exactly the staging deployment and `PUBLIC_INDEXING_ENABLED=false`, then runs the
+  whole staging database guard; and Identity's service (`createHostStepUpService`) **cannot be
+  constructed** without that declaration. It runs as the least-privilege runtime principal and is
+  composed only by the staging operator root (`composition/staging-step-up-runner.ts`) — no web
+  request path reaches it (`tests/architecture/staging-host-step-up.test.ts`).
+- **What it replaces — the moment of re-authentication, nothing else.** The account must exist, be
+  **active**, hold live a permission the purpose's gate demands (`quran.editCanonical` for
+  `quran-canonical-edit`, `migration.publish` for `migration-publication`, … — an unknown purpose is
+  refused), and have a **complete** second-factor posture; nothing is enrolled, confirmed or
+  cleared. `second-factor` is never host-issued.
+- **Bound like any grant.** To the account's most recent **live** session (the person signs in once
+  in the ordinary way; with no live session it refuses), to one purpose, for at most **15 minutes**
+  (default 5), and deleted with its session. The gates are unchanged and re-check permission,
+  posture and grant live.
+- **Recorded.** The browser's own audit action, `identity.security.step-up-granted`, with actor
+  type `operator`, `issuance: staging-host`, the lifetime, and the decision reference as its
+  authorising source — never a secret or token.
+- **The review acts it serves (same decision, staging only).** `bin/migration-review.sh` performs a
+  completed run's review and publication acts as the named administrators, under the same root,
+  host-proof, non-indexable and declared-staging refusals, the host lock, and a composition root that
+  refuses to be built elsewhere (`composition/staging-review-runner.ts`; no web request path reaches
+  it). It calls the screens' own services, so each key is re-read live for the named account
+  (`migration.administer`; `migration.publish` through the privileged gate with the live
+  `migration-publication` grant; `content.review` + `content.publish` with self-approval refused);
+  every act is first previewed and then runs only over the exact set confirmed by count and
+  fingerprint (or a manifest's version); pictures are decided public only on first-party Minhaj
+  hosts, with the licence, evidence and holder always stated (MIGRATION_STRATEGY.md §19.2).
+
 ### 8.2 Privileged multi-factor authentication — a V1 production requirement, precisely scoped
 
 > **High-consequence privileged capabilities require an enrolled second factor before those
@@ -1836,7 +1874,12 @@ made, and no cookie banner is added — there is no non-essential processing to 
   email, identifier, role or permission — `private, no-store`, through the same personal
   transport, refusing a cross-site read before the session is resolved; a signed-out browser gets
   an ordinary `200 { signedIn: false }`, which reveals nothing that opening `/my` would not. The
-  public HTML is identical for every visitor.
+  public HTML is identical for every visitor. Quran Part 1 (2026-11-09) adds one more such read for
+  the Quran reader's "Continue where you stopped" card: `GET /api/my/quran-position` answers only
+  `{ signedIn: false }` or `{ signedIn: true, position: { surah, ayah } | null }` for the session's
+  own account — no version, time or identifier — refuses a cross-site (or same-site) read before
+  the session is resolved and any query at all (`400`), and is `private, no-store`, `noindex`; the
+  reader entry's HTML stays identical signed in and out (proved in `tests/browser/quran.spec.ts`).
 - **Logging.** Note text, addresses, tokens, history and export bodies are never logged; failures are
   logged by operation name only, and operator audit rows carry identifiers and states, not addresses.
 

@@ -1042,7 +1042,9 @@ Model A surface:
 - **Operations image.** It also carries `quran-reference-runner.ts`,
   `storage-derivatives-backfill.ts`, the `quran` context and `scripts/quran` and `scripts/storage`;
   `sharp` arrives with `npm ci` as `@minhaj/storage`'s dependency, its linux-x64 prebuilt binary
-  included.
+  included. Since 2026-11-09 it also carries the staging host review's root
+  (`composition/staging-review-runner.ts`, over `migration-runner.ts` and Editorial's service) and
+  its tool `scripts/review` (§10.6; MIGRATION_STRATEGY.md §19.2).
 
 ---
 
@@ -1681,6 +1683,27 @@ fixture donations against a Stripe protocol simulator on loopback inside that pr
 sent and no money moves; public Donate stays off. `reset` closes the personas through Identity's
 own closure, runs every context's closed-account disposition and archives the demo catalogue
 (SECURITY_BASELINE.md §21.5).
+
+**Host-issued step-up (Rebaseline R2; OPEN_DECISIONS.md §4.2,
+`OWNER-DECISION-2026-11-09-STAGING-HOST-STEP-UP`).** `bin/step-up.sh grant --account <id> --purpose
+<purpose> [--minutes <1-15>]` runs `staging-step-up` in the operations image after the staging host
+proof and the same non-indexable check as the demo, then the whole staging database guard; a runtime
+child (`scripts/identity/host-step-up.ts`, root `composition/staging-step-up-runner.ts`) issues the
+browser step-up's own grant through Identity's `createHostStepUpService`, bound to the account's
+most recent live session, so `quran-reference.sh import` and the other gated commands find it
+unchanged. It takes no host lock (one grant row and one audit row conflict with no ingest, backup or
+deploy); the command that uses the grant does. Production never runs it (SECURITY_BASELINE.md §8.1).
+
+**Host review of a completed run (Rebaseline R2; same decision).** `bin/migration-review.sh
+status|approve-run|rights|manifest|publish|editorial …` runs `staging-migration-review` in the
+operations image after the staging host proof, the non-indexable check and the host lock, then the
+whole staging database guard; a runtime child (`scripts/review/review-runtime.ts`, root
+`composition/staging-review-runner.ts`, which composes the migration tooling's root and Editorial's
+service and refuses to be built outside a declared non-indexable staging deployment) performs the
+acts through the screens' own services as the named administrators. A confirmed publication's
+session is read as the runtime principal (the owner principal is not opened). Editorial search
+requests are indexed by the web service's own sweep; no second search processor runs
+(MIGRATION_STRATEGY.md §19.2).
 
 **Image derivatives (Rebaseline R2).** `bin/derivatives-backfill.sh [--limit <n>]` runs
 `staging-storage-derivatives` in the `ops` service (staging storage root mounted, scanner on the

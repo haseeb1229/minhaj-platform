@@ -2721,6 +2721,9 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 >   (OPEN_DECISIONS.md §1.3). **Fatwa:** unchanged; the staged review set is widened (§1.4).
 > - **Staging demonstration data** as operator-run environment data, never an application mode
 >   (`OWNER-DECISION-2026-11-06-R2-STAGING-DEMO`; OPEN_DECISIONS.md §4.2).
+> - **Staging host-issued step-up** (2026-11-09; `OWNER-DECISION-2026-11-09-STAGING-HOST-STEP-UP`;
+>   OPEN_DECISIONS.md §4.2) — the staging operator may issue the browser step-up's own grant from the
+>   proven host; production keeps every confirmation unchanged (SECURITY_BASELINE.md §8.1).
 >
 > **Delivered:**
 >
@@ -2788,6 +2791,23 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 >   (`apps/web/src/composition/staging-demo-runner.ts`), three synthetic `.invalid` personas, the
 >   email transport refusing `.invalid` recipients (`reserved_domain`), and the provider simulator
 >   in-process for fixture donations (OPEN_DECISIONS.md §4.2; SECURITY_BASELINE.md §21.5).
+> - **Staging host-issued step-up** — `npm run staging:step-up:grant` behind
+>   `docker/staging/bin/step-up.sh grant --account <id> --purpose <purpose> [--minutes <1-15>]`, a
+>   further operations composition root (`apps/web/src/composition/staging-step-up-runner.ts`) and
+>   Identity's `createHostStepUpService`: the same grant, bound to the account's latest live
+>   session, refused unless the account is active, holds the purpose's permission, has a complete
+>   second-factor posture and the deployment is declared non-indexable staging; at most 15 minutes;
+>   audited as `identity.security.step-up-granted` marked host-issued; unreachable from any web
+>   request path (`tests/architecture/staging-host-step-up.test.ts`; SECURITY_BASELINE.md §8.1).
+> - **Staging host review of a completed run** — `npm run staging:migration:review` behind
+>   `docker/staging/bin/migration-review.sh status|approve-run|rights|manifest|publish|editorial`,
+>   the review tool `scripts/review/review-runtime.ts` and its operations composition root
+>   (`apps/web/src/composition/staging-review-runner.ts`): the screens' own Migration and Editorial
+>   services, every act a preview first and then confirmed over exactly the printed set,
+>   publication only under a live `migration-publication` step-up, the Editorial approver never
+>   the author, pictures decided public only on first-party Minhaj hosts with the R2 attestation
+>   named; staging only, unreachable from any web request path (MIGRATION_STRATEGY.md §19.2;
+>   `tests/migration/host-review*.test.ts`).
 > - **CI** — a new "Authorisation catalogue proof (real SQL Server)" step in the Database foundation
 >   job runs the Identity and Taxonomy authorisation suites against the live catalogue and fails if
 >   any did not run (`scripts/assert-authorization-proofs.mjs`); both suites, stale since Phase
@@ -2827,7 +2847,11 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > pictures and publishing per run (MIGRATION_STRATEGY.md §19.1); a second administrator's custom
 > role for the Quran import, its step-up, then `quran-reference.sh import --sha256 …` and, after the
 > Irfan-ul-Quran runs, `quran-reference.sh translations`; `derivatives-backfill.sh`; and, after a
-> `privilege-administration` step-up, `demo.sh seed`.
+> `privilege-administration` step-up, `demo.sh seed`. Since 2026-11-09 each step-up named here may
+> instead be issued on the host with `step-up.sh grant` for that administrator and purpose (the
+> administrator signs in once first); the gates and the two-person rules are unchanged. The
+> review and publication acts of each completed run may likewise be performed with
+> `migration-review.sh` (MIGRATION_STRATEGY.md §19.2).
 >
 > #### Closure evidence
 >
@@ -2845,6 +2869,58 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > §4.2). Production — not started (Phases 34–35). Flagship/presentation — the full presentation
 > layer exists for review on pre-adoption staging; its acceptance is the owner's review of the
 > deployed build, not this record.
+
+> **Quran Part 1 — the reading experience (owner direction 2026-11-09; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** The owner directed that the Quran section be
+> built part by part, "from A to Z, fully ready", in menu order; Part 1 is **Read Quran** — the
+> reader entry, the Surah reading page, the Ayah page and the reader components they share
+> (ROUTE_MAP.md §3.3; INFORMATION_ARCHITECTURE.md §3.2). The owner's four Quran content decisions of
+> the same day are recorded in OPEN_DECISIONS.md §1.2 (staging only; the production gates of §1.1,
+> §1.2 and §2.4 are unchanged). Delivered:
+>
+> - **Windows, not one document.** A Surah page renders one window of 40 ayat server-side (one read
+>   per layer, no per-Ayah read); `?from=` opens the window holding an Ayah; the next window is a link
+>   the reader island fetches and appends as the reader nears it. Every Ayah element is
+>   `ayah-{surah}-{ayah}`; a fragment such as `/quran/surah/2#ayah-2-255` is landed by the island in
+>   that Ayah's window. Corpus reads are **not cached**: the cost was the payload, not the bounded
+>   reads, and a cache would need invalidation on activation and correction that the platform does
+>   not have.
+> - **Three reading modes over one document** — Translation, Reading (flowing Arabic, presentational
+>   end marks, one button per Ayah opening its translation in a sheet) and Mushaf (grouped by the
+>   source's pages) — and **`/quran/page/{n}`**, one mushaf page as text (no images), 404 outside the
+>   corpus's recorded pages. `PublicAyah` now carries the stored `hizb` and `page`, and the public
+>   reader answers `pageAyat` and `lastPage` (no schema change, no new index: one bounded scan of the
+>   canonical table).
+> - **Division markers** where a Juz, a hizb or a page begins, and sajdah ayat, from stored numbers
+>   only; rub' al-hizb quarters are not stored apart from the text's own ۞ sign.
+> - **A settings sheet** — mode, which of up to four rendered public translations show, stacked or
+>   side by side, both sizes, line spacing — kept in `localStorage` and applied before the first
+>   paint by a fixed inline boot script whose rules are proved equal to the TypeScript ones by test;
+>   the no-JS GET form remains.
+> - **Continue where you stopped**, on `/quran/read` and the landing: the signed-in person's own
+>   position through a new data-minimal `GET /api/my/quran-position` (same-origin only, no query,
+>   private and `no-store`), else the device's last place; `/quran/read` becomes a start page
+>   (popular starting points as fixed citations offered only where the corpus holds them, the quick
+>   jump with "page 50", the indexes). Save and note open the existing private island in place on
+>   the Surah page (it records no history there).
+> - **Surah header** with the Arabic and recorded names, count, revelation, Juz and page span and the
+>   neighbouring Surahs; a skip link to the text; `aria-current="location"` on the read position;
+>   no single-key shortcuts (they collide with screen-reader browse keys).
+>
+> **Proof:** unit tests for windows, fragments, divisions, starting points, preferences and the boot
+> script's parity, the quick jump's pages and the private read's parsing
+> (`tests/quran/reading-layout.test.ts`, `tests/quran/reader-surface.test.ts`); the browser journey
+> (`tests/browser/quran.spec.ts`) gains a 45-Ayah fixture Surah with made-up hizb and page numbers
+> and proves windows and deep links, the three modes, the page route's 200/404, settings across a
+> reload, the continue card signed in and out with the private read's refusals, the start page's
+> sameness signed in and out, no sideways scroll at 320 and 390 px in Urdu and Arabic in every mode,
+> and an axe scan in every mode; `/quran/read` joins the accessibility smoke. *CI and staging
+> evidence are recorded when they exist; nothing here is called green before them.*
+>
+> **Not in Part 1 (later parts of the same programme):** the Surah and Juz index redesigns, Quran
+> search, the recitation player (each Ayah element is its seam: a stable id and `data-ayah`, and no
+> placeholder control), the translations comparison page, tafsir, tajweed and the related views;
+> more than four translations side by side (more are chosen one at a time through `?translation=`).
 
 ---
 
