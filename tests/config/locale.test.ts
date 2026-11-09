@@ -460,8 +460,9 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/quran/reading-layout.ts',
     'apps/web/src/components/quran/reference-sources.ts',
     'apps/web/src/components/quran/scripture.tsx',
-    // Quran Part 2: the Surah index's live filter.
+    // Quran Part 2: the Surah index's live filter and its pure rules.
     'apps/web/src/components/quran/surah-index-island.tsx',
+    'apps/web/src/components/quran/surah-index.ts',
     'apps/web/src/components/my/dashboard.ts',
     'apps/web/src/components/my/frame.tsx',
     'apps/web/src/components/my/metadata.ts',
