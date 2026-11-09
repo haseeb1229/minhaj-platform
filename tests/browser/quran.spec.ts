@@ -1300,6 +1300,247 @@ test.describe('a fixture corpus', () => {
     await expect(page.getByRole('article', { name: 'Surah 2, Ayah 2' })).toHaveCount(0);
   });
 
+  test('Part 3: the Juz index — opening words verbatim, ranges, a filter by number, the quick jump’s hizb, RTL and 320px', async ({
+    page,
+    browser,
+    request,
+  }, testInfo) => {
+    test.setTimeout(240_000);
+    await visitFixture(page, '/quran/juz');
+    const list = page.getByRole('list', { name: 'Juz', exact: true });
+    const cards = list.getByRole('listitem');
+    await expect(cards).toHaveCount(2);
+    const second = cards.nth(1);
+    await expect(
+      second.getByRole('link', { name: 'Juz 2', exact: true }),
+    ).toHaveAttribute('href', '/quran/juz/2');
+    // The opening words are a slice of the first Ayah's stored text, never a
+    // name written anywhere: the first three words of 2:3, then a quiet "…".
+    const opening = second.locator('span[lang="ar"]').first();
+    const words = canonicalText(2, 3).split(' ').slice(0, 3).join(' ');
+    expect(await opening.evaluate((element) => element.firstChild?.textContent)).toBe(
+      words,
+    );
+    expect(canonicalText(2, 3).startsWith(words)).toBe(true);
+    await expect(opening.locator('[aria-hidden="true"]')).toHaveText(' …');
+    await expect(second).toContainText('From 2:3 to 3:45 · 47 ayat');
+    await expect(second).toContainText(
+      'NON_QURAN_FIXTURE Surah Two–NON_QURAN_FIXTURE Surah Three',
+    );
+    await expect(second).toContainText('Pages 3–6 · Hizb 3–4');
+    await expect(cards.first()).toContainText('Pages 1–3 · Hizb 1–2');
+
+    // A filter by number, or by a hizb a Juz holds, kept in the address.
+    const status = page.getByRole('status').filter({ hasText: 'Showing' });
+    await expect(status).toHaveText('Showing 2 of 2 Juz');
+    const filter = page.getByRole('searchbox', { name: 'Find a Juz' });
+    await filter.fill('2');
+    await expect(cards).toHaveCount(1);
+    await expect(page).toHaveURL(/\/quran\/juz\?q=2$/);
+    await filter.fill('hizb 1');
+    await expect(cards).toHaveCount(1);
+    await expect(cards.first().getByRole('link')).toHaveAttribute('href', '/quran/juz/1');
+    await filter.fill('kahf');
+    await expect(list).toHaveCount(0);
+    await expect(page.getByText('No Juz matches “kahf”.')).toBeVisible();
+    await page.getByRole('link', { name: 'Show every Juz' }).click();
+    await expect(cards).toHaveCount(2);
+
+    // The same filter without JavaScript: a plain GET answered on the server.
+    const noScript = await browser.newContext({
+      baseURL: baseUrl(),
+      javaScriptEnabled: false,
+    });
+    contexts.push(noScript);
+    const plain = await noScript.newPage();
+    expect((await plain.goto('/quran/juz?q=hizb+4'))?.status()).toBe(200);
+    const plainCards = plain
+      .getByRole('list', { name: 'Juz', exact: true })
+      .getByRole('listitem');
+    await expect(plainCards).toHaveCount(1);
+    await expect(plainCards.first()).toContainText('Juz 2');
+    await plain.getByRole('searchbox', { name: 'Find a Juz' }).fill('1');
+    await plain.getByRole('button', { name: 'Apply' }).click();
+    await plain.waitForURL(/\/quran\/juz\?q=1$/);
+    await expect(plainCards).toHaveCount(1);
+    await expect(plainCards.first()).toContainText('Juz 1');
+
+    // The quick jump opens a recorded hizb in its Juz — and nothing else.
+    const jump = await request.get('/quran/read?q=hizb%204', { maxRedirects: 0 });
+    const target = new URL(jump.headers()['location'] ?? '', baseUrl());
+    expect(`${target.pathname}${target.search}`).toBe('/quran/juz/2?hizb=4');
+    const missing = await request.get('/quran/read?q=hizb%209', { maxRedirects: 0 });
+    expect(missing.status()).toBe(200);
+
+    // Urdu and Arabic: right to left, the opening words marked Arabic.
+    for (const locale of ['ur', 'ar'] as const) {
+      await visitFixture(page, localizedPath(locale, '/quran/juz'), locale);
+      await expect(page.locator('html'), locale).toHaveAttribute('dir', 'rtl');
+      await expect(
+        page.getByRole('main').locator('ol span[lang="ar"]').first(),
+        locale,
+      ).toContainText(canonicalText(1, 1).split(' ').slice(0, 3).join(' '));
+    }
+
+    await page.setViewportSize({ width: 320, height: 800 });
+    for (const target of ['/quran/juz', '/ur/quran/juz', '/ar/quran/juz?q=2']) {
+      await page.goto(target);
+      const { overflow, offenders } = await overflowOf(page);
+      expect(
+        overflow,
+        `320px ${target} — beyond the viewport: ${offenders.join(', ')}`,
+      ).toBeLessThanOrEqual(0);
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+    for (const target of ['/quran/juz', '/ur/quran/juz']) {
+      await page.goto(target);
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      const blocking = results.violations.filter(
+        (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+      );
+      for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+        testInfo.annotations.push({
+          type: 'axe',
+          description: `${target}: ${finding.id} (${String(finding.impact)})`,
+        });
+      expect(
+        blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+        target,
+      ).toEqual([]);
+    }
+  });
+
+  test('Part 3: a Juz is read hizb by hizb — contents, windows that load on, neighbours, no script, RTL, 320px', async ({
+    page,
+    browser,
+  }, testInfo) => {
+    test.setTimeout(240_000);
+
+    // Without JavaScript: one window, complete, and plain links to the rest.
+    const noScript = await browser.newContext({
+      baseURL: baseUrl(),
+      javaScriptEnabled: false,
+    });
+    contexts.push(noScript);
+    const plain = await noScript.newPage();
+    expect((await plain.goto('/quran/juz/2'))?.status()).toBe(200);
+    await expect(plain.getByRole('heading', { level: 1 })).toHaveText('Juz 2');
+    const header = plain.locator('main header').first();
+    await expect(
+      header.getByRole('link', { name: 'NON_QURAN_FIXTURE Surah Two 2:3' }),
+    ).toHaveAttribute('href', '/quran/surah/2/3');
+    await expect(
+      header.getByRole('link', { name: 'NON_QURAN_FIXTURE Surah Three 3:45' }),
+    ).toHaveAttribute('href', '/quran/surah/3/45');
+    await expect(header).toContainText('47 ayat · Pages 3–6 · Hizb 3–4');
+    await expect(plain.locator('#ayah-2-3')).toHaveCount(1);
+    await expect(plain.locator('#ayah-3-19')).toHaveCount(1);
+    await expect(plain.locator('#ayah-3-20')).toHaveCount(0);
+    await expect(plain.getByText('Ayat 1–21 of 47 in this Juz')).toBeVisible();
+    // Surah 3 opens inside the window: its heading is there.
+    await expect(
+      plain.getByRole('heading', { level: 2, name: /NON_QURAN_FIXTURE Surah Three/ }),
+    ).toHaveCount(1);
+
+    const contents = plain.getByRole('navigation', { name: 'In this Juz' });
+    await expect(contents.getByRole('link', { name: /^Hizb 3/ })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    await expect(contents.getByRole('link', { name: /^Hizb 4/ })).toHaveAttribute(
+      'href',
+      '/quran/juz/2?hizb=4',
+    );
+    await expect(
+      contents.getByRole('link', { name: /NON_QURAN_FIXTURE Surah Three/ }),
+    ).toHaveAttribute('href', '/quran/juz/2#ayah-3-1');
+
+    const more = plain.getByRole('link', { name: 'Continue reading: Hizb 4' });
+    await expect(more).toHaveAttribute('href', '/quran/juz/2?hizb=4');
+    await more.click();
+    await plain.waitForURL('**/quran/juz/2?hizb=4');
+    await expect(plain.locator('#ayah-3-20')).toHaveCount(1);
+    await expect(plain.locator('#ayah-3-45')).toHaveCount(1);
+    await expect(plain.locator('#ayah-2-3')).toHaveCount(0);
+    await expect(plain.getByText('Ayat 22–47 of 47 in this Juz')).toBeVisible();
+    await expect(plain.getByRole('link', { name: 'Earlier: Hizb 3' })).toHaveAttribute(
+      'href',
+      '/quran/juz/2',
+    );
+    await expect(plain.getByRole('link', { name: /^Continue reading/ })).toHaveCount(0);
+
+    // Neighbours: Juz 1 before, nothing after the last Juz the corpus has.
+    const neighbours = plain.getByRole('navigation', { name: 'Previous and next Juz' });
+    await expect(
+      neighbours.getByRole('link', { name: /Previous: Juz 1/ }),
+    ).toHaveAttribute('href', '/quran/juz/1');
+    await expect(neighbours.getByRole('link', { name: /Next/ })).toHaveCount(0);
+
+    // Unknown windows and the old paging are the first window, not an error.
+    for (const odd of [
+      '/quran/juz/2?hizb=99',
+      '/quran/juz/2?offset=100',
+      '/quran/juz/2?part=x',
+    ])
+      expect((await plain.goto(odd))?.status(), odd).toBe(200);
+    await expect(plain.locator('#ayah-2-3')).toHaveCount(1);
+
+    // With JavaScript: the next hizb is appended as the reader nears it, its
+    // ids stay unique, and the link goes once the Juz is read to its end.
+    await visitFixture(page, '/quran/juz/2');
+    await readerReady(page);
+    await page.locator('a[data-window-next]').scrollIntoViewIfNeeded();
+    await expect(page.locator('#ayah-3-45')).toHaveCount(1);
+    await expect(page.locator('[data-window-nav]')).toHaveCount(0);
+    expect(
+      await page.evaluate(() => {
+        const ids = [...document.querySelectorAll('[id]')].map((element) => element.id);
+        return ids.length - new Set(ids).size;
+      }),
+    ).toBe(0);
+
+    // Urdu and Arabic read right to left; nothing is wider than 320px.
+    for (const locale of ['ur', 'ar'] as const) {
+      await visitFixture(page, localizedPath(locale, '/quran/juz/2'), locale);
+      await expect(page.locator('html'), locale).toHaveAttribute('dir', 'rtl');
+      await expect(
+        page.locator('#ayah-2-3 p[lang="ar"]').first(),
+        locale,
+      ).toHaveAttribute('dir', 'rtl');
+    }
+    await page.setViewportSize({ width: 320, height: 800 });
+    for (const target of ['/quran/juz/2', '/ur/quran/juz/2', '/ar/quran/juz/2?hizb=4']) {
+      await page.goto(target);
+      const { overflow, offenders } = await overflowOf(page);
+      expect(
+        overflow,
+        `320px ${target} — beyond the viewport: ${offenders.join(', ')}`,
+      ).toBeLessThanOrEqual(0);
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+    for (const target of ['/quran/juz/2', '/ur/quran/juz/2?hizb=4']) {
+      await page.goto(target);
+      await readerReady(page);
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      const blocking = results.violations.filter(
+        (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+      );
+      for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+        testInfo.annotations.push({
+          type: 'axe',
+          description: `${target}: ${finding.id} (${String(finding.impact)})`,
+        });
+      expect(
+        blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+        target,
+      ).toEqual([]);
+    }
+  });
+
   test('the study pages render the published fixture works', async ({ page }) => {
     await visitFixture(page, '/quran/translations');
     await page.getByRole('link', { name: NAME.translation }).click();

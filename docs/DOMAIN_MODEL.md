@@ -1044,6 +1044,24 @@ procedure, and adding them would change canonical structure for a presentation c
 offers no revelation-order sort. The "About this text" panel names the metadata wherever an English
 name is recorded.
 
+**Juz and hizb on the public reader (Quran Part 3, 2026-11-09). No schema change.** Everything the
+Juz index and the Juz page show is DERIVED from the stored Ayah rows: `PublicJuz` now carries, beside
+its range and count, the first and last stored `page`, every stored `hizb` in it, and the stored text
+of its first Ayah (one read grouped by Juz and hizb, and one read of at most thirty first ayat); the
+public reader adds `juzOutline(n)` (each Ayah's citation, hizb and page, no text — one bounded read)
+and `juzAyat(n, from, to)` (one read of at most `QURAN_JUZ_WINDOW` = 100 ayat between two citations,
+replacing the Phase-18 offset page and its `PublicAyahPage`). No Juz name is stored or written: a Juz
+is shown by the opening words of its first Ayah, cut verbatim from the stored text by one pure rule.
+**Rub' al-hizb quarters are not stored.** The canonical structure carries the source's hizb (1–60),
+derived at registration from Tanzil's 240 quarters; a quarter's start exists only in the metadata
+file, and Tanzil text 1.1 and metadata 1.0 disagree on one quarter start (15:49 against 15:50).
+Storing quarters would add canonical structure through the registered-source and canonical
+procedures — for every future corpus, the approved one included — and would choose between the two
+files; neither is justified for navigation, so the Juz page navigates by hizb (and by parts of a long
+hizb that break between stored pages), and the text's own ۞ sign remains the reader's quarter mark.
+A future need for quarter navigation is an owner decision on which file is authoritative, then a
+registered-source import with the same SHA-256 verification as the names.
+
 **Irreversible on its database.** Canonical Quran is a singleton store that is never deleted, and
 only one corpus is ever accepted: a staging database that holds the reference corpus keeps it until
 the staging database is reset, and a later approved corpus needs a fresh database or a recorded

@@ -26,9 +26,10 @@ import { pathFor, requireRoute } from '@/shell/registry';
 import { ContinueReading, QuickJumpForm } from './landing-islands';
 import { AboutThisText, CorpusNotice, quranTrail } from './parts';
 import { quranPath } from './presentation';
-import { readLastPage, readQuranTopic, readSurahs } from './read';
+import { readJuzList, readLastPage, readQuranTopic, readSurahs } from './read';
+import { hizbJuzOf } from './quick-jump';
 import {
-  JuzIndexList,
+  JuzIndexSection,
   SurahIndexSection,
   continueProps,
   jumpIndex,
@@ -40,14 +41,16 @@ import { RELATED_KINDS } from './related';
  * `/quran` — the Quran landing (ROUTE_MAP.md §3.3; R2).
  *
  * THE WAY IN FIRST. It opens with where a reader wants to go — type a place
- * ("18:10", a Surah's name, "juz 15", "page 50"), search the text and its
+ * ("18:10", a Surah's name, "juz 15", "hizb 30", "page 50"), search the text and its
  * published translations for words (a GET form to `/quran/search`, working
  * without JavaScript), continue where the reader stopped (their own signed-in
  * position, else this browser's last place — Quran Part 1), or start at the
  * beginning — and then lays the whole text out as an index:
  * every Surah — the same index as `/quran/surah` (Quran Part 2): number, name
  * and its meaning, ayat, revelation, Juz span and its Arabic name in the Quran
- * face, filtered as the reader types — and, in the second tab, every Juz.
+ * face, filtered as the reader types — and, in the second tab, every Juz with
+ * its range, Surahs, pages and hizb, filtered by number (Quran Part 3; its
+ * opening words are on `/quran/juz`, since the landing shows no verse).
  * Below it a quiet directory
  * of the rest of the section — reading, the published works beside the text,
  * what the platform classifies under the Quran, and courses — each listed ONLY
@@ -82,7 +85,7 @@ export async function QuranLandingPage({
     lastPage,
   ] = await Promise.all([
     readSurahs(),
-    reader.juzList(),
+    readJuzList(),
     reader.translations(),
     reader.tafsirs(),
     reader.transliterations(),
@@ -179,6 +182,7 @@ export async function QuranLandingPage({
             action={quranPath(locale, 'read')}
             index={jumpIndex(surahs)}
             lastPage={lastPage}
+            hizbs={[...hizbJuzOf(juzList)]}
             labels={await quickJumpLabels(locale)}
           />
         )}
@@ -240,12 +244,15 @@ export async function QuranLandingPage({
                     id: 'juz',
                     label: t('sections.juz'),
                     panel: (
-                      <JuzIndexList
+                      <JuzIndexSection
                         locale={locale}
                         list={juzList}
-                        label={t('sections.juz')}
-                        t={t}
+                        surahs={surahs}
+                        openings={false}
+                        initial=""
+                        idPrefix="landing-juz"
                         headingLevel="h3"
+                        syncAddress={false}
                       />
                     ),
                   },

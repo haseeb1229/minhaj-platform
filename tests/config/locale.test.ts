@@ -463,6 +463,10 @@ describe('the render and routing tree stays statically renderable', () => {
     // Quran Part 2: the Surah index's live filter and its pure rules.
     'apps/web/src/components/quran/surah-index-island.tsx',
     'apps/web/src/components/quran/surah-index.ts',
+    // Quran Part 3: the Juz index's cards and filter, and the pure Juz rules
+    // (opening words, windows, the index filter).
+    'apps/web/src/components/quran/juz-index-island.tsx',
+    'apps/web/src/components/quran/juz-layout.ts',
     'apps/web/src/components/my/dashboard.ts',
     'apps/web/src/components/my/frame.tsx',
     'apps/web/src/components/my/metadata.ts',

@@ -1,7 +1,7 @@
 import { QURAN_JUZ_MAX } from '@minhaj/contracts/quran';
 
 /**
- * QUICK JUMP — "18", "18:10", "kahf", "juz 15", "page 50" → one place in the Quran
+ * QUICK JUMP — "18", "18:10", "kahf", "juz 15", "hizb 30", "page 50" → one place in the Quran
  * (R2; benchmark pattern 10a). PURE and free of React, so the landing's GET
  * form (`/quran/read?q=`) and its client island answer the same input the same
  * way, and both are unit-tested here.
@@ -10,7 +10,8 @@ import { QURAN_JUZ_MAX } from '@minhaj/contracts/quran';
  * each has and what each is called all arrive in the `index` the caller read
  * from the public reader; a number the index does not have, or an Ayah past a
  * Surah's own count, matches nothing. A name matches only a name the corpus
- * recorded — none is written here.
+ * recorded — none is written here — and a hizb only one the corpus recorded,
+ * opened in the Juz the reader says holds it (Quran Part 3).
  *
  * FOLDING IS FOR MATCHING ONLY. The input and the recorded names are folded
  * (case, marks, letter variants, punctuation) solely to compare them; nothing
@@ -28,6 +29,7 @@ export type QuickJump =
   | { readonly kind: 'surah'; readonly surah: number }
   | { readonly kind: 'ayah'; readonly surah: number; readonly ayah: number }
   | { readonly kind: 'juz'; readonly juz: number }
+  | { readonly kind: 'hizb'; readonly hizb: number; readonly juz: number }
   | { readonly kind: 'page'; readonly page: number }
   | { readonly kind: 'unknown' };
 
@@ -100,6 +102,16 @@ export function foldName(value: string): string {
 const JUZ_PATTERN =
   /^(?:juz|juzz|juza|para|parah|sipara|پارہ|پاره|جزء|الجزء|جز)\s*(\d{1,2})$/u;
 
+/** The same keywords before a bare number ("Juz 15") — the Juz index's filter sets them aside. */
+export const JUZ_PREFIX =
+  /^(?:juz|juzz|juza|para|parah|sipara|پارہ|پاره|جزء|الجزء|جز)\s*/u;
+
+/** The hizb keywords, in the three interface languages (Quran Part 3). */
+export const HIZB_PATTERN = /^(?:hizb|hizbs|ahzab|حزب|الحزب)\s*(\d{1,2})$/u;
+
+/** No hizb recorded: what a corpus without hizb numbers answers. */
+const NO_HIZB: ReadonlyMap<number, number> = new Map();
+
 /** The mushaf-page keywords, in the three interface languages (Quran Part 1). */
 const PAGE_PATTERN = /^(?:page|pg|p|safha|safhah|صفحہ|صفحه|صفحة|الصفحة)\.?\s*(\d{1,3})$/u;
 
@@ -110,11 +122,14 @@ const CITATION_PATTERN = /^(\d{1,3})\s*(?:[:.\-/,،]\s*|\s+)(\d{1,3})$/u;
  * One place in the Quran, or `unknown` — never a guess beyond the index.
  * `lastPage` is the highest mushaf page the corpus records (0: none), so a
  * page past it, or any page in a corpus without pages, matches nothing.
+ * `hizbs` maps each hizb the corpus records to the Juz it begins in
+ * (`hizbJuzOf`), so a hizb it does not record matches nothing.
  */
 export function parseQuickJump(
   raw: string,
   index: readonly JumpSurah[],
   lastPage = 0,
+  hizbs: ReadonlyMap<number, number> = NO_HIZB,
 ): QuickJump {
   if (raw.length > QUICK_JUMP_MAX_LENGTH) return UNKNOWN;
   const input = asciiDigits(raw).trim().replace(/\s+/g, ' ').toLowerCase();
@@ -141,6 +156,13 @@ export function parseQuickJump(
     return number >= 1 && number <= QURAN_JUZ_MAX
       ? { kind: 'juz', juz: number }
       : UNKNOWN;
+  }
+
+  const hizb = HIZB_PATTERN.exec(input);
+  if (hizb !== null) {
+    const number = Number(hizb[1]);
+    const juz = hizbs.get(number);
+    return juz === undefined ? UNKNOWN : { kind: 'hizb', hizb: number, juz };
   }
 
   const page = PAGE_PATTERN.exec(input);
@@ -171,8 +193,23 @@ export function parseQuickJump(
 }
 
 /**
+ * Each hizb the reader recorded, mapped to the Juz it begins in — from the
+ * Juz list's own `hizbs`, in Juz order, so a hizb that ran across two Juz
+ * would open where it starts.
+ */
+export function hizbJuzOf(
+  list: readonly { readonly number: number; readonly hizbs: readonly number[] }[],
+): ReadonlyMap<number, number> {
+  const map = new Map<number, number>();
+  for (const juz of [...list].sort((a, b) => a.number - b.number))
+    for (const hizb of juz.hizbs) if (!map.has(hizb)) map.set(hizb, juz.number);
+  return map;
+}
+
+/**
  * The LOCALE-FREE address a jump opens: a Surah, a canonical Ayah citation, a
- * Juz or a mushaf page — built from numbers the index confirmed, never from the input.
+ * Juz, a hizb in its Juz or a mushaf page — built from numbers the index
+ * confirmed, never from the input.
  */
 export function quickJumpPathOf(jump: QuickJump): string | null {
   switch (jump.kind) {
@@ -182,6 +219,8 @@ export function quickJumpPathOf(jump: QuickJump): string | null {
       return `/quran/surah/${String(jump.surah)}/${String(jump.ayah)}`;
     case 'juz':
       return `/quran/juz/${String(jump.juz)}`;
+    case 'hizb':
+      return `/quran/juz/${String(jump.juz)}?hizb=${String(jump.hizb)}`;
     case 'page':
       return `/quran/page/${String(jump.page)}`;
     case 'unknown':

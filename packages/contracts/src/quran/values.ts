@@ -229,8 +229,12 @@ export const QURAN_LIMITS = Object.freeze({
 
 /** Admin and public listing page size. */
 export const QURAN_PAGE = 50;
-/** How many ayat one Juz page shows. */
-export const QURAN_JUZ_PAGE = 100;
+/**
+ * The most ayat one window of a Juz page holds (Quran Part 3). A Juz is read
+ * one hizb at a time; a hizb longer than this is read in parts that break
+ * between the source's mushaf pages, never inside one.
+ */
+export const QURAN_JUZ_WINDOW = 100;
 /** How many citations one current-projection read for a results page may name. */
 export const QURAN_SEARCH_RECORDS_MAX = 100;
 
@@ -741,11 +745,6 @@ export interface RecitationPage {
   readonly total: number;
   readonly offset: number;
 }
-export interface PublicAyahPage {
-  readonly items: readonly PublicAyah[];
-  readonly total: number;
-  readonly offset: number;
-}
 export interface TafsirEntryPage {
   readonly items: readonly TafsirEntryRecord[];
   readonly total: number;
@@ -803,6 +802,23 @@ export interface PublicJuz {
   readonly start: QuranRef;
   readonly end: QuranRef;
   readonly ayahCount: number;
+  /** The first and last mushaf page it lies on, where the source recorded pages. */
+  readonly pages: { readonly start: number; readonly end: number } | null;
+  /** Every hizb the source recorded in it, ascending — empty when it recorded none. */
+  readonly hizbs: readonly number[];
+  /**
+   * The stored text of the Ayah it begins with, unchanged: a Juz is known by
+   * its opening words, and these are the only words it may be shown by.
+   */
+  readonly startText: string;
+}
+
+/** Where an Ayah falls — its citation, hizb and mushaf page — without its text. */
+export interface PublicAyahPlace {
+  readonly surah: number;
+  readonly ayah: number;
+  readonly hizb: number | null;
+  readonly page: number | null;
 }
 
 export interface PublicContributor {

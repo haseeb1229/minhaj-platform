@@ -50,6 +50,8 @@ export interface QuickJumpLabels {
   readonly surah: string;
   readonly ayah: string;
   readonly juz: string;
+  /** "Hizb {hizb}, in Juz {juz}". */
+  readonly hizb: string;
   readonly page: string;
 }
 
@@ -61,6 +63,8 @@ function targetText(jump: QuickJump, labels: QuickJumpLabels): string | null {
       return fill(labels.ayah, { surah: jump.surah, ayah: jump.ayah });
     case 'juz':
       return fill(labels.juz, { number: jump.juz });
+    case 'hizb':
+      return fill(labels.hizb, { hizb: jump.hizb, juz: jump.juz });
     case 'page':
       return fill(labels.page, { number: jump.page });
     case 'unknown':
@@ -73,6 +77,7 @@ export function QuickJumpForm({
   action,
   index,
   lastPage,
+  hizbs,
   labels,
 }: {
   readonly locale: string;
@@ -80,12 +85,15 @@ export function QuickJumpForm({
   readonly index: readonly JumpSurah[];
   /** The highest mushaf page the corpus records (0: none). */
   readonly lastPage: number;
+  /** `[hizb, juz]` for every hizb the corpus records (`hizbJuzOf`). */
+  readonly hizbs: readonly (readonly [number, number])[];
   readonly labels: QuickJumpLabels;
 }) {
   const [value, setValue] = useState('');
+  const hizbMap = useMemo(() => new Map(hizbs), [hizbs]);
   const jump = useMemo(
-    () => parseQuickJump(value, index, lastPage),
-    [value, index, lastPage],
+    () => parseQuickJump(value, index, lastPage, hizbMap),
+    [value, index, lastPage, hizbMap],
   );
   const target = targetText(jump, labels);
   const id = 'quran-quick-jump';

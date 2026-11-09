@@ -3125,7 +3125,7 @@
     "sectionBody": {
       "read": "Choose a Surah, or go straight to an Ayah by its number.",
       "surah": "Every Surah in order, with the number of its ayat.",
-      "juz": "Every Juz in order, with the range of ayat it covers.",
+      "juz": "Every Juz in order, by its opening words, with the ayat, Surahs and pages it covers.",
       "search": "Search the Arabic text and every published translation and transliteration.",
       "translations": "Published translations of the Quran, each its own work with its own translators and source.",
       "tafsir": "Published works of tafsir, with commentary arranged by Ayah.",
@@ -3143,6 +3143,32 @@
     "rangeName": "Surah {surah}, ayat {start}–{end}",
     "juzName": "Juz {number}",
     "juzRange": "From {start} to {end}",
+    "juz": {
+      "opening": "Opening words",
+      "begins": "Begins",
+      "ends": "Ends",
+      "hizbSpan": "Hizb {start}–{end}",
+      "surahCount": "{count, plural, one {# Surah} other {# Surahs}}",
+      "filter": "Find a Juz",
+      "filterHelp": "By its number — “15”, “Juz 15” — or by a hizb it holds, “Hizb 30”.",
+      "count": "Showing {shown} of {total} Juz",
+      "none": "No Juz matches “{query}”.",
+      "clear": "Show every Juz",
+      "inThis": "In this Juz",
+      "surahs": "Surahs",
+      "hizbs": "Hizb",
+      "window": {
+        "label": "More of this Juz",
+        "hizbPart": "Hizb {hizb}, part {part} of {parts}",
+        "part": "Part {part} of {parts}",
+        "continue": "Continue reading: {place}",
+        "earlier": "Earlier: {place}",
+        "position": "Ayat {start}–{end} of {count} in this Juz"
+      },
+      "navigation": "Previous and next Juz",
+      "previous": "Previous: Juz {number}",
+      "next": "Next: Juz {number}"
+    },
     "ayahCount": "{count, plural, one {# ayah} other {# ayat}}",
     "ayatOf": "Ayat of Surah {number}",
     "revelation": {
@@ -3221,7 +3247,7 @@
       "submit": "Go",
       "surahMissing": "That Surah is not available. Choose one from the list.",
       "ayahMissing": "That Surah has no Ayah with that number.",
-      "queryMissing": "Nothing matches “{query}”. Try a Surah number such as 18, a citation such as 18:10, a Surah’s name, or Juz 15.",
+      "queryMissing": "Nothing matches “{query}”. Try a Surah number such as 18, a citation such as 18:10, a Surah’s name, Juz 15 or Hizb 30.",
       "pageMissing": "That page is not in this text."
     },
     "readIntro": "Choose where to begin: continue where you stopped, open a well-loved place, type a citation, or browse by Surah, Juz or mushaf page.",
@@ -3310,10 +3336,11 @@
     },
     "jump": {
       "label": "Go to a Surah, Ayah, Juz or page",
-      "help": "For example 18, 18:10, a Surah’s name, Juz 15 or page 50.",
+      "help": "For example 18, 18:10, a Surah’s name, Juz 15, Hizb 30 or page 50.",
       "submit": "Go",
       "opens": "Opens {target}",
-      "none": "Nothing matches yet."
+      "none": "Nothing matches yet.",
+      "hizb": "Hizb {hizb}, in Juz {juz}"
     },
     "continue": {
       "heading": "Continue where you stopped",

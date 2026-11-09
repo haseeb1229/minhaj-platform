@@ -53,6 +53,14 @@ export const readSurahs = cache(() => quranReadRuntime().reader.surahs());
 
 export const readJuz = cache((number: number) => quranReadRuntime().reader.juz(number));
 
+/** Where each Ayah of a Juz falls (no text), read once per request. */
+export const readJuzOutline = cache((number: number) =>
+  quranReadRuntime().reader.juzOutline(number),
+);
+
+/** Every Juz with what the reader derives for it, read once per request. */
+export const readJuzList = cache(() => quranReadRuntime().reader.juzList());
+
 /** One Ayah, read once per request however many parts of a page ask. */
 export const readAyah = cache((surah: number, ayah: number) =>
   quranReadRuntime().reader.ayah({ surah, ayah }),

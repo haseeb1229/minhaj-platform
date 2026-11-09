@@ -286,7 +286,7 @@ it reserves is unpublished. No route changes.
 | `/quran/surah` · `/quran/surah/{surahNumber}` | Surah index (`?q` filter, `?sort` order — Quran Part 2) and view — `?translation, tafsir, reciter, transliteration`; `?from` names the reading window (Quran Part 1) |
 | `/quran/surah/{surahNumber}/{ayahNumber}` | **Canonical ayah citation URL** |
 | `/quran/page/{pageNumber}` | One mushaf page, as text (Quran Part 1) — 404 for a page no public Ayah carries |
-| `/quran/juz` · `/quran/juz/{juzNumber}` | Juz index and view |
+| `/quran/juz` · `/quran/juz/{juzNumber}` | Juz index (`?q` filter by number or hizb — Quran Part 3) and view — `?hizb` and `?part` name the reading window (Quran Part 3; the Phase-18 `?offset` paging is historical) |
 | `/quran/search` | Quran search — `noindex` |
 | `/quran/translations` · `/{slug}` | Translation works |
 | `/quran/tafsir` · `/{slug}` | Tafsir works |
@@ -415,6 +415,51 @@ and fixture rule above is unchanged.
   own Arabic name marked `lang="ar"`, never an English transliteration in its place; no English
   meaning is shown there. The quick jump (`/quran/read?q=`) also resolves a recorded meaning
   ("The Cave") and a transliteration typed with single vowels ("Fatiha" for "Al-Faatiha").
+
+**Quran Part 3 — the Juz index and the Juz reading page (owner direction 2026-11-09;
+DELIVERY_PLAN.md, the Quran Part 3 record).** No new route; every corpus-state, `noindex`,
+attribution and fixture rule above is unchanged.
+
+- **`/quran/juz?q=`** — thirty cards, each whole card its link: the number; the **opening words of
+  the Juz's first Ayah**, cut verbatim from the stored text (its first three words — a word is a
+  space-separated run carrying a letter, so a leading ۞ is not one and a pause mark between words
+  stays where the text has it — with a presentational "…" hidden from assistive technology when the
+  Ayah goes on), in the Quran face; "From 2:142 to 2:252 · 111 ayat"; the Surah it begins in and the
+  one it ends in by their display names (Part 2's rule and fallback; "· 37 Surahs" where it spans
+  more); and its pages and hizb where the source recorded them. **No Juz name is written anywhere**:
+  a Juz is known by its opening words, and those are the stored words. `?q` (at most 60 characters)
+  keeps the Juz whose number begins with it ("1", "15", "۱۵", "Juz 15", "Para 15") or, for "hizb 30"
+  (also حزب / الحزب), the Juz the source recorded that hizb in; anything else keeps nothing. A GET
+  form answered on the server, live per keystroke with a client island that keeps the address in
+  step and announces the count; the canonical URL is the bare index; Part 1's continue card sits
+  above it. The landing's Juz tab is the same component without the opening words (the landing shows
+  no verse).
+- **`/quran/juz/{n}` reads one window at a time, by the source's own divisions** — one window per
+  recorded hizb (two to a Juz in the Tanzil structure); a hizb of more than 100 ayat (the short ayat
+  at the Quran's end) is read in parts that break only between mushaf pages, as even as the pages
+  allow; ayat with no recorded hizb are read the same way as one run. `?hizb={h}` opens hizb `h` of
+  this Juz and `?part={p}` one of its parts; anything else (an unknown hizb, a malformed value, the
+  historical `?offset=`) is the first window, which is the bare address and its canonical URL; any
+  other window canonicalises to itself. Each window is server-rendered and complete without
+  JavaScript — Surah headings where a Surah opens (centred, with Part 1's Bismillah rule) or
+  continues, Part 1's markers, modes, settings and `ayah-{s}-{a}` anchors — and the next is a plain
+  link the reader island fetches and appends as the reader nears it (the list carries
+  `data-series="juz-{n}"`, a Surah's `surah-{n}`). Above the text: the opening words, "Juz n", its
+  count, pages and hizb, where it begins and ends (Surah name and citation, linked to the citation
+  pages) and the neighbouring Juz; a compact "In this Juz" navigation of its hizb starts and its
+  Surahs (each linked to the window that holds its first Ayah in the Juz, at that Ayah); the window's
+  name and "Ayat 22–47 of 47 in this Juz", with the island's progress line through the whole Juz.
+  Below: the Juz before and after, by their opening words, and the no-JS reading form, which keeps
+  the window.
+- **Rub' al-hizb quarters are not navigated.** The canonical structure stores the hizb only; a
+  quarter's start exists only in the Tanzil metadata, whose 240 quarters the import folds into hizb
+  numbers — and Tanzil text 1.1 and metadata 1.0 disagree on one quarter start (15:49 against 15:50,
+  `tanzil-corpus.ts`). Storing quarters would change canonical structure and choose between the two
+  files; neither is done for navigation (DOMAIN_MODEL.md §8.4). The text's own ۞ sign still marks
+  quarters where the source wrote one.
+- **The quick jump accepts "hizb 30"** (حزب, الحزب) for a hizb the corpus records, opening
+  `/quran/juz/{n}?hizb=30` in the Juz the reader says it begins in — an address built from the
+  confirmed numbers, never from the typed text.
 
 ### 3.4 Hadith
 

@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 
 import {
   QURAN_AYAH_NUMBER_MAX,
-  QURAN_JUZ_PAGE,
+  QURAN_JUZ_WINDOW,
   QURAN_LIMITS,
   QURAN_MODE_POSTURE,
   QURAN_PAGE,
@@ -283,22 +283,83 @@ export function createQuranPublicReader(
     return mode !== null && QURAN_MODE_POSTURE[mode].sitemap;
   }
 
-  /** Each Juz's derived range: ONE grouped read over the canonical ayat. */
+  /**
+   * What each Juz is, DERIVED from the canonical ayat: ONE read grouped by Juz
+   * and hizb (its range, count, pages and recorded hizb), then one read of the
+   * first Ayah of each — at most thirty rows — for the text it opens with.
+   */
   async function juzRanges(only: number | null): Promise<PublicJuz[]> {
     const filter = only === null ? Prisma.empty : Prisma.sql`WHERE [juzNumber] = ${only}`;
     const rows = await db.$queryRaw<
-      { number: number; ayahCount: number; first: number; last: number }[]
-    >`SELECT [juzNumber] AS [number], COUNT(*) AS [ayahCount],
+      {
+        number: number;
+        hizb: number | null;
+        ayahCount: number;
+        first: number;
+        last: number;
+        firstPage: number | null;
+        lastPage: number | null;
+      }[]
+    >`SELECT [juzNumber] AS [number], [hizb], COUNT(*) AS [ayahCount],
              MIN([surahNumber] * ${CITATION_KEY} + [ayahNumber]) AS [first],
-             MAX([surahNumber] * ${CITATION_KEY} + [ayahNumber]) AS [last]
+             MAX([surahNumber] * ${CITATION_KEY} + [ayahNumber]) AS [last],
+             MIN([page]) AS [firstPage], MAX([page]) AS [lastPage]
       FROM [dbo].[Ayah] ${filter}
-      GROUP BY [juzNumber]
-      ORDER BY [juzNumber]`;
-    return rows.map((row) => ({
-      number: Number(row.number),
-      start: refOf(Number(row.first)),
-      end: refOf(Number(row.last)),
-      ayahCount: Number(row.ayahCount),
+      GROUP BY [juzNumber], [hizb]
+      ORDER BY [juzNumber], [first]`;
+
+    const byJuz = new Map<
+      number,
+      {
+        ayahCount: number;
+        first: number;
+        last: number;
+        pages: number[];
+        hizbs: number[];
+      }
+    >();
+    for (const row of rows) {
+      const number = Number(row.number);
+      const entry = byJuz.get(number) ?? {
+        ayahCount: 0,
+        first: Number(row.first),
+        last: Number(row.last),
+        pages: [],
+        hizbs: [],
+      };
+      entry.ayahCount += Number(row.ayahCount);
+      entry.first = Math.min(entry.first, Number(row.first));
+      entry.last = Math.max(entry.last, Number(row.last));
+      for (const page of [row.firstPage, row.lastPage])
+        if (page !== null) entry.pages.push(Number(page));
+      if (row.hizb !== null) entry.hizbs.push(Number(row.hizb));
+      byJuz.set(number, entry);
+    }
+    if (byJuz.size === 0) return [];
+
+    const starts = [...byJuz.values()].map((entry) => refOf(entry.first));
+    const texts = await db.ayah.findMany({
+      where: {
+        OR: starts.map((ref) => ({ surahNumber: ref.surah, ayahNumber: ref.ayah })),
+      },
+      select: { surahNumber: true, ayahNumber: true, text: true },
+      take: starts.length,
+    });
+    const textOf = new Map(
+      texts.map((row) => [row.surahNumber * CITATION_KEY + row.ayahNumber, row.text]),
+    );
+
+    return [...byJuz].map(([number, entry]) => ({
+      number,
+      start: refOf(entry.first),
+      end: refOf(entry.last),
+      ayahCount: entry.ayahCount,
+      pages:
+        entry.pages.length === 0
+          ? null
+          : { start: Math.min(...entry.pages), end: Math.max(...entry.pages) },
+      hizbs: [...new Set(entry.hizbs)].sort((a, b) => a - b),
+      startText: textOf.get(entry.first) ?? '',
     }));
   }
 
@@ -498,22 +559,31 @@ export function createQuranPublicReader(
       return (await juzRanges(Math.trunc(number)))[0] ?? null;
     },
 
-    async juzAyat(number, offset) {
-      const skip = boundedOffset(offset);
-      if ((await activeMode(db, admission)) === null)
-        return { items: [], total: 0, offset: skip };
-      const where = { juzNumber: number };
-      const [total, rows] = await Promise.all([
-        db.ayah.count({ where }),
-        db.ayah.findMany({
-          where,
-          select: PUBLIC_AYAH,
-          orderBy: [...CANONICAL_ORDER],
-          skip,
-          take: QURAN_JUZ_PAGE,
-        }),
-      ]);
-      return { items: rows.map(toAyah), total, offset: skip };
+    async juzOutline(number) {
+      if ((await activeMode(db, admission)) === null) return [];
+      const rows = await db.ayah.findMany({
+        where: { juzNumber: number },
+        select: { surahNumber: true, ayahNumber: true, hizb: true, page: true },
+        orderBy: [...CANONICAL_ORDER],
+        take: QURAN_LIMITS.corpusAyat,
+      });
+      return rows.map((row) => ({
+        surah: row.surahNumber,
+        ayah: row.ayahNumber,
+        hizb: row.hizb,
+        page: row.page,
+      }));
+    },
+
+    async juzAyat(number, from, to) {
+      if ((await activeMode(db, admission)) === null) return [];
+      const rows = await db.ayah.findMany({
+        where: { juzNumber: number, ...citationsBetween(from, to) },
+        select: PUBLIC_AYAH,
+        orderBy: [...CANONICAL_ORDER],
+        take: QURAN_JUZ_WINDOW,
+      });
+      return rows.map(toAyah);
     },
 
     /**

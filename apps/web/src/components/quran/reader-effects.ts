@@ -37,6 +37,17 @@ export interface WindowedSurah {
 }
 
 /**
+ * A reading served in windows — a Surah or a Juz — as the server declared it:
+ * the key every window's list carries (`data-series`), how many ayat of the
+ * reading come before the window rendered, and how many it has in all.
+ */
+export interface ReadingSeries {
+  readonly key: string;
+  readonly offset: number;
+  readonly total: number;
+}
+
+/**
  * LANDS A FRAGMENT ON ITS AYAH. `/quran/surah/2#ayah-2-255` (or an older
  * `#ayah-255`) names an Ayah the server may not have rendered — the fragment
  * never reaches it — so when that Ayah is not on the page the island replaces
@@ -85,23 +96,25 @@ export function useFragmentLanding(readerId: string, surah: WindowedSurah | null
  * THE NEXT WINDOW, BEFORE THE READER REACHES THE END. The page ends with a
  * plain link to its next window (`data-window-next`); as it comes within a
  * screen or so of view, the island fetches that same public address, takes
- * the ayat list out of it and appends its rows, then points the link at the
- * window after — or removes it at the Surah's end. A fetch that fails leaves
- * the link where it is, says so, and stops trying: the link still works.
+ * the ayat list out of it and appends what it holds — a Surah's rows, or a
+ * Juz's Surah sections — then points the link at the window after, or removes
+ * it at the reading's end. A fetch that fails leaves the link where it is,
+ * says so, and stops trying: the link still works.
  *
  * THE ROWS ARE THE SERVER'S. Nothing is built from strings: the fetched
  * document is parsed inertly (`DOMParser` runs no script) and its elements
- * are adopted as they are, from this site's own response for the same Surah.
+ * are adopted as they are, from this site's own response for the same reading
+ * (its list carries the same `data-series`).
  */
 export function useWindowLoader(
   readerId: string,
   listId: string,
-  surah: WindowedSurah | null,
+  series: string | null,
   onLoaded: () => void,
   onFailed: () => void,
 ): void {
   useEffect(() => {
-    if (surah === null || typeof IntersectionObserver === 'undefined') return undefined;
+    if (series === null || typeof IntersectionObserver === 'undefined') return undefined;
     const reader = document.getElementById(readerId);
     const list = document.getElementById(listId);
     const link = reader?.querySelector<HTMLAnchorElement>('a[data-window-next]');
@@ -128,7 +141,7 @@ export function useWindowLoader(
           'text/html',
         );
         const rows = fetched.getElementById(listId);
-        if (rows === null || rows.getAttribute('data-surah') !== String(surah?.number))
+        if (rows === null || rows.getAttribute('data-series') !== series)
           throw new Error('window');
         for (const row of [...rows.children])
           list?.append(document.importNode(row, true));
@@ -169,12 +182,14 @@ export function useWindowLoader(
       observer.disconnect();
       controller.abort();
     };
-  }, [readerId, listId, surah, onLoaded, onFailed]);
+  }, [readerId, listId, series, onLoaded, onFailed]);
 }
 
 /**
- * THE AYAH IN VIEW: the Juz it is in, how far through the reading it is (the
- * Surah's own count where the page reads one Surah) and — on a reading page —
+ * THE AYAH IN VIEW: the Juz it is in, how far through the reading it is (by
+ * the reading's own count where the page reads a Surah or a Juz in windows —
+ * the rows are contiguous from the window rendered — else through the rows on
+ * the page) and — on a reading page —
  * "last read" in this browser. Rows added by the window loader are observed
  * too (`version` changes when they arrive). The stored last place is marked
  * `aria-current="location"` when it is on the page.
@@ -183,7 +198,7 @@ export function usePosition(
   readerId: string,
   initialJuz: number,
   remember: boolean,
-  ayahCount: number | null,
+  series: ReadingSeries | null,
   version: number,
 ): { readonly juz: number; readonly value: number; readonly max: number } {
   const [juz, setJuz] = useState(initialJuz);
@@ -225,9 +240,9 @@ export function usePosition(
         if (row === undefined) return;
         const [surah, ayah] = (row.dataset['ayah'] ?? '').split(':').map(Number);
         setProgress(
-          ayahCount === null || ayah === undefined
+          series === null
             ? { value: index + 1, max: rows.length }
-            : { value: ayah, max: ayahCount },
+            : { value: series.offset + index + 1, max: series.total },
         );
         const rowJuz = Number(row.dataset['juz']);
         if (Number.isInteger(rowJuz) && rowJuz > 0) setJuz(rowJuz);
@@ -244,7 +259,7 @@ export function usePosition(
       observer.disconnect();
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [readerId, remember, ayahCount, version]);
+  }, [readerId, remember, series, version]);
 
   return { juz, value: progress.value, max: progress.max };
 }

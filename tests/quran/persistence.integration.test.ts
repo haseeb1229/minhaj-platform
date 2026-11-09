@@ -1207,7 +1207,10 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
       expect(await reader.ayat(1, 1, 3)).toEqual([]);
       expect(await reader.ayah({ surah: 1, ayah: 1 })).toBeNull();
       expect(await reader.juzList()).toEqual([]);
-      expect((await reader.juzAyat(1, 0)).items).toEqual([]);
+      expect(await reader.juzOutline(1)).toEqual([]);
+      expect(
+        await reader.juzAyat(1, { surah: 1, ayah: 1 }, { surah: 2, ayah: 2 }),
+      ).toEqual([]);
       expect(await reader.translations()).toEqual([]);
       expect(await reader.translation(fixtureTranslation.slug)).toBeNull();
       expect(await reader.translationTexts(fixtureTranslation.id, 1, 1, 3)).toEqual([]);
@@ -1256,24 +1259,46 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
       expect((await reader.ayah({ surah: 1, ayah: 1 }))?.text).toBe(
         primary.ayat[0]!.text,
       );
+      // Quran Part 3: the fixture records no hizb and no page, so neither is
+      // derived; the text a Juz opens with is its first Ayah's, as stored.
+      const textOf = (surah: number, ayah: number) =>
+        primary.ayat.find((entry) => entry.surah === surah && entry.ayah === ayah)!.text;
       expect(await reader.juzList()).toEqual([
         {
           number: 1,
           start: { surah: 1, ayah: 1 },
           end: { surah: 2, ayah: 2 },
           ayahCount: 5,
+          pages: null,
+          hizbs: [],
+          startText: textOf(1, 1),
         },
         {
           number: 2,
           start: { surah: 2, ayah: 3 },
           end: { surah: 2, ayah: 4 },
           ayahCount: 2,
+          pages: null,
+          hizbs: [],
+          startText: textOf(2, 3),
         },
       ]);
       expect(await reader.juz(2)).toMatchObject({ ayahCount: 2 });
+      expect(await reader.juzOutline(2)).toEqual([
+        { surah: 2, ayah: 3, hizb: null, page: null },
+        { surah: 2, ayah: 4, hizb: null, page: null },
+      ]);
       expect(
-        (await reader.juzAyat(2, 0)).items.map((a) => `${a.surah}:${a.ayah}`),
+        (await reader.juzAyat(2, { surah: 2, ayah: 3 }, { surah: 2, ayah: 4 })).map(
+          (a) => `${a.surah}:${a.ayah}`,
+        ),
       ).toEqual(['2:3', '2:4']);
+      // Only that Juz's ayat, however wide the range asked.
+      expect(
+        (await reader.juzAyat(2, { surah: 1, ayah: 1 }, { surah: 2, ayah: 3 })).map(
+          (a) => `${a.surah}:${a.ayah}`,
+        ),
+      ).toEqual(['2:3']);
 
       const slugs = (await reader.translations()).map((work) => work.slug);
       expect(slugs).toContain(fixtureTranslation.slug);

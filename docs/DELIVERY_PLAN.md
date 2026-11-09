@@ -2950,6 +2950,41 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > (`tests/browser/quran.spec.ts`) gains the index's filter with and without script, its orders,
 > Urdu and Arabic, 320 px and an axe scan. *CI and staging evidence are recorded when they exist.*
 
+> **Quran Part 3 — the Juz index and the Juz reading page (owner direction 2026-11-09; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (ROUTE_MAP.md §3.3; DOMAIN_MODEL.md
+> §8.4). **No migration, no import, no staging command**: everything is derived from the stored
+> `juzNumber`, `hizb`, `page` and text.
+>
+> - **Juz identity without invented text.** Each Juz is shown by the opening words of its first Ayah —
+>   its first three words cut verbatim from the stored text (a leading ۞ is not a word; a pause mark
+>   between words stays) — with "Juz n", its range by citation and by its first and last Surahs'
+>   display names, its pages and hizb. No Juz name list exists anywhere.
+> - **The index** (`/quran/juz`, and the landing's Juz tab without the opening words — the landing
+>   shows no verse): thirty cards in Part 2's styling, a filter
+>   by number or by a hizb a Juz holds (GET without JavaScript, live with it, count announced), the
+>   continue card above.
+> - **The Juz page** reads one window per recorded hizb; a hizb over 100 ayat is read in parts that
+>   break only between mushaf pages (`juzWindows`, pure). `?hizb=`/`?part=` name a window; the next
+>   one is appended by Part 1's window loader (generalised from a Surah to a reading series), with the
+>   reading frame, modes, settings, markers, anchors, Surah headings and Bismillah rule of Part 1
+>   shared rather than copied (the mushaf page and the Juz page now render Surah runs through one
+>   component). An "In this Juz" navigation lists its hizb starts and Surahs; the header names where
+>   it begins and ends; the Juz before and after close the page; the window's position is in words
+>   and the island's progress line runs through the whole Juz. The arbitrary 100-ayah `?offset=`
+>   paging is gone (an old address opens the first window).
+> - **The quick jump** also opens "hizb 30" in its Juz.
+> - **Quarters (rub' al-hizb) are not stored or navigated** — the reason is recorded in
+>   DOMAIN_MODEL.md §8.4 (canonical structure, and Tanzil's text and metadata disagree on one quarter).
+>
+> **Proof:** `tests/quran/juz-layout.test.ts` (the opening-words rule, windows and their balance,
+> addresses, the index filter, the quick jump's hizb); `tests/quran/persistence.integration.test.ts`
+> (the derived Juz fields, the outline and the bounded window read on SQL Server); the browser
+> journey (`tests/browser/quran.spec.ts`) gains the Juz index (verbatim opening words, ranges, the
+> filter with and without script, the quick jump's hizb, Urdu and Arabic, 320 px, axe) and the Juz
+> page (one window without script, the next appended with it, unique ids, contents, neighbours,
+> unknown windows, Urdu and Arabic, 320 px, axe). *CI and staging evidence are recorded when they
+> exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

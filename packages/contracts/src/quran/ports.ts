@@ -1,7 +1,6 @@
 import type { PrivilegedActor } from '../identity/authorization.ts';
 import type {
   AyahRecordPage,
-  PublicAyahPage,
   RecitationPage,
   TafsirEntryPage,
   TafsirPage,
@@ -15,6 +14,7 @@ import type {
   LayerText,
   LayerTextChange,
   PublicAyah,
+  PublicAyahPlace,
   PublicJuz,
   PublicLayerWork,
   PublicRecitation,
@@ -107,11 +107,23 @@ export interface QuranPublicReaderPort {
    */
   ayat(surah: number, from: number, to: number): Promise<readonly PublicAyah[]>;
   ayah(ref: QuranRef): Promise<PublicAyah | null>;
-  /** Every Juz with its derived range, in number order. */
+  /**
+   * Every Juz with what the reader derives for it — its range, count, pages,
+   * hizb and the stored text of its first Ayah — in number order. ONE grouped
+   * read and one read of the thirty first ayat.
+   */
   juzList(): Promise<readonly PublicJuz[]>;
   juz(number: number): Promise<PublicJuz | null>;
-  /** One bounded page of a Juz's ayat in canonical order. */
-  juzAyat(number: number, offset: number): Promise<PublicAyahPage>;
+  /**
+   * Where each Ayah of one Juz falls — citation, hizb and page, no text — in
+   * canonical order: ONE bounded read the Juz page lays its windows out from.
+   */
+  juzOutline(number: number): Promise<readonly PublicAyahPlace[]>;
+  /**
+   * The ayat of one Juz from one citation to another inclusive, in canonical
+   * order — ONE read of at most `QURAN_JUZ_WINDOW` ayat.
+   */
+  juzAyat(number: number, from: QuranRef, to: QuranRef): Promise<readonly PublicAyah[]>;
   /**
    * The ayat the source placed on one mushaf page, in canonical order — ONE
    * bounded read. Empty for a page no public Ayah carries (Quran Part 1).

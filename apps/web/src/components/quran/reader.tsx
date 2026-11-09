@@ -5,7 +5,6 @@ import { getTranslations } from 'next-intl/server';
 
 import { localeSchema, type Locale } from '@minhaj/contracts';
 import {
-  QURAN_JUZ_PAGE,
   QURAN_SURAH_MAX,
   citationOf,
   type LayerText,
@@ -23,7 +22,7 @@ import { directionOf } from '@/config/locale';
 import { playableSegments } from '@/composition/quran-assets';
 import { quranReadRuntime } from '@/composition/quran-read';
 import { paragraphsOf } from '@/components/library/scholarly-presentation';
-import { BreadcrumbData, Pagination } from '@/components/media/parts';
+import { BreadcrumbData } from '@/components/media/parts';
 import { personalIslandLabels } from '@/components/personal-island/personal-controls';
 import {
   Alert,
@@ -61,8 +60,6 @@ import {
   ayahPath,
   juzPath,
   nextAyah,
-  offsetPathOf,
-  pageLinks,
   previousAyah,
   quranPath,
   segmentCovering,
@@ -75,7 +72,18 @@ import {
   type ReadingRequest,
   type TextSize,
 } from './presentation';
-import { QUICK_JUMP_MAX_LENGTH, type JumpSurah } from './quick-jump';
+import {
+  hizbStarts,
+  juzWindows,
+  openingWords,
+  readJuzWindow,
+  windowOf,
+  withJuzWindow,
+  type JuzIndexRow,
+  type JuzWindow,
+} from './juz-layout';
+import { JuzIndex, type JuzIndexLabels } from './juz-index-island';
+import { QUICK_JUMP_MAX_LENGTH, hizbJuzOf, type JumpSurah } from './quick-jump';
 import { ArabicText, TranslationText } from './scripture';
 import { juzSpans, type SurahIndexQuery, type SurahIndexRow } from './surah-index';
 import { SurahIndex, type SurahIndexLabels } from './surah-index-island';
@@ -84,6 +92,8 @@ import {
   quranIndexable,
   readAyah,
   readAyahBefore,
+  readJuzList,
+  readJuzOutline,
   readLastPage,
   readOpening,
   readSurah,
@@ -95,6 +105,7 @@ import {
   QuranReaderControls,
   type ReaderControlLabels,
 } from './reader-controls';
+import type { ReadingSeries } from './reader-effects';
 import {
   READER_BOOT_SCRIPT,
   TRANSLATIONS_RENDERED_MAX,
@@ -118,7 +129,7 @@ import {
 /**
  * The public Quran reader — the Surah index, a Surah, a canonical Ayah
  * citation, a mushaf page, the Juz index and a Juz (ROUTE_MAP.md §3.3; Phase
- * 18; R2; Quran Part 1).
+ * 18; R2; Quran Parts 1–3).
  *
  * SERVER COMPONENTS, SESSION-FREE BY CONSTRUCTION. Every read is Quran's public
  * reader, Taxonomy's content languages and nothing else: no session, no
@@ -131,8 +142,9 @@ import {
  * `QURAN_WINDOW` ayat — one read for its ayat and one per shown layer, never a
  * read per Ayah — and the next window is a link the reader island fetches as
  * the reader nears it (`./reading-layout`). Al-Baqarah no longer ships 286
- * ayat with two translations in one document. A Juz is read in bounded pages;
- * a mushaf page is one read.
+ * ayat with two translations in one document. A Juz is read the same way, one
+ * window per hizb the source recorded (Quran Part 3, `./juz-layout`); a
+ * mushaf page is one read.
  *
  * NOTHING INVENTED. Every name, count, boundary and text shown comes from the
  * reader; where a source recorded no name, the page says "Surah {number}" and
@@ -346,65 +358,125 @@ export async function SurahIndexSection({
   );
 }
 
-/** Every Juz as a row: its name (the link) and the range the reader derived. */
-export function JuzIndexList({
-  locale,
-  list,
-  label,
-  t,
-  headingLevel = 'h2',
-}: {
-  readonly locale: Locale;
-  readonly list: readonly PublicJuz[];
-  readonly label: string;
-  readonly t: QuranTranslator;
-  readonly headingLevel?: 'h2' | 'h3';
-}) {
-  const Heading = headingLevel;
-  return (
-    <ol
-      aria-label={label}
-      className="grid list-none grid-cols-1 gap-x-8 p-0 sm:grid-cols-2 lg:grid-cols-3"
-    >
-      {list.map((juz) => (
-        <li
-          key={juz.number}
-          className="relative flex min-w-0 items-center gap-4 border-b border-border py-4 transition-colors duration-[var(--duration-fast)] hover:bg-surface-raised"
-        >
-          <span
-            aria-hidden="true"
-            className="w-9 shrink-0 text-center text-sm font-semibold text-accent tabular-nums"
-          >
-            {juz.number}
-          </span>
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <Heading className="text-base font-semibold">
-              <a
-                href={juzPath(locale, juz.number)}
-                className="text-foreground no-underline after:absolute after:inset-0 hover:text-action"
-              >
-                {t('juzName', { number: juz.number })}
-              </a>
-            </Heading>
-            <JuzRange juz={juz} t={t} />
-          </div>
-        </li>
-      ))}
-    </ol>
-  );
+/** "Pages 22–41 · Hizb 3–4": the spans the source recorded for a Juz, or none. */
+function juzFacts(juz: PublicJuz, t: QuranTranslator): string {
+  const firstHizb = juz.hizbs[0];
+  const lastHizb = juz.hizbs.at(-1);
+  return [
+    juz.pages === null
+      ? null
+      : juz.pages.start === juz.pages.end
+        ? t('reader.marks.page', { number: juz.pages.start })
+        : t('reader.pageSpan', juz.pages),
+    firstHizb === undefined || lastHizb === undefined
+      ? null
+      : firstHizb === lastHizb
+        ? t('reader.marks.hizb', { number: firstHizb })
+        : t('juz.hizbSpan', { start: firstHizb, end: lastHizb }),
+  ]
+    .filter((part): part is string => part !== null)
+    .join(' · ');
 }
 
 /** "From 2:142 to 2:252 · 111 ayat" — the reader's own derived range. */
-function JuzRange({ juz, t }: { readonly juz: PublicJuz; readonly t: QuranTranslator }) {
+function juzRange(juz: PublicJuz, t: QuranTranslator): string {
+  return `${t('juzRange', {
+    start: citationOf(juz.start),
+    end: citationOf(juz.end),
+  })} · ${t('ayahCount', { count: juz.ayahCount })}`;
+}
+
+/**
+ * Every Juz as the index shows it (Quran Part 3): its number, the opening
+ * words of its first Ayah cut verbatim from the stored text, its range, the
+ * Surah it begins in and the one it ends in by their display names (with the
+ * number of Surahs where it spans more), and its pages and hizb — every one
+ * from the reader. Nothing is written here that the reader did not return.
+ */
+function juzIndexRows(
+  locale: Locale,
+  list: readonly PublicJuz[],
+  surahs: readonly PublicSurah[],
+  openings: boolean,
+  t: QuranTranslator,
+): JuzIndexRow[] {
+  const byNumber = new Map(surahs.map((surah) => [surah.number, surah]));
+  const named = (number: number) => {
+    const surah = byNumber.get(number);
+    return { number, name: surah === undefined ? null : surahName(surah, locale) };
+  };
+  return list.map((juz) => {
+    const spanned = juz.end.surah - juz.start.surah + 1;
+    return {
+      number: juz.number,
+      href: juzPath(locale, juz.number),
+      opening: openings ? openingWords(juz.startText) : null,
+      range: juzRange(juz, t),
+      facts: juzFacts(juz, t),
+      surahs:
+        spanned === 1
+          ? [named(juz.start.surah)]
+          : [named(juz.start.surah), named(juz.end.surah)],
+      surahCount: spanned > 2 ? t('juz.surahCount', { count: spanned }) : null,
+      hizbs: juz.hizbs,
+    };
+  });
+}
+
+/** The Juz index's words, from the public catalogue. */
+async function juzIndexLabels(locale: Locale): Promise<JuzIndexLabels> {
+  const t = await getTranslations({ locale, namespace: 'quran' });
+  return {
+    list: t('sections.juz'),
+    filter: t('juz.filter'),
+    filterHelp: t('juz.filterHelp'),
+    apply: t('index.apply'),
+    count: t.raw('juz.count') as string,
+    none: t.raw('juz.none') as string,
+    clear: t('juz.clear'),
+    juz: t.raw('juzName') as string,
+    surah: t.raw('surahName') as string,
+    opening: t('juz.opening'),
+  };
+}
+
+/**
+ * The Juz index — the landing's Juz tab and `/quran/juz` alike: thirty cards,
+ * each whole card its link, and a GET filter by number that works without
+ * JavaScript and answers every keystroke with it. The landing shows no verse
+ * (its own rule), so there the cards carry no opening words.
+ */
+export async function JuzIndexSection({
+  locale,
+  list,
+  surahs,
+  openings,
+  initial,
+  idPrefix,
+  headingLevel,
+  syncAddress,
+}: {
+  readonly locale: Locale;
+  readonly list: readonly PublicJuz[];
+  readonly surahs: readonly PublicSurah[];
+  /** Show each Juz's opening words — everywhere but the landing. */
+  readonly openings: boolean;
+  readonly initial: string;
+  readonly idPrefix: string;
+  readonly headingLevel: 'h2' | 'h3';
+  readonly syncAddress: boolean;
+}) {
+  const t = await getTranslations({ locale, namespace: 'quran' });
   return (
-    <p className="text-caption text-foreground-muted">
-      {t('juzRange', {
-        start: citationOf(juz.start),
-        end: citationOf(juz.end),
-      })}
-      {' · '}
-      {t('ayahCount', { count: juz.ayahCount })}
-    </p>
+    <JuzIndex
+      rows={juzIndexRows(locale, list, surahs, openings, t)}
+      initial={initial}
+      action={quranPath(locale, 'juz')}
+      idPrefix={idPrefix}
+      headingLevel={headingLevel}
+      syncAddress={syncAddress}
+      labels={await juzIndexLabels(locale)}
+    />
   );
 }
 
@@ -449,10 +521,7 @@ export async function SurahIndexPage({
 }) {
   const t = await getTranslations({ locale, namespace: 'quran' });
   const parts = await quranTrail(locale);
-  const [surahs, juzList] = await Promise.all([
-    readSurahs(),
-    quranReadRuntime().reader.juzList(),
-  ]);
+  const [surahs, juzList] = await Promise.all([readSurahs(), readJuzList()]);
   const title = t('sections.surah');
 
   return (
@@ -920,7 +989,7 @@ function AyahItem({
 /** A run of ayat as one ordered list, each with what begins at it. */
 function AyahList({
   id,
-  surah,
+  series,
   locale,
   ayat,
   previous,
@@ -931,8 +1000,8 @@ function AyahList({
   t,
 }: {
   readonly id?: string;
-  /** The Surah a windowed list reads, for the island's window check. */
-  readonly surah?: number;
+  /** The reading a windowed list belongs to, for the island's window check. */
+  readonly series?: string;
   readonly locale: Locale;
   readonly ayat: readonly PublicAyah[];
   /** The Ayah before the first, in canonical order, or null at the start. */
@@ -947,7 +1016,7 @@ function AyahList({
   return (
     <ol
       {...(id === undefined ? {} : { id })}
-      {...(surah === undefined ? {} : { 'data-surah': surah })}
+      {...(series === undefined ? {} : { 'data-series': series })}
       aria-labelledby={labelledBy}
       className="quran-ayat flex flex-col"
     >
@@ -1007,6 +1076,11 @@ async function Bismillah({
 }
 
 const READER_ID = 'quran-reader';
+
+/** The reading a page's windows belong to: `surah-2`, `juz-30`. */
+function seriesOf(kind: 'surah' | 'juz', number: number): string {
+  return `${kind}-${String(number)}`;
+}
 /** The ayat list of a reading page — the skip link's target and the island's. */
 const AYAT_ID = 'quran-ayat';
 /** The text of a reading page, for "Skip to the text". */
@@ -1085,6 +1159,7 @@ async function ReadingFrame({
   remember,
   modes,
   surah,
+  series,
   defaultsHref,
   children,
 }: {
@@ -1105,6 +1180,8 @@ async function ReadingFrame({
     readonly ayahCount: number;
     readonly start: number;
   } | null;
+  /** The reading the page's windows belong to, and where the shown one starts in it. */
+  readonly series: ReadingSeries | null;
   /** This page with its default translations: the address chose none. */
   readonly defaultsHref: string;
   readonly children: ReactNode;
@@ -1169,6 +1246,7 @@ async function ReadingFrame({
             remember={remember}
             moreOptionsHref={`#${READING_OPTIONS_ID}`}
             surah={surah}
+            series={series}
             personal={modes ? await personalIslandLabels(locale) : null}
           />
         </div>
@@ -1199,24 +1277,22 @@ function SkipToText({ t }: { readonly t: QuranTranslator }) {
  * /quran/surah/{surahNumber}
  * ========================================================================= */
 
-/** One neighbouring Surah as a large previous/next link. */
+/** A neighbouring Surah or Juz as a large previous/next link: its name, then what it is known by. */
 function NeighbourLink({
-  locale,
-  surah,
-  choice,
+  href,
   direction,
-  t,
+  label,
+  children,
 }: {
-  readonly locale: Locale;
-  readonly surah: PublicSurah;
-  readonly choice: ReadingChoice;
+  readonly href: string;
   readonly direction: 'previous' | 'next';
-  readonly t: QuranTranslator;
+  readonly label: string;
+  readonly children: ReactNode;
 }) {
   const next = direction === 'next';
   return (
     <a
-      href={withReading(surahPath(locale, surah.number), choice)}
+      href={href}
       className={`flex min-h-16 items-center gap-4 rounded-panel border border-border bg-surface-raised px-5 py-4 no-underline transition-colors duration-[var(--duration-fast)] hover:border-border-strong hover:bg-surface-sunken ${
         next ? 'sm:col-start-2 sm:justify-end sm:text-end' : ''
       }`}
@@ -1225,13 +1301,8 @@ function NeighbourLink({
         <Icon name="arrow-start" size={20} className="text-foreground-muted" />
       )}
       <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-sm font-semibold text-foreground">
-          {t(next ? 'nextSurah' : 'previousSurah', { number: surah.number })}
-        </span>
-        <ArabicName
-          surah={surah}
-          className="text-lg leading-loose text-foreground-muted"
-        />
+        <span className="text-sm font-semibold text-foreground">{label}</span>
+        {children}
       </span>
       {next ? (
         <Icon name="arrow-end" size={20} className="text-foreground-muted" />
@@ -1421,6 +1492,11 @@ export async function SurahPage({
             ayahCount: surah.ayahCount,
             start: window.start,
           }}
+          series={{
+            key: seriesOf('surah', surah.number),
+            offset: window.start - 1,
+            total: surah.ayahCount,
+          }}
           defaultsHref={withReading(path, { ...choice, translation: null })}
         >
           {earlier === null ? null : (
@@ -1457,7 +1533,7 @@ export async function SurahPage({
             ) : (
               <AyahList
                 id={AYAT_ID}
-                surah={surah.number}
+                series={seriesOf('surah', surah.number)}
                 locale={locale}
                 ayat={ayat}
                 previous={before}
@@ -1496,21 +1572,27 @@ export async function SurahPage({
         >
           {previous === null ? null : (
             <NeighbourLink
-              locale={locale}
-              surah={previous}
-              choice={choice}
+              href={withReading(surahPath(locale, previous.number), choice)}
               direction="previous"
-              t={t}
-            />
+              label={t('previousSurah', { number: previous.number })}
+            >
+              <ArabicName
+                surah={previous}
+                className="text-lg leading-loose text-foreground-muted"
+              />
+            </NeighbourLink>
           )}
           {next === null ? null : (
             <NeighbourLink
-              locale={locale}
-              surah={next}
-              choice={choice}
+              href={withReading(surahPath(locale, next.number), choice)}
               direction="next"
-              t={t}
-            />
+              label={t('nextSurah', { number: next.number })}
+            >
+              <ArabicName
+                surah={next}
+                className="text-lg leading-loose text-foreground-muted"
+              />
+            </NeighbourLink>
           )}
         </nav>
 
@@ -1580,6 +1662,121 @@ function GoToAyah({
 }
 
 /* ===========================================================================
+ * Runs of one Surah — a mushaf page and a Juz window alike
+ * ========================================================================= */
+
+/** Consecutive ayat of one Surah, in canonical order. */
+interface SurahRun {
+  readonly surah: number;
+  readonly ayat: readonly PublicAyah[];
+}
+
+/** Ayat in canonical order as runs of one Surah, so a heading marks each. */
+function surahRunsOf(ayat: readonly PublicAyah[]): SurahRun[] {
+  const runs: { surah: number; ayat: PublicAyah[] }[] = [];
+  for (const ayah of ayat) {
+    const last = runs.at(-1);
+    if (last !== undefined && last.surah === ayah.surah) last.ayat.push(ayah);
+    else runs.push({ surah: ayah.surah, ayat: [ayah] });
+  }
+  return runs;
+}
+
+/** The shown layers of each run — one read per layer per Surah, never per Ayah. */
+function layersOfRuns(
+  context: Awaited<ReturnType<typeof readingContext>>,
+  set: TranslationSet,
+  languages: ReadonlyMap<string, ContentLanguage>,
+  runs: readonly SurahRun[],
+): Promise<AyahLayers[]> {
+  return Promise.all(
+    runs.map((run) => {
+      const from = run.ayat[0]?.ayah ?? 1;
+      const to = run.ayat.at(-1)?.ayah ?? from;
+      return layersFor(
+        context,
+        set,
+        languages,
+        run.surah,
+        from,
+        to,
+        run.ayat.map((ayah) => ayah.ayah),
+      );
+    }),
+  );
+}
+
+/**
+ * Runs of one Surah, each a section under the Surah's heading — centred, with
+ * the Bismillah under Part 1's rule, where the Surah OPENS in the run; a plain
+ * heading where it continues — and each Ayah with what begins at it.
+ */
+function SurahRuns({
+  locale,
+  availability,
+  runs,
+  layered,
+  before,
+  surahs,
+  choice,
+  pageLink,
+  idOf,
+  t,
+}: {
+  readonly locale: Locale;
+  readonly availability: QuranAvailability;
+  readonly runs: readonly SurahRun[];
+  readonly layered: readonly AyahLayers[];
+  /** The Ayah before the first run, in canonical order, or null at the start. */
+  readonly before: PublicAyah | null;
+  readonly surahs: ReadonlyMap<number, PublicSurah>;
+  readonly choice: ReadingChoice;
+  readonly pageLink: boolean;
+  /** Each run's heading identifier — unique on the page however windows are joined. */
+  readonly idOf: (run: SurahRun) => string;
+  readonly t: QuranTranslator;
+}) {
+  return runs.map((run, index) => {
+    const surah = surahs.get(run.surah);
+    const id = idOf(run);
+    const opens = run.ayat[0]?.ayah === 1;
+    const previousOf = index === 0 ? before : (runs[index - 1]?.ayat.at(-1) ?? null);
+    return (
+      <section key={id} className="flex flex-col pt-6" aria-labelledby={id}>
+        <h2
+          id={id}
+          className={`flex flex-wrap items-baseline gap-x-3 text-heading font-semibold break-words ${
+            opens ? 'justify-center border-b border-border pb-4 text-center' : ''
+          }`}
+        >
+          <TextLink href={surahPath(locale, run.surah)}>
+            {surah === undefined ? (
+              t('surahName', { number: run.surah })
+            ) : (
+              <SurahTitle surah={surah} locale={locale} t={t} />
+            )}
+          </TextLink>
+          {surah === undefined ? null : (
+            <ArabicName surah={surah} className="text-2xl leading-loose font-normal" />
+          )}
+        </h2>
+        {opens ? <Bismillah availability={availability} surah={run.surah} /> : null}
+        <AyahList
+          locale={locale}
+          ayat={run.ayat}
+          previous={previousOf}
+          layers={layered[index] ?? NO_LAYERS}
+          choice={choice}
+          pageLink={pageLink}
+          labelledBy={id}
+          t={t}
+        />
+      </section>
+    );
+  });
+}
+
+/* ===========================================================================
  * /quran/page/{pageNumber} — one mushaf page (Quran Part 1)
  * ========================================================================= */
 
@@ -1619,28 +1816,8 @@ export async function MushafPage({
   const heading = t('page.title', { number: page });
   const set = translationSet(context, request, locale);
 
-  // Consecutive ayat of one Surah are one group, so a heading marks each.
-  const groups: { surah: number; ayat: PublicAyah[] }[] = [];
-  for (const ayah of ayat) {
-    const last = groups.at(-1);
-    if (last !== undefined && last.surah === ayah.surah) last.ayat.push(ayah);
-    else groups.push({ surah: ayah.surah, ayat: [ayah] });
-  }
-  const layered = await Promise.all(
-    groups.map((group) => {
-      const from = group.ayat[0]?.ayah ?? 1;
-      const to = group.ayat.at(-1)?.ayah ?? from;
-      return layersFor(
-        context,
-        set,
-        languages,
-        group.surah,
-        from,
-        to,
-        group.ayat.map((ayah) => ayah.ayah),
-      );
-    }),
-  );
+  const groups = surahRunsOf(ayat);
+  const layered = await layersOfRuns(context, set, languages, groups);
   const onPage = groups.flatMap((group) => {
     const surah = surahByNumber.get(group.surah);
     return surah === undefined ? [] : [surah];
@@ -1701,59 +1878,22 @@ export async function MushafPage({
           remember
           modes
           surah={null}
+          series={null}
           defaultsHref={withReading(path, { ...context.choice, translation: null })}
         >
           <div id={TEXT_ID} tabIndex={-1} className="flex scroll-mt-20 flex-col">
-            {groups.map((group, index) => {
-              const surah = surahByNumber.get(group.surah);
-              const id = `page-surah-${String(group.surah)}`;
-              const opens = group.ayat[0]?.ayah === 1;
-              const previousOf =
-                index === 0 ? before : (groups[index - 1]?.ayat.at(-1) ?? null);
-              return (
-                <section
-                  key={group.surah}
-                  className="flex flex-col pt-6"
-                  aria-labelledby={id}
-                >
-                  <h2
-                    id={id}
-                    className={`flex flex-wrap items-baseline gap-x-3 text-heading font-semibold break-words ${
-                      opens
-                        ? 'justify-center border-b border-border pb-4 text-center'
-                        : ''
-                    }`}
-                  >
-                    <TextLink href={surahPath(locale, group.surah)}>
-                      {surah === undefined ? (
-                        t('surahName', { number: group.surah })
-                      ) : (
-                        <SurahTitle surah={surah} locale={locale} t={t} />
-                      )}
-                    </TextLink>
-                    {surah === undefined ? null : (
-                      <ArabicName
-                        surah={surah}
-                        className="text-2xl leading-loose font-normal"
-                      />
-                    )}
-                  </h2>
-                  {opens ? (
-                    <Bismillah availability={availability} surah={group.surah} />
-                  ) : null}
-                  <AyahList
-                    locale={locale}
-                    ayat={group.ayat}
-                    previous={previousOf}
-                    layers={layered[index] ?? NO_LAYERS}
-                    choice={context.choice}
-                    pageLink={false}
-                    labelledBy={id}
-                    t={t}
-                  />
-                </section>
-              );
-            })}
+            <SurahRuns
+              locale={locale}
+              availability={availability}
+              runs={groups}
+              layered={layered}
+              before={before}
+              surahs={surahByNumber}
+              choice={context.choice}
+              pageLink={false}
+              idOf={(run) => `page-surah-${String(run.surah)}`}
+              t={t}
+            />
           </div>
         </ReadingFrame>
 
@@ -1962,6 +2102,7 @@ export async function AyahPage({
           remember
           modes={false}
           surah={null}
+          series={null}
           defaultsHref={withReading(path, { ...choice, translation: null })}
         >
           <div
@@ -2142,19 +2283,26 @@ export async function AyahPage({
 }
 
 /* ===========================================================================
- * /quran/juz and /quran/juz/{juzNumber}
+ * /quran/juz and /quran/juz/{juzNumber} (Quran Part 3)
  * ========================================================================= */
 
+/**
+ * `/quran/juz`: the reader's own "Continue where you stopped" card where there
+ * is a place to return to, then thirty cards — each Juz by its number and the
+ * opening words of its first Ayah — filtered by the address's `?q=`.
+ */
 export async function JuzIndexPage({
   locale,
   availability,
+  query,
 }: {
   readonly locale: Locale;
   readonly availability: QuranAvailability;
+  readonly query: string;
 }) {
   const t = await getTranslations({ locale, namespace: 'quran' });
   const parts = await quranTrail(locale);
-  const list = await quranReadRuntime().reader.juzList();
+  const [list, surahs] = await Promise.all([readJuzList(), readSurahs()]);
   const title = t('sections.juz');
 
   return (
@@ -2171,82 +2319,175 @@ export async function JuzIndexPage({
       {list.length === 0 ? (
         <EmptyState>{t('empty')}</EmptyState>
       ) : (
-        <JuzIndexList locale={locale} list={list} label={title} t={t} />
+        <>
+          <ContinueReading {...await continueProps(locale, surahs)} card />
+          <JuzIndexSection
+            locale={locale}
+            list={list}
+            surahs={surahs}
+            openings
+            initial={query}
+            idPrefix="juz-index"
+            headingLevel="h2"
+            syncAddress
+          />
+        </>
       )}
+      <AboutThisText
+        locale={locale}
+        availability={availability}
+        translation={(await quranReadRuntime().reader.translations()).length > 0}
+      />
     </QuranFrame>
   );
 }
 
+/** The opening words of a Juz in the Quran face, cut verbatim from its first Ayah. */
+function JuzOpening({
+  juz,
+  label,
+  className,
+}: {
+  readonly juz: PublicJuz;
+  readonly label: string;
+  readonly className: string;
+}) {
+  const opening = openingWords(juz.startText);
+  if (opening.text === '') return null;
+  return (
+    // Right to left whatever the interface: the words begin on the right.
+    <p dir="rtl" className="max-w-full min-w-0">
+      <span className="sr-only">{`${label}: `}</span>
+      <span lang="ar" className={`quran-name wrap-anywhere ${className}`}>
+        {opening.text}
+        {opening.more ? <span aria-hidden="true">{' …'}</span> : null}
+      </span>
+    </p>
+  );
+}
+
+/** A citation with its Surah's display name: "Al-Baqarah 2:142", else "Surah 2 · 2:142". */
+function NamedCitation({
+  locale,
+  at,
+  surahs,
+  t,
+}: {
+  readonly locale: Locale;
+  readonly at: QuranRef;
+  readonly surahs: ReadonlyMap<number, PublicSurah>;
+  readonly t: QuranTranslator;
+}) {
+  const surah = surahs.get(at.surah);
+  const name = surah === undefined ? null : surahName(surah, locale);
+  return (
+    <>
+      {name === null ? (
+        t('surahName', { number: at.surah })
+      ) : (
+        <span lang={name.locale} dir={directionOf(name.locale)}>
+          {name.text}
+        </span>
+      )}{' '}
+      <bdi dir="ltr" className="tabular-nums">
+        {citationOf(at)}
+      </bdi>
+    </>
+  );
+}
+
+/** "Hizb 4", "Hizb 59, part 2 of 3" — what a window of a Juz is called. */
+function windowName(window: JuzWindow, juz: number, t: QuranTranslator): string {
+  if (window.hizb === null)
+    return window.parts > 1
+      ? t('juz.window.part', { part: window.part, parts: window.parts })
+      : t('juzName', { number: juz });
+  return window.parts > 1
+    ? t('juz.window.hizbPart', {
+        hizb: window.hizb,
+        part: window.part,
+        parts: window.parts,
+      })
+    : t('reader.marks.hizb', { number: window.hizb });
+}
+
+const CONTENTS_LINK =
+  'flex min-h-11 items-center justify-between gap-3 rounded-control px-3 py-1.5 text-sm no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken aria-[current=true]:bg-accent-surface aria-[current=true]:font-semibold';
+
 /**
- * One Juz in bounded pages of `QURAN_JUZ_PAGE` ayat, in canonical order: a
- * Surah's opening wherever one begins, every Ayah linked to its citation, and
- * the rendered translations read once per Surah on the page.
+ * ONE JUZ, READ BY ITS OWN DIVISIONS (Quran Part 3). The page renders one
+ * window server-side, complete without JavaScript — a hizb the source
+ * recorded, or one part of a long hizb broken between mushaf pages
+ * (`./juz-layout`) — in canonical order, each Surah's opening (and its
+ * Bismillah, under Part 1's rule) wherever one begins. `?hizb=` and `?part=`
+ * name the window; the next is a link the reader island fetches and appends
+ * as the reader nears it, exactly as a Surah's windows are. Above the text:
+ * the opening words, the range by name and citation, the pages and hizb, and
+ * a compact list of its Surahs and hizb starts; below it, the Juz before and
+ * after.
  */
 export async function JuzPage({
   locale,
   availability,
   juz,
-  offset,
+  window: requested,
   request,
 }: {
   readonly locale: Locale;
   readonly availability: QuranAvailability;
   readonly juz: PublicJuz;
-  readonly offset: number;
+  /** The address's query: its `?hizb=` and `?part=`, validated here. */
+  readonly window: Record<string, string | string[] | undefined>;
   readonly request: ReadingRequest;
 }) {
   const t = await getTranslations({ locale, namespace: 'quran' });
   const parts = await quranTrail(locale);
+  const reader = quranReadRuntime().reader;
   const path = juzPath(locale, juz.number);
-  const [page, surahs, context, languages] = await Promise.all([
-    quranReadRuntime().reader.juzAyat(juz.number, offset),
+  const [outline, list, surahs, context, languages] = await Promise.all([
+    readJuzOutline(juz.number),
+    readJuzList(),
     readSurahs(),
     readingContext(request),
     contentLanguages(),
   ]);
-  const firstAyah = page.items[0];
-  const before = firstAyah === undefined ? null : await readAyahBefore(firstAyah);
+  const windows = juzWindows(outline);
+  const index = readJuzWindow(requested, windows);
+  const shown = windows[index];
+  const following = windows[index + 1];
+  const [ayat, before] = await Promise.all([
+    shown === undefined
+      ? Promise.resolve([])
+      : reader.juzAyat(juz.number, shown.start, shown.end),
+    shown === undefined ? Promise.resolve(null) : readAyahBefore(shown.start),
+  ]);
+  const set = translationSet(context, request, locale);
+  const runs = surahRunsOf(ayat);
+  const layered = await layersOfRuns(context, set, languages, runs);
+  const { choice } = context;
+
   const surahByNumber = new Map(surahs.map((surah) => [surah.number, surah]));
+  const inJuz = surahs.filter(
+    (surah) => surah.number >= juz.start.surah && surah.number <= juz.end.surah,
+  );
+  const previous = list.find((each) => each.number === juz.number - 1) ?? null;
+  const next = list.find((each) => each.number === juz.number + 1) ?? null;
   const heading = t('juzName', { number: juz.number });
-  const links = pageLinks(page.offset, QURAN_JUZ_PAGE, page.total);
+  const facts = juzFacts(juz, t);
+  const reading = withReading(path, choice);
+  const at = (window: number, anchor: string | null = null) =>
+    withJuzWindow(withReading(path, choice, {}, anchor), windows, window);
+  // The window, and nothing else, rides along when the reading form is sent.
+  const keep: Record<string, string> = Object.fromEntries(
+    new URLSearchParams(withJuzWindow('', windows, index).replace(/^\?/, '')),
+  );
+  const starts = hizbStarts(windows);
   const trail = [
     { name: parts.home.text, path: parts.home.href },
     { name: parts.quran.text, path: parts.quran.href },
     { name: t('sections.juz'), path: quranPath(locale, 'juz') },
     { name: heading, path },
   ];
-
-  // Consecutive ayat of one Surah are one group, so a heading marks each start.
-  const groups: { surah: number; ayat: PublicAyah[] }[] = [];
-  for (const ayah of page.items) {
-    const last = groups.at(-1);
-    if (last !== undefined && last.surah === ayah.surah) last.ayat.push(ayah);
-    else groups.push({ surah: ayah.surah, ayat: [ayah] });
-  }
-  const set = translationSet(context, request, locale);
-  // Only the translations ride along on a Juz: one read per work per Surah.
-  const layered = await Promise.all(
-    groups.map((group) => {
-      const first = group.ayat[0]?.ayah ?? 1;
-      const last = group.ayat.at(-1)?.ayah ?? first;
-      return layersFor(
-        {
-          ...context,
-          chosen: { ...context.chosen, transliteration: null, tafsir: null },
-        },
-        set,
-        languages,
-        group.surah,
-        first,
-        last,
-        group.ayat.map((ayah) => ayah.ayah),
-      );
-    }),
-  );
-  const onPage = groups.flatMap((group) => {
-    const surah = surahByNumber.get(group.surah);
-    return surah === undefined ? [] : [surah];
-  });
 
   return (
     <QuranFrame
@@ -2258,14 +2499,143 @@ export async function JuzPage({
       ]}
     >
       <div className="mx-auto flex w-full max-w-4xl min-w-0 flex-col gap-6">
-        <Prose>
-          <PageHeading>{heading}</PageHeading>
-          <JuzRange juz={juz} t={t} />
-        </Prose>
+        <SkipToText t={t} />
+        <header className="flex flex-col items-center gap-3 border-b border-border pb-8 text-center">
+          <h1 className="text-title font-semibold tracking-[var(--tracking-display)]">
+            {heading}
+          </h1>
+          <div className="order-first">
+            <JuzOpening
+              juz={juz}
+              label={t('juz.opening')}
+              className="text-4xl leading-loose"
+            />
+          </div>
+          <p className="text-sm text-foreground-muted">
+            {t('ayahCount', { count: juz.ayahCount })}
+            {facts === '' ? null : ` · ${facts}`}
+          </p>
+          <dl className="flex flex-wrap justify-center gap-x-8 gap-y-2 text-sm">
+            <div className="flex flex-wrap items-baseline justify-center gap-x-2">
+              <dt className="text-foreground-muted">{t('juz.begins')}</dt>
+              <dd className="font-medium">
+                <TextLink href={withReading(ayahPath(locale, juz.start), choice)}>
+                  <NamedCitation
+                    locale={locale}
+                    at={juz.start}
+                    surahs={surahByNumber}
+                    t={t}
+                  />
+                </TextLink>
+              </dd>
+            </div>
+            <div className="flex flex-wrap items-baseline justify-center gap-x-2">
+              <dt className="text-foreground-muted">{t('juz.ends')}</dt>
+              <dd className="font-medium">
+                <TextLink href={withReading(ayahPath(locale, juz.end), choice)}>
+                  <NamedCitation
+                    locale={locale}
+                    at={juz.end}
+                    surahs={surahByNumber}
+                    t={t}
+                  />
+                </TextLink>
+              </dd>
+            </div>
+          </dl>
+          <p className="flex flex-wrap justify-center gap-x-6 gap-y-1 pt-1 text-sm">
+            {previous === null ? null : (
+              <TextLink href={withReading(juzPath(locale, previous.number), choice)}>
+                {t('juz.previous', { number: previous.number })}
+              </TextLink>
+            )}
+            {next === null ? null : (
+              <TextLink href={withReading(juzPath(locale, next.number), choice)}>
+                {t('juz.next', { number: next.number })}
+              </TextLink>
+            )}
+          </p>
+        </header>
 
         <LayerNotices locale={locale} unavailable={context.unavailable} />
 
-        {groups.length === 0 ? (
+        {windows.length === 0 ? null : (
+          <nav
+            aria-labelledby="juz-contents"
+            className="flex flex-col gap-4 rounded-panel border border-border bg-surface-raised p-4 sm:p-5"
+          >
+            <h2 id="juz-contents" className="text-lg font-semibold">
+              {t('juz.inThis')}
+            </h2>
+            {starts.length === 0 ? null : (
+              <div className="flex flex-col gap-2">
+                <h3 className="text-sm font-semibold text-foreground-muted">
+                  {t('juz.hizbs')}
+                </h3>
+                <ol className="grid list-none grid-cols-1 gap-1 p-0 sm:grid-cols-2">
+                  {starts.map((start) => {
+                    const window = windows[start];
+                    if (window === undefined || window.hizb === null) return null;
+                    const current = shown !== undefined && shown.hizb === window.hizb;
+                    return (
+                      <li key={window.hizb}>
+                        <a
+                          href={at(start)}
+                          aria-current={current ? 'true' : undefined}
+                          className={CONTENTS_LINK}
+                        >
+                          <span className="font-medium text-foreground">
+                            {t('reader.marks.hizb', { number: window.hizb })}
+                          </span>
+                          <bdi dir="ltr" className="text-foreground-muted tabular-nums">
+                            {citationOf(window.start)}
+                          </bdi>
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            )}
+            <details open={inJuz.length <= 4} className="group flex flex-col gap-2">
+              <summary className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-foreground-muted">
+                <Icon
+                  name="chevron-down"
+                  size={16}
+                  className="transition-transform group-open:rotate-180"
+                />
+                {`${t('juz.surahs')} · ${t('juz.surahCount', { count: inJuz.length })}`}
+              </summary>
+              <ol className="grid list-none grid-cols-1 gap-1 p-0 sm:grid-cols-2">
+                {inJuz.map((surah) => {
+                  const begins =
+                    surah.number === juz.start.surah
+                      ? juz.start
+                      : { surah: surah.number, ayah: 1 };
+                  const window = windowOf(windows, begins);
+                  return (
+                    <li key={surah.number}>
+                      <a
+                        href={at(window, ayahElementId(begins))}
+                        aria-current={window === index ? 'true' : undefined}
+                        className={CONTENTS_LINK}
+                      >
+                        <span className="min-w-0 font-medium wrap-anywhere text-foreground">
+                          <SurahTitle surah={surah} locale={locale} t={t} />
+                        </span>
+                        <bdi dir="ltr" className="text-foreground-muted tabular-nums">
+                          {citationOf(begins)}
+                        </bdi>
+                      </a>
+                    </li>
+                  );
+                })}
+              </ol>
+            </details>
+          </nav>
+        )}
+
+        {shown === undefined || ayat.length === 0 ? (
           <EmptyState>{t('empty')}</EmptyState>
         ) : (
           <ReadingFrame
@@ -2276,70 +2646,121 @@ export async function JuzPage({
             set={set}
             languages={languages}
             initialJuz={juz.number}
-            surahs={onPage}
+            surahs={inJuz}
             remember
             modes
             surah={null}
-            defaultsHref={withReading(path, { ...context.choice, translation: null })}
+            series={{
+              key: seriesOf('juz', juz.number),
+              offset: shown.offset,
+              total: juz.ayahCount,
+            }}
+            defaultsHref={withJuzWindow(
+              withReading(path, { ...choice, translation: null }),
+              windows,
+              index,
+            )}
           >
-            {groups.map((group, index) => {
-              const surah = surahByNumber.get(group.surah);
-              const id = `juz-surah-${String(group.surah)}`;
-              const opens = group.ayat[0]?.ayah === 1;
-              const previousOf =
-                index === 0 ? before : (groups[index - 1]?.ayat.at(-1) ?? null);
-              return (
-                <section
-                  key={group.surah}
-                  className="flex flex-col pt-6"
-                  aria-labelledby={id}
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border py-4 text-sm">
+              {index === 0 ? null : (
+                <TextLink href={at(index - 1)}>
+                  {t('juz.window.earlier', {
+                    place: windowName(windows[index - 1] ?? shown, juz.number, t),
+                  })}
+                </TextLink>
+              )}
+              <p className="flex flex-wrap items-baseline gap-x-3">
+                <span className="font-semibold">{windowName(shown, juz.number, t)}</span>
+                <span className="text-foreground-muted tabular-nums">
+                  {t('juz.window.position', {
+                    start: shown.offset + 1,
+                    end: shown.offset + shown.count,
+                    count: juz.ayahCount,
+                  })}
+                </span>
+              </p>
+            </div>
+            <div id={TEXT_ID} tabIndex={-1} className="flex scroll-mt-20 flex-col">
+              <div
+                id={AYAT_ID}
+                data-series={seriesOf('juz', juz.number)}
+                className="flex flex-col"
+              >
+                <SurahRuns
+                  locale={locale}
+                  availability={availability}
+                  runs={runs}
+                  layered={layered}
+                  before={before}
+                  surahs={surahByNumber}
+                  choice={choice}
+                  pageLink
+                  idOf={(run) =>
+                    `juz-surah-${String(run.surah)}-${String(run.ayat[0]?.ayah ?? 0)}`
+                  }
+                  t={t}
+                />
+              </div>
+            </div>
+            {following === undefined ? null : (
+              <nav
+                data-window-nav=""
+                aria-label={t('juz.window.label')}
+                className="flex justify-center py-6"
+              >
+                <a
+                  data-window-next=""
+                  href={withJuzWindow(reading, windows, index + 1)}
+                  className="inline-flex min-h-12 items-center gap-2 rounded-control border border-border-strong bg-surface-raised px-5 text-sm font-semibold text-foreground no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken"
                 >
-                  <h2
-                    id={id}
-                    className={`flex flex-wrap items-baseline gap-x-3 text-heading font-semibold break-words ${
-                      opens
-                        ? 'justify-center border-b border-border pb-4 text-center'
-                        : ''
-                    }`}
-                  >
-                    <TextLink href={surahPath(locale, group.surah)}>
-                      {surah === undefined ? (
-                        t('surahName', { number: group.surah })
-                      ) : (
-                        <SurahTitle surah={surah} locale={locale} t={t} />
-                      )}
-                    </TextLink>
-                    {surah === undefined ? null : (
-                      <ArabicName
-                        surah={surah}
-                        className="text-2xl leading-loose font-normal"
-                      />
-                    )}
-                  </h2>
-                  {opens ? (
-                    <Bismillah availability={availability} surah={group.surah} />
-                  ) : null}
-                  <AyahList
-                    locale={locale}
-                    ayat={group.ayat}
-                    previous={previousOf}
-                    layers={layered[index] ?? NO_LAYERS}
-                    choice={context.choice}
-                    labelledBy={id}
-                    t={t}
-                  />
-                </section>
-              );
-            })}
+                  {t('juz.window.continue', {
+                    place: windowName(following, juz.number, t),
+                  })}
+                  <Icon name="chevron-down" size={20} />
+                </a>
+              </nav>
+            )}
           </ReadingFrame>
         )}
 
-        <Pagination
-          label={heading}
-          previous={links.previous === null ? null : offsetPathOf(path, links.previous)}
-          next={links.next === null ? null : offsetPathOf(path, links.next)}
-          previousLabel={t('previous')}
-          nextLabel={t('next')}
+        <nav
+          aria-label={t('juz.navigation')}
+          className="grid grid-cols-1 gap-3 pt-4 sm:grid-cols-2"
+        >
+          {previous === null ? null : (
+            <NeighbourLink
+              href={withReading(juzPath(locale, previous.number), choice)}
+              direction="previous"
+              label={t('juz.previous', { number: previous.number })}
+            >
+              <JuzOpening
+                juz={previous}
+                label={t('juz.opening')}
+                className="text-lg leading-loose text-foreground-muted"
+              />
+            </NeighbourLink>
+          )}
+          {next === null ? null : (
+            <NeighbourLink
+              href={withReading(juzPath(locale, next.number), choice)}
+              direction="next"
+              label={t('juz.next', { number: next.number })}
+            >
+              <JuzOpening
+                juz={next}
+                label={t('juz.opening')}
+                className="text-lg leading-loose text-foreground-muted"
+              />
+            </NeighbourLink>
+          )}
+        </nav>
+
+        <ReadingForm
+          locale={locale}
+          action={path}
+          context={context}
+          languages={languages}
+          keep={keep}
         />
 
         <AboutThisText
@@ -2390,6 +2811,7 @@ export async function quickJumpLabels(locale: Locale) {
     surah: t.raw('surahName') as string,
     ayah: t.raw('ayahName') as string,
     juz: t.raw('juzName') as string,
+    hizb: t.raw('jump.hizb') as string,
     page: t.raw('page.title') as string,
   };
 }
@@ -2438,10 +2860,11 @@ export async function ReaderEntryPage({
 }) {
   const t = await getTranslations({ locale, namespace: 'quran' });
   const parts = await quranTrail(locale);
-  const [surahs, lastPage, kursi] = await Promise.all([
+  const [surahs, lastPage, kursi, juzList] = await Promise.all([
     readSurahs(),
     readLastPage(),
     readAyah(2, 255),
+    readJuzList(),
   ]);
   const title = t('sections.read');
   const first = surahs[0];
@@ -2479,6 +2902,7 @@ export async function ReaderEntryPage({
             action={quranPath(locale, 'read')}
             index={jumpIndex(surahs)}
             lastPage={lastPage}
+            hizbs={[...hizbJuzOf(juzList)]}
             labels={await quickJumpLabels(locale)}
           />
 

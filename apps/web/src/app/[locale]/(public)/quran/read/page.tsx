@@ -11,10 +11,15 @@ import {
   readSurahSegment,
   surahPath,
 } from '@/components/quran/presentation';
-import { parseQuickJump, quickJumpPathOf } from '@/components/quran/quick-jump';
+import {
+  hizbJuzOf,
+  parseQuickJump,
+  quickJumpPathOf,
+} from '@/components/quran/quick-jump';
 import {
   quranAvailability,
   quranMetadata,
+  readJuzList,
   readLastPage,
   readSurah,
   readSurahs,
@@ -38,9 +43,9 @@ import { requireLocale } from '@/config/route-locale';
  * a mushaf page the corpus records. No value a URL carries can choose where
  * the visitor is sent; a choice that cannot be honoured is said so in words.
  *
- * `?q=` IS THE QUICK JUMP (R2): "18", "18:10", a Surah name, "juz 15" or
- * "page 50", parsed against the reader's own Surahs, counts, recorded names
- * and pages (`@/components/quran/quick-jump`). The address it opens is built
+ * `?q=` IS THE QUICK JUMP (R2): "18", "18:10", a Surah name, "juz 15",
+ * "hizb 30" or "page 50", parsed against the reader's own Surahs, counts,
+ * recorded names, hizb and pages (`@/components/quran/quick-jump`). The address it opens is built
  * from the numbers that parse confirmed — never from the text typed — so it is
  * no redirect parameter either.
  */
@@ -80,8 +85,13 @@ export default async function ReadRoute({ params, searchParams }: ReadParams) {
   let problem: 'surah' | 'ayah' | 'query' | 'page' | null = null;
 
   if (jumpText !== null && jumpText.trim() !== '') {
+    const [surahs, lastPage, juzList] = await Promise.all([
+      readSurahs(),
+      readLastPage(),
+      readJuzList(),
+    ]);
     const target = quickJumpPathOf(
-      parseQuickJump(jumpText, jumpIndex(await readSurahs()), await readLastPage()),
+      parseQuickJump(jumpText, jumpIndex(surahs), lastPage, hizbJuzOf(juzList)),
     );
     if (target === null) problem = 'query';
     else redirect(localizedPath(locale, target));

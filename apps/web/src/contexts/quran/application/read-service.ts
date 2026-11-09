@@ -52,6 +52,10 @@ const ENUMERATION_MAX = 1_000;
 const limitOk = (value: number) =>
   Number.isInteger(value) && value >= 1 && value <= ENUMERATION_MAX;
 
+/** Two citations in canonical order: the first at or before the second. */
+const citationOrder = (from: QuranRef, to: QuranRef) =>
+  from.surah < to.surah || (from.surah === to.surah && from.ayah <= to.ayah);
+
 /** A range of one Surah: both ends real Ayah numbers, in order. */
 const rangeOk = (surah: number, from: number, to: number) =>
   surahOk(surah) && ayahOk(from) && ayahOk(to) && from <= to;
@@ -79,10 +83,15 @@ export function createQuranReadService(
       refOk(ref) ? reader.ayah({ surah: ref.surah, ayah: ref.ayah }) : absent(),
     juzList: () => reader.juzList(),
     juz: (number) => (juzOk(number) ? reader.juz(number) : absent()),
-    juzAyat: async (number, offset) =>
-      juzOk(number) && offsetOk(offset)
-        ? reader.juzAyat(number, offset)
-        : emptyPage(offset),
+    juzOutline: (number) => (juzOk(number) ? reader.juzOutline(number) : none()),
+    juzAyat: (number, from, to) =>
+      juzOk(number) && refOk(from) && refOk(to) && citationOrder(from, to)
+        ? reader.juzAyat(
+            number,
+            { surah: from.surah, ayah: from.ayah },
+            { surah: to.surah, ayah: to.ayah },
+          )
+        : none(),
     pageAyat: (page) => (pageOk(page) ? reader.pageAyat(page) : none()),
     lastPage: () => reader.lastPage(),
 

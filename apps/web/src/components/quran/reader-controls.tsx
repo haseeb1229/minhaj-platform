@@ -15,6 +15,7 @@ import {
   usePosition,
   useFragmentLanding,
   useWindowLoader,
+  type ReadingSeries,
   type WindowedSurah,
 } from './reader-effects';
 import {
@@ -132,8 +133,10 @@ export interface ReaderControlsProps {
   readonly remember: boolean;
   /** Where the full GET reading form lives on the page, if it does. */
   readonly moreOptionsHref: string | null;
-  /** The Surah a page reads in windows, or null. */
+  /** The Surah a page reads in windows, or null: a fragment is landed in it. */
   readonly surah: WindowedSurah | null;
+  /** The reading a page's windows belong to (a Surah or a Juz), or null. */
+  readonly series: ReadingSeries | null;
   /** The private island's words: Save opens it in place. Null: Save navigates. */
   readonly personal: PersonalIslandLabels | null;
 }
@@ -177,6 +180,7 @@ export function QuranReaderControls({
   remember,
   moreOptionsHref,
   surah,
+  series,
   personal,
 }: ReaderControlsProps) {
   const preferences = useReaderPreferences();
@@ -238,14 +242,8 @@ export function QuranReaderControls({
   useFragmentLanding(readerId, surah);
   const onLoaded = useCallback(() => setRowsVersion((version) => version + 1), []);
   const onFailed = useCallback(() => say(labels.loadFailed), [say, labels.loadFailed]);
-  useWindowLoader(readerId, listId, surah, onLoaded, onFailed);
-  const position = usePosition(
-    readerId,
-    initialJuz,
-    remember,
-    surah?.ayahCount ?? null,
-    rowsVersion,
-  );
+  useWindowLoader(readerId, listId, series?.key ?? null, onLoaded, onFailed);
+  const position = usePosition(readerId, initialJuz, remember, series, rowsVersion);
 
   /** What the page rendered for one Ayah row: its Arabic and its shown translations. */
   const viewOf = useCallback(

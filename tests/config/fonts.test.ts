@@ -143,6 +143,8 @@ describe('the shipped typefaces', () => {
         named.push(relative(file));
     }
     expect(named.sort()).toEqual([
+      // Quran Part 3: each Juz card's opening words and Arabic Surah names.
+      'apps/web/src/components/quran/juz-index-island.tsx',
       'apps/web/src/components/quran/reader.tsx',
       'apps/web/src/components/quran/scripture.tsx',
       // Quran Part 2: each Surah index row's Arabic name.
