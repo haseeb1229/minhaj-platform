@@ -448,6 +448,10 @@ describe('the mutation surface', () => {
         'apps/web/src/app/[locale]/(public)/authors/[slug]/route.ts',
         'apps/web/src/app/[locale]/(public)/library/authors/[slug]/route.ts',
         'apps/web/src/app/assets/[id]/route.ts',
+        // Quran Part 5: a recitation's public, identity-free plan for one Surah
+        // (asset identifiers or the stream descriptor, and ayah timings) — a
+        // GET alone that reads no session and mutates nothing.
+        'apps/web/src/app/api/quran/recitations/[recitation]/[surah]/route.ts',
         // Phase 8: Library's own byte routes, beneath the same unprefixed
         // `/assets` namespace. The public one imports no Identity; the preview
         // one READS a session to re-check `library.administer` live, and
@@ -569,9 +573,10 @@ describe('the mutation surface', () => {
       ].sort(),
     );
 
-    // And the thirty others (Phase 23 added the Learn teacher alias, Phase 24
+    // And the thirty-one others (Phase 23 added the Learn teacher alias, Phase 24
     // the three attachment byte routes, Phase 30-R the six picture routes,
-    // Rebaseline R2 their six derivative routes) genuinely are read-only: a mutating
+    // Rebaseline R2 their six derivative routes, Quran Part 5 the recitation
+    // plan) genuinely are read-only: a mutating
     // verb on any of them would be a state-changing endpoint outside the
     // Class-A controls.
     const { readFile } = await import('node:fs/promises');
@@ -583,7 +588,7 @@ describe('the mutation surface', () => {
         !entry.includes('/api/my/') &&
         !entry.includes('/api/messaging/'),
     );
-    expect(readOnly).toHaveLength(30);
+    expect(readOnly).toHaveLength(31);
 
     for (const route of readOnly) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');

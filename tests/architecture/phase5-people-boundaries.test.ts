@@ -652,6 +652,14 @@ describe('the contract and the database agree on the bounds they share', () => {
         triggers: ['QuranActivationIntegrity', 'AyahCanonicalChange'],
         numbers: ['51181', '51182', '51185', '51198'],
       },
+      // Quran Part 5 redefines Phase 18's two "a published recitation needs
+      // audio" triggers so a streamed segment counts as audio, keeping 51188;
+      // the numbers it mints (51400–51402) are its own.
+      '20261109120000_r2_quran_recitation_timing': {
+        owner: '20261002000000_phase18_quran',
+        triggers: ['QuranRecitationPublishedAudio', 'QuranRecitationSegmentKeepsAudio'],
+        numbers: ['51188'],
+      },
     };
 
     const numbers = new Map<string, string[]>();
