@@ -733,6 +733,7 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
       expect((await persistence.translationTexts(created.id, 1))[0]).toEqual({
         ayah: 1,
         text: exact,
+        notes: [],
       });
 
       // A stale save, and a save naming an Ayah the corpus lacks, change
@@ -1631,6 +1632,224 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
       expect((await reader.searchAyah({ surah: 1, ayah: 1 }))?.stamp).not.toBe(
         projection?.stamp,
       );
+    });
+
+    it("keeps a Translation's translator's notes beside their text, public, counted and searched (Quran Part 6)", async () => {
+      const before = (await reader.searchAyah({ surah: 1, ayah: 1 }))?.stamp;
+      const version = (await persistence.translation(fixtureTranslation.id))!.version;
+      const note = (marker: string, text: string) => ({ marker, text });
+      const twoParagraphs = 'NON_QURAN_FIXTURE note one\n\nits second paragraph';
+      const saved = await persistence.saveTranslationTexts({
+        actorId,
+        id: fixtureTranslation.id,
+        expectedVersion: version,
+        surah: 1,
+        changes: [
+          {
+            ayah: 1,
+            text: 'NON_QURAN_FIXTURE translation 1:1 noted*',
+            notes: [note('*', 'NON_QURAN_FIXTURE note 1:1')],
+          },
+          {
+            ayah: 2,
+            text: 'NON_QURAN_FIXTURE translation 1:2 (1) (2)',
+            notes: [
+              note('1:-', twoParagraphs),
+              note('2:-', 'NON_QURAN_FIXTURE note two'),
+            ],
+          },
+        ],
+      });
+      expect(saved.version).toBe(version + 1);
+      // Exactly as given, in order, on the administrative and the public read.
+      const expected = [
+        {
+          ayah: 1,
+          text: 'NON_QURAN_FIXTURE translation 1:1 noted*',
+          notes: [{ ordinal: 1, marker: '*', text: 'NON_QURAN_FIXTURE note 1:1' }],
+        },
+        {
+          ayah: 2,
+          text: 'NON_QURAN_FIXTURE translation 1:2 (1) (2)',
+          notes: [
+            { ordinal: 1, marker: '1:-', text: twoParagraphs },
+            { ordinal: 2, marker: '2:-', text: 'NON_QURAN_FIXTURE note two' },
+          ],
+        },
+        { ayah: 3, text: 'NON_QURAN_FIXTURE translation 1:3', notes: [] },
+      ];
+      expect(await persistence.translationTexts(fixtureTranslation.id, 1)).toEqual(
+        expected,
+      );
+      expect(await reader.translationTexts(fixtureTranslation.id, 1, 1, 3)).toEqual(
+        expected,
+      );
+
+      // Coverage: per Surah, ayat with text and notes — public works only, once
+      // each, in the order asked; an unknown or unpublished work is absent.
+      const draft = await persistence.createTranslation({
+        actorId,
+        value: translationValue(
+          `non-quran-fixture-unpublished-${randomUUID().slice(0, 8)}`,
+          primary.id,
+        ),
+      });
+      await persistence.saveTranslationTexts({
+        actorId,
+        id: draft.id,
+        expectedVersion: 1,
+        surah: 1,
+        changes: [
+          {
+            ayah: 1,
+            text: 'NON_QURAN_FIXTURE draft*',
+            notes: [note('*', 'NON_QURAN_FIXTURE draft note')],
+          },
+        ],
+      });
+      expect(await reader.translationTexts(draft.id, 1, 1, 3)).toEqual([]);
+      expect(
+        await reader.translationCoverage([
+          fixtureTranslation.id,
+          randomUUID(),
+          draft.id,
+          approvedTranslation.id,
+          fixtureTranslation.id,
+        ]),
+      ).toEqual([
+        { workId: fixtureTranslation.id, surahs: [{ surah: 1, ayat: 3, notes: 3 }] },
+        { workId: approvedTranslation.id, surahs: [{ surah: 1, ayat: 1, notes: 0 }] },
+      ]);
+      expect(await reader.translationCoverage([])).toEqual([]);
+
+      // Search: each note is its work's `note` layer, after every text, in
+      // work-slug order and then its own — and the stamp moved with the save.
+      const one = await reader.searchAyah({ surah: 1, ayah: 1 });
+      expect(one?.stamp).not.toBe(before);
+      expect(one?.layers.map((layer) => layer.kind)).toEqual([
+        'translation',
+        'translation',
+        'transliteration',
+        'note',
+      ]);
+      expect(one?.layers.at(-1)).toEqual({
+        kind: 'note',
+        slug: fixtureTranslation.slug,
+        name: 'NON_QURAN_FIXTURE translation',
+        languageCode: 'en',
+        text: 'NON_QURAN_FIXTURE note 1:1',
+      });
+      const two = await reader.searchAyah({ surah: 1, ayah: 2 });
+      expect(
+        two?.layers.filter((layer) => layer.kind === 'note').map((layer) => layer.text),
+      ).toEqual([twoParagraphs, 'NON_QURAN_FIXTURE note two']);
+      expect((await reader.searchAyahRecords([{ surah: 1, ayah: 2 }]))[0]).toEqual(two);
+      expect((await reader.searchAyahScopes({ surah: 1, ayah: 1 }, 1))[0]?.stamp).toBe(
+        two?.stamp,
+      );
+
+      // A malformed marker or a twenty-first note is the database's to refuse
+      // too: nothing is written and the version holds.
+      for (const notes of [
+        [note('a', 'NON_QURAN_FIXTURE bad marker')],
+        Array.from({ length: 21 }, () => note('*', 'NON_QURAN_FIXTURE one too many')),
+      ])
+        expect(
+          await reasonOf(
+            persistence.saveTranslationTexts({
+              actorId,
+              id: fixtureTranslation.id,
+              expectedVersion: version + 1,
+              surah: 1,
+              changes: [{ ayah: 3, text: 'NON_QURAN_FIXTURE translation 1:3', notes }],
+            }),
+          ),
+        ).toBe('invalid');
+      expect((await persistence.translation(fixtureTranslation.id))?.version).toBe(
+        version + 1,
+      );
+
+      // A removed text takes its notes with it; notes named `[]` are removed and
+      // the text kept; notes not named are kept as they are.
+      await persistence.saveTranslationTexts({
+        actorId,
+        id: fixtureTranslation.id,
+        expectedVersion: version + 1,
+        surah: 1,
+        changes: [{ ayah: 2, text: null }],
+      });
+      await persistence.saveTranslationTexts({
+        actorId,
+        id: fixtureTranslation.id,
+        expectedVersion: version + 2,
+        surah: 1,
+        changes: [
+          { ayah: 1, text: 'NON_QURAN_FIXTURE translation 1:1 noted*', notes: [] },
+          { ayah: 3, text: 'NON_QURAN_FIXTURE translation 1:3 again' },
+        ],
+      });
+      expect(await persistence.translationTexts(fixtureTranslation.id, 1)).toEqual([
+        { ayah: 1, text: 'NON_QURAN_FIXTURE translation 1:1 noted*', notes: [] },
+        { ayah: 3, text: 'NON_QURAN_FIXTURE translation 1:3 again', notes: [] },
+      ]);
+      expect(
+        await count(
+          db.admin,
+          'QuranTranslationNote',
+          `[translationId] = ${n(fixtureTranslation.id)}`,
+        ),
+      ).toBe(0);
+      await persistence.saveTranslationTexts({
+        actorId,
+        id: fixtureTranslation.id,
+        expectedVersion: version + 3,
+        surah: 1,
+        changes: [
+          {
+            ayah: 3,
+            text: 'NON_QURAN_FIXTURE translation 1:3*',
+            notes: [note('*', 'NON_QURAN_FIXTURE kept')],
+          },
+        ],
+      });
+      await persistence.saveTranslationTexts({
+        actorId,
+        id: fixtureTranslation.id,
+        expectedVersion: version + 4,
+        surah: 1,
+        changes: [{ ayah: 3, text: 'NON_QURAN_FIXTURE translation 1:3 revised*' }],
+      });
+      expect(
+        (await persistence.translationTexts(fixtureTranslation.id, 1)).at(-1),
+      ).toEqual({
+        ayah: 3,
+        text: 'NON_QURAN_FIXTURE translation 1:3 revised*',
+        notes: [{ ordinal: 1, marker: '*', text: 'NON_QURAN_FIXTURE kept' }],
+      });
+
+      // The audit names how many notes, never a word of them.
+      const audited = await db.admin.query<{ afterState: string | null }>(
+        `SELECT [afterState] FROM [dbo].[AuditLog] WHERE [targetId] = ${n(fixtureTranslation.id)} AND [action] = N'quran.translation.texts-saved' ORDER BY [occurredAt]`,
+      );
+      expect(
+        audited.slice(-5).map((row) => {
+          const after = JSON.parse(row.afterState ?? '{}') as Record<string, string>;
+          return [after['notesSaved'], after['notesRemoved']];
+        }),
+      ).toEqual([
+        ['3', '0'],
+        ['0', '2'],
+        ['0', '1'],
+        ['1', '0'],
+        ['0', '0'],
+      ]);
+
+      // The runtime principal may never edit a note in place.
+      expect(
+        await sqlNumber(
+          app.query('UPDATE [dbo].[QuranTranslationNote] SET [text]=[text];'),
+        ),
+      ).toBe(229);
     });
 
     it('beside an APPROVED corpus, shows only approved-source works and lists the sitemap', async () => {

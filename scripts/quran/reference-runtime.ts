@@ -9,7 +9,9 @@ import {
   QURAN_LIMITS,
   QURAN_SURAH_MAX,
   type CandidateAyah,
+  type TranslationNote,
   type TranslationRecord,
+  type TranslationTextChange,
 } from '@minhaj/contracts/quran';
 
 import {
@@ -43,6 +45,13 @@ import { approvedTarget, CommandError, required, runCommand } from '../migration
  *     or superseded, never one whose personal-data detector redacted it — of
  *     the two Irfan-ul-Quran sources is used, and only when it covers every
  *     Ayah of its Surah. Anything else is SKIPPED AND REPORTED, never repaired.
+ *     Since Quran Part 6 a revision's translator's notes (parser version 3)
+ *     are saved WITH its texts, each Ayah's notes exactly as staged and in
+ *     order, through the same save — whose service ties every note to a mark
+ *     of its text and refuses one it cannot (`notes-untied`, the Surah
+ *     skipped). A revision staged before notes were read (`notes: null`)
+ *     changes texts only and leaves the notes held untouched. A re-run whose
+ *     texts and notes are already held reports the Surah unchanged.
  *
  *   names         --operator <accountId> --names <json file>
  *     (Quran Part 2) Saves each Surah's English display name and its meaning —
@@ -167,11 +176,14 @@ type Skip =
   | 'unreadable-payload'
   | 'wrong-language'
   | 'incomplete'
+  | 'notes-untied'
   | 'refused';
 
 interface Report {
   saved: number;
   unchanged: number;
+  /** Translator's notes written with the saved Surahs (Quran Part 6) — a count. */
+  notes: number;
   skipped: { surah: number; reason: Skip }[];
   published: boolean;
   workId: string | null;
@@ -265,6 +277,57 @@ async function findOrCreateWork(
   );
 }
 
+/** Whether two lists of one Ayah's notes are the same notes, in the same order. */
+function sameNotes(
+  held: readonly Pick<TranslationNote, 'marker' | 'text'>[],
+  staged: readonly Pick<TranslationNote, 'marker' | 'text'>[],
+): boolean {
+  return (
+    held.length === staged.length &&
+    held.every(
+      (note, index) =>
+        note.marker === staged[index]?.marker && note.text === staged[index]?.text,
+    )
+  );
+}
+
+/**
+ * What one Surah's save must change: every Ayah whose staged text differs
+ * from the text held — and, when the revision read notes, every Ayah whose
+ * notes differ, carrying ALL its staged notes in order (an Ayah with none
+ * carries `[]`, which removes notes held). A revision that read no notes
+ * (`null`) names none, so the notes held are kept.
+ */
+function translationChanges(
+  ayat: readonly { readonly ayah: number; readonly text: string }[],
+  notes:
+    | readonly { readonly ayah: number; readonly marker: string; readonly text: string }[]
+    | null,
+  current: readonly {
+    readonly ayah: number;
+    readonly text: string;
+    readonly notes: readonly TranslationNote[];
+  }[],
+): TranslationTextChange[] {
+  const held = new Map(current.map((entry) => [entry.ayah, entry]));
+  const staged = new Map<number, { marker: string; text: string }[]>();
+  for (const note of notes ?? []) {
+    const list = staged.get(note.ayah) ?? [];
+    list.push({ marker: note.marker, text: note.text });
+    staged.set(note.ayah, list);
+  }
+  return ayat.flatMap((entry) => {
+    const before = held.get(entry.ayah);
+    const textChanged = before?.text !== entry.text;
+    if (notes === null)
+      return textChanged ? [{ ayah: entry.ayah, text: entry.text }] : [];
+    const own = staged.get(entry.ayah) ?? [];
+    return textChanged || !sameNotes(before?.notes ?? [], own)
+      ? [{ ayah: entry.ayah, text: entry.text, notes: own }]
+      : [];
+  });
+}
+
 async function translations(
   runner: QuranReferenceRunner,
 ): Promise<Record<string, unknown>> {
@@ -288,8 +351,8 @@ async function translations(
   const surahs = await quran(runner.quran.surahs(actor));
   const revisions = await currentRevisions(runner, actor, migrationSources);
   const reports: Record<Language, Report> = {
-    ur: { saved: 0, unchanged: 0, skipped: [], published: false, workId: null },
-    en: { saved: 0, unchanged: 0, skipped: [], published: false, workId: null },
+    ur: { saved: 0, unchanged: 0, notes: 0, skipped: [], published: false, workId: null },
+    en: { saved: 0, unchanged: 0, notes: 0, skipped: [], published: false, workId: null },
   };
 
   for (const language of Object.keys(LANGUAGES) as Language[]) {
@@ -322,10 +385,7 @@ async function translations(
       const current = await quran(
         runner.quran.translationTexts(actor, work.id, surah.number),
       );
-      const held = new Map(current.map((entry) => [entry.ayah, entry.text]));
-      const changes = ayat
-        .filter((entry) => held.get(entry.ayah) !== entry.text)
-        .map((entry) => ({ ayah: entry.ayah, text: entry.text }));
+      const changes = translationChanges(ayat, payload.notes, current);
       if (changes.length === 0) {
         report.unchanged += 1;
         continue;
@@ -338,9 +398,17 @@ async function translations(
           changes,
         });
         report.saved += 1;
+        report.notes += changes.reduce(
+          (sum, change) => sum + (change.notes?.length ?? 0),
+          0,
+        );
       } catch (error) {
-        if ((error as { name?: unknown } | null)?.name !== 'QuranRefusal') throw error;
-        report.skipped.push({ surah: surah.number, reason: 'refused' });
+        const refusal = error as { name?: unknown; reason?: unknown } | null;
+        if (refusal?.name !== 'QuranRefusal') throw error;
+        report.skipped.push({
+          surah: surah.number,
+          reason: refusal.reason === 'note-untied' ? 'notes-untied' : 'refused',
+        });
       }
     }
 

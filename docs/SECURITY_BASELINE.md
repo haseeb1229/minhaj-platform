@@ -369,6 +369,23 @@ weakens rules 1–4:
   origin, never the page. The audio is played by the browser, nothing is downloadable, and no
   third-party script is loaded.
 
+**Quran Part 6 — a translation's translator's notes (DOMAIN_MODEL.md §8.6).** Rules 1–5 hold: a note
+is layered text of its Translation, never canonical Arabic and never a field on the Ayah.
+
+- **Same authority as the text it annotates.** `QuranTranslationNote` is written only through
+  Quran's administrative service under `quran.administer` (re-read live), in the same save,
+  transaction, expected version and audit entry as its Translation's text; the audit records how
+  many notes were saved and removed, never a word of them. A note is public exactly when its work
+  is (the one public predicate), and Search indexes it only as its work's `note` layer.
+- **Typed, bounded and written once.** The note names its text by that text's own composite key
+  (NO ACTION), so a note cannot exist without its text and a text cannot be removed from under its
+  notes; at most twenty to a text, each non-empty within 20,000 UTF-16 units, its marker one of the
+  exact shapes of `TRANSLATION_NOTE_MARKER` (`QuranTranslationNote_ck`, `_marker_ck`). The runtime
+  principal holds SELECT, INSERT and DELETE only — UPDATE and ALTER are denied — and trigger 51403
+  refuses an edit in place or an Ayah's notes numbered with a gap, so a change replaces an Ayah's
+  notes whole. Whether a note answers a mark of its text is one pure rule the service applies
+  (`tieTranslationNotes`, refusal `note-untied`); nothing is re-placed to make it fit.
+
 ### 5.2 Hadith
 
 1. **Text, reference numbers, narrator chains and gradings are sourced data — never inferred,

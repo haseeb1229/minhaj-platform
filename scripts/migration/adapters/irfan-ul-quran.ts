@@ -1,3 +1,5 @@
+import type { CheerioAPI } from 'cheerio';
+
 import {
   SURAH_AYAH_COUNTS,
   canonicalSourceUrl,
@@ -38,19 +40,25 @@ import {
  *                        the FIRST `h2.{ur|en}` of the row exactly as the
  *                        site wrote it, minus only the leading "{n}." the
  *                        site prepends — and only when n IS that row's
- *                        ayah. Every later `h2` of the class in the row must
- *                        be empty or, on the Urdu page only, the
- *                        translator's note tied to a mark the translation
- *                        carries — a star, numbered or single unmarked note
- *                        (`translatorNotesOnly`; parser version 2). The rows
- *                        must be exactly ayat 1…count of the surah, or the
- *                        page FAILS: religious text is never silently partial.
+ *                        ayah. The rows must be exactly ayat 1…count of the
+ *                        surah, or the page FAILS: religious text is never
+ *                        silently partial.
+ *                notes   (parser version 3, Quran Part 6) the translator's
+ *                        own notes, each READ verbatim into its own place —
+ *                        the ayah, the mark it opens with as written, and
+ *                        its words: on the Urdu page every later `h2.ur` of
+ *                        the row, on the English page the row's `p.en`
+ *                        (`translatorNotes`). A note is commentary BESIDE the
+ *                        translation: its mark stays in the ayah's text
+ *                        exactly as written and is never moved. Each note
+ *                        must be tied to the translation's own marks in a
+ *                        surveyed form, or the page FAILS; a later `h2.en`
+ *                        holding anything still fails it.
  *              NOT READ: the Arabic in any script (not this kind; the
  *              `data-uthmani` attribute is font glyph codes, not text), the
- *              other translations, the copy payloads, recitation audio, the
- *              translator's notes (commentary, not the translation: the marks
- *              stay in the ayah's text as written) — of the English note slot
- *              `p.en` only whether it is filled.
+ *              other translations, the copy payloads, recitation audio, and of
+ *              a note its markup — an italic, a link's address — only its
+ *              words are read.
  */
 
 export const IRFAN_UL_QURAN_ADAPTER_KEY = 'irfan-ul-quran-translation';
@@ -214,86 +222,172 @@ export function withoutAyahPrefix(text: string, ayah: number): string {
   return text.slice(match[0].length);
 }
 
-/** The star marks the Urdu translation sets in an ayah: "٭", or the ASCII "*". */
-const STAR_MARK = /[٭*]/g;
-/** A numbered mark in the translation: "(1)", "(2)" … */
-const NUMBERED_MARK = /\(([0-9]{1,2})\)/g;
-/** A numbered entry of a note: "1:-", "2:-" … */
+/** A mark the translation sets for a note: a run of stars ("٭", "*", "**") or "(n)". */
+const TRANSLATION_MARK = /[٭*]+|\(([0-9]{1,2})\)/g;
+/** How a note slot's paragraph opens: a run of stars (with the ":" the site sometimes sets) … */
+const STAR_OPENING = /^[٭*]+:?/;
+/** … or a numbered entry "1:-", "2:-" … — every one of which in a paragraph is an entry. */
+const NUMBERED_OPENING = /^[0-9]{1,2}:-/;
 const NUMBERED_ENTRY = /([0-9]{1,2}):-/g;
+/** A paragraph break inside a note slot: a `<br>` run (made a blank line) or a blank source line. */
+const BLANK_LINE = /\n[\t\f\r ]*\n/;
+/** The most notes one ayah may carry (Quran's own ceiling). */
+const NOTES_PER_AYAH = 20;
+
+/** ASCII whitespace collapsed to one space and trimmed — every other character kept exactly. */
+function collapsed(text: string): string {
+  return text.replace(/[\t\n\f\r ]+/g, ' ').replace(/^ | $/g, '');
+}
 
 /** Whether the numbers are exactly 1, 2, … in order (and at least one). */
 function countsFromOne(numbers: readonly number[]): boolean {
   return numbers.length > 0 && numbers.every((value, index) => value === index + 1);
 }
 
-/** What a row needs, to tell its translator's notes from anything else. */
+/** One translator's note as the page sets it: its opening mark ('' for none) and its words. */
+export interface IrfanUlQuranNote {
+  readonly marker: string;
+  readonly text: string;
+}
+
+/** What a row needs, to read its translator's notes and tell them from anything else. */
 export interface IrfanUlQuranNoteRow {
-  /** The row's later `h2.{ur|en}` texts that are not empty, whitespace-collapsed. */
-  readonly notes: readonly string[];
+  /**
+   * The row's note slots in order — on the Urdu page each later `h2.ur`, on
+   * the English page each `p.en` — each as its paragraphs (`<br>` runs and
+   * blank source lines break them), ASCII whitespace collapsed, empty ones
+   * dropped.
+   */
+  readonly slots: readonly (readonly string[])[];
   /** The row's translation, the first `h2` (where its marks are). */
   readonly translationText: string;
-  /** Whether the row's English note slot, `p.en`, holds anything (its text is never read). */
+  /** Whether the row's English note slot, `p.en`, holds anything. */
   readonly englishNoteSlotFilled: boolean;
 }
 
 /**
- * Whether a row's later, non-empty `h2` texts are the translator's own notes
- * and nothing else. Only the Urdu page has them: each row carries a second
- * `h2.ur`, empty unless the translation sets a note mark, and then holding
- * the note (the English page keeps the same notes in `p.en`, never read). A
- * note is commentary, not the ayah's translation: it is recognised and NOT
- * read, and its mark stays in the translation exactly as written. A note is
- * admitted in exactly one of three forms, each tied to the translation's own
- * marks (surveyed on the live pages, 2026-11-09/10):
- *
- *   star      the note opens with "٭" or "*" (the site mixes the two between
- *             a mark and its note, 47:19), and the row has no more star notes
- *             than the translation has star marks;
- *   numbered  the translation's numbered marks are exactly "(1)" … "(m)" in
- *             order, and ONE note opens "1:-" with exactly the entries
- *             "1:-" … "m:-" in order (42:52);
- *   unmarked  the note opens with no mark (108:1) — only as the row's ONLY
- *             note, when the translation carries exactly ONE mark of any
- *             form, and the English note slot of the same row is filled.
- *
- * Anything else is not a note and fails the page. Every row version 2 of the
- * rule admitted ("٭" notes, no more than "٭" marks) is admitted unchanged.
+ * A note slot's paragraphs as notes. A paragraph that opens with a star run
+ * begins a note with that run (and its ":") as its marker; one that opens
+ * "1:-" holds numbered entries, each its own note marked "n:-"; one that
+ * opens with no mark continues the note before it in the same slot (a
+ * paragraph break, kept as one blank line) or, first in its slot, is a note
+ * opened with no mark. A marker with no words after it is not a note.
  */
-export function translatorNotesOnly(
+function slotNotes(paragraphs: readonly string[]): IrfanUlQuranNote[] {
+  const notes: { marker: string; text: string }[] = [];
+  for (const paragraph of paragraphs) {
+    if (NUMBERED_OPENING.test(paragraph)) {
+      const entries = [...paragraph.matchAll(NUMBERED_ENTRY)];
+      entries.forEach((entry, index) => {
+        const from = entry.index + entry[0].length;
+        const to = entries[index + 1]?.index ?? paragraph.length;
+        notes.push({ marker: entry[0], text: collapsed(paragraph.slice(from, to)) });
+      });
+      continue;
+    }
+    const star = STAR_OPENING.exec(paragraph);
+    if (star !== null) {
+      notes.push({ marker: star[0], text: collapsed(paragraph.slice(star[0].length)) });
+      continue;
+    }
+    const last = notes.at(-1);
+    if (last === undefined) notes.push({ marker: '', text: paragraph });
+    else last.text = last.text === '' ? paragraph : `${last.text}\n\n${paragraph}`;
+  }
+  return notes.filter((note) => note.text !== '');
+}
+
+/**
+ * The row's translator's notes, in order, when they are notes and nothing
+ * else — or `null`, which fails the page. A note is commentary BESIDE the
+ * ayah's translation: it is read into its own place, and its mark stays in
+ * the translation exactly as written. Each note is tied to the translation's
+ * own marks in one of the forms surveyed on all 114 live pages (2026-11-10):
+ *
+ *   star      the note opens with a run of stars ("٭" or "*", mixed between a
+ *             mark and its note at 47:19; "٭:" at 33:37) and, in order, takes
+ *             the next untaken star run of the same length in the translation
+ *             ("*" and "**" at 9:29). On the English page only, a translation
+ *             with NO star mark at all carries its star notes on the ayah as a
+ *             whole (the site drops the English mark: 9:101, 24:11 …);
+ *   numbered  Urdu only: entries "1:-" … "m:-" in order answering exactly the
+ *             translation's "(1)" … "(m)", in order (42:52);
+ *   unmarked  the note opens with no mark — only as the row's ONLY note, when
+ *             the translation carries exactly ONE mark of any form, and on the
+ *             Urdu page when the row's English note slot is filled (108:1;
+ *             English 53:39).
+ *
+ * Anything else is not a note. Every row version 2 of the rule admitted is
+ * admitted, and its ayah's text read is unchanged.
+ */
+export function translatorNotes(
   row: IrfanUlQuranNoteRow,
   translation: IrfanUlQuranTranslation,
-): boolean {
-  const { notes, translationText } = row;
-  if (notes.length === 0) return true;
-  if (translation !== 'ur') return false;
-  const starMarks = translationText.match(STAR_MARK)?.length ?? 0;
-  const numberedMarks = [...translationText.matchAll(NUMBERED_MARK)].map((match) =>
-    Number(match[1]),
+): readonly IrfanUlQuranNote[] | null {
+  const notes = row.slots.flatMap(slotNotes);
+  if (notes.length === 0) return [];
+  if (notes.length > NOTES_PER_AYAH) return null;
+  const marks = [...row.translationText.matchAll(TRANSLATION_MARK)].map((match) => ({
+    numbered: match[1] === undefined ? null : Number(match[1]),
+    size: match[0].length,
+  }));
+  const starRuns = marks.flatMap((mark, index) =>
+    mark.numbered === null ? [{ index, size: mark.size }] : [],
   );
-  let starNotes = 0;
-  let numberedNotes = 0;
-  let unmarkedNotes = 0;
-  for (const note of notes) {
-    if (note.startsWith('٭') || note.startsWith('*')) starNotes += 1;
-    else if (note.startsWith('1:-')) {
-      const entries = [...note.matchAll(NUMBERED_ENTRY)].map((match) => Number(match[1]));
-      if (
-        numberedNotes > 0 ||
-        !countsFromOne(numberedMarks) ||
-        !countsFromOne(entries) ||
-        entries.length !== numberedMarks.length
-      )
-        return false;
-      numberedNotes += 1;
-    } else unmarkedNotes += 1;
+  const numberedMarks = marks.flatMap((mark) =>
+    mark.numbered === null ? [] : [mark.numbered],
+  );
+
+  const numbered = notes.filter((note) => NUMBERED_OPENING.test(note.marker));
+  if (numbered.length > 0) {
+    const entries = numbered.map((note) => Number(note.marker.slice(0, -2)));
+    if (
+      translation !== 'ur' ||
+      !countsFromOne(entries) ||
+      !countsFromOne(numberedMarks) ||
+      entries.length !== numberedMarks.length
+    )
+      return null;
   }
-  if (starNotes > starMarks) return false;
-  if (unmarkedNotes === 0) return true;
-  return (
-    notes.length === 1 &&
-    starMarks + numberedMarks.length === 1 &&
-    row.englishNoteSlotFilled
-  );
+
+  if (notes.some((note) => note.marker === '')) {
+    if (
+      notes.length !== 1 ||
+      marks.length !== 1 ||
+      (translation === 'ur' && !row.englishNoteSlotFilled)
+    )
+      return null;
+    return notes;
+  }
+
+  let after = -1;
+  for (const note of notes) {
+    if (NUMBERED_OPENING.test(note.marker)) continue;
+    const size = note.marker.replace(':', '').length;
+    const run = starRuns.find((mark) => mark.index > after && mark.size === size);
+    if (run !== undefined) {
+      after = run.index;
+      continue;
+    }
+    if (translation === 'en' && starRuns.length === 0) continue;
+    return null;
+  }
+  return notes;
+}
+
+/**
+ * A note slot's paragraphs, its words only: every `<br>` run and blank
+ * source line breaks a paragraph, markup (an italic, a link) gives its words
+ * and never its address, and each paragraph is collapsed (`collapsed`).
+ */
+function paragraphsOf(slot: ReturnType<CheerioAPI>): string[] {
+  const words = slot.clone();
+  words.find('br').replaceWith('\n\n');
+  return words
+    .text()
+    .split(BLANK_LINE)
+    .map(collapsed)
+    .filter((paragraph) => paragraph.length > 0);
 }
 
 export function createIrfanUlQuranTranslationAdapter(
@@ -332,7 +426,7 @@ export function createIrfanUlQuranTranslationAdapter(
     adapterKey: IRFAN_UL_QURAN_ADAPTER_KEY,
     adapterVersion: '1',
     parserKey: 'cheerio-irfan-ul-quran-translation',
-    parserVersion: '2',
+    parserVersion: '3',
     contentKind: 'quran.translation',
     accessMethod: 'http',
 
@@ -359,6 +453,7 @@ export function createIrfanUlQuranTranslationAdapter(
         return { kind: 'failed', detail: 'record-structure-missing' };
 
       const ayat: { ayah: number; text: string }[] = [];
+      const notes: { ayah: number; marker: string; text: string }[] = [];
       for (const element of rows.toArray()) {
         const row = $(element);
         const trigger = row.find('button.ayat-menu-trigger').first();
@@ -371,20 +466,31 @@ export function createIrfanUlQuranTranslationAdapter(
         const headings = row.find(`h2.${translation}`);
         if (headings.length === 0)
           return { kind: 'failed', detail: 'translation-missing' };
-        const notes = headings
-          .slice(1)
-          .toArray()
-          .map((extra) => cleanText($(extra).text()))
-          .filter((text) => text.length > 0);
-        const noteRow = {
-          notes,
-          translationText: headings.first().text(),
-          englishNoteSlotFilled: row
-            .find('p.en')
+        // The English page has no note heading: a later `h2.en` that holds
+        // anything is not a note, and fails the page.
+        const englishSlots = row.find('p.en').toArray();
+        if (
+          translation === 'en' &&
+          headings
+            .slice(1)
             .toArray()
-            .some((slot) => cleanText($(slot).text()).length > 0),
-        };
-        if (!translatorNotesOnly(noteRow, translation))
+            .some((extra) => cleanText($(extra).text()).length > 0)
+        )
+          return { kind: 'failed', detail: 'translation-structure-unexpected' };
+        const slots = (
+          translation === 'ur' ? headings.slice(1).toArray() : englishSlots
+        ).map((slot) => paragraphsOf($(slot)));
+        const rowNotes = translatorNotes(
+          {
+            slots,
+            translationText: headings.first().text(),
+            englishNoteSlotFilled: englishSlots.some(
+              (slot) => cleanText($(slot).text()).length > 0,
+            ),
+          },
+          translation,
+        );
+        if (rowNotes === null)
           return { kind: 'failed', detail: 'translation-structure-unexpected' };
         // Exactly the site's text (an empty one is left for validation to
         // name), minus only its own "{n}." prefix and its own end-of-ayah
@@ -402,6 +508,7 @@ export function createIrfanUlQuranTranslationAdapter(
         )
           marker.remove();
         ayat.push({ ayah, text: withoutAyahPrefix(heading.text(), ayah) });
+        for (const note of rowNotes) notes.push({ ayah, ...note });
       }
 
       const count = SURAH_AYAH_COUNTS[pageSurah - 1] ?? 0;
@@ -422,6 +529,7 @@ export function createIrfanUlQuranTranslationAdapter(
         work,
         surah: pageSurah,
         ayat,
+        notes,
       };
       return { kind: 'parsed', record };
     },

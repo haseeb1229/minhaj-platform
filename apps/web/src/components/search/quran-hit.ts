@@ -78,7 +78,9 @@ const bySlug = (
  *
  *   - an `ar` hit shows the CURRENT canonical text;
  *   - another language shows the first CURRENT public layer text in that
- *     language, in deterministic work-slug order, matched case-insensitively;
+ *     language, in deterministic work-slug order, matched case-insensitively
+ *     — a translation or transliteration, never a translator's note, which
+ *     is shown only as a note (Quran Part 6);
  *   - if no public layer in that language remains, the current canonical text,
  *     labelled as the Arabic — never the withdrawn layer's words;
  *   - a hit whose Ayah has no current record is not public now, and is OMITTED.
@@ -111,7 +113,10 @@ export function quranHitDisplays(
         ? undefined
         : [...record.layers]
             .sort(bySlug)
-            .find((entry) => entry.languageCode.toLowerCase() === language);
+            .find(
+              (entry) =>
+                entry.kind !== 'note' && entry.languageCode.toLowerCase() === language,
+            );
 
     displays.set(
       quranHitKey(hit),

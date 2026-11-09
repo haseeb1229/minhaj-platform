@@ -319,6 +319,13 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // Asserted by `assertQuranFoundation`, proved as behaviour inside
   // `assertQuranCanonicalRules`, its rollback by `assertRecitationTimingRemoved`.
   '20261109120000_r2_quran_recitation_timing': ['QuranRecitationTiming'],
+  // QURAN PART 6 CREATES ONE TABLE: a translation text's translator's notes,
+  // typed to that text by its composite key (NO ACTION), numbered 1..n without
+  // a gap, marker shapes and bounds held by two CHECKs, written once and never
+  // edited (one trigger). Asserted by `assertQuranFoundation`, proved as
+  // behaviour inside `assertQuranCanonicalRules`, its rollback by
+  // `assertTranslationNotesRemoved`.
+  '20261110000000_r2_quran_translation_notes': ['QuranTranslationNote'],
   // THE DONATIONS CONTEXT: a campaign with its words per locale and its
   // per-currency policy, the owner's fail-closed provider activation (one
   // immutable row the runtime can only read), the donation — one payment
@@ -1260,6 +1267,9 @@ const EXPECTED_COLUMN_SIZES: readonly {
   // a URL (RECITATION_STREAM_PATH_MAX is the same 200).
   { table: 'QuranRecitation', column: 'streamProvider', characters: 16 },
   { table: 'QuranRecitation', column: 'streamPath', characters: 200 },
+  // Quran Part 6: a translator's note's opening mark — "", "٭", "**:", "12:-"
+  // (QURAN_LIMITS.noteMarker is the same 8).
+  { table: 'QuranTranslationNote', column: 'marker', characters: 8 },
   { table: 'QuranSource', column: 'code', characters: 64 },
   // R2: a reference source keeps its licence notice verbatim as evidence.
   { table: 'QuranSource', column: 'reference', characters: 2000 },
@@ -1925,6 +1935,15 @@ const QURAN_PART5_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, str
 };
 
 /**
+ * Quran Part 6's one trigger (51403, after Part 5's range): a translator's
+ * note that is edited in place, or an Ayah's notes numbered with a gap.
+ */
+const QURAN_PART6_TABLES = ['QuranTranslationNote'] as const;
+const QURAN_PART6_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, string]>> = {
+  QuranTranslationNoteShape: ['QuranTranslationNote', '51403'],
+};
+
+/**
  * Each Quran trigger, the table it guards and the refusal numbers its body
  * raises: 51180 an immutable registered source, 51181 immutable canonical
  * structure, 51182 a canonical change that is a recorded, one-step correction,
@@ -2067,6 +2086,8 @@ const EXPECTED_TRIGGERS = [
   ...Object.keys(QURAN_TRIGGER_NUMBERS),
   // Quran Part 5: the stream and timing rules.
   ...Object.keys(QURAN_PART5_TRIGGER_NUMBERS),
+  // Quran Part 6: the translator's note's shape.
+  ...Object.keys(QURAN_PART6_TRIGGER_NUMBERS),
   // Phase 19: every Hadith invariant no constraint can express — each listed,
   // with the refusal it raises, in `HADITH_TRIGGER_NUMBERS`.
   ...Object.keys(HADITH_TRIGGER_NUMBERS),
@@ -2346,6 +2367,9 @@ const EXPECTED_CHECK_CONSTRAINTS = [
   // within the twelve-hour ceiling.
   { table: 'QuranRecitation', constraint: 'QuranRecitation_stream_ck' },
   { table: 'QuranRecitationTiming', constraint: 'QuranRecitationTiming_ck' },
+  // Quran Part 6: a note's place (1..20) and length, and its marker's shapes.
+  { table: 'QuranTranslationNote', constraint: 'QuranTranslationNote_ck' },
+  { table: 'QuranTranslationNote', constraint: 'QuranTranslationNote_marker_ck' },
   ...[
     'QuranTranslation',
     'QuranTransliteration',
@@ -4812,10 +4836,13 @@ async function assertQuranFoundation(
   session: SqlSession,
   stage: 'reference' | 'before-reference' = 'reference',
 ): Promise<void> {
-  // With every migration applied, Quran Part 5's timing table is a Quran table
-  // too; after the R2 rollback (which follows Part 5's) the Phase-18 set is back.
+  // With every migration applied, Quran Part 5's timing table and Part 6's
+  // notes table are Quran tables too; after the R2 rollback (which follows
+  // both of theirs) the Phase-18 set is back.
   const all: readonly string[] =
-    stage === 'reference' ? [...QURAN_TABLES, ...QURAN_PART5_TABLES] : QURAN_TABLES;
+    stage === 'reference'
+      ? [...QURAN_TABLES, ...QURAN_PART5_TABLES, ...QURAN_PART6_TABLES]
+      : QURAN_TABLES;
   const tables = all.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',');
   const names = all.map((table) => `N'${table}'`).join(',');
 
@@ -4829,7 +4856,7 @@ async function assertQuranFoundation(
       .join(' UNION ALL ') + ';',
   );
   const seeded = counts.filter((row) => Number(row.total) !== 0);
-  const tableCount = stage === 'reference' ? 24 : 23;
+  const tableCount = stage === 'reference' ? 25 : 23;
   if (QURAN_TABLES.length !== 23 || counts.length !== tableCount || seeded.length > 0)
     fail(
       `The Quran migrations must create ${String(tableCount)} empty tables and seed no content; ` +
@@ -4979,6 +5006,8 @@ async function assertQuranFoundation(
     'QuranSourceAyah.text:nvarchar(8000)',
     'QuranTafsirText.text:nvarchar(-1)',
     'QuranTajweedRuleText.body:nvarchar(-1)',
+    // Quran Part 6: a translator's note, Unicode like the text it annotates.
+    ...(stage === 'reference' ? ['QuranTranslationNote.text:nvarchar(-1)'] : []),
     'QuranTranslationText.text:nvarchar(-1)',
     'QuranTransliterationText.text:nvarchar(-1)',
   ].join(',');
@@ -4999,13 +5028,15 @@ async function assertQuranFoundation(
     .sort()
     .join(',');
   // R2 widens the canonical-change trigger with the authority-mixing refusal.
-  // Quran Part 5 adds its three, and leaves 51188 the published-audio rule's.
+  // Quran Part 5 adds its three, and leaves 51188 the published-audio rule's;
+  // Quran Part 6 adds the note's shape.
   const triggerNumbers: Readonly<Record<string, readonly [string, string]>> =
     stage === 'reference'
       ? {
           ...QURAN_TRIGGER_NUMBERS,
           AyahCanonicalChange: ['Ayah', '51181+51182+51198'],
           ...QURAN_PART5_TRIGGER_NUMBERS,
+          ...QURAN_PART6_TRIGGER_NUMBERS,
         }
       : QURAN_TRIGGER_NUMBERS;
   const expectedTriggers = Object.entries(triggerNumbers)
@@ -6246,6 +6277,132 @@ async function assertQuranCanonicalRules(session: SqlSession): Promise<void> {
     `DELETE FROM [dbo].[QuranRecitationTiming] WHERE [segmentId]=N'${firstSegment}';`,
   );
   if ((await timedAyat(firstSegment)) !== 0) fail('A removed timing left rows behind.');
+
+  // ---- Quran Part 6: a translation text's translator's notes ---------------------
+  //
+  // A note annotates a REAL translation text (its composite key), an Ayah's
+  // notes are numbered 1..n without a gap, each is non-empty within its bound
+  // and opens with one of the marker's exact shapes, and a note is written
+  // once — never edited, removed whole or from the end, and never left behind
+  // by its text. `translation` is published with its text at 1:1 above.
+  const note = (ayah: number, rows: readonly (readonly [number, string, string])[]) =>
+    `INSERT INTO [dbo].[QuranTranslationNote] ([translationId],[surahNumber],[ayahNumber],[ordinal],[marker],[text]) VALUES ${rows
+      .map(
+        ([ordinal, marker, text]) =>
+          `(N'${translation}',1,${String(ayah)},${String(ordinal)},N'${marker}',N'${text}')`,
+      )
+      .join(',')};`;
+  const notesOn = (ayah: number) =>
+    count(
+      `SELECT COUNT_BIG(*) AS [total] FROM [dbo].[QuranTranslationNote] WHERE [translationId]=N'${translation}' AND [ayahNumber]=${String(ayah)};`,
+    );
+  const NOTE = 'NON_QURAN_FIXTURE note';
+  const NOTE_GAP = 'numbered from 1 without a gap.';
+  for (const [label, statement, numbers, ruleName] of [
+    [
+      'A note annotates a real translation text',
+      note(2, [[1, '*', NOTE]]),
+      [547],
+      'QuranTranslationNote_text_fkey',
+    ],
+    ['An Ayah’s notes are numbered from 1', note(1, [[2, '*', NOTE]]), [51403], NOTE_GAP],
+    [
+      'An Ayah’s notes leave no gap',
+      note(1, [
+        [1, '*', NOTE],
+        [3, '*', NOTE],
+      ]),
+      [51403],
+      NOTE_GAP,
+    ],
+    [
+      'A note’s place is at least 1',
+      note(1, [[0, '*', NOTE]]),
+      [547],
+      'QuranTranslationNote_ck',
+    ],
+    [
+      'An Ayah holds at most twenty notes',
+      note(1, [[21, '*', NOTE]]),
+      [547],
+      'QuranTranslationNote_ck',
+    ],
+    ['A note says something', note(1, [[1, '*', '']]), [547], 'QuranTranslationNote_ck'],
+    ...[
+      ['five stars', '٭٭٭٭٭'],
+      ['a space', ' '],
+      ['a star and a space', '٭ '],
+      ['a star after a colon', '*:*'],
+      ['two colons', '*::'],
+      ['an entry numbered 0', '0:-'],
+      ['an entry numbered 100', '100:-'],
+      ['an entry without its dash', '1:'],
+      ['a letter', 'a'],
+      ['a bracketed number', '(1)'],
+    ].map(
+      ([why, marker]) =>
+        [
+          `A note marker of ${why ?? ''} is refused`,
+          note(1, [[1, marker ?? '', NOTE]]),
+          [547],
+          'QuranTranslationNote_marker_ck',
+        ] as const,
+    ),
+  ] as const)
+    await refuse(label, statement, numbers, ruleName);
+  if ((await notesOn(1)) !== 0) fail('A refused note left rows behind.');
+  await expectAccepted(
+    session,
+    'Every marker shape, numbered 1..n in one statement',
+    note(1, [
+      [1, '٭', NOTE],
+      [2, '*', NOTE],
+      [3, '**:', NOTE],
+      [4, '٭٭٭٭', NOTE],
+      [5, '1:-', NOTE],
+      [6, '99:-', NOTE],
+      [7, '', NOTE],
+      [8, '٭:', `${NOTE}\n\nits second paragraph`],
+    ]),
+  );
+  await expectAccepted(
+    session,
+    'A second text, with a note of its own',
+    `INSERT INTO [dbo].[QuranTranslationText] ([translationId],[surahNumber],[ayahNumber],[text]) VALUES (N'${translation}',1,2,N'${literal(proofText('TRANSLATION', 1, 2))}');
+     ${note(2, [[1, '*', NOTE]])}`,
+  );
+  for (const [label, statement, numbers, ruleName] of [
+    [
+      'A note is never edited',
+      `UPDATE [dbo].[QuranTranslationNote] SET [marker]=N'*' WHERE [translationId]=N'${translation}' AND [ayahNumber]=1 AND [ordinal]=1;`,
+      [51403],
+      'written once, never edited.',
+    ],
+    [
+      'A note is never removed from the middle',
+      `DELETE FROM [dbo].[QuranTranslationNote] WHERE [translationId]=N'${translation}' AND [ayahNumber]=1 AND [ordinal]=1;`,
+      [51403],
+      NOTE_GAP,
+    ],
+    [
+      'A text is never removed from under its notes',
+      `DELETE FROM [dbo].[QuranTranslationText] WHERE [translationId]=N'${translation}' AND [ayahNumber]=2;`,
+      [547],
+      'QuranTranslationNote_text_fkey',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, ruleName);
+  if ((await notesOn(1)) !== 8 || (await notesOn(2)) !== 1)
+    fail('A refused change altered a translator’s note.');
+  await expectAccepted(
+    session,
+    'The last note removed, then every note and the second text',
+    `DELETE FROM [dbo].[QuranTranslationNote] WHERE [translationId]=N'${translation}' AND [ayahNumber]=1 AND [ordinal]=8;
+     DELETE FROM [dbo].[QuranTranslationNote] WHERE [translationId]=N'${translation}';
+     DELETE FROM [dbo].[QuranTranslationText] WHERE [translationId]=N'${translation}' AND [ayahNumber]=2;`,
+  );
+  if ((await notesOn(1)) !== 0 || (await notesOn(2)) !== 0)
+    fail('Removed notes left rows behind.');
 
   // ---- Quran Part 5: a streamed recitation --------------------------------------
   //
@@ -18671,6 +18828,53 @@ async function assertRecitationTimingRemoved(session: SqlSession): Promise<void>
   );
 }
 
+/** Quran Part 6: a translation text's translator's notes. */
+const TRANSLATION_NOTES_MIGRATION = '20261110000000_r2_quran_translation_notes';
+
+/**
+ * After the Quran Part 6 rollback: no notes table, CHECK, key or trigger — and
+ * the translation text exactly as Phase 18 made it, its own key, CHECK, two
+ * foreign keys and its keep-text trigger intact.
+ */
+async function assertTranslationNotesRemoved(session: SqlSession): Promise<void> {
+  const [row] = await session.query<{
+    notes: number;
+    added: number;
+    columns: string | null;
+    kept: number;
+    triggers: string | null;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables WHERE [name] = N'QuranTranslationNote') AS [notes],
+      (SELECT COUNT(*) FROM sys.objects WHERE [name] IN (N'QuranTranslationNote_pkey',
+        N'QuranTranslationNote_text_fkey', N'QuranTranslationNote_ck',
+        N'QuranTranslationNote_marker_ck', N'QuranTranslationNoteShape')) AS [added],
+      (SELECT STRING_AGG([name], N',') WITHIN GROUP (ORDER BY [column_id]) FROM sys.columns
+        WHERE [object_id] = OBJECT_ID(N'[dbo].[QuranTranslationText]')) AS [columns],
+      (SELECT COUNT(*) FROM sys.objects WHERE [name] IN (N'QuranTranslationText_pkey',
+        N'QuranTranslationText_ck', N'QuranTranslationText_translationId_fkey',
+        N'QuranTranslationText_ayah_fkey')
+        AND [parent_object_id] = OBJECT_ID(N'[dbo].[QuranTranslationText]')) AS [kept],
+      (SELECT STRING_AGG([name], N',') WITHIN GROUP (ORDER BY [name]) FROM sys.triggers
+        WHERE [parent_id] = OBJECT_ID(N'[dbo].[QuranTranslationText]')) AS [triggers];
+  `);
+  if (
+    Number(row?.notes) !== 0 ||
+    Number(row?.added) !== 0 ||
+    row?.columns !== 'translationId,surahNumber,ayahNumber,text' ||
+    Number(row.kept) !== 4 ||
+    row.triggers !== 'QuranTranslationTextKept'
+  )
+    fail(
+      `The Quran Part 6 rollback must leave the translation text exactly as Phase 18 made it; ` +
+        `found ${JSON.stringify(row ?? null)}.`,
+    );
+  report(
+    'translation notes rollback',
+    'notes table, its CHECKs, key and trigger removed',
+  );
+}
+
 /** The one table Phase 30-RD creates. */
 const PERSONAL_DATA_FINDING_TABLE = 'MigrationPersonalDataFinding';
 
@@ -24764,6 +24968,9 @@ try {
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
     }
+    if (migration.id === TRANSLATION_NOTES_MIGRATION)
+      // Quran Part 6 is gone without a trace on the translation tables.
+      await assertTranslationNotesRemoved(session);
     if (migration.id === RECITATION_TIMING_MIGRATION)
       // Quran Part 5 is gone without a trace on the recitation tables.
       await assertRecitationTimingRemoved(session);

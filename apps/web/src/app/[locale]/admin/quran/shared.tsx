@@ -87,6 +87,7 @@ export async function quranCopy(locale: Locale) {
       'corpus-exists': t('corpusExists'),
       unchanged: t('unchanged'),
       'fixture-over-approved': t('fixtureOverApproved'),
+      'note-untied': t('noteUntied'),
       // The upload route's own transport refusals.
       unsupported: t('typeNotAllowed'),
       'rate-limited': t('rateLimited'),

@@ -39,6 +39,8 @@ export const QURAN_REFUSAL_REASONS = Object.freeze([
   'unchanged',
   /** A fixture source never displaces or sits beside approved text. */
   'fixture-over-approved',
+  /** A translator's note answers no mark its translation carries (Quran Part 6). */
+  'note-untied',
 ] as const);
 
 export type QuranRefusalReason = (typeof QURAN_REFUSAL_REASONS)[number];

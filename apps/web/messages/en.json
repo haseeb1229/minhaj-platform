@@ -3183,7 +3183,19 @@
       "arabic": "Arabic text",
       "translation": "Translation: {name}",
       "transliteration": "Transliteration: {name}",
-      "tafsir": "Tafsir: {name}"
+      "tafsir": "Tafsir: {name}",
+      "note": "Translator’s note: {name}"
+    },
+    "notes": {
+      "title": "Translator’s note",
+      "summary": "{count, plural, one {Translator’s note} other {Translator’s notes (#)}}",
+      "reference": "Translator’s note {number}",
+      "display": {
+        "label": "Translator’s notes",
+        "request": "Open from their marks",
+        "inline": "Show under every Ayah",
+        "help": "Where a translation has them, the translator’s notes are marked in its text: choose a mark to read its note."
+      }
     },
     "layerMissing": {
       "translation": "{name} has no translation of this Ayah.",
@@ -3275,6 +3287,33 @@
       "entries": "Commentary",
       "entriesEmpty": "No commentary from this work has been published yet.",
       "readEntry": "Read the commentary"
+    },
+    "translations": {
+      "coverage": "{complete} of {total} Surahs",
+      "partial": "{count} more in part",
+      "coverageTerm": "Surahs translated",
+      "notesTerm": "Translator’s notes",
+      "notes": "{count, plural, =0 {None} one {# note} other {# notes}}",
+      "ayatTerm": "Ayat translated",
+      "ayat": "{count} of {total}",
+      "read": "Read with this translation",
+      "compare": "Compare translations",
+      "compareAll": "Compare every translation, Ayah by Ayah",
+      "about": "About this translation",
+      "contributors": "Contributors",
+      "bySurah": "Surah by Surah",
+      "bySurahHelp": "How much of each Surah this translation carries. Choose a Surah to read it with this translation.",
+      "surahComplete": "Complete",
+      "surahNone": "Not yet",
+      "surahPartial": "{count} of {total} ayat",
+      "compareTitle": "Compare translations",
+      "compareIntro": "One Ayah in the Arabic, and every published translation of it with its translator’s notes.",
+      "choose": "Choose an Ayah",
+      "surahLabel": "Surah",
+      "ayahLabel": "Ayah",
+      "show": "Show",
+      "missingAyah": "There is no Ayah {asked} in the text. Choose another.",
+      "openAyah": "Open this Ayah"
     },
     "worksEmpty": {
       "translations": "No translation has been published yet.",
@@ -3579,6 +3618,7 @@
     "corpusExists": "A canonical corpus already exists.",
     "unchanged": "Nothing changed, so nothing was saved.",
     "fixtureOverApproved": "A work with a test fixture source cannot be published while the corpus comes from an approved source.",
+    "noteUntied": "A translator’s note must answer a mark in its Ayah’s text — “٭”, “*” or “(1)” — or be the only note, opened with no mark. Nothing was saved.",
     "rateLimited": "Too many uploads in a short time. Wait a few minutes and try again.",
     "noSession": "Sign in again to continue.",
     "secondFactorRequired": "Set up two-step verification and confirm your recovery codes before using this.",
@@ -3793,7 +3833,12 @@
       "help": "Choose a Surah, then edit the text for each Ayah. Only the ayat you change are saved; empty a field to remove that Ayah's text. The Arabic shown above each field is read-only.",
       "missing": "No text",
       "noCorpus": "Texts can be added once a canonical corpus has been accepted.",
-      "save": "Save changed texts"
+      "save": "Save changed texts",
+      "notes": "Translator’s notes",
+      "noteMarker": "Mark",
+      "noteText": "Note {number}",
+      "addNote": "Add a translator’s note",
+      "notesHelp": "Each note opens with the mark it answers in the text above, exactly as written — “٭”, “*”, “**” or “1:-” for the mark “(1)” — or with no mark when it is the Ayah’s only note. Empty a note’s text to remove it."
     },
     "contributors": {
       "title": "Contributors",

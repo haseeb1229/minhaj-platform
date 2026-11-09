@@ -836,7 +836,7 @@ Independent first-class context with the platform's strictest integrity requirem
 | Surah | The 114 chapters: number, names per locale, revelation type, ayah count |
 | Ayah | A verse: surah, number, Arabic text, juz, hizb, page, sajdah marker |
 | Juz | The 30 parts and their ayah ranges |
-| Translation / TranslationText | A named translation work; its rendering per ayah |
+| Translation / TranslationText | A named translation work; its rendering per ayah, with the translator's notes on it (§8.6) |
 | Transliteration | A scheme and its per-ayah text |
 | Tafsir / TafsirText | A named exegetical work; content per ayah or range |
 | **Recitation / RecitationSegment** | **A reciter's recitation work and its verse/surah mapping** |
@@ -1137,6 +1137,50 @@ per Surah. Each import's provenance is a `reference` source with no ayat (`mp3qu
 **Untimed is said, never faked.** A recitation without per-Ayah timing plays whole Surahs, and every
 surface that offers it says that verse highlighting is unavailable; no Ayah button pretends to start
 at an Ayah it cannot find.
+
+### 8.6 Translator's notes (Quran Part 6)
+
+**A translation's own notes are part of that translation, held beside its text — never inside it,
+never moved, never rewritten.** Irfan-ul-Quran (first-party, MQI) sets marks in its text — "٭" or
+"*" in the Urdu, "*" and "**" in the English, "(1)" … "(m)" — whose notes the source publishes
+beside each Ayah. Migration `20261110000000_r2_quran_translation_notes` (with its rollback) adds
+the one Quran-owned table that holds them:
+
+| Fact | Shape | Rule |
+|---|---|---|
+| A note | `QuranTranslationNote (translationId, surahNumber, ayahNumber, ordinal, marker, text)` | A typed composite key to the `QuranTranslationText` row it annotates (NO ACTION): a note exists only beside its text, and a text that carries notes cannot be removed until they are. `ordinal` numbers an Ayah's notes 1..n in the source's order with no gap, at most twenty (`QuranTranslationNote_ck`, trigger 51403); the text is non-empty, within 20,000 UTF-16 units, exactly as the source wrote it, paragraphs separated by one blank line |
+| What it opens with | `marker` | Exactly as written: none (`''`), a run of one to four stars ("٭", "*", mixed, optionally followed by ":"), or a numbered entry "1:-" … "99:-" (`TRANSLATION_NOTE_MARKER`; `QuranTranslationNote_marker_ck`) |
+| Written once | — | Inserted with its text's save and never edited in place: a change replaces an Ayah's notes whole (trigger 51403; the runtime principal holds SELECT, INSERT and DELETE only) |
+
+**The tie rule is one pure function** (`tieTranslationNotes`, `@minhaj/contracts/quran`), applied by
+Quran's service to every save and by the reader to every render: numbered notes "1:-" … "m:-"
+answer exactly the text's "(1)" … "(m)"; star notes take, in order, the next star run of their own
+length ("٭" and "*" are one mark in two spellings); a text with no star mark at all carries its star
+notes on the Ayah as a whole (the source's English often sets a note with no mark in the text); a
+note opened with no mark is the Ayah's only note and answers its one mark, or the Ayah. A save whose
+notes do not tie — the ones it names, or the ones the Ayah keeps under a new text — is refused
+(`note-untied`); a note is never placed by guesswork and a mark is never added, moved or removed. A
+mark no note answers stays text.
+
+**Same authority, version and audit as the text.** Notes are saved by `saveTranslationTexts` under
+`quran.administer` and the work's expected version, in the same transaction as the text; the audit
+entry counts notes saved and removed and never carries a word; a published work's changed ayat are
+re-projected for search. The public reader returns each translation text with its notes
+(`TranslationLayerText`) and counts, per public work and Surah, the ayat with text and the notes
+(`translationCoverage`) — counted, never claimed: a Surah is complete only when every one of its
+ayat carries text.
+
+**Search indexes notes, as notes.** A public translation's notes are its translator's own published
+words on that Ayah, so Search matches them: each is a `note` layer of its work in the Ayah's search
+record, matched in its language's document after every text of that language and never that
+document's summary; a results page shows a note only where the typed words mark the note itself,
+labelled as the translator's note it is, and never presents it as the translation.
+
+**What staging holds once the operator replays and imports** (MIGRATION_STRATEGY.md §19): the
+Irfan-ul-Quran parser, version 3, reads each Ayah's notes verbatim into the staged revision's
+`notes` (Urdu from the row's later `h2.ur`, English from `p.en`), and `quran-reference.sh
+translations` saves them with the texts, idempotently; a revision staged by an earlier parser
+(`notes: null`) leaves the held notes untouched.
 
 ---
 

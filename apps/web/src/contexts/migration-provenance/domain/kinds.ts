@@ -843,6 +843,27 @@ function quranTranslation(input: Ready, record: ParsedQuranTranslation): Normali
     ayat.push({ ayah, text });
   }
   if (ayat.length === 0) words.issues.add('body-missing');
+  // The translator's notes (Quran Part 6), exactly as the ayat: control
+  // characters and line endings only, the ends trimmed of ASCII whitespace. A
+  // note of an ayah the record does not carry, or with no words, is named and
+  // left out — never re-placed or repaired. `null`: the adapter reads no notes.
+  let notes: { ayah: number; marker: string; text: string }[] | null = null;
+  if (record.notes !== null) {
+    notes = [];
+    for (const note of record.notes) {
+      const text = normalizeText(note.text).replace(/^[\t\n ]+|[\t\n ]+$/g, '');
+      if (note.ayah === null || !seen.has(note.ayah)) {
+        words.issues.add('ayah-invalid');
+        continue;
+      }
+      if (text.length === 0) {
+        words.issues.add('body-missing');
+        continue;
+      }
+      words.redact(text);
+      notes.push({ ayah: note.ayah, marker: note.marker, text });
+    }
+  }
   const title = clip(`${work} · ${surah ?? '?'}`, MIGRATION_LIMITS.title);
   const payload = {
     kind: 'quran.translation' as const,
@@ -850,6 +871,7 @@ function quranTranslation(input: Ready, record: ParsedQuranTranslation): Normali
     languageCode: lang.text,
     surah: surah ?? 0,
     ayat,
+    notes,
     legacyIdentifier: identifier(input, record.legacyIdentifier),
   };
   return finish('quran.translation', payload, words, {

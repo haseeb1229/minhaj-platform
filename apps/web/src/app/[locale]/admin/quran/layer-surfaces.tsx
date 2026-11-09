@@ -18,6 +18,7 @@ import {
   type SurahRecord,
   type TafsirEntryRecord,
   type TafsirRecord,
+  type TranslationNote,
   type TranslationRecord,
   type TransliterationRecord,
 } from '@minhaj/contracts/quran';
@@ -93,6 +94,10 @@ import {
  * TEXT IS SAVED EXACTLY AS ENTERED. One plain textarea per Ayah, no rich-text
  * editor (§5.3); only the ayat that changed are sent, an emptied field removes
  * that ayah's text, and surrounding whitespace is refused rather than trimmed.
+ * A Translation's Ayah carries its translator's notes beneath it (Quran Part
+ * 6): each note a marker and a plain textarea, saved with the text under the
+ * same authority, version and audit, and refused unless every note answers a
+ * mark of the Ayah's text (`note-untied`).
  * Each page of a Surah's editor carries at most one listing page of ayat, which
  * keeps every save comfortably inside the Server Action body cap.
  */
@@ -696,14 +701,17 @@ async function LayerTexts({
 }) {
   const { t } = copy;
   const service = quranRuntime().quran;
-  const [texts, canonical]: [readonly LayerText[], QuranPage<AyahRecord>] =
-    await Promise.all([
-      kind === 'translation'
-        ? service.translationTexts(actor, record.id, surah.number)
-        : service.transliterationTexts(actor, record.id, surah.number),
-      service.surahAyat(actor, surah.number, offset),
-    ]);
+  const [texts, canonical]: [
+    readonly (LayerText & { readonly notes?: readonly TranslationNote[] })[],
+    QuranPage<AyahRecord>,
+  ] = await Promise.all([
+    kind === 'translation'
+      ? service.translationTexts(actor, record.id, surah.number)
+      : service.transliterationTexts(actor, record.id, surah.number),
+    service.surahAyat(actor, surah.number, offset),
+  ]);
   const byAyah = new Map(texts.map((entry) => [entry.ayah, entry.text]));
+  const notesOf = new Map(texts.map((entry) => [entry.ayah, entry.notes ?? []]));
   const direction = language?.direction ?? 'ltr';
   const label = surahText(surah, locale, copy);
 
@@ -747,6 +755,16 @@ async function LayerTexts({
           )}
         </p>
       )}
+      {kind === 'translation' ? (
+        <AyahNotes
+          ayah={ayah.ayah}
+          notes={notesOf.get(ayah.ayah) ?? []}
+          language={record.languageCode}
+          direction={direction}
+          administer={administer}
+          copy={copy}
+        />
+      ) : null}
     </div>
   ));
 
@@ -780,6 +798,104 @@ async function LayerTexts({
         copy={copy}
       />
     </div>
+  );
+}
+
+/**
+ * One Ayah's translator's notes (Quran Part 6). To an administrator, each note
+ * is a marker field and a plain textarea in the Surah's one form, followed by
+ * one empty slot for a further note; emptying a note's text removes it. The
+ * form says how many slots it drew (`notes-{ayah}`), so the action can tell a
+ * note removed from one never shown. To a reader, the notes as stored.
+ */
+function AyahNotes({
+  ayah,
+  notes,
+  language,
+  direction,
+  administer,
+  copy,
+}: {
+  readonly ayah: number;
+  readonly notes: readonly TranslationNote[];
+  readonly language: string;
+  readonly direction: 'ltr' | 'rtl';
+  readonly administer: boolean;
+  readonly copy: Copy;
+}) {
+  const { t } = copy;
+  if (!administer) {
+    if (notes.length === 0) return null;
+    return (
+      <div className="flex flex-col gap-1 border-s-2 border-border ps-3 text-sm">
+        <p className="font-medium">{t('texts.notes')}</p>
+        <ol className="flex flex-col gap-1">
+          {notes.map((note) => (
+            <li
+              key={note.ordinal}
+              lang={language}
+              dir={direction}
+              className="whitespace-pre-wrap"
+            >
+              {note.marker === '' ? null : <bdi>{note.marker} </bdi>}
+              {note.text}
+            </li>
+          ))}
+        </ol>
+      </div>
+    );
+  }
+  const slots = Math.min(notes.length + 1, QURAN_LIMITS.notesPerAyah);
+  const slot = (index: number, note: TranslationNote | undefined) => {
+    const base = `note-${String(ayah)}-${String(index)}`;
+    return (
+      <div
+        key={index}
+        className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,7rem)_minmax(0,1fr)]"
+      >
+        <Field id={`${base}-marker`} label={t('texts.noteMarker')}>
+          {(props) => (
+            <TextInput
+              {...props}
+              name={`${base}-marker`}
+              defaultValue={note?.marker ?? ''}
+              maxLength={QURAN_LIMITS.noteMarker}
+              dir="ltr"
+            />
+          )}
+        </Field>
+        <Field id={`${base}-text`} label={t('texts.noteText', { number: index })}>
+          {(props) => (
+            <TextArea
+              {...props}
+              name={`${base}-text`}
+              rows={note === undefined ? 2 : 3}
+              defaultValue={note?.text ?? ''}
+              maxLength={QURAN_LIMITS.noteText}
+              lang={language}
+              dir={direction}
+            />
+          )}
+        </Field>
+      </div>
+    );
+  };
+  const extra = notes.length < slots;
+  return (
+    <fieldset className="flex flex-col gap-3 border-s-2 border-border ps-3">
+      <legend className="text-sm font-medium">{t('texts.notes')}</legend>
+      <input type="hidden" name={`notes-${String(ayah)}`} value={String(slots)} />
+      {notes.map((note, index) => slot(index + 1, note))}
+      {extra ? (
+        <details>
+          <summary className="min-h-11 cursor-pointer py-2 text-sm text-action">
+            {t('texts.addNote')}
+          </summary>
+          {slot(notes.length + 1, undefined)}
+        </details>
+      ) : null}
+      <p className="text-caption text-foreground-muted">{t('texts.notesHelp')}</p>
+    </fieldset>
   );
 }
 

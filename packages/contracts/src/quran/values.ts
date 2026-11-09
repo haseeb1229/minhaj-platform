@@ -206,6 +206,11 @@ export type QuranSajdah = 'recommended' | 'obligatory';
 export const QURAN_LIMITS = Object.freeze({
   ayahText: 4_000,
   layerText: 12_000,
+  /** One translator's note (Quran Part 6) — the longest real note is a few thousand. */
+  noteText: 20_000,
+  /** A note's opening mark: "", "٭", "**", "٭:", "12:-" (`TRANSLATION_NOTE_MARKER`). */
+  noteMarker: 8,
+  notesPerAyah: 20,
   tafsirText: 60_000,
   name: 200,
   surahName: 100,
@@ -433,8 +438,18 @@ const layerWorkFields = {
   sourceId: quranIdSchema.nullable(),
 };
 
+/**
+ * Addresses beneath `/quran/translations/` the platform itself serves (Quran
+ * Part 6: the compare view), which no Translation may take as its slug.
+ */
+export const TRANSLATION_RESERVED_SLUGS: readonly string[] = Object.freeze(['compare']);
+
 export const translationInputSchema = z.strictObject({
   ...layerWorkFields,
+  slug: quranSlugSchema.refine(
+    (slug) => !TRANSLATION_RESERVED_SLUGS.includes(slug),
+    'This address is the platform’s own.',
+  ),
   contributors: contributors(TRANSLATION_CONTRIBUTOR_ROLES),
 });
 export type TranslationValue = z.output<typeof translationInputSchema>;
@@ -514,6 +529,170 @@ export const layerTextSaveSchema = z
     { path: ['changes'], message: 'An ayah is changed once per save.' },
   );
 export type LayerTextSave = z.output<typeof layerTextSaveSchema>;
+
+/* ===========================================================================
+ * Translator's notes (Quran Part 6)
+ * ========================================================================= */
+
+/**
+ * WHAT A NOTE OPENS WITH, as its source wrote it — the one shape a stored
+ * marker may take (`QuranTranslationNote_ck` holds it again):
+ *
+ *   ''          no mark at all (a note the source opens with its words);
+ *   ٭ * ** ٭:   a run of one to four stars, Urdu "٭" or ASCII "*" (the source
+ *               mixes them), optionally followed by the ":" it sometimes sets;
+ *   1:- … 99:-  a numbered entry, answering the translation's "(1)" … "(99)".
+ */
+export const TRANSLATION_NOTE_MARKER = /^(?:|[٭*]{1,4}:?|[1-9][0-9]?:-)$/;
+
+/** One translator's note on one Ayah, as an administrator or the import gives it. */
+export const translationNoteSchema = z.strictObject({
+  marker: z.string().max(QURAN_LIMITS.noteMarker).regex(TRANSLATION_NOTE_MARKER),
+  text: exactText(QURAN_LIMITS.noteText),
+});
+export type TranslationNoteValue = z.output<typeof translationNoteSchema>;
+
+/**
+ * One Ayah's text in a Translation and — where given — its translator's notes,
+ * in order (Quran Part 6). `notes` omitted keeps the notes the Ayah has (which
+ * must still be tied to the new text); `[]` removes them; a removed text
+ * (`null`) removes its notes with it and can carry none.
+ */
+export const translationTextChangeSchema = z
+  .strictObject({
+    ayah: ayahNumberSchema,
+    text: exactText(QURAN_LIMITS.layerText).nullable(),
+    notes: z.array(translationNoteSchema).max(QURAN_LIMITS.notesPerAyah).optional(),
+  })
+  .refine(
+    (value) =>
+      value.text !== null || value.notes === undefined || value.notes.length === 0,
+    { path: ['notes'], message: 'A removed text carries no notes.' },
+  );
+export type TranslationTextChange = z.output<typeof translationTextChangeSchema>;
+
+export const translationTextSaveSchema = z
+  .strictObject({
+    surah: surahNumberSchema,
+    changes: z.array(translationTextChangeSchema).min(1).max(QURAN_LIMITS.textsPerSave),
+  })
+  .refine(
+    (value) => new Set(value.changes.map((c) => c.ayah)).size === value.changes.length,
+    { path: ['changes'], message: 'An ayah is changed once per save.' },
+  );
+export type TranslationTextSave = z.output<typeof translationTextSaveSchema>;
+
+/** A mark in a translation's text where a note may attach (UTF-16 offsets). */
+export interface TranslationNoteMark {
+  readonly start: number;
+  readonly end: number;
+  /** A run of stars, or a numbered mark "(n)". */
+  readonly kind: 'star' | 'numbered';
+  /** The run's length in stars, or the mark's number. */
+  readonly size: number;
+}
+
+/** Every star run ("٭", "*", "**" …) and numbered mark ("(1)" …) of a text, in order. */
+export function translationNoteMarks(text: string): readonly TranslationNoteMark[] {
+  const marks: TranslationNoteMark[] = [];
+  for (const match of text.matchAll(/[٭*]+|\(([1-9][0-9]?)\)/g)) {
+    const start = match.index;
+    const numbered = match[1];
+    marks.push({
+      start,
+      end: start + match[0].length,
+      kind: numbered === undefined ? 'star' : 'numbered',
+      size: numbered === undefined ? match[0].length : Number(numbered),
+    });
+  }
+  return marks;
+}
+
+/** A note's marker read for its shape: a star run, a numbered entry, or none. */
+function markerOf(
+  marker: string,
+): { readonly kind: 'star' | 'numbered' | 'none'; readonly size: number } | null {
+  if (!TRANSLATION_NOTE_MARKER.test(marker)) return null;
+  if (marker === '') return { kind: 'none', size: 0 };
+  const numbered = /^([1-9][0-9]?):-$/.exec(marker);
+  if (numbered !== null) return { kind: 'numbered', size: Number(numbered[1]) };
+  return { kind: 'star', size: marker.replace(':', '').length };
+}
+
+/**
+ * THE TIE RULE, ONE PURE FUNCTION (Quran Part 6): where each of an Ayah's
+ * notes attaches in its translation — the index of its mark in
+ * `translationNoteMarks(text)`, or `null` for a note on the Ayah as a whole —
+ * or `null` when some note is NOT tied, which is refused (`note-untied`). A
+ * note is never placed by guesswork and a mark is never moved or added:
+ *
+ *   numbered  the notes "1:-" … "m:-" in order answer exactly the text's
+ *             marks "(1)" … "(m)", in order, each its own;
+ *   star      in order, each takes the next untaken star run of the same
+ *             length ("٭" and "*" are one mark in two spellings, which the
+ *             source mixes); a text with NO star mark at all carries its star
+ *             notes on the Ayah as a whole, as its source sets them;
+ *   none      a note opened with no mark is the Ayah's ONLY note, and answers
+ *             the one mark the text carries — or the Ayah, when it has none.
+ *
+ * A mark no note answers stays what it is: text.
+ */
+export function tieTranslationNotes(
+  text: string,
+  notes: readonly { readonly marker: string }[],
+): readonly (number | null)[] | null {
+  if (notes.length > QURAN_LIMITS.notesPerAyah) return null;
+  const marks = translationNoteMarks(text);
+  const read = notes.map((note) => markerOf(note.marker));
+  if (read.some((marker) => marker === null)) return null;
+  const markers = read as readonly NonNullable<(typeof read)[number]>[];
+
+  const numberedNotes = markers.filter((marker) => marker.kind === 'numbered');
+  const numberedMarks = marks
+    .map((mark, index) => ({ mark, index }))
+    .filter(({ mark }) => mark.kind === 'numbered');
+  if (numberedNotes.length > 0) {
+    if (
+      numberedNotes.some((marker, index) => marker.size !== index + 1) ||
+      numberedMarks.length !== numberedNotes.length ||
+      numberedMarks.some(({ mark }, index) => mark.size !== index + 1)
+    )
+      return null;
+  }
+  if (markers.some((marker) => marker.kind === 'none') && markers.length !== 1)
+    return null;
+
+  const starMarks = marks
+    .map((mark, index) => ({ mark, index }))
+    .filter(({ mark }) => mark.kind === 'star');
+  const taken = new Set<number>();
+  let after = -1;
+  const ties: (number | null)[] = [];
+  for (const marker of markers) {
+    if (marker.kind === 'numbered') {
+      ties.push(numberedMarks[marker.size - 1]?.index ?? null);
+      continue;
+    }
+    if (marker.kind === 'none') {
+      if (marks.length > 1) return null;
+      ties.push(marks.length === 1 ? 0 : null);
+      continue;
+    }
+    if (starMarks.length === 0) {
+      ties.push(null);
+      continue;
+    }
+    const found = starMarks.find(
+      ({ mark, index }) =>
+        index > after && !taken.has(index) && mark.size === marker.size,
+    );
+    if (found === undefined) return null;
+    taken.add(found.index);
+    after = found.index;
+    ties.push(found.index);
+  }
+  return ties;
+}
 
 /** One Tafsir entry over a same-Surah range of ayat. */
 export const tafsirEntryInputSchema = z
@@ -854,6 +1033,20 @@ export interface LayerText {
   readonly text: string;
 }
 
+/** One translator's note on one Ayah of a Translation, exactly as stored. */
+export interface TranslationNote {
+  /** Its place among the Ayah's notes, from 1. */
+  readonly ordinal: number;
+  /** What it opens with, as written (`TRANSLATION_NOTE_MARKER`); '' for none. */
+  readonly marker: string;
+  readonly text: string;
+}
+
+/** One Ayah's text in a Translation, with its translator's notes in order. */
+export interface TranslationLayerText extends LayerText {
+  readonly notes: readonly TranslationNote[];
+}
+
 export interface TafsirEntryRecord {
   readonly id: string;
   readonly surah: number;
@@ -996,6 +1189,21 @@ export interface PublicTransliteration extends PublicLayerWork {
   readonly scheme: string | null;
 }
 
+/**
+ * How much of the Quran one public Translation carries (Quran Part 6): for
+ * each Surah it has any text in, how many ayat carry text and how many
+ * translator's notes it holds. Counted, never claimed: a Surah is complete
+ * only when its count equals the Surah's own.
+ */
+export interface PublicTranslationCoverage {
+  readonly workId: string;
+  readonly surahs: readonly {
+    readonly surah: number;
+    readonly ayat: number;
+    readonly notes: number;
+  }[];
+}
+
 export interface PublicRecitation {
   readonly id: string;
   readonly slug: string;
@@ -1064,9 +1272,15 @@ export interface AyahSearchRecord {
   readonly text: string;
   readonly stamp: string;
   readonly topicIds: readonly string[];
-  /** Every PUBLIC layer text of this Ayah, in deterministic work-slug order. */
+  /**
+   * Every PUBLIC layer text of this Ayah, in deterministic work-slug order —
+   * and, since Quran Part 6, each translator's note of a public Translation
+   * as a `note` of that work, after every text (work-slug order, then the
+   * note's own order). A note is matched and shown as a note, never as the
+   * translation.
+   */
   readonly layers: readonly {
-    readonly kind: 'translation' | 'transliteration';
+    readonly kind: 'translation' | 'transliteration' | 'note';
     readonly slug: string;
     readonly name: string;
     readonly languageCode: string;

@@ -227,6 +227,10 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/quran/search.tsx',
     'apps/web/src/components/quran/topics.tsx',
     'apps/web/src/components/quran/works.tsx',
+    // Quran Part 6: the translations listing, a work's page and the compare
+    // view, and their pure compare, order and coverage rules.
+    'apps/web/src/components/quran/translations.tsx',
+    'apps/web/src/components/quran/compare.ts',
     // Phase 19. The public Hadith surfaces, their pure presentation decisions
     // and their request-cached reads, and the one batched current-text read
     // and pure labels the search pages use for Hadith results. The ROUTES that
@@ -477,6 +481,8 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/quran/recitation-dock.tsx',
     'apps/web/src/components/quran/recitation-host.tsx',
     'apps/web/src/components/quran/recitation-listen.tsx',
+    // Quran Part 6: where a translation's notes attach in its text, pure.
+    'apps/web/src/components/quran/translation-notes.ts',
     'apps/web/src/components/my/dashboard.ts',
     'apps/web/src/components/my/frame.tsx',
     'apps/web/src/components/my/metadata.ts',

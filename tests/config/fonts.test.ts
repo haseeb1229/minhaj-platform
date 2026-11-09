@@ -151,6 +151,8 @@ describe('the shipped typefaces', () => {
       'apps/web/src/components/quran/search.tsx',
       // Quran Part 2: each Surah index row's Arabic name.
       'apps/web/src/components/quran/surah-index-island.tsx',
+      // Quran Part 6: a Surah's Arabic name on the translations pages.
+      'apps/web/src/components/quran/translations.tsx',
     ]);
   });
 

@@ -12,6 +12,7 @@ import type {
 } from '@minhaj/contracts/quran';
 
 import type { ContentLanguage } from '@/composition/public-references';
+import { directionOf } from '@/config/locale';
 import {
   Alert,
   Breadcrumbs,
@@ -34,6 +35,7 @@ import {
   type TextSize,
 } from './presentation';
 import { RecitationPlayer } from './recitation-player';
+import type { NoteLabels } from './scripture';
 
 /**
  * The parts every public Quran page shares (Phase 18; SECURITY_BASELINE.md
@@ -53,6 +55,23 @@ import { RecitationPlayer } from './recitation-player';
  */
 
 type QuranTranslator = Awaited<ReturnType<typeof getTranslations<'quran'>>>;
+
+/**
+ * The words a translation's notes are offered with on one Ayah (Quran Part 6),
+ * in the interface language: the disclosure's summary counts the notes.
+ */
+export function noteLabelsFor(
+  locale: Locale,
+  t: QuranTranslator,
+  count: number,
+): NoteLabels {
+  return {
+    locale,
+    direction: directionOf(locale),
+    summary: t('notes.summary', { count }),
+    reference: (number) => t('notes.reference', { number }),
+  };
+}
 
 /** Home / Quran — the trail every Quran page starts with. */
 export async function quranTrail(locale: Locale) {

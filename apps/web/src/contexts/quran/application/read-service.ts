@@ -106,6 +106,12 @@ export function createQuranReadService(
       idOk(workId) && rangeOk(surah, from, to)
         ? reader.translationTexts(workId, surah, from, to)
         : none(),
+    // Malformed identifiers are dropped, never queried; a listing names at
+    // most the works the reader listed.
+    translationCoverage: (workIds) => {
+      const valid = [...new Set(workIds.filter(idOk))].slice(0, ENUMERATION_MAX);
+      return valid.length === 0 ? none() : reader.translationCoverage(valid);
+    },
     transliterationTexts: (workId, surah, from, to) =>
       idOk(workId) && rangeOk(surah, from, to)
         ? reader.transliterationTexts(workId, surah, from, to)

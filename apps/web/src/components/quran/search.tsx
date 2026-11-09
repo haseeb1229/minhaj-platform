@@ -807,7 +807,7 @@ function QuranResult({
               const id = `hit-${key}-layer-${String(index + 1)}`;
               return (
                 <div
-                  key={`${layer.kind}:${layer.slug}`}
+                  key={`${layer.kind}:${layer.slug}:${String(index)}`}
                   role="group"
                   aria-labelledby={id}
                   dir={written.direction}
@@ -828,6 +828,7 @@ function QuranResult({
                     </span>
                     <span aria-hidden="true">
                       — <bdi>{layer.name}</bdi>
+                      {layer.kind === 'note' ? ` · ${t('notes.title')}` : null}
                     </span>
                   </p>
                 </div>

@@ -708,6 +708,9 @@ IF OBJECT_ID(N'[dbo].[QuranTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT,
 -- never edited.
 IF COL_LENGTH(N'dbo.QuranRecitation', N'streamPath') IS NOT NULL DENY UPDATE ON OBJECT::[dbo].[QuranRecitation] ([streamProvider], [streamPath]) TO [$(app_login)];
 IF OBJECT_ID(N'[dbo].[QuranRecitationTiming]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranRecitationTiming] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[QuranRecitationTiming] TO [$(app_login)]; END;
+-- Quran Part 6. A translation's translator's notes are inserted with its
+-- text's save and replaced whole — never edited in place.
+IF OBJECT_ID(N'[dbo].[QuranTranslationNote]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranTranslationNote] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[QuranTranslationNote] TO [$(app_login)]; END;
 
 -- Phase 19: Hadith.
 --

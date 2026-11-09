@@ -543,6 +543,16 @@ export async function verifyRestoredSchema(
       'Restored database is missing the Quran Part 5 table: QuranRecitationTiming',
     );
 
+  // Quran Part 6. Its history row without the notes table would report an
+  // applied migration over a database that has lost every translator's note.
+  if (
+    expectedMigrationIds.some((id) => id.includes('r2_quran_translation_notes')) &&
+    !tables.includes('QuranTranslationNote')
+  )
+    throw new Error(
+      'Restored database is missing the Quran Part 6 table: QuranTranslationNote',
+    );
+
   // Phase 19. A restore that carried the Hadith migration's history row but not
   // its source-qualified records, their evidence or the citation mapping would
   // report an applied migration over a database that has lost the identity

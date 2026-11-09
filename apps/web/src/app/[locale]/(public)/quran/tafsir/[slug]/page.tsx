@@ -55,7 +55,6 @@ export default async function TafsirRoute({ params, searchParams }: WorkParams) 
     <WorkDetailPage
       locale={locale}
       availability={availability}
-      kind="tafsir"
       work={work}
       offset={readQuranOffset(await searchParams)}
     />

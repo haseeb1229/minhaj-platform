@@ -3086,6 +3086,60 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > Arabic, 320 px, axe, the catalogue filter and the reciter page, and the no-JavaScript fallback.
 > *CI and staging evidence are recorded when they exist.*
 
+> **Quran Part 6 — translations and the translator's notes (owner direction 2026-11-10; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (DOMAIN_MODEL.md §8.6; ROUTE_MAP.md
+> §3.3, §7; MIGRATION_STRATEGY.md §19, parser version 3; SECURITY_BASELINE.md §5.1):
+>
+> - **Data.** Migration `20261110000000_r2_quran_translation_notes` (**36 migrations**, with its
+>   rollback): `QuranTranslationNote` (a translation text's notes in order — the marker as written
+>   and the note's words), a typed composite key to its `QuranTranslationText` row,
+>   `QuranTranslationNote_ck` (ordinal 1–20, non-empty, 20,000 units) and `_marker_ck` (none, a run
+>   of one to four stars with an optional ":", or "n:-"), trigger 51403 (written once; no gap).
+>   Grants: SELECT, INSERT and DELETE only. Restore proof: 44 CHECKs, 44 foreign keys, 29 triggers.
+> - **The rule.** `tieTranslationNotes` ties each note to a mark of its text — numbered entries to
+>   "(1)" … "(m)", star notes to star runs of their own length in order, a star note on a text with no
+>   star mark to the Ayah, an unmarked note (the only one) to the one mark — and the service refuses
+>   anything else (`note-untied`), the notes an Ayah keeps under a new text included.
+> - **Migration.** The Irfan-ul-Quran parser, version 3, reads the notes verbatim (Urdu from the
+>   later `h2.ur`, English from `p.en`; numbered notes split at their entries; paragraphs kept) with
+>   per-language strictness; proved on all 114 surveyed surahs of both sources (46 Urdu and 134
+>   English notes, every one tied). The staged payload carries `notes` (`null` from an earlier
+>   parser); `quran-reference.sh translations` saves texts and notes together, idempotently.
+> - **Reader.** Each answered mark is a link to its note (the mark, exactly as written, is the link);
+>   the notes follow the work's attribution in a native disclosure, in the translation's own language
+>   and direction; a mark opens its note in a dialog; the settings offer "Show under every Ayah"
+>   (remembered, applied before the first paint); without JavaScript a mark jumps to its note.
+> - **Pages.** `/quran/translations` (each work's language, People, attribution, counted coverage
+>   and notes, Read and Compare), `/quran/translations/{slug}` (the work's record and every Surah's
+>   coverage and notes, linked to the reader), and `/quran/translations/compare?surah=&ayah=` (the
+>   Arabic once and every public translation with its notes; a GET form and neighbour links; a
+>   missing Ayah said). `compare` is reserved from translation slugs.
+> - **Administration.** `/admin/quran/translations/{id}?surah=` edits each Ayah's notes beside its
+>   text (a marker and a textarea per note, one slot to add), under the same authority, version and
+>   audit; read-only to `quran.read`.
+> - **Search.** Notes are indexed as `note` layers of their work — after every text of their
+>   language, never a summary — and a result shows a note only where the typed words mark it,
+>   labelled as the translator's note.
+>
+> **Operator steps on staging** (after deploying the release that carries the migration):
+> `migration-run.sh run --source irfan-ul-quran-ur --operator <adminId> --pages 1 --limit 114
+> --items 1,2,…,114 --replay` and the same for `irfan-ul-quran-en` (every surah re-staged by parser
+> version 3 from its retained evidence; nothing is fetched), then `quran-reference.sh translations
+> --operator <accountId>` (`migration.read`, `quran.read`, `quran.administer`).
+>
+> **Proof:** `tests/quran/translation-notes.test.ts` (the tie rule, the text cut at its marks, the
+> rendered notes, compare and coverage rules, search), `tests/quran/service.test.ts` (tie refusals,
+> kept notes, schema refusals, the reserved slug), `tests/quran/reader-surface.test.ts` (the notes
+> preference and the boot script), `tests/migration/tooling/adapters/irfan-ul-quran.test.ts` (trimmed
+> real rows: 9:29, 9:101, 24:35, 33:6, 33:37, 53:39, 4:34, 42:52, 108:1, and refusals),
+> `tests/migration/kinds.test.ts`; on SQL Server `tests/quran/persistence.integration.test.ts`,
+> `tests/quran/reference.integration.test.ts` (the import with notes, idempotent, null-notes
+> revisions, untied refused), the migration rehearsal (`db:migrate:test`), `db:test:permissions` and
+> the populated restore proof; the browser journey (`tests/browser/quran.spec.ts`): a mark opening
+> its note, notes under every Ayah, an Ayah-level note, Urdu right to left, no script, the listing,
+> a work's Surahs, the compare view and its form without script, the admin note refused then saved,
+> 320 px and axe. *CI and staging evidence are recorded when they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

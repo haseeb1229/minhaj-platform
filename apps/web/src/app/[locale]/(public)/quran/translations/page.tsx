@@ -3,11 +3,12 @@ import { getTranslations } from 'next-intl/server';
 
 import { QuranUnavailable } from '@/components/quran/parts';
 import { quranAvailability, quranMetadata } from '@/components/quran/read';
-import { WorkListingPage } from '@/components/quran/works';
+import { TranslationListingPage } from '@/components/quran/translations';
 import { requireLocale } from '@/config/route-locale';
 
 /**
- * `/{locale}/quran/translations` — every public Translation work.
+ * `/{locale}/quran/translations` — every public Translation work, with what it
+ * covers and its translator's notes counted (Quran Part 6).
  *
  * Signed out and `force-dynamic`: the corpus and its works are mutable data.
  * The honest unavailable state while no corpus is active; the fixture banner
@@ -38,7 +39,5 @@ export default async function TranslationsRoute({ params }: SectionParams) {
     const t = await getTranslations({ locale, namespace: 'quran' });
     return <QuranUnavailable locale={locale} section={t('sections.translations')} />;
   }
-  return (
-    <WorkListingPage locale={locale} availability={availability} kind="translations" />
-  );
+  return <TranslationListingPage locale={locale} availability={availability} />;
 }

@@ -667,6 +667,22 @@ export const SURAH_AYAH_COUNTS: readonly number[] = Object.freeze([
   3, 5, 4, 5, 6,
 ]);
 
+/**
+ * A translator's note as the source wrote it (Quran Part 6): the ayah it
+ * belongs to, the mark it opens with — '' when it opens with none — and its
+ * words, paragraphs separated by one blank line. Migration's own shape: what
+ * a mark may be is the source's spelling, and whether a note is tied to its
+ * translation is the reviewing context's question, never this one's.
+ */
+export interface StagedQuranTranslationNote {
+  readonly ayah: number;
+  readonly marker: string;
+  readonly text: string;
+}
+
+/** The opening marks a source sets on a note: none, a run of stars, or "n:-". */
+const STAGED_NOTE_MARKER = /^(?:|[٭*]{1,4}:?|[1-9][0-9]?:-)$/;
+
 export interface StagedQuranTranslationPayload {
   readonly kind: 'quran.translation';
   /** The translation work, as the source names it (e.g. its title and language). */
@@ -675,6 +691,12 @@ export interface StagedQuranTranslationPayload {
   readonly surah: number;
   /** One entry per ayah the source gives, its text EXACTLY as the source wrote it. */
   readonly ayat: readonly { readonly ayah: number; readonly text: string }[];
+  /**
+   * The translator's notes, in the source's order (Quran Part 6) — or `null`
+   * from a parser that did not read notes (Irfan-ul-Quran parser version 2
+   * and before), which says nothing about whether the source has any.
+   */
+  readonly notes: readonly StagedQuranTranslationNote[] | null;
   readonly legacyIdentifier: string | null;
 }
 
@@ -695,6 +717,19 @@ export const stagedQuranTranslationPayloadSchema = z
       )
       .min(1)
       .max(286),
+    notes: z
+      .array(
+        z
+          .object({
+            ayah: z.number().int().min(1).max(286),
+            marker: z.string().max(8).regex(STAGED_NOTE_MARKER),
+            text: z.string().min(1).max(20_000),
+          })
+          .strict(),
+      )
+      .max(2_000)
+      .nullable()
+      .default(null),
     legacyIdentifier: z.string().max(200).nullable(),
   })
   .strict()
@@ -709,6 +744,25 @@ export const stagedQuranTranslationPayloadSchema = z
       return true;
     },
     { message: 'ayah-out-of-range' },
+  )
+  .refine(
+    (value) => {
+      // Each note belongs to an ayah the payload carries, in ayah order, at
+      // most twenty to one ayah.
+      if (value.notes === null) return true;
+      const carried = new Set(value.ayat.map((entry) => entry.ayah));
+      const perAyah = new Map<number, number>();
+      let previous = 0;
+      for (const note of value.notes) {
+        if (!carried.has(note.ayah) || note.ayah < previous) return false;
+        previous = note.ayah;
+        const held = (perAyah.get(note.ayah) ?? 0) + 1;
+        if (held > 20) return false;
+        perAyah.set(note.ayah, held);
+      }
+      return true;
+    },
+    { message: 'note-out-of-place' },
   );
 
 /* ===========================================================================
@@ -915,6 +969,17 @@ export interface ParsedQuranTranslation extends ParsedCommon {
   readonly work: string;
   readonly surah: number | null;
   readonly ayat: readonly { readonly ayah: number | null; readonly text: string }[];
+  /**
+   * The translator's notes as the page sets them, in order (Quran Part 6), or
+   * `null` when the adapter does not read notes.
+   */
+  readonly notes:
+    | readonly {
+        readonly ayah: number | null;
+        readonly marker: string;
+        readonly text: string;
+      }[]
+    | null;
 }
 
 export type ParsedRecord =

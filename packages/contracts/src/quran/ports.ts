@@ -42,7 +42,10 @@ import type {
   TafsirValue,
   TajweedRuleRecord,
   TajweedRuleValue,
+  PublicTranslationCoverage,
+  TranslationLayerText,
   TranslationRecord,
+  TranslationTextChange,
   TranslationValue,
   TransliterationRecord,
   TransliterationValue,
@@ -141,13 +144,24 @@ export interface QuranPublicReaderPort {
   tafsirs(): Promise<readonly PublicLayerWork[]>;
   tafsir(slug: string): Promise<PublicLayerWork | null>;
 
-  /** One public work's texts for a range of one Surah — ONE read per page, never per Ayah. */
+  /**
+   * One public Translation's texts for a range of one Surah, each with its
+   * translator's notes in order — ONE read per page, never per Ayah.
+   */
   translationTexts(
     workId: string,
     surah: number,
     from: number,
     to: number,
-  ): Promise<readonly LayerText[]>;
+  ): Promise<readonly TranslationLayerText[]>;
+  /**
+   * How much of the Quran each of these public Translations carries, per
+   * Surah: ayat with text and translator's notes (Quran Part 6). ONE grouped
+   * read for every work named; a work that is not public now is absent.
+   */
+  translationCoverage(
+    workIds: readonly string[],
+  ): Promise<readonly PublicTranslationCoverage[]>;
   transliterationTexts(
     workId: string,
     surah: number,
@@ -273,11 +287,17 @@ export interface QuranPersistencePort {
   setTranslationState(
     input: Versioned & { readonly state: QuranLayerState },
   ): Promise<TranslationRecord>;
-  translationTexts(id: string, surah: number): Promise<readonly LayerText[]>;
+  /** A Translation's texts of one Surah, each with its translator's notes in order. */
+  translationTexts(id: string, surah: number): Promise<readonly TranslationLayerText[]>;
+  /**
+   * Saves texts of one Surah and — where a change names them — replaces that
+   * Ayah's translator's notes, in one transaction under the expected version
+   * (Quran Part 6). The service has already tied every note to its text.
+   */
   saveTranslationTexts(
     input: Versioned & {
       readonly surah: number;
-      readonly changes: readonly LayerTextChange[];
+      readonly changes: readonly TranslationTextChange[];
     },
   ): Promise<TranslationRecord>;
 

@@ -76,6 +76,8 @@ const THROW_REASONS: ReadonlyMap<number, string> = new Map([
   [51400, 'invalid'],
   [51401, 'invalid'],
   [51402, 'invalid'],
+  // Quran Part 6: a translator's note edited in place, or numbered with a gap.
+  [51403, 'invalid'],
 ]);
 
 /**

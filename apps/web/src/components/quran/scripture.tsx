@@ -1,4 +1,7 @@
+import type { TranslationNote } from '@minhaj/contracts/quran';
+
 import { arabicIndic } from './citation';
+import { noteParagraphs, noteSegments } from './translation-notes';
 
 /**
  * THE SCRIPTURE ELEMENTS every public Quran page renders (R2): the canonical
@@ -91,6 +94,17 @@ export function ArabicText({
   );
 }
 
+/** The words a translation's notes are offered with, in the interface language. */
+export interface NoteLabels {
+  /** The interface locale and its direction, for the words below. */
+  readonly locale: string;
+  readonly direction: 'ltr' | 'rtl';
+  /** "Translator's note" / "Translator's notes (2)" — the disclosure's summary. */
+  readonly summary: string;
+  /** "Translator's note {number}" — a mark's accessible name, after the mark. */
+  readonly reference: (number: number) => string;
+}
+
 /**
  * One translation of one Ayah (R2; benchmark patterns 1 and 2): the text in its
  * own language and direction, set for reading (`.quran-translation`: a serif in
@@ -101,6 +115,18 @@ export function ArabicText({
  * `index` is the work's place among the translations the page rendered: the
  * reader shows or hides each by it (`data-shown` on the reader, Quran Part 1).
  * `data-translation-*` is what Copy and the reading-mode sheet read.
+ *
+ * THE TRANSLATOR'S NOTES (Quran Part 6). Each mark a note answers is drawn as
+ * a link to that note — the mark itself, exactly as written, is the link's
+ * only content, so the text node, what Copy reads and what is selected stay
+ * the stored text; the link is NAMED "٭ Translator's note 1". The notes
+ * follow the attribution in a native `<details>`, each in the translation's
+ * language and direction, opened by its own marker as the source wrote it, so
+ * with no script a mark jumps to its note (the browser opens the disclosure
+ * for the fragment) and the page is complete. The reader island opens a note
+ * in a dialog instead, and opens every disclosure when the reader asks for
+ * notes under each Ayah (`data-notes`). A note with no mark in the text is
+ * the Ayah's as a whole and is listed the same way.
  */
 export function TranslationText({
   id,
@@ -109,6 +135,9 @@ export function TranslationText({
   text,
   language,
   index,
+  notes = [],
+  noteLabels = null,
+  open = false,
 }: {
   readonly id: string;
   /** "Translation: {name}" — the accessible name. */
@@ -117,7 +146,16 @@ export function TranslationText({
   readonly text: string;
   readonly language: { readonly code: string; readonly direction: 'ltr' | 'rtl' };
   readonly index: number;
+  /** The Ayah's translator's notes in this work, in order. */
+  readonly notes?: readonly TranslationNote[];
+  /** The words the notes are offered with; no notes are drawn without them. */
+  readonly noteLabels?: NoteLabels | null;
+  /** The notes' disclosure open from the start (the compare view). */
+  readonly open?: boolean;
 }) {
+  const shownNotes = noteLabels === null ? [] : notes;
+  const noteId = (ordinal: number) => `${id}-note-${String(ordinal)}`;
+  const segments = noteSegments(text, shownNotes);
   return (
     <div
       role="group"
@@ -133,7 +171,23 @@ export function TranslationText({
         data-translation-text=""
         className="quran-translation reading-face break-words"
       >
-        {text}
+        {segments.every((segment) => segment.note === null)
+          ? text
+          : segments.map((segment, position) => {
+              const note = segment.note === null ? undefined : shownNotes[segment.note];
+              if (note === undefined || noteLabels === null) return segment.text;
+              return (
+                <a
+                  key={position}
+                  href={`#${noteId(note.ordinal)}`}
+                  data-note-ref={noteId(note.ordinal)}
+                  aria-label={`${segment.text} ${noteLabels.reference(note.ordinal)}`}
+                  className="quran-note-ref"
+                >
+                  {segment.text}
+                </a>
+              );
+            })}
       </p>
       <p id={id} className="text-caption text-foreground-muted">
         <span className="sr-only">{label}</span>
@@ -141,6 +195,43 @@ export function TranslationText({
           — <bdi>{name}</bdi>
         </span>
       </p>
+      {shownNotes.length === 0 || noteLabels === null ? null : (
+        <details open={open} className="quran-notes" data-translation-notes="">
+          <summary
+            lang={noteLabels.locale}
+            dir={noteLabels.direction}
+            className="quran-notes-summary"
+          >
+            {noteLabels.summary}
+          </summary>
+          <ol
+            lang={language.code}
+            dir={language.direction}
+            className="quran-notes-list reading-face"
+          >
+            {shownNotes.map((note) => (
+              <li
+                key={note.ordinal}
+                id={noteId(note.ordinal)}
+                data-note=""
+                tabIndex={-1}
+                className="quran-note"
+              >
+                {noteParagraphs(note.text).map((paragraph, position) => (
+                  <p key={position} className="break-words">
+                    {position === 0 && note.marker !== '' ? (
+                      <>
+                        <span className="quran-note-marker">{note.marker}</span>{' '}
+                      </>
+                    ) : null}
+                    <span data-note-paragraph="">{paragraph}</span>
+                  </p>
+                ))}
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
     </div>
   );
 }

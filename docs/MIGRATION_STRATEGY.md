@@ -834,7 +834,7 @@ seconds. A fixture never becomes an authorised source, nor the reverse.
 | Magazines (minhaj.info) | `minhaj-info-magazines` (`library.magazine`) · `minhaj-info-issues-mq`, `minhaj-info-issues-di` (`library.magazine-issue`) | Issue pages with their table of contents; no PDFs or covers |
 | Minhaj.TV | `minhaj-tv-videos` (`media.video`) | YouTube identifiers and metadata from `/english/` pages only (`robots.txt`); audio is a SoundCloud embed, which the storage-backed audio model (§4.9) cannot hold — **source-limited** |
 | TheFatwa | `thefatwa-rulings` (`fatwa.ruling`, review-only) | Published rulings; the asker's name and place are never read |
-| Irfan-ul-Quran | `irfan-ul-quran-ur`, `irfan-ul-quran-en` (`quran.translation`, review-only) | Translation text per surah, exactly; no Arabic text, tafsir, translator's notes or recitation (§19, parser version 2: star, numbered and unmarked notes) |
+| Irfan-ul-Quran | `irfan-ul-quran-ur`, `irfan-ul-quran-en` (`quran.translation`, review-only) | Translation text per surah, exactly, and since parser version 3 (Quran Part 6) the translator's own notes beside it, verbatim; no Arabic text, tafsir or recitation (§19) |
 | eLearning (equranclass.com / femaletutor.com) | — | **Source-limited:** the public catalogue has no syllabus, and Learning cannot publish a course without one; a syllabus is never invented |
 
 **Eight content kinds.** `media.video`, `library.work`, `library.magazine`,
@@ -1464,10 +1464,12 @@ published through the single-record workflow and audited on its own, self-approv
 sources' revisions stay review-only and are never in a manifest (§14). On staging only,
 `quran:reference:translations` (`quran-reference.sh translations`) reads them exactly as staged and
 saves each surah through Quran's own administrative service as the layered `reference` translation
-beside the Tanzil text; a surah whose staged revision fails validation is skipped and reported, never
-repaired (DOMAIN_MODEL.md §8.4; OPEN_DECISIONS.md §1.2).
+beside the Tanzil text — since Quran Part 6 with the revision's translator's notes (below); a surah
+whose staged revision fails validation is skipped and reported, never repaired (DOMAIN_MODEL.md
+§8.4; OPEN_DECISIONS.md §1.2).
 
-**The Urdu translator's notes (parser version 2, 2026-11-09).** The first staging run of
+**The Urdu translator's notes (parser version 2, 2026-11-09 — historical; since parser version 3
+the notes are read, below).** The first staging run of
 `irfan-ul-quran-ur` over all 114 surahs staged 77 and failed 37 at parse
 (`translation-structure-unexpected`); `irfan-ul-quran-en` staged all 114. Every surah is one page
 (no pagination), and every ayah row carries two `h2.ur`: the translation, and a second that is empty
@@ -1499,9 +1501,48 @@ the translation's own marks (`translatorNotesOnly`):
 
 Every row the first rule admitted is admitted unchanged and the text read is the same, so every
 surah it parsed parses byte-identically (checked on 2, 9, 24, 33, 36, 63 and 112); the parser
-therefore stays at **version 2** and a replay leaves the 110 staged surahs unchanged while
-re-reading the four that have no staged revision. Anything else in a later heading still fails the
-page.
+therefore stayed at **version 2** (as at 2026-11-10, before Quran Part 6) and a replay left the 110
+staged surahs unchanged while re-reading the four that had no staged revision. Anything else in a
+later heading still failed the page.
+
+**Parser version 3 — the translator's notes are read (Quran Part 6, 2026-11-10).** Versions 1 and 2
+recognised the translator's notes only to tell them from anything else, and left them unread. Version
+3 (`cheerio-irfan-ul-quran-translation`, `translatorNotes` in
+`scripts/migration/adapters/irfan-ul-quran.ts`) reads each note **verbatim into its own place**: the
+ayah, the mark it opens with exactly as written (`'٭'`, `'*'`, `'**'`, `'٭:'`, `'1:-'` …, or `''`
+when it opens with none) and its words — on the Urdu page from every later `h2.ur` of the row, on
+the English page from the row's `p.en` (inside the row's own `a.ayat-div`, one per row on every
+page; nothing else is in it). A `<br>` run or a blank source line breaks a note's paragraphs, kept as
+one blank line; a paragraph that opens with a mark begins a note, one that opens with none continues
+the note before it; one numbered note ("1:- … 2:- …") is split into its entries, each its own note;
+ASCII whitespace is collapsed and every other character kept; of markup (an italic, the appendix link
+of 4:34) only the words are read, never an address. A mark with no words after it ("* " at 33:6,
+40:55, 48:2) is not a note. **The mark stays in the ayah's text exactly where the translation sets
+it; no note is ever moved, merged or reworded.** Each note must still be tied to the translation's
+own marks in a surveyed form, or the page fails (`translation-structure-unexpected`): a star note
+takes, in order, the next star run of the same length ("*" and "**" at 9:29); a numbered entry list
+answers exactly "(1)" … "(m)" (Urdu only); a note opened with no mark is the row's only note and
+answers the one mark its translation carries (Urdu 108:1 with its English note slot filled, English
+53:39); and — the English page only — a star note on a translation that carries **no** star at all is
+the ayah's as a whole, because the site drops the English mark (9:101, 24:11, 63:5 and 24 more). A
+later `h2.en` that holds anything still fails the page. Survey of all 114 pages (fetched 2026-11-10
+with the authorised User-Agent, sequentially, every one HTTP 200): both sources parse all 114 surahs,
+**46 Urdu notes** (43 star, 2 numbered entries of 42:52, 1 unmarked) and **134 English notes** (106
+tied to a star mark, 27 on the ayah as a whole, 1 unmarked; 9:29 holds two, 24:35 and 55:2 two
+paragraphs); every one satisfies Quran's own tie rule (`tieTranslationNotes`, DOMAIN_MODEL.md §8.6),
+and every ayah's text is **byte-identical** to version 2's on all 228 records. Marks without a note
+(Urdu 93:6–7, English 22:5) stay text.
+
+The staged payload gains `notes` — `{ ayah, marker, text }` in the source's order, each note's ayah
+one the payload carries, at most twenty to an ayah — or **`null`** in a revision a parser before
+version 3 staged, which says nothing about whether the source has notes. Because the parser version
+changed, a `--replay` of each source's retained evidence re-reads and re-stages all 114 records
+(the ayat unchanged, the notes added) with nothing fetched. `quran-reference.sh translations` then
+saves each surah's texts **with** its notes through the same Quran save, which ties every note to a
+mark again and refuses one it cannot (that surah skipped as `notes-untied`, never repaired); a
+revision with `notes: null` changes texts only and leaves notes held untouched, and a re-run whose
+texts and notes are already held reports the surah unchanged. The summary counts notes written per
+language — never their words.
 
 ### 19.1 Run plan on staging — PLANNED, not yet run
 

@@ -408,7 +408,8 @@ export async function capturePhase18Fixture(
 
 /**
  * The Quran tables whose constraints and triggers must return intact: Phase
- * 18's, and Quran Part 5's per-Ayah recitation timing.
+ * 18's, Quran Part 5's per-Ayah recitation timing and Quran Part 6's
+ * translator's notes.
  */
 const PHASE18_TABLES = [
   'QuranSource',
@@ -435,6 +436,7 @@ const PHASE18_TABLES = [
   'QuranTajweedRuleText',
   'QuranTopic',
   'QuranRecitationTiming',
+  'QuranTranslationNote',
 ] as const;
 
 const PROCEDURES = [
@@ -618,16 +620,17 @@ export async function verifyRestoredPhase18(
           WHERE r.[key]=N'platform-administrator'
             AND rp.[permissionKey] IN (N'quran.read', N'quran.administer', N'quran.editCanonical')) AS [bundled];`,
   );
-  // 42 CHECKs (39 from Phase 18, Quran Part 2's non-empty SurahName.meaning,
-  // and Quran Part 5's stream and timing rules), 43 foreign keys (Part 5: the
-  // language heard and the timing's segment) and 28 triggers (Part 5: the
-  // stream rules, the streamed segment and the timing's shape), exactly as the
-  // migrations create them: a restore that silently lost one would otherwise
-  // read as "none untrusted".
+  // 44 CHECKs (39 from Phase 18, Quran Part 2's non-empty SurahName.meaning,
+  // Quran Part 5's stream and timing rules, and Quran Part 6's note bounds and
+  // marker shapes), 44 foreign keys (Part 5: the language heard and the
+  // timing's segment; Part 6: the note's translation text) and 29 triggers
+  // (Part 5: the stream rules, the streamed segment and the timing's shape;
+  // Part 6: the note's shape), exactly as the migrations create them: a
+  // restore that silently lost one would otherwise read as "none untrusted".
   if (
-    Number(counts?.checks ?? 0) !== 42 ||
-    Number(counts?.keys ?? 0) !== 43 ||
-    Number(counts?.triggers ?? 0) !== 28 ||
+    Number(counts?.checks ?? 0) !== 44 ||
+    Number(counts?.keys ?? 0) !== 44 ||
+    Number(counts?.triggers ?? 0) !== 29 ||
     Number(counts?.procedures ?? 0) !== PROCEDURES.length ||
     Number(counts?.bundled ?? 0) !== 3
   ) {

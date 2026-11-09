@@ -5,12 +5,14 @@ import { notFound } from 'next/navigation';
 import { quranReadRuntime } from '@/composition/quran-read';
 import { readSlugSegment } from '@/components/quran/presentation';
 import { quranAvailability, quranMetadata } from '@/components/quran/read';
-import { WorkDetailPage } from '@/components/quran/works';
+import { TranslationDetailPage } from '@/components/quran/translations';
 import { requireLocale } from '@/config/route-locale';
 
 /**
- * `/{locale}/quran/translations/{slug}` — one public Translation work and the
- * way to read the Quran with it. The slug is immutable, so there is no history
+ * `/{locale}/quran/translations/{slug}` — one public Translation work: what is
+ * recorded of it, what it covers Surah by Surah, and the way to read the Quran
+ * with it (Quran Part 6). `compare` is the platform's own address beneath
+ * `/quran/translations/` (`TRANSLATION_RESERVED_SLUGS`), never a work. The slug is immutable, so there is no history
  * to redirect; a work that is not public now is a 404.
  */
 export const dynamic = 'force-dynamic';
@@ -45,12 +47,6 @@ export default async function TranslationRoute({ params }: WorkParams) {
   const [availability, work] = await Promise.all([quranAvailability(), load(params)]);
   if (!availability.active || work === null) notFound();
   return (
-    <WorkDetailPage
-      locale={locale}
-      availability={availability}
-      kind="translations"
-      work={work}
-      offset={0}
-    />
+    <TranslationDetailPage locale={locale} availability={availability} work={work} />
   );
 }

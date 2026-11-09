@@ -16,7 +16,9 @@ import {
   tafsirEntryInputSchema,
   tafsirInputSchema,
   tajweedRuleInputSchema,
+  tieTranslationNotes,
   translationInputSchema,
+  translationTextSaveSchema,
   transliterationInputSchema,
   type LayerTextChange,
   type QuranActor,
@@ -25,6 +27,7 @@ import {
   type QuranPersistencePort,
   type QuranRef,
   type QuranSourceAuthority,
+  type TranslationTextChange,
 } from '@minhaj/contracts/quran';
 
 import { QuranRefusal, asRefusal } from '../domain/refusal.ts';
@@ -150,6 +153,14 @@ export interface LayerTextSaveInput {
   readonly expectedVersion: number;
   readonly surah: number;
   readonly changes: readonly LayerTextChange[];
+}
+
+/** A Translation's save: each change may carry the Ayah's notes (Quran Part 6). */
+export interface TranslationTextSaveInput {
+  readonly id: string;
+  readonly expectedVersion: number;
+  readonly surah: number;
+  readonly changes: readonly TranslationTextChange[];
 }
 
 /** What publication needs of a work, whatever kind it is. */
@@ -317,10 +328,29 @@ export function createQuranService(deps: {
       );
     },
 
-    async saveTranslationTexts(actor: QuranActor, input: LayerTextSaveInput) {
+    async saveTranslationTexts(actor: QuranActor, input: TranslationTextSaveInput) {
       await administer(actor);
       const { id, expectedVersion, surah, changes } = parse(textSave, input);
-      const save = parse(layerTextSaveSchema, { surah, changes });
+      const save = parse(translationTextSaveSchema, { surah, changes });
+      // EVERY NOTE TIED (Quran Part 6): each changed Ayah's notes — the ones
+      // the change names, else the ones it keeps — must answer marks its final
+      // text carries (`tieTranslationNotes`). A note is never re-placed and a
+      // mark never moved to make it fit: an untied note is refused. The
+      // expected version makes the notes read here the ones the save replaces.
+      if (save.changes.some((change) => change.text !== null)) {
+        const held = new Map(
+          (await run(store.translationTexts(id, save.surah))).map((entry) => [
+            entry.ayah,
+            entry.notes,
+          ]),
+        );
+        for (const change of save.changes) {
+          if (change.text === null) continue;
+          const notes = change.notes ?? held.get(change.ayah) ?? [];
+          if (tieTranslationNotes(change.text, notes) === null)
+            throw new QuranRefusal('note-untied');
+        }
+      }
       return run(
         store.saveTranslationTexts({
           actorId: actor.accountId,

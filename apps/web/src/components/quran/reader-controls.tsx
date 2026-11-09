@@ -22,6 +22,7 @@ import {
 import {
   DEFAULT_PREFERENCES,
   LEADINGS,
+  NOTE_DISPLAYS,
   READING_MODES,
   SCALE,
   TRANSLATION_LAYOUTS,
@@ -29,6 +30,7 @@ import {
   shownOf,
   stepScale,
   type Leading,
+  type NoteDisplay,
   type ReadingMode,
   type TranslationLayout,
 } from './reader-preferences';
@@ -81,6 +83,10 @@ export interface ReaderControlLabels {
   readonly increase: string;
   readonly leading: Readonly<Record<Leading | 'label', string>>;
   readonly layout: Readonly<Record<TranslationLayout | 'label', string>>;
+  /** Where translator's notes are read (Quran Part 6). */
+  readonly notes: Readonly<Record<NoteDisplay | 'label' | 'help', string>>;
+  /** A translator's note's dialog title. */
+  readonly noteTitle: string;
   readonly reset: string;
   readonly kept: string;
   readonly moreOptions: string;
@@ -152,6 +158,16 @@ const CHOICE =
 
 const percent = (scale: number) => `${String(Math.round(scale * 100))}%`;
 
+/** One translator's note as the page rendered it, for its dialog (Quran Part 6). */
+interface NoteView {
+  readonly ref: { readonly surah: number; readonly ayah: number };
+  readonly work: string;
+  readonly marker: string;
+  readonly paragraphs: readonly string[];
+  readonly lang: string;
+  readonly dir: 'ltr' | 'rtl';
+}
+
 /** An Ayah's text as the page rendered it, for a sheet and for Copy. */
 interface AyahView {
   readonly ref: { readonly surah: number; readonly ayah: number };
@@ -193,6 +209,7 @@ export function QuranReaderControls({
   const [rowsVersion, setRowsVersion] = useState(0);
   const [ayahSheet, setAyahSheet] = useState<AyahView | null>(null);
   const [saving, setSaving] = useState<AyahView['ref'] | null>(null);
+  const [noteView, setNoteView] = useState<NoteView | null>(null);
   const statusTimer = useRef<number | null>(null);
   const base = useId();
 
@@ -243,6 +260,25 @@ export function QuranReaderControls({
   );
 
   useFragmentLanding(readerId, surah);
+
+  // NOTES UNDER EVERY AYAH (Quran Part 6): every notes disclosure open, the
+  // ones a later window brings included. Changing back closes them; a window
+  // arriving while notes are read on request leaves every disclosure as the
+  // reader left it.
+  const noteDisplay = useRef<NoteDisplay | null>(null);
+  useEffect(() => {
+    const reader = document.getElementById(readerId);
+    if (reader === null) return;
+    const inline = preferences.notes === 'inline';
+    const changed =
+      noteDisplay.current !== null && noteDisplay.current !== preferences.notes;
+    noteDisplay.current = preferences.notes;
+    if (!inline && !changed) return;
+    for (const details of reader.querySelectorAll<HTMLDetailsElement>(
+      'details[data-translation-notes]',
+    ))
+      details.open = inline;
+  }, [readerId, preferences.notes, rowsVersion]);
   const onLoaded = useCallback(() => setRowsVersion((version) => version + 1), []);
   const onFailed = useCallback(() => say(labels.loadFailed), [say, labels.loadFailed]);
   useWindowLoader(readerId, listId, series?.key ?? null, onLoaded, onFailed);
@@ -336,6 +372,33 @@ export function QuranReaderControls({
     if (reader === null) return undefined;
     const listener = (event: MouseEvent) => {
       const target = event.target instanceof Element ? event.target : null;
+      // A mark in a translation opens its note in a dialog; without script
+      // (or should the note be missing) the link jumps to it under the Ayah.
+      const mark = target?.closest<HTMLAnchorElement>('a[data-note-ref]');
+      if (mark !== null && mark !== undefined) {
+        const note = document.getElementById(mark.dataset['noteRef'] ?? '');
+        const row = mark.closest<HTMLElement>('li[data-ayah], [data-ayah]');
+        const group = mark.closest<HTMLElement>('[data-translation-work]');
+        const list = note?.closest<HTMLElement>('ol');
+        if (note === null || row === null || list === null || list === undefined) return;
+        event.preventDefault();
+        const [surahNumber = 0, ayah = 0] = (row.dataset['ayah'] ?? '')
+          .split(':')
+          .map(Number);
+        // Plain text out of the server's elements — never markup.
+        const paragraphs = [...note.querySelectorAll('[data-note-paragraph]')].map(
+          (paragraph) => paragraph.textContent ?? '',
+        );
+        setNoteView({
+          ref: { surah: surahNumber, ayah },
+          work: group?.dataset['translationWork'] ?? '',
+          marker: note.querySelector('.quran-note-marker')?.textContent ?? '',
+          paragraphs,
+          lang: list.lang,
+          dir: list.dir === 'rtl' ? 'rtl' : 'ltr',
+        });
+        return;
+      }
       const control = target?.closest<HTMLElement>('[data-ayah-action]');
       const row = control?.closest<HTMLElement>('li[data-ayah], [data-ayah]');
       if (control === null || control === undefined || row === null || row === undefined)
@@ -478,6 +541,20 @@ export function QuranReaderControls({
             </fieldset>
           ) : null}
 
+          {anyTranslation ? (
+            <div className="flex flex-col gap-2">
+              <Choice
+                legend={labels.notes.label}
+                name={`${base}-notes`}
+                values={NOTE_DISPLAYS}
+                labels={labels.notes}
+                value={preferences.notes}
+                onChange={(notes) => updateReaderPreferences({ notes })}
+              />
+              <p className="text-caption text-foreground-muted">{labels.notes.help}</p>
+            </div>
+          ) : null}
+
           {translations.length > 1 ? (
             <Choice
               legend={labels.layout.label}
@@ -576,6 +653,39 @@ export function QuranReaderControls({
                   }
             }
           />
+        )}
+      </Dialog>
+
+      <Dialog
+        title={labels.noteTitle}
+        closeLabel={labels.close}
+        open={noteView !== null}
+        onOpenChange={(next) => {
+          if (!next) setNoteView(null);
+        }}
+      >
+        {noteView === null ? null : (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-foreground-muted">
+              {ayahTitle(noteView.ref)} · <bdi>{noteView.work}</bdi>
+            </p>
+            <div
+              lang={noteView.lang}
+              dir={noteView.dir}
+              className="quran-note-dialog reading-face flex flex-col gap-3"
+            >
+              {noteView.paragraphs.map((paragraph, index) => (
+                <p key={index} className="break-words">
+                  {index === 0 && noteView.marker !== '' ? (
+                    <>
+                      <span className="quran-note-marker">{noteView.marker}</span>{' '}
+                    </>
+                  ) : null}
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+          </div>
         )}
       </Dialog>
 

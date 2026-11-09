@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -68,6 +68,11 @@ import {
  *   - the translation import registers Irfan-ul-Quran's provenance and, with no
  *     staged revision to read, saves and publishes nothing — it reports every
  *     Surah skipped instead;
+ *   - the translation import (Quran Part 6) saves a staged revision's texts
+ *     WITH its translator's notes, exactly and in order, changes nothing on a
+ *     second run, replaces a note a later revision changes, leaves the notes
+ *     held alone for a revision staged before notes were read (`notes: null`),
+ *     and skips — never repairs — a Surah whose note answers no mark;
  *   - the Surah names import (Quran Part 2) refuses metadata the corpus was not
  *     registered with and an operator without `quran.administer`, saves each
  *     English name and meaning verbatim through the admin service with its
@@ -76,6 +81,83 @@ import {
  */
 
 const live = databaseConfigured ? describe : describe.skip;
+
+const sha256 = (value: string) =>
+  createHash('sha256').update(value, 'utf8').digest('hex');
+
+/** A staged quran.translation payload's notes, as Migration stages them. */
+interface StagedNote {
+  readonly ayah: number;
+  readonly marker: string;
+  readonly text: string;
+}
+
+/** Synthetic translation words for one Ayah of Surah 1 — never the Quran. */
+const fixtureWords = (language: 'ur' | 'en', ayah: number, mark = '') =>
+  language === 'ur'
+    ? `NON_QURAN_FIXTURE ترجمہ ${String(ayah)}${mark}`
+    : `NON_QURAN_FIXTURE rendering ${String(ayah)}${mark}`;
+
+/**
+ * Stages ONE review-only revision of Surah 1 for an Irfan-ul-Quran migration
+ * source, through the same tables the pipeline writes: the source (once), a
+ * run, the record (once), a raw snapshot and the staged revision.
+ */
+async function stageSurahOne(
+  admin: SqlSession,
+  input: {
+    readonly operator: string;
+    readonly language: 'ur' | 'en';
+    readonly revision: number;
+    readonly ayat: readonly string[];
+    /** Omitted: a payload staged before notes were read. */
+    readonly notes?: readonly StagedNote[];
+  },
+): Promise<void> {
+  const key = `irfan-ul-quran-${input.language}`;
+  const url = `https://www.irfan-ul-quran.com/english/Surah-al-Fatihah-with-english-translation`;
+  const [held] = await admin.query<{ source: string | null; record: string | null }>(`
+    SELECT (SELECT [id] FROM [dbo].[MigrationSource] WHERE [key] = ${n(key)}) AS [source],
+           (SELECT r.[id] FROM [dbo].[MigrationRecord] r JOIN [dbo].[MigrationSource] s ON s.[id] = r.[sourceId]
+              WHERE s.[key] = ${n(key)}) AS [record];`);
+  const source = held?.source ?? randomUUID();
+  const record = held?.record ?? randomUUID();
+  const run = randomUUID();
+  const snapshot = randomUUID();
+  const body = `<html><!-- NON_QURAN_FIXTURE ${key} revision ${String(input.revision)} --></html>`;
+  const payload = JSON.stringify({
+    kind: 'quran.translation',
+    work: 'NON_QURAN_FIXTURE work',
+    languageCode: input.language,
+    surah: 1,
+    ayat: input.ayat.map((text, index) => ({ ayah: index + 1, text })),
+    ...(input.notes === undefined ? {} : { notes: input.notes }),
+    legacyIdentifier: `surah-1-${input.language}`,
+  });
+  const provenance = `N'irfan-ul-quran-translation', N'1', N'cheerio-irfan-ul-quran-translation', N'3', N'1', N'proof'`;
+  await admin.query(`BEGIN TRY BEGIN TRAN;
+    ${
+      held?.source === null || held?.source === undefined
+        ? `INSERT INTO [dbo].[MigrationSource] ([id],[key],[name],[authorityKind],[accessMethod],[contentKind],[baseUrl],[defaultLanguageCode],[minIntervalMs],[maxConcurrency],[maxAttempts],[timeoutMs],[maxBodyBytes],[maxRedirects],[state],[createdAt],[createdByUserId],[updatedAt],[updatedByUserId],[authorisationReference],[authorisedOn])
+             VALUES (${n(source)}, ${n(key)}, N'NON_QURAN_FIXTURE source', N'authorised', N'http', N'quran.translation', N'https://www.irfan-ul-quran.com/', ${n(input.language)}, 1000, 1, 3, 10000, 1048576, 2, N'active', SYSUTCDATETIME(), ${n(input.operator)}, SYSUTCDATETIME(), ${n(input.operator)}, N'NON-QURAN-FIXTURE-AUTHORISATION', '2026-11-06');
+           INSERT INTO [dbo].[MigrationSourceHost] ([sourceId],[host]) VALUES (${n(source)}, N'www.irfan-ul-quran.com');`
+        : ''
+    }
+    INSERT INTO [dbo].[MigrationRun] ([id],[sourceId],[operatorUserId],[state],[adapterKey],[adapterVersion],[parserKey],[parserVersion],[normalizerVersion],[codeRevision],[discoveryComplete],[startedAt])
+      VALUES (${n(run)}, ${n(source)}, ${n(input.operator)}, N'open', ${provenance}, 1, SYSUTCDATETIME());
+    ${
+      held?.record === null || held?.record === undefined
+        ? `INSERT INTO [dbo].[MigrationRecord] ([id],[sourceId],[externalKey],[originalUrl],[contentKind],[status],[observed],[firstObservedRunId],[lastObservedRunId],[createdAt],[updatedAt])
+             VALUES (${n(record)}, ${n(source)}, ${n(url)}, ${n(url)}, N'quran.translation', N'staged', N'present', ${n(run)}, ${n(run)}, SYSUTCDATETIME(), SYSUTCDATETIME());`
+        : ''
+    }
+    INSERT INTO [dbo].[MigrationRawSnapshot] ([id],[sourceId],[recordId],[runId],[requestedUrl],[finalUrl],[httpStatus],[contentType],[body],[byteSize],[checksum],[fetchedAt],[fetcherKey],[fetcherVersion],[personalData])
+      VALUES (${n(snapshot)}, ${n(source)}, ${n(record)}, ${n(run)}, ${n(url)}, ${n(url)}, 200, N'text/html; charset=utf-8', ${`0x${Buffer.from(body, 'utf8').toString('hex')}`}, ${String(Buffer.byteLength(body))}, N'${sha256(body)}', SYSUTCDATETIME(), N'proof', N'1', N'none');
+    INSERT INTO [dbo].[MigrationStagedRecord] ([id],[recordId],[snapshotId],[runId],[revision],[contentKind],[title],[titleKey],[languageCode],[payload],[payloadChecksum],[adapterKey],[adapterVersion],[parserKey],[parserVersion],[normalizerVersion],[codeRevision],[inputChecksum],[producedAt],[validation],[personalData])
+      VALUES (${n(randomUUID())}, ${n(record)}, ${n(snapshot)}, ${n(run)}, ${String(input.revision)}, N'quran.translation', N'NON_QURAN_FIXTURE work · 1', N'non quran fixture work 1', ${n(input.language)}, ${n(payload)}, N'${sha256(payload)}', ${provenance}, N'${sha256(body)}', SYSUTCDATETIME(), N'valid', N'none');
+    UPDATE [dbo].[MigrationRun] SET [state] = N'completed', [endedAt] = SYSUTCDATETIME() WHERE [id] = ${n(run)};
+    COMMIT TRAN; END TRY BEGIN CATCH IF @@TRANCOUNT > 0 ROLLBACK TRAN; THROW; END CATCH;`);
+}
 
 const sqlNumber = async (promise: Promise<unknown>): Promise<number | null> => {
   try {
@@ -357,6 +439,158 @@ live('R2 Quran reference preview against real SQL Server', () => {
     }
     expect(await admitted.translations()).toEqual([]);
   }, 300_000);
+
+  it("imports a staged revision's texts with its translator's notes, exactly, and resumes", async () => {
+    type Summary = Record<
+      'ur' | 'en',
+      {
+        saved: number;
+        unchanged: number;
+        notes: number;
+        skipped: { surah: number; reason: string }[];
+        published: boolean;
+        workId: string;
+      }
+    >;
+    const translations = async () =>
+      (await importIrfanTranslations({
+        owner,
+        runtime,
+        operator,
+        environment: process.env,
+      })) as Summary;
+    const notesHeld = async (workId: string) =>
+      (await admitted.translationTexts(workId, 1, 1, 7)).flatMap((entry) =>
+        entry.notes.map((note) => ({ ayah: entry.ayah, ...note })),
+      );
+    const urAyat = [1, 2, 3, 4, 5, 6, 7].map((ayah) =>
+      fixtureWords('ur', ayah, ayah === 1 ? '٭' : ayah === 3 ? ' (1) آگے (2)' : ''),
+    );
+    const enAyat = [1, 2, 3, 4, 5, 6, 7].map((ayah) =>
+      fixtureWords('en', ayah, ayah === 4 ? '*' : ''),
+    );
+    const urNotes: StagedNote[] = [
+      { ayah: 1, marker: '٭', text: 'NON_QURAN_FIXTURE حاشیہ اول' },
+      { ayah: 3, marker: '1:-', text: 'NON_QURAN_FIXTURE پہلا' },
+      {
+        ayah: 3,
+        marker: '2:-',
+        text: 'NON_QURAN_FIXTURE دوسرا\n\nNON_QURAN_FIXTURE پیراگراف',
+      },
+    ];
+    // Ayah 2's note is the Ayah's as a whole (its text carries no mark); ayah
+    // 4's opens with no mark and answers the one mark its text carries.
+    const enNotes: StagedNote[] = [
+      { ayah: 2, marker: '*', text: 'NON_QURAN_FIXTURE note on the ayah' },
+      { ayah: 4, marker: '', text: 'NON_QURAN_FIXTURE unmarked note' },
+    ];
+    await stageSurahOne(db.admin, {
+      operator,
+      language: 'ur',
+      revision: 1,
+      ayat: urAyat,
+      notes: urNotes,
+    });
+    await stageSurahOne(db.admin, {
+      operator,
+      language: 'en',
+      revision: 1,
+      ayat: enAyat,
+      notes: enNotes,
+    });
+
+    const first = await translations();
+    for (const language of ['ur', 'en'] as const) {
+      expect(first[language], language).toMatchObject({
+        saved: 1,
+        unchanged: 0,
+        published: true,
+      });
+      expect(first[language].skipped, language).toHaveLength(113);
+    }
+    expect([first.ur.notes, first.en.notes]).toEqual([3, 2]);
+    const ordinals = (notes: readonly StagedNote[]) => {
+      const seen = new Map<number, number>();
+      return notes.map((note) => {
+        const ordinal = (seen.get(note.ayah) ?? 0) + 1;
+        seen.set(note.ayah, ordinal);
+        return { ayah: note.ayah, ordinal, marker: note.marker, text: note.text };
+      });
+    };
+    expect(await notesHeld(first.ur.workId)).toEqual(ordinals(urNotes));
+    expect(await notesHeld(first.en.workId)).toEqual(ordinals(enNotes));
+    expect(
+      (await admitted.translationTexts(first.ur.workId, 1, 1, 7)).map(
+        (entry) => entry.text,
+      ),
+    ).toEqual(urAyat);
+    // The audit names how many notes, never their words.
+    const audits = await db.admin.query<{ after: string }>(
+      `SELECT [afterState] AS [after] FROM [dbo].[AuditLog] WHERE [action] = N'quran.translation.texts-saved';`,
+    );
+    expect(audits).toHaveLength(2);
+    expect(JSON.stringify(audits)).not.toContain('NON_QURAN_FIXTURE');
+
+    // A second run changes nothing.
+    const second = await translations();
+    for (const language of ['ur', 'en'] as const)
+      expect(second[language], language).toMatchObject({
+        saved: 0,
+        unchanged: 1,
+        notes: 0,
+      });
+
+    // A later revision that changes one note replaces the Ayah's notes.
+    const changed = urNotes.map((note, index) =>
+      index === 0 ? { ...note, text: 'NON_QURAN_FIXTURE حاشیہ نیا' } : note,
+    );
+    await stageSurahOne(db.admin, {
+      operator,
+      language: 'ur',
+      revision: 2,
+      ayat: urAyat,
+      notes: changed,
+    });
+    const third = await translations();
+    expect(third.ur).toMatchObject({ saved: 1, notes: 1 });
+    expect(await notesHeld(first.ur.workId)).toEqual(ordinals(changed));
+
+    // A revision staged before notes were read changes texts only: the notes
+    // held stay as they are, even where the text it saves changes.
+    const textOnly = urAyat.map((text, index) =>
+      index === 4 ? `${text} NON_QURAN_FIXTURE` : text,
+    );
+    await stageSurahOne(db.admin, {
+      operator,
+      language: 'ur',
+      revision: 3,
+      ayat: textOnly,
+    });
+    const fourth = await translations();
+    expect(fourth.ur).toMatchObject({ saved: 1, notes: 0 });
+    expect(await notesHeld(first.ur.workId)).toEqual(ordinals(changed));
+    expect((await admitted.translationTexts(first.ur.workId, 1, 5, 5))[0]?.text).toBe(
+      textOnly[4],
+    );
+
+    // A note that answers no mark is never placed: the Surah is skipped and
+    // nothing of it changes.
+    const untied: StagedNote[] = [
+      ...enNotes.slice(0, 1),
+      { ayah: 4, marker: '**', text: 'NON_QURAN_FIXTURE untied note' },
+    ];
+    await stageSurahOne(db.admin, {
+      operator,
+      language: 'en',
+      revision: 2,
+      ayat: enAyat,
+      notes: untied,
+    });
+    const fifth = await translations();
+    expect(fifth.en).toMatchObject({ saved: 0, notes: 0 });
+    expect(fifth.en.skipped).toContainEqual({ surah: 1, reason: 'notes-untied' });
+    expect(await notesHeld(first.en.workId)).toEqual(ordinals(enNotes));
+  }, 600_000);
 
   it('imports the Surah names verbatim through the admin service, keeps an operator’s, and resumes', async () => {
     const metadata = utf8(tanzilFixture().metadata);

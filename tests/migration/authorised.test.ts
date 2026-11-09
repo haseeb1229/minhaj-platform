@@ -600,6 +600,7 @@ const SAMPLES: Readonly<Record<MigrationContentKind, ParsedRecord>> = Object.fre
       { ayah: 1, text: 'One' },
       { ayah: 4, text: 'Four' },
     ],
+    notes: [{ ayah: 4, marker: '*', text: 'A note on four' }],
   },
 });
 

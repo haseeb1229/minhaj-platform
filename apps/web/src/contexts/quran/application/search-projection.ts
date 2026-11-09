@@ -31,6 +31,13 @@ import {
  * after the canonical text, and is never its summary: the one Arabic a result
  * shows is the canonical text.
  *
+ * TRANSLATOR'S NOTES ARE MATCHED, AS NOTES (Quran Part 6). A public
+ * Translation's notes are its translator's own published words on that Ayah —
+ * a reader looking for "Antioch" or "al-Kawthar" is looking for them — so each
+ * is matched in its language's document AFTER every text of that language,
+ * and is never the summary: a result is summarised by a translation, and a
+ * page that shows a matching note labels it as the note it is.
+ *
  * WHAT IS NOT HERE. No Tafsir body — commentary is navigated from the Ayah, not
  * matched as if it were the Ayah — no Surah name, no work name and no audio.
  * Every title is the citation itself, which is the only label an Ayah has that
@@ -64,8 +71,12 @@ function documents(record: AyahSearchRecord): SearchDocumentSource[] {
   const resourceId = citationOf(ref);
   const topicIds = [...record.topicIds];
 
+  // Texts first, then notes — each in work-slug order (a note's own order is
+  // the reader's, kept by the stable sort).
+  const noteLast = (kind: string) => (kind === 'note' ? 1 : 0);
   const layers = [...record.layers].sort(
     (a, b) =>
+      noteLast(a.kind) - noteLast(b.kind) ||
       (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0) ||
       (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0),
   );

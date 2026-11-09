@@ -22,8 +22,11 @@ import {
   tafsirInputSchema,
   tajweedRuleInputSchema,
   translationInputSchema,
+  translationTextSaveSchema,
   transliterationInputSchema,
   type LayerTextChange,
+  type TranslationNoteValue,
+  type TranslationTextChange,
   type QuranActor,
   type VerificationReport,
 } from '@minhaj/contracts/quran';
@@ -473,36 +476,45 @@ export async function saveLayerTexts(
     if (!kind.success || !target.success || !surah.success) return INVALID;
 
     const service = quranRuntime().quran;
-    const current =
-      kind.data === 'translation'
-        ? await service.translationTexts(actor, target.data.id, surah.data)
-        : await service.transliterationTexts(actor, target.data.id, surah.data);
-    const existing = new Map(current.map((entry) => [entry.ayah, entry.text]));
-
-    // A FIXED ceiling of fields, never a count the browser supplies.
-    const changes: { ayah: number; text: string | null }[] = [];
-    for (let ayah = 1; ayah <= QURAN_AYAH_NUMBER_MAX; ayah += 1) {
-      const submitted = textarea(form, `text-${String(ayah)}`);
-      if (submitted === null) continue;
-      const before = existing.get(ayah) ?? null;
-      if (submitted === '') {
-        if (before !== null) changes.push({ ayah, text: null });
-      } else if (submitted !== before) {
-        changes.push({ ayah, text: submitted });
+    if (kind.data === 'translation') {
+      const current = await service.translationTexts(actor, target.data.id, surah.data);
+      const changes = translationChanges(form, current);
+      if (changes.length === 0) return { status: 'error', failure: 'unchanged' };
+      const parsed = translationTextSaveSchema.safeParse({ surah: surah.data, changes });
+      if (!parsed.success) return INVALID;
+      await service.saveTranslationTexts(actor, {
+        ...target.data,
+        surah: parsed.data.surah,
+        changes: parsed.data.changes as readonly TranslationTextChange[],
+      });
+    } else {
+      const current = await service.transliterationTexts(
+        actor,
+        target.data.id,
+        surah.data,
+      );
+      const existing = new Map(current.map((entry) => [entry.ayah, entry.text]));
+      // A FIXED ceiling of fields, never a count the browser supplies.
+      const changes: { ayah: number; text: string | null }[] = [];
+      for (let ayah = 1; ayah <= QURAN_AYAH_NUMBER_MAX; ayah += 1) {
+        const submitted = textarea(form, `text-${String(ayah)}`);
+        if (submitted === null) continue;
+        const before = existing.get(ayah) ?? null;
+        if (submitted === '') {
+          if (before !== null) changes.push({ ayah, text: null });
+        } else if (submitted !== before) {
+          changes.push({ ayah, text: submitted });
+        }
       }
+      if (changes.length === 0) return { status: 'error', failure: 'unchanged' };
+      const parsed = layerTextSaveSchema.safeParse({ surah: surah.data, changes });
+      if (!parsed.success) return INVALID;
+      await service.saveTransliterationTexts(actor, {
+        ...target.data,
+        surah: parsed.data.surah,
+        changes: parsed.data.changes as readonly LayerTextChange[],
+      });
     }
-    if (changes.length === 0) return { status: 'error', failure: 'unchanged' };
-
-    const parsed = layerTextSaveSchema.safeParse({ surah: surah.data, changes });
-    if (!parsed.success) return INVALID;
-    const save = {
-      ...target.data,
-      surah: parsed.data.surah,
-      changes: parsed.data.changes as readonly LayerTextChange[],
-    };
-
-    if (kind.data === 'translation') await service.saveTranslationTexts(actor, save);
-    else await service.saveTransliterationTexts(actor, save);
 
     refresh(locale);
     // Durable intent is already committed; this only indexes it sooner.
@@ -511,6 +523,65 @@ export async function saveLayerTexts(
   } catch (error) {
     return rejected(error, 'quran-save-layer-texts');
   }
+}
+
+/**
+ * A Translation's changes from its per-Surah form (Quran Part 6): each Ayah's
+ * text, and — where the form rendered them (`notes-{ayah}` holds how many
+ * note slots it drew, never more than `QURAN_LIMITS.notesPerAyah`) — its
+ * translator's notes, each slot a marker and a text, an emptied text removing
+ * that note. A change names its notes only when they differ, and always
+ * carries the Ayah's text (the text as it stands when only the notes moved);
+ * an Ayah whose text is emptied is removed with its notes. The marker is a
+ * label-like value (trimmed); a note's text is exactly as typed.
+ */
+function translationChanges(
+  form: FormData,
+  current: readonly {
+    readonly ayah: number;
+    readonly text: string;
+    readonly notes: readonly { readonly marker: string; readonly text: string }[];
+  }[],
+): TranslationTextChange[] {
+  const existing = new Map(current.map((entry) => [entry.ayah, entry]));
+  const same = (
+    a: readonly { readonly marker: string; readonly text: string }[],
+    b: readonly { readonly marker: string; readonly text: string }[],
+  ) =>
+    a.length === b.length &&
+    a.every(
+      (note, index) => note.marker === b[index]?.marker && note.text === b[index]?.text,
+    );
+
+  const changes: TranslationTextChange[] = [];
+  for (let ayah = 1; ayah <= QURAN_AYAH_NUMBER_MAX; ayah += 1) {
+    const submitted = textarea(form, `text-${String(ayah)}`);
+    if (submitted === null) continue;
+    const before = existing.get(ayah);
+    if (submitted === '') {
+      if (before !== undefined) changes.push({ ayah, text: null });
+      continue;
+    }
+    const slots = Math.min(
+      whole(form, `notes-${String(ayah)}`),
+      QURAN_LIMITS.notesPerAyah,
+    );
+    const notes: TranslationNoteValue[] = [];
+    for (let slot = 1; slot <= slots; slot += 1) {
+      const text = textarea(form, `note-${String(ayah)}-${String(slot)}-text`);
+      if (text === null || text === '') continue;
+      notes.push({
+        marker: value(form, `note-${String(ayah)}-${String(slot)}-marker`) ?? '',
+        text,
+      });
+    }
+    const notesChanged = Number.isInteger(slots) && !same(notes, before?.notes ?? []);
+    if (submitted === before?.text && !notesChanged) continue;
+    changes.push(
+      notesChanged ? { ayah, text: submitted, notes } : { ayah, text: submitted },
+    );
+  }
+  return changes;
 }
 
 /** Adds a Tafsir entry over a same-Surah range, or replaces an existing one. */

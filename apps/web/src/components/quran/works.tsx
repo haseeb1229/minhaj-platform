@@ -6,7 +6,6 @@ import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import {
   QURAN_PAGE,
   type PublicLayerWork,
-  type PublicSurah,
   type PublicTajweedRule,
   type PublicTransliteration,
   type QuranAvailability,
@@ -37,20 +36,20 @@ import {
   offsetPathOf,
   pageLinks,
   quranPath,
-  surahName,
   surahPath,
   tafsirPath,
   tajweedLocales,
   tajweedRulePath,
   tajweedTextFor,
-  translationPath,
   withReading,
 } from './presentation';
 import { quranIndexable, readSurahs } from './read';
 
 /**
- * The layered works and study aids — Translations, Tafsir, Transliteration and
- * Tajweed (ROUTE_MAP.md §3.3; DOMAIN_MODEL.md §8.2).
+ * The layered works and study aids — Tafsir, Transliteration and Tajweed
+ * (ROUTE_MAP.md §3.3; DOMAIN_MODEL.md §8.2). The Translations have their own
+ * pages since Quran Part 6 (`./translations`), which share this module's
+ * language name and contributor line.
  *
  * EACH WORK IS ITS OWN THING, AND NONE IS PRIVILEGED. A page names the work, its
  * language, its contributors and the attribution its source supplied — never a
@@ -63,10 +62,8 @@ import { quranIndexable, readSurahs } from './read';
 
 type QuranTranslator = Awaited<ReturnType<typeof getTranslations<'quran'>>>;
 type Names = Awaited<ReturnType<typeof referenceNames>>;
-type WorkKind = 'translations' | 'tafsir';
-
 /** A work's language, named in its own script and marked with its own code. */
-function LanguageName({
+export function LanguageName({
   languages,
   code,
 }: {
@@ -82,7 +79,7 @@ function LanguageName({
 }
 
 /** The contributors of a work whose People profile is public, linked to it. */
-function Contributors({
+export function Contributors({
   locale,
   work,
   names,
@@ -126,19 +123,14 @@ function WorkRow({
   scheme = null,
 }: {
   readonly locale: Locale;
-  readonly kind: WorkKind | 'transliteration';
+  readonly kind: 'tafsir' | 'transliteration';
   readonly work: PublicLayerWork;
   readonly languages: ReadonlyMap<string, ContentLanguage>;
   readonly names: Names;
   readonly t: QuranTranslator;
   readonly scheme?: string | null;
 }) {
-  const href =
-    kind === 'translations'
-      ? translationPath(locale, work.slug)
-      : kind === 'tafsir'
-        ? tafsirPath(locale, work.slug)
-        : null;
+  const href = kind === 'tafsir' ? tafsirPath(locale, work.slug) : null;
   return (
     <Panel as="li">
       <div className="flex min-w-0 flex-col gap-2">
@@ -171,7 +163,7 @@ function WorkRow({
 }
 
 /* ===========================================================================
- * /quran/translations, /quran/tafsir, /quran/transliteration
+ * /quran/tafsir, /quran/transliteration
  * ========================================================================= */
 
 export async function WorkListingPage({
@@ -181,17 +173,13 @@ export async function WorkListingPage({
 }: {
   readonly locale: Locale;
   readonly availability: QuranAvailability;
-  readonly kind: WorkKind | 'transliteration';
+  readonly kind: 'tafsir' | 'transliteration';
 }) {
   const t = await getTranslations({ locale, namespace: 'quran' });
   const parts = await quranTrail(locale);
   const reader = quranReadRuntime().reader;
   const [works, languages, surahs] = await Promise.all([
-    kind === 'translations'
-      ? reader.translations()
-      : kind === 'tafsir'
-        ? reader.tafsirs()
-        : reader.transliterations(),
+    kind === 'tafsir' ? reader.tafsirs() : reader.transliterations(),
     contentLanguages(),
     readSurahs(),
   ]);
@@ -204,12 +192,7 @@ export async function WorkListingPage({
   );
   const title = t(`sections.${kind}`);
   const first = surahs[0];
-  const layer =
-    kind === 'translations'
-      ? 'translation'
-      : kind === 'tafsir'
-        ? 'tafsir'
-        : 'transliteration';
+  const layer = kind;
 
   return (
     <QuranFrame
@@ -265,55 +248,8 @@ export async function WorkListingPage({
 }
 
 /* ===========================================================================
- * /quran/translations/{slug} and /quran/tafsir/{slug}
+ * /quran/tafsir/{slug}
  * ========================================================================= */
-
-/** Every Surah, linked to the reader WITH this work chosen. */
-function ReadWithSurahs({
-  locale,
-  surahs,
-  layer,
-  slug,
-  t,
-}: {
-  readonly locale: Locale;
-  readonly surahs: readonly PublicSurah[];
-  readonly layer: 'translation' | 'tafsir';
-  readonly slug: string;
-  readonly t: QuranTranslator;
-}) {
-  if (surahs.length === 0) return null;
-  return (
-    <section className="flex flex-col gap-3" aria-labelledby="work-read">
-      <SectionHeading>
-        <span id="work-read">{t('work.readWith')}</span>
-      </SectionHeading>
-      <ol
-        aria-labelledby="work-read"
-        className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4"
-      >
-        {surahs.map((surah) => {
-          const name = surahName(surah, locale);
-          return (
-            <li key={surah.number} className="min-w-0 break-words">
-              <TextLink
-                href={withReading(surahPath(locale, surah.number), {
-                  ...NO_READING_CHOICE,
-                  [layer]: slug,
-                })}
-              >
-                {t('surahName', { number: surah.number })}
-                {name === null ? null : (
-                  <span lang={name.locale}>{` · ${name.text}`}</span>
-                )}
-              </TextLink>
-            </li>
-          );
-        })}
-      </ol>
-    </section>
-  );
-}
 
 function WorkFacts({
   locale,
@@ -354,49 +290,42 @@ function WorkFacts({
 }
 
 /**
- * One Translation or Tafsir: what it is, who made it, what its source
- * attributes — and, for a Tafsir, its entries in canonical order in bounded
- * pages, each linked to the Ayah it comments on with this Tafsir chosen.
+ * One Tafsir: what it is, who made it, what its source attributes — and its
+ * entries in canonical order in bounded pages, each linked to the Ayah it
+ * comments on with this Tafsir chosen.
  */
 export async function WorkDetailPage({
   locale,
   availability,
-  kind,
   work,
   offset,
 }: {
   readonly locale: Locale;
   readonly availability: QuranAvailability;
-  readonly kind: WorkKind;
   readonly work: PublicLayerWork;
   readonly offset: number;
 }) {
   const t = await getTranslations({ locale, namespace: 'quran' });
   const parts = await quranTrail(locale);
   const reader = quranReadRuntime().reader;
-  const path =
-    kind === 'translations'
-      ? translationPath(locale, work.slug)
-      : tafsirPath(locale, work.slug);
-  const [languages, names, surahs, entries] = await Promise.all([
+  const path = tafsirPath(locale, work.slug);
+  const [languages, names, entries] = await Promise.all([
     contentLanguages(),
     referenceNames(
       { personIds: work.contributors.map((c) => c.personId), topicIds: [] },
       locale,
     ),
-    kind === 'translations' ? readSurahs() : Promise.resolve([]),
-    kind === 'tafsir' ? reader.tafsirEntryPage(work.id, offset) : Promise.resolve(null),
+    reader.tafsirEntryPage(work.id, offset),
   ]);
   const language = languageOf(languages, work.languageCode);
-  const sectionTitle = t(`sections.${kind}`);
+  const sectionTitle = t('sections.tafsir');
   const trail = [
     { name: parts.home.text, path: parts.home.href },
     { name: parts.quran.text, path: parts.quran.href },
-    { name: sectionTitle, path: quranPath(locale, kind) },
+    { name: sectionTitle, path: quranPath(locale, 'tafsir') },
     { name: work.name, path },
   ];
-  const links =
-    entries === null ? null : pageLinks(entries.offset, QURAN_PAGE, entries.total);
+  const links = pageLinks(entries.offset, QURAN_PAGE, entries.total);
 
   return (
     <QuranFrame
@@ -433,68 +362,54 @@ export async function WorkDetailPage({
           t={t}
         />
 
-        {kind === 'translations' ? (
-          <ReadWithSurahs
-            locale={locale}
-            surahs={surahs}
-            layer="translation"
-            slug={work.slug}
-            t={t}
+        <section className="flex flex-col gap-4" aria-labelledby="tafsir-entries">
+          <SectionHeading>
+            <span id="tafsir-entries">{t('work.entries')}</span>
+          </SectionHeading>
+          {entries.items.length === 0 ? (
+            <EmptyState>{t('work.entriesEmpty')}</EmptyState>
+          ) : (
+            <ol aria-labelledby="tafsir-entries" className="flex flex-col gap-4">
+              {entries.items.map((entry) => (
+                <li key={entry.id} className="flex flex-col gap-2">
+                  <h3 className="font-semibold">
+                    <TextLink
+                      href={withReading(
+                        ayahPath(locale, { surah: entry.surah, ayah: entry.startAyah }),
+                        { ...NO_READING_CHOICE, tafsir: work.slug },
+                      )}
+                    >
+                      {segmentRange(t, entry)}
+                    </TextLink>
+                  </h3>
+                  <details className="rounded-control border border-border px-4 py-2">
+                    <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">
+                      {t('work.readEntry')}
+                    </summary>
+                    <div
+                      lang={language.code}
+                      dir={language.direction}
+                      className="flex max-w-[var(--measure-prose)] flex-col gap-3 pb-2"
+                    >
+                      {paragraphsOf(entry.text).map((paragraph, index) => (
+                        <p key={index} className="break-words">
+                          {paragraph}
+                        </p>
+                      ))}
+                    </div>
+                  </details>
+                </li>
+              ))}
+            </ol>
+          )}
+          <Pagination
+            label={t('work.entries')}
+            previous={links.previous === null ? null : offsetPathOf(path, links.previous)}
+            next={links.next === null ? null : offsetPathOf(path, links.next)}
+            previousLabel={t('previous')}
+            nextLabel={t('next')}
           />
-        ) : null}
-
-        {entries === null || links === null ? null : (
-          <section className="flex flex-col gap-4" aria-labelledby="tafsir-entries">
-            <SectionHeading>
-              <span id="tafsir-entries">{t('work.entries')}</span>
-            </SectionHeading>
-            {entries.items.length === 0 ? (
-              <EmptyState>{t('work.entriesEmpty')}</EmptyState>
-            ) : (
-              <ol aria-labelledby="tafsir-entries" className="flex flex-col gap-4">
-                {entries.items.map((entry) => (
-                  <li key={entry.id} className="flex flex-col gap-2">
-                    <h3 className="font-semibold">
-                      <TextLink
-                        href={withReading(
-                          ayahPath(locale, { surah: entry.surah, ayah: entry.startAyah }),
-                          { ...NO_READING_CHOICE, tafsir: work.slug },
-                        )}
-                      >
-                        {segmentRange(t, entry)}
-                      </TextLink>
-                    </h3>
-                    <details className="rounded-control border border-border px-4 py-2">
-                      <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">
-                        {t('work.readEntry')}
-                      </summary>
-                      <div
-                        lang={language.code}
-                        dir={language.direction}
-                        className="flex max-w-[var(--measure-prose)] flex-col gap-3 pb-2"
-                      >
-                        {paragraphsOf(entry.text).map((paragraph, index) => (
-                          <p key={index} className="break-words">
-                            {paragraph}
-                          </p>
-                        ))}
-                      </div>
-                    </details>
-                  </li>
-                ))}
-              </ol>
-            )}
-            <Pagination
-              label={t('work.entries')}
-              previous={
-                links.previous === null ? null : offsetPathOf(path, links.previous)
-              }
-              next={links.next === null ? null : offsetPathOf(path, links.next)}
-              previousLabel={t('previous')}
-              nextLabel={t('next')}
-            />
-          </section>
-        )}
+        </section>
       </article>
 
       <BreadcrumbData

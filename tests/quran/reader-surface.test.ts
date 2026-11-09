@@ -172,6 +172,7 @@ describe('the reader’s preferences, as this browser stores them', () => {
       translationScale: 0.9,
       leading: 'spacious',
       layout: 'side',
+      notes: 'inline',
     } as const;
     expect(readPreferences(writePreferences(stored))).toEqual(stored);
   });
@@ -330,6 +331,7 @@ const PAGES = [
       'data-shown': '1',
       'data-leading': 'comfortable',
       'data-layout': 'stacked',
+      'data-notes': 'request',
     },
     page: {
       slugs: ['ur-work', 'en-work'],
@@ -348,6 +350,7 @@ const PAGES = [
       'data-explicit-size': '',
       'data-leading': 'comfortable',
       'data-layout': 'stacked',
+      'data-notes': 'request',
     },
     page: {
       slugs: ['en-work'],
@@ -382,6 +385,9 @@ const STORED: readonly (string | null)[] = [
     translations: ['en-work', 'en-work', 'en-work', 'en-work', 'ur-work'],
   }),
   JSON.stringify({ arabicScale: 1.6, translationScale: 0.8 }),
+  // Quran Part 6: where translator's notes are read.
+  JSON.stringify({ notes: 'inline' }),
+  JSON.stringify({ notes: 'popover', mode: 'reading' }),
 ];
 
 describe('the boot script', () => {
@@ -397,6 +403,7 @@ describe('the boot script', () => {
         expect(reader.attributes.get('data-shown'), label).toBe(expected.shown);
         expect(reader.attributes.get('data-leading'), label).toBe(expected.leading);
         expect(reader.attributes.get('data-layout'), label).toBe(expected.layout);
+        expect(reader.attributes.get('data-notes'), label).toBe(expected.notes);
         const arabic = reader.properties.get('--quran-arabic-scale');
         expect(
           arabic === undefined ? (page.explicitSize ? null : 1) : Number(arabic),

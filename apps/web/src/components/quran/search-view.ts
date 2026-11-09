@@ -179,7 +179,9 @@ export const RESULT_LAYERS_MAX = 3;
  * order:
  *
  *   - with a translation language chosen, that language's texts;
- *   - otherwise every text the typed words mark — "the matching snippets";
+ *   - otherwise every text the typed words mark — "the matching snippets",
+ *     a translator's note among them only when the words mark the note
+ *     itself, labelled as the note it is (Quran Part 6);
  *   - otherwise, for a result found in a layer language, that language's
  *     texts (the engine matched a form the highlighter does not reproduce);
  *   - otherwise the reader's own interface language's texts, so a result
@@ -194,17 +196,33 @@ export function layersShown(
     readonly query: string;
   },
 ): readonly Layer[] {
+  // Texts before notes, each in work-slug order (a note keeps its own order).
+  const noteLast = (kind: string) => (kind === 'note' ? 1 : 0);
   const layers = [...record.layers].sort(
     (a, b) =>
+      noteLast(a.kind) - noteLast(b.kind) ||
       (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0) ||
       (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0),
   );
+  const ofLanguage = (layer: Layer, code: string) =>
+    layer.languageCode.toLowerCase() === code.toLowerCase();
+  // A language's texts are its translations and transliterations: a note is
+  // shown only where the words mark it.
   const inLanguage = (code: string) =>
-    layers.filter((layer) => layer.languageCode.toLowerCase() === code.toLowerCase());
+    layers.filter((layer) => layer.kind !== 'note' && ofLanguage(layer, code));
 
   let shown: Layer[];
   if (context.language !== null && context.language !== 'ar') {
-    shown = inLanguage(context.language);
+    const language = context.language;
+    shown = [
+      ...inLanguage(language),
+      ...layers.filter(
+        (layer) =>
+          layer.kind === 'note' &&
+          ofLanguage(layer, language) &&
+          marksIn(layer.text, context.query),
+      ),
+    ];
   } else {
     const marked =
       context.language === 'ar'

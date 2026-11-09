@@ -16,6 +16,8 @@ import {
   type QuranAvailability,
   type QuranRef,
   type TafsirEntryRecord,
+  type TranslationLayerText,
+  type TranslationNote,
 } from '@minhaj/contracts/quran';
 
 import {
@@ -45,6 +47,7 @@ import {
   TextInput,
   TextLink,
 } from '@/components/ui';
+import { inReadingOrder } from './compare';
 import { ContinueReading, QuickJumpForm } from './landing-islands';
 import {
   AboutThisText,
@@ -52,6 +55,7 @@ import {
   LayerBlock,
   LayerNotices,
   QuranFrame,
+  noteLabelsFor,
   READING_OPTIONS_ID,
   ReadingForm,
   SegmentPlayer,
@@ -116,7 +120,6 @@ import {
   READER_BOOT_SCRIPT,
   TRANSLATIONS_RENDERED_MAX,
   defaultShown,
-  primaryLanguage,
 } from './reader-preferences';
 import {
   QURAN_WINDOW,
@@ -245,6 +248,17 @@ function surahFacts(surah: PublicSurah, t: QuranTranslator): string {
 }
 
 /** A text from a layer, by Ayah number. */
+/** Each Ayah's translator's notes in one work, by Ayah. */
+function notesByAyah(
+  texts: readonly TranslationLayerText[],
+): ReadonlyMap<number, readonly TranslationNote[]> {
+  return new Map(
+    texts.flatMap((entry) =>
+      entry.notes.length === 0 ? [] : [[entry.ayah, entry.notes]],
+    ),
+  );
+}
+
 function byAyah(texts: readonly LayerText[]): ReadonlyMap<number, string> {
   return new Map(texts.map((entry) => [entry.ayah, entry.text]));
 }
@@ -576,6 +590,8 @@ interface TranslationLayer {
   /** The work's place among the rendered translations: the reader shows it by this. */
   readonly index: number;
   readonly texts: ReadonlyMap<number, string>;
+  /** Each Ayah's translator's notes in this work (Quran Part 6). */
+  readonly notes: ReadonlyMap<number, readonly TranslationNote[]>;
 }
 
 interface AyahLayers {
@@ -619,18 +635,10 @@ function translationSet(
   const chosen = context.chosen.translation;
   if (chosen !== null) return { works: [chosen], fixed: true };
   if (request.translation.state !== 'none') return { works: [], fixed: false };
-  const rank = (code: string) => {
-    const language = primaryLanguage(code);
-    return language === locale ? 0 : language === 'ur' ? 1 : language === 'en' ? 2 : 3;
-  };
-  const works = context.options.translations
-    .map((work, order) => ({ work, order }))
-    .sort(
-      (a, b) =>
-        rank(a.work.languageCode) - rank(b.work.languageCode) || a.order - b.order,
-    )
-    .map((entry) => entry.work)
-    .slice(0, TRANSLATIONS_RENDERED_MAX);
+  const works = inReadingOrder(context.options.translations, locale).slice(
+    0,
+    TRANSLATIONS_RENDERED_MAX,
+  );
   return { works, fixed: false };
 }
 
@@ -673,6 +681,7 @@ async function layersFor(
       index,
       language: languageOf(languages, work.languageCode),
       texts: byAyah(translationTexts[index] ?? []),
+      notes: notesByAyah(translationTexts[index] ?? []),
     })),
     transliteration:
       transliteration === null
@@ -986,7 +995,9 @@ function AyahItem({
   const tafsir = tafsirLayer?.placed.get(ayah.ayah) ?? [];
   const translations = layers.translations.flatMap((layer) => {
     const text = layer.texts.get(ayah.ayah);
-    return text === undefined ? [] : [{ layer, text }];
+    return text === undefined
+      ? []
+      : [{ layer, text, notes: layer.notes.get(ayah.ayah) ?? [] }];
   });
 
   return (
@@ -1042,7 +1053,7 @@ function AyahItem({
         )}
         {translations.length === 0 ? null : (
           <div className="quran-translations">
-            {translations.map(({ layer, text }) => (
+            {translations.map(({ layer, text, notes }) => (
               <TranslationText
                 key={layer.work.id}
                 id={`translation-${key}${layer.index === 0 ? '' : `-${String(layer.index + 1)}`}`}
@@ -1051,6 +1062,8 @@ function AyahItem({
                 text={text}
                 language={layer.language}
                 index={layer.index}
+                notes={notes}
+                noteLabels={noteLabelsFor(locale, t, notes.length)}
               />
             ))}
           </div>
@@ -1216,6 +1229,13 @@ async function controlLabels(locale: Locale): Promise<ReaderControlLabels> {
       stacked: t('reader.layout.stacked'),
       side: t('reader.layout.side'),
     },
+    notes: {
+      label: t('notes.display.label'),
+      request: t('notes.display.request'),
+      inline: t('notes.display.inline'),
+      help: t('notes.display.help'),
+    },
+    noteTitle: t('notes.title'),
     reset: t('reader.reset'),
     kept: t('reader.kept'),
     moreOptions: t('reader.moreOptions'),
@@ -1304,6 +1324,7 @@ async function ReadingFrame({
       {...(explicitSize ? { 'data-explicit-size': '' } : {})}
       data-leading="comfortable"
       data-layout="stacked"
+      data-notes="request"
       suppressHydrationWarning
       className={`quran-reader quran-size-${request.size} flex min-w-0 flex-col`}
     >
@@ -2238,6 +2259,7 @@ export async function AyahPage({
             <div className="quran-translations">
               {layers.translations.map((layer) => {
                 const text = layer.texts.get(ref.ayah);
+                const notes = layer.notes.get(ref.ayah) ?? [];
                 return text === undefined ? null : (
                   <TranslationText
                     key={layer.work.id}
@@ -2251,6 +2273,8 @@ export async function AyahPage({
                     text={text}
                     language={layer.language}
                     index={layer.index}
+                    notes={notes}
+                    noteLabels={noteLabelsFor(locale, t, notes.length)}
                   />
                 );
               })}

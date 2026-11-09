@@ -656,6 +656,72 @@ body:has([data-quran-dock]) {
   cursor: pointer;
 }
 
+/*
+ * QURAN PART 6 — THE TRANSLATOR'S NOTES. A mark a note answers is a link in
+ * the accent; its target is widened by inline padding that a negative margin
+ * gives back, and an inline box's block padding never opens the line, so the
+ * text does not move and the mark is a comfortable target (WCAG 2.5.8). The
+ * notes follow the attribution in a native disclosure, in the translation's
+ * own face. "Under every Ayah" (`data-notes="inline"`, set before the first
+ * paint) shows a disclosure's contents at once where the browser lets a
+ * stylesheet reach them, and the island opens every disclosure in any case.
+ */
+.quran-note-ref {
+  border-radius: 0.375rem;
+  margin-inline: -0.5em;
+  padding: 0.3em 0.5em;
+  font-weight: 700;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+.quran-note-ref:hover {
+  background-color: var(--color-accent-surface);
+}
+.quran-notes {
+  border-inline-start: 2px solid var(--color-accent-rule);
+  padding-inline-start: 0.875rem;
+}
+.quran-notes-summary {
+  display: inline-flex;
+  min-height: 2.75rem;
+  cursor: pointer;
+  align-items: center;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--color-foreground-muted);
+}
+.quran-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding-block-end: 0.5rem;
+}
+.quran-note {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: calc(
+    0.92 * var(--quran-translation-base, 1.0625rem) * var(--quran-translation-scale, 1)
+  );
+  line-height: calc(1.6 * var(--quran-leading, 1));
+}
+.quran-note:lang(ur) {
+  line-height: calc(2.1 * var(--quran-leading, 1));
+}
+.quran-note:focus-visible {
+  outline-offset: 0.25rem;
+}
+.quran-note-marker {
+  font-weight: 700;
+  color: var(--color-accent);
+}
+.quran-reader[data-notes='inline'] .quran-notes::details-content {
+  content-visibility: visible;
+}
+.quran-note-dialog:lang(ur) {
+  line-height: 2.1;
+}
+
 /* Copy, Share, Save-in-place and the reading-mode Ayah button need script. */
 .quran-reader:not([data-enhanced]) .quran-ayah-tool,
 .quran-ayah-open {

@@ -288,7 +288,7 @@ it reserves is unpublished. No route changes.
 | `/quran/page/{pageNumber}` | One mushaf page, as text (Quran Part 1) — 404 for a page no public Ayah carries |
 | `/quran/juz` · `/quran/juz/{juzNumber}` | Juz index (`?q` filter by number or hizb — Quran Part 3) and view — `?hizb` and `?part` name the reading window (Quran Part 3; the Phase-18 `?offset` paging is historical) |
 | `/quran/search` | Quran search — `noindex`; `?q`, `?page`, and the filters `?surah`, `?juz`, `?language` (Quran Part 4) |
-| `/quran/translations` · `/{slug}` | Translation works |
+| `/quran/translations` · `/{slug}` · `/quran/translations/compare` | Translation works, each with its counted coverage and translator's notes; `compare` (`?surah`, `?ayah`) shows one Ayah in every public translation (Quran Part 6) — a reserved address no translation may take as its slug |
 | `/quran/tafsir` · `/{slug}` | Tafsir works |
 | `/quran/transliteration` · `/quran/tajweed` · `/quran/tajweed/{rule}` | Study aids |
 | `/quran/recitations` · `/quran/recitations/{reciter}` | **Recitations — owned by Quran** (DOMAIN_MODEL.md §8.1) |
@@ -525,6 +525,29 @@ route. Every corpus-state, `noindex`, attribution and fixture rule above is unch
   them; a value no recitation carries matches none. **`/quran/recitations/{reciter}`** lists each
   recitation's Surahs, each with Play and "Read and listen" (`/quran/surah/{n}?reciter=`), and keeps
   the native players collapsed as the no-script fallback. Nothing is downloadable anywhere.
+
+**Quran Part 6 — translations and the translator's notes (DELIVERY_PLAN.md, the Quran Part 6
+record; DOMAIN_MODEL.md §8.6).** One new page route; every corpus-state, `noindex`, attribution and
+fixture rule above is unchanged.
+
+- **Reading pages** (Surah, Ayah, mushaf page, Juz): each mark a translator's note answers is a link
+  to that note (the mark itself, exactly as written, is its only content, so the text, selection and
+  Copy are unchanged); the Ayah's notes follow the work's attribution in a native disclosure, in the
+  translation's language and direction. With script a mark opens its note in a dialog, and the
+  reading settings offer "Show under every Ayah" (`data-notes`, remembered in this browser, set
+  before the first paint); **without JavaScript** the notes are in the page and a mark jumps to its
+  note.
+- **`/quran/translations`** — a card per public translation: name, language, credited People,
+  description, attribution, "{n} of {total} Surahs" (and how many in part), the number of
+  translator's notes, "Read with this translation" and "Compare translations".
+  **`/quran/translations/{slug}`** — what is recorded of the work (no biography is written here),
+  its counted coverage and notes, and every Surah of the corpus with its coverage and notes, linked to
+  the reader with the work chosen.
+- **`/quran/translations/compare?surah=&ayah=`** — the Ayah's Arabic once, and every public
+  translation of it beneath (side by side on a wide screen) with its notes open; a GET form chooses
+  the Ayah and plain links reach the neighbours, so it is complete without script; an Ayah the
+  corpus does not hold is said to be missing and nothing else is shown. Canonical address: the bare
+  view.
 
 ### 3.4 Hadith
 
@@ -1074,7 +1097,7 @@ At `/admin` (English) and `/ur/admin` · `/ar/admin` (§1.1).
 |---|---|
 | Dashboard | `/admin` |
 | Editorial | `/admin/editorial/{articles\|pages\|news\|press-releases\|statements\|media-coverage\|events\|collections\|queue\|correspondence}` — **correspondence** covers private ContactInquiry and Feedback triage (DOMAIN_MODEL.md §7.5); `news`, `press-releases`, `statements` and `media-coverage` delivered in Phase 13, `events` in Phase 14, `collections` in Phase 15, and `queue` lists every workflow-governed aggregate |
-| Quran | `/admin/quran/{surahs\|ayat\|translations\|tafsir\|transliterations\|recitations\|tajweed}` — delivered in Phase 18; `tajweed` holds TajweedRule guidance. Canonical text is read-only; the correction flow on an Ayah appears only to `quran.editCanonical` holders after a `quran-canonical-edit` step-up. No corpus import surface exists. Quran Part 5: `recitations` names each recitation's language (a required choice on its form) and its audio source — "Uploaded files" or "Streamed from cdn.mp3quran.net", the stream's provider folder shown read-only, never a field — and each segment's timing ("Timed: n of m ayat" or "Not timed"); a streamed recitation offers no upload and no new segment (its whole-Surah segments come only from the operator's import) |
+| Quran | `/admin/quran/{surahs\|ayat\|translations\|tafsir\|transliterations\|recitations\|tajweed}` — delivered in Phase 18; `tajweed` holds TajweedRule guidance. Canonical text is read-only; the correction flow on an Ayah appears only to `quran.editCanonical` holders after a `quran-canonical-edit` step-up. No corpus import surface exists. Quran Part 5: `recitations` names each recitation's language (a required choice on its form) and its audio source — "Uploaded files" or "Streamed from cdn.mp3quran.net", the stream's provider folder shown read-only, never a field — and each segment's timing ("Timed: n of m ayat" or "Not timed"); a streamed recitation offers no upload and no new segment (its whole-Surah segments come only from the operator's import). Quran Part 6: `translations/{id}?surah=` shows each Ayah's translator's notes beneath its text — to `quran.administer` a marker field and a textarea per note and one empty slot to add one, saved with the text (same version and audit; a note that answers no mark is refused); read-only to `quran.read` |
 | Hadith | `/admin/hadith/{collections\|books\|chapters\|records\|commentary\|sciences}` — delivered in Phase 19; `sciences` holds HadithScience study material. Registered source systems, editions and activation are shown read-only (operator-only). Records are read-only by default; structure and record creation, correction, verification and citation mapping appear only to `hadith.editCanonical` holders after a `hadith-canonical-edit` step-up. Conflict evidence is shown with no resolve action. No corpus import surface exists |
 | Fatwa | `/admin/fatwa/{questions\|assignment\|drafts\|review\|published\|categories}` — delivered in Phase 20. `questions` and `assignment` under `question.receive` (a question's private text only on its detail page, recorded as an audited access); `drafts/{questionId}` under `fatwa.answer` for the current assignee only; `review/{fatwaId}` and `published/{fatwaId}` under `fatwa.publish`, publication and withdrawal behind a `fatwa-publication` step-up and never offered to the revision's author; `categories` readable by any Fatwa key and maintained under `fatwa.publish`. No import, bulk or generation surface exists |
 | Library | `/admin/library/{works\|editions\|translations\|research\|publications\|magazines\|encyclopedias\|sale-points}` — research papers at `research/papers`, and a Magazine's issues beneath it at `magazines/{id}/issues/{issueId}` (Phase 9) |

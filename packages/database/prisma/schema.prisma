@@ -4107,10 +4107,30 @@ model QuranTranslationText {
 
   translation QuranTranslation @relation(fields: [translationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   ayah        Ayah             @relation(fields: [surahNumber, ayahNumber], references: [surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction)
+  notes       QuranTranslationNote[]
 
   @@id([translationId, surahNumber, ayahNumber])
   @@index([surahNumber, ayahNumber], map: "QuranTranslationText_ayah_idx")
   @@map("QuranTranslationText")
+}
+
+/// A translator's own note on one Ayah of a Translation, exactly as its source
+/// wrote it: the marker it opens with and its words, numbered 1..n in the
+/// source's order beside the text it belongs to. Written once with its text's
+/// save and never edited; replaced whole (Quran Part 6).
+model QuranTranslationNote {
+  translationId String @db.NVarChar(36)
+  surahNumber   Int
+  ayahNumber    Int
+  ordinal       Int
+  /// '' | a run of one to four "٭"/"*" with an optional ":" | "n:-"
+  marker        String @db.NVarChar(8)
+  text          String @db.NVarChar(Max)
+
+  translationText QuranTranslationText @relation(fields: [translationId, surahNumber, ayahNumber], references: [translationId, surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction, map: "QuranTranslationNote_text_fkey")
+
+  @@id([translationId, surahNumber, ayahNumber, ordinal])
+  @@map("QuranTranslationNote")
 }
 
 model QuranTransliteration {

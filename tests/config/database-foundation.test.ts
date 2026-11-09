@@ -281,6 +281,8 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'QuranTranslation',
       'QuranTranslationContributor',
       'QuranTranslationText',
+      // Quran Part 6 — a translation text's translator's notes.
+      'QuranTranslationNote',
       'QuranTransliteration',
       'QuranTransliterationText',
       'QuranTafsir',

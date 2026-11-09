@@ -138,14 +138,32 @@ const CORRECTED = `NON_QURAN_FIXTURE_CORRECTED_1_1 ${NEUTRAL} ${BEH_KASRA}`;
 /** The same text with the kasra replaced by a fatha: one code point apart. */
 const NEAR_MISS = `NON_QURAN_FIXTURE_CORRECTED_1_1 ${NEUTRAL} ${BEH_FATHA}`;
 
+/** 2:1 carries the mark "*" its translator's note answers (Quran Part 6). */
 const translationText = (surah: number, ayah: number) =>
   `NON_QURAN_FIXTURE_TRANSLATION_${String(surah)}_${String(ayah)}${
     surah === 1 && ayah === 2 ? ` ${WORD}` : ''
+  }${surah === 2 && ayah === 1 ? '*' : ''}`;
+
+/**
+ * A second, Urdu-language translation's text: a sentinel and neutral Urdu ("test
+ * text"); 2:1 carries the Urdu mark "٭" its note answers.
+ */
+const urduText = (surah: number, ayah: number) =>
+  `NON_QURAN_FIXTURE_URDU_${String(surah)}_${String(ayah)} آزمائشی متن${
+    surah === 2 && ayah === 1 ? '٭' : ''
   }`;
 
-/** A second, Urdu-language translation's text: a sentinel and neutral Urdu ("test text"). */
-const urduText = (surah: number, ayah: number) =>
-  `NON_QURAN_FIXTURE_URDU_${String(surah)}_${String(ayah)} آزمائشی متن`;
+/**
+ * Quran Part 6: the fixture translator's notes — invented sentinels, never a
+ * real note. 2:1's answer the marks above; 2:2's English note is on the Ayah
+ * as a whole (its text carries no mark), in two paragraphs.
+ */
+const NOTE = {
+  en21: 'NON_QURAN_FIXTURE_NOTE_EN_2_1 an invented note',
+  en22: 'NON_QURAN_FIXTURE_NOTE_EN_2_2 a note on the whole Ayah',
+  en22second: 'NON_QURAN_FIXTURE_NOTE_EN_2_2 its second paragraph',
+  ur21: 'NON_QURAN_FIXTURE_NOTE_UR_2_1 آزمائشی حاشیہ',
+} as const;
 
 const ids = {
   source: randomUUID(),
@@ -440,6 +458,10 @@ async function seedWorks(): Promise<void> {
     INSERT INTO [dbo].[QuranTranslation] ([id],[slug],[languageCode],[name],[description],[attribution],[state],[version],[createdAt],[updatedAt]) VALUES
       (N'${ids.urdu}', N'${slug.urdu}', N'ur', ${n(NAME.urdu)}, N'NON_QURAN_FIXTURE browser Urdu-language translation.', NULL, N'draft', 1, SYSUTCDATETIME(), SYSUTCDATETIME());
     INSERT INTO [dbo].[QuranTranslationText] ([translationId],[surahNumber],[ayahNumber],[text]) VALUES ${urduRows};
+    INSERT INTO [dbo].[QuranTranslationNote] ([translationId],[surahNumber],[ayahNumber],[ordinal],[marker],[text]) VALUES
+      (N'${ids.translation}', 2, 1, 1, N'*', ${n(NOTE.en21)}),
+      (N'${ids.translation}', 2, 2, 1, N'*', ${n(`${NOTE.en22}\n\n${NOTE.en22second}`)}),
+      (N'${ids.urdu}', 2, 1, 1, N'٭', ${n(NOTE.ur21)});
     UPDATE [dbo].[QuranTranslation] SET [state]=N'published', [sourceId]=N'${ids.source}', [publishedAt]=SYSUTCDATETIME(), [version]=2, [updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${ids.urdu}';
 
     INSERT INTO [dbo].[QuranTransliteration] ([id],[slug],[languageCode],[name],[scheme],[state],[version],[createdAt],[updatedAt]) VALUES
@@ -1642,6 +1664,229 @@ test.describe('a fixture corpus', () => {
     ).toHaveText('NON_QURAN_FIXTURE_TRANSLITERATION_1_1');
   });
 
+  test('Part 6: a translator’s note opens from its mark, shows under every Ayah on request, and needs no script', async ({
+    page,
+    browser,
+  }, testInfo) => {
+    test.setTimeout(240_000);
+    await visitFixture(page, '/quran/surah/2');
+    await readerReady(page);
+    const work = (ayah: number) =>
+      page
+        .locator(`#ayah-2-${String(ayah)}`)
+        .locator(`[data-translation-work="${NAME.translation}"]`);
+
+    // The translation is still exactly the stored text; its mark is the link.
+    await expect(work(1).locator('[data-translation-text]')).toHaveText(
+      translationText(2, 1),
+    );
+    const mark = work(1).getByRole('link', { name: '* Translator’s note 1' });
+    await expect(mark).toHaveText('*');
+    const notes = work(1).locator('details[data-translation-notes]');
+    await expect(notes).not.toHaveAttribute('open', '');
+    await expect(work(1).getByText(NOTE.en21)).toBeHidden();
+
+    // The mark opens its note in a dialog, and closing it returns to the mark.
+    await mark.click();
+    const dialog = page.getByRole('dialog', { name: 'Translator’s note' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText(NOTE.en21);
+    await expect(dialog).toContainText('Surah 2, Ayah 1');
+    await expect(dialog).toContainText(NAME.translation);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(mark).toBeFocused();
+
+    // A note on the Ayah as a whole is listed, never placed in the text.
+    await expect(work(2).locator('[data-translation-text] a')).toHaveCount(0);
+    const whole = work(2).locator('details[data-translation-notes] summary');
+    await expect(whole).toHaveText('Translator’s note');
+    await whole.click();
+    await expect(work(2).getByText(NOTE.en22second)).toBeVisible();
+
+    // Notes under every Ayah, from the settings, kept across a reload.
+    await page.getByRole('button', { name: 'Settings' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Reading settings' });
+    await sheet.getByRole('radio', { name: 'Show under every Ayah' }).check();
+    await page.keyboard.press('Escape');
+    await expect(notes).toHaveAttribute('open', '');
+    await expect(work(1).getByText(NOTE.en21)).toBeVisible();
+    await page.reload();
+    await readerReady(page);
+    await expect(page.locator('#quran-reader')).toHaveAttribute('data-notes', 'inline');
+    await expect(notes).toHaveAttribute('open', '');
+    await expect(work(1).getByText(NOTE.en21)).toBeVisible();
+
+    // No sideways scroll at 320px and no serious finding, the notes open.
+    for (const target of ['/quran/surah/2', '/ur/quran/surah/2']) {
+      await page.setViewportSize({ width: 320, height: 800 });
+      await page.goto(target);
+      await readerReady(page);
+      const { overflow, offenders } = await overflowOf(page);
+      expect(overflow, `${target}: ${offenders.join(', ')}`).toBeLessThanOrEqual(0);
+      await page.setViewportSize({ width: 1280, height: 800 });
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      const blocking = results.violations.filter(
+        (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+      );
+      for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+        testInfo.annotations.push({
+          type: 'axe',
+          description: `${target}: ${finding.id} (${String(finding.impact)})`,
+        });
+      expect(
+        blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+        target,
+      ).toEqual([]);
+    }
+
+    // Back to notes on request: the disclosures close again.
+    await page.goto('/quran/surah/2');
+    await readerReady(page);
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await sheet.getByRole('radio', { name: 'Open from their marks' }).check();
+    await page.keyboard.press('Escape');
+    await expect(notes).not.toHaveAttribute('open', '');
+
+    // In Urdu, the Urdu translation's note reads right to left, in its words.
+    await visitFixture(page, '/ur/quran/surah/2', 'ur');
+    await readerReady(page);
+    const urdu = page
+      .locator('#ayah-2-1')
+      .locator(`[data-translation-work="${NAME.urdu}"]`);
+    await expect(urdu.locator('[data-translation-text]')).toHaveText(urduText(2, 1));
+    await expect(urdu.locator('a[data-note-ref]')).toHaveText('٭');
+    await expect(urdu.locator('ol.quran-notes-list')).toHaveAttribute('dir', 'rtl');
+    await expect(urdu.locator('ol.quran-notes-list')).toHaveAttribute('lang', 'ur');
+    await urdu.locator('a[data-note-ref]').click();
+    await expect(page.getByRole('dialog')).toContainText(NOTE.ur21);
+    await page.keyboard.press('Escape');
+
+    // Without script: the notes are in the page, and a mark jumps to its note.
+    const noScript = await browser.newContext({
+      baseURL: baseUrl(),
+      javaScriptEnabled: false,
+    });
+    contexts.push(noScript);
+    const plain = await noScript.newPage();
+    expect((await plain.goto('/quran/surah/2'))?.status()).toBe(200);
+    const plainMark = plain
+      .locator(`#ayah-2-1 [data-translation-work="${NAME.translation}"]`)
+      .locator('a[data-note-ref]');
+    const target = (await plainMark.getAttribute('href')) ?? '';
+    expect(target).toMatch(/^#translation-2-1(-\d+)?-note-1$/);
+    await expect(plain.locator(target)).toHaveCount(1);
+    await expect(plain.locator(target)).toContainText(NOTE.en21);
+    await plainMark.click();
+    await expect(plain).toHaveURL(new RegExp(`${target}$`));
+    await expect(plain.locator(target)).toBeVisible();
+  });
+
+  test('Part 6: the translations — counted coverage and notes, a work Surah by Surah, and one Ayah compared across every translation', async ({
+    page,
+    browser,
+  }, testInfo) => {
+    test.setTimeout(240_000);
+    await visitFixture(page, '/quran/translations');
+    const card = page.getByRole('article', { name: NAME.translation });
+    await expect(card).toContainText('3 of 3 Surahs');
+    await expect(card).toContainText('2 notes');
+    await expect(page.getByRole('article', { name: NAME.urdu })).toContainText('1 note');
+    await expect(
+      card.getByRole('link', { name: 'Read with this translation' }),
+    ).toHaveAttribute('href', `/quran/surah/1?translation=${slug.translation}`);
+    await expect(
+      card.getByRole('link', { name: 'Compare translations' }),
+    ).toHaveAttribute('href', '/quran/translations/compare?surah=1&ayah=1');
+
+    // One work: what it covers, Surah by Surah, each read with the work.
+    await visitFixture(page, `/quran/translations/${slug.translation}`);
+    const coverage = page.locator('ol[aria-labelledby="work-coverage"]');
+    await expect(coverage.getByRole('listitem')).toHaveCount(3);
+    await expect(coverage.getByRole('listitem').nth(1)).toContainText(
+      'Complete · 2 notes',
+    );
+    await expect(
+      coverage.getByRole('link', { name: /NON_QURAN_FIXTURE Surah Two/ }),
+    ).toHaveAttribute('href', `/quran/surah/2?translation=${slug.translation}`);
+
+    // The compare view: the Arabic once, every translation beneath, notes open.
+    await visitFixture(page, '/quran/translations/compare?surah=2&ayah=1');
+    const compared = page.locator('article[data-ayah="2:1"]');
+    await expect(compared.locator('p[data-ayah-arabic]')).toHaveCount(1);
+    await expect(compared.locator('p[data-ayah-arabic]')).toHaveText(canonicalText(2, 1));
+    await expect(compared.locator('[data-translation-work]')).toHaveCount(2);
+    await expect(compared.getByText(NOTE.en21)).toBeVisible();
+    await expect(compared.getByText(NOTE.ur21)).toBeVisible();
+    await expect(
+      compared.locator(`[data-translation-work="${NAME.urdu}"] ol`),
+    ).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByRole('link', { name: 'Next Ayah (2:2)' })).toHaveAttribute(
+      'href',
+      '/quran/translations/compare?surah=2&ayah=2',
+    );
+    await expect(page.getByRole('link', { name: 'Previous Ayah (1:3)' })).toHaveAttribute(
+      'href',
+      '/quran/translations/compare?surah=1&ayah=3',
+    );
+    // An Ayah the text does not hold is said to be missing, never replaced.
+    await visitFixture(page, '/quran/translations/compare?surah=2&ayah=9');
+    await expect(page.getByRole('main')).toContainText(
+      'There is no Ayah 2:9 in the text.',
+    );
+    await expect(page.locator('p[data-ayah-arabic]')).toHaveCount(0);
+
+    // Without script, the GET form chooses the Ayah.
+    const noScript = await browser.newContext({
+      baseURL: baseUrl(),
+      javaScriptEnabled: false,
+    });
+    contexts.push(noScript);
+    const plain = await noScript.newPage();
+    await plain.goto('/quran/translations/compare');
+    await plain.locator('#compare-surah').selectOption('3');
+    await plain.locator('#compare-ayah').fill('42');
+    await plain.getByRole('button', { name: 'Show' }).click();
+    await plain.waitForURL(/compare\?surah=3&ayah=42$/);
+    await expect(plain.locator('article[data-ayah="3:42"]')).toContainText(
+      translationText(3, 42),
+    );
+
+    // Right to left in Urdu and Arabic, no sideways scroll at 320px, and no
+    // serious accessibility finding on the listing, a work or the compare view.
+    for (const target of [
+      '/ur/quran/translations',
+      `/ar/quran/translations/${slug.urdu}`,
+      '/ur/quran/translations/compare?surah=2&ayah=1',
+      '/quran/translations/compare?surah=2&ayah=1',
+    ]) {
+      await page.setViewportSize({ width: 320, height: 800 });
+      await page.goto(target);
+      if (!target.startsWith('/quran'))
+        await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+      const { overflow, offenders } = await overflowOf(page);
+      expect(overflow, `${target}: ${offenders.join(', ')}`).toBeLessThanOrEqual(0);
+      await page.setViewportSize({ width: 1280, height: 800 });
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      const blocking = results.violations.filter(
+        (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+      );
+      for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+        testInfo.annotations.push({
+          type: 'axe',
+          description: `${target}: ${finding.id} (${String(finding.impact)})`,
+        });
+      expect(
+        blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+        target,
+      ).toEqual([]);
+    }
+  });
+
   test('a topic view lists its ayat and points at the Topic hub', async ({ page }) => {
     await visitFixture(page, `/quran/topics/${slug.topic}`);
     const ayah = page.getByRole('article', { name: 'Surah 1, Ayah 2' });
@@ -2674,7 +2919,10 @@ test.describe('Quran administration', () => {
     ).toHaveCount(0);
     await expect(reader.locator('textarea')).toHaveCount(0);
 
-    // Layered works are read, not edited.
+    // Layered works are read, not edited — translator's notes too (Part 6).
+    await reader.goto(`/admin/quran/translations/${ids.translation}?surah=2`);
+    await expect(reader.getByRole('main')).toContainText(NOTE.en21);
+    await expect(reader.locator('#note-1-1-text')).toHaveCount(0);
     await reader.goto(`/admin/quran/translations/${ids.translation}?surah=1`);
     await expect(reader.getByRole('main')).toContainText(translationText(1, 2));
     await expect(reader.getByRole('button', { name: 'Save' })).toHaveCount(0);
@@ -2716,6 +2964,29 @@ test.describe('Quran administration', () => {
     await expect(
       page.getByRole('status').filter({ hasText: 'Saved.' }).first(),
     ).toBeVisible();
+
+    // Quran Part 6: a translator's note beside its text — refused while it
+    // answers no mark the text carries, saved once the text carries it.
+    const slot = page.locator('fieldset', { has: page.locator('#note-1-1-text') });
+    await slot.getByText('Add a translator’s note').click();
+    await page.locator('#note-1-1-marker').fill('1:-');
+    await page.locator('#note-1-1-text').fill('NON_QURAN_FIXTURE_ADMIN_NOTE_1_1');
+    await page.getByRole('button', { name: 'Save changed texts' }).click();
+    await expect(page.getByRole('main')).toContainText(
+      'A translator’s note must answer a mark in its Ayah’s text',
+    );
+    await page.locator('#text-1').fill('NON_QURAN_FIXTURE_ADMIN_TRANSLATION_1_1 (1)');
+    await page.getByRole('button', { name: 'Save changed texts' }).click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Saved.' }).first(),
+    ).toBeVisible();
+    await expect
+      .poll(async () =>
+        sql.query<{ marker: string; text: string }>(
+          `SELECT [marker],[text] FROM [dbo].[QuranTranslationNote] WHERE [translationId]=N'${id}';`,
+        ),
+      )
+      .toEqual([{ marker: '1:-', text: 'NON_QURAN_FIXTURE_ADMIN_NOTE_1_1' }]);
 
     // Publish it.
     await page.getByRole('button', { name: 'Publish', exact: true }).click();

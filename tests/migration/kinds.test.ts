@@ -598,6 +598,7 @@ const QURAN: ParsedQuranTranslation = Object.freeze({
     { ayah: 1, text: ' \tاللہ کے نام سے شروع  ' },
     { ayah: 2, text: 'سب تعریفیں اللہ ہی کے لئے ہیں' },
   ],
+  notes: null,
 });
 
 describe('quran.translation (review-only)', () => {
@@ -613,6 +614,7 @@ describe('quran.translation (review-only)', () => {
         { ayah: 1, text: 'اللہ کے نام سے شروع' },
         { ayah: 2, text: 'سب تعریفیں اللہ ہی کے لئے ہیں' },
       ],
+      notes: null,
       legacyIdentifier: 'iuq-1',
     });
     expect(result.title).toBe('Irfan-ul-Quran (Urdu) · 1');
@@ -688,6 +690,79 @@ describe('quran.translation (review-only)', () => {
     const result = run({ ...QURAN, ayat: [{ ayah: 1, text }] });
     expect(result.personalData).toBe(true);
     expect(payloadOf<{ ayat: { text: string }[] }>(result).ayat[0]?.text).toBe(text);
+  });
+
+  it('keeps every translator’s note exactly, its mark as written (Quran Part 6)', () => {
+    const result = run({
+      ...QURAN,
+      notes: [
+        { ayah: 1, marker: '٭', text: ' حاشیہ  اول\n\nدوسرا پیراگراف ' },
+        { ayah: 2, marker: '', text: 'Synthetic unmarked note' },
+        { ayah: 2, marker: '1:-', text: 'Synthetic entry' },
+      ],
+    });
+    expect(result.issues).toEqual([]);
+    expect(payloadOf<{ notes: unknown }>(result).notes).toEqual([
+      { ayah: 1, marker: '٭', text: 'حاشیہ  اول\n\nدوسرا پیراگراف' },
+      { ayah: 2, marker: '', text: 'Synthetic unmarked note' },
+      { ayah: 2, marker: '1:-', text: 'Synthetic entry' },
+    ]);
+    // An adapter that reads no notes stages none — not an empty list.
+    expect(payloadOf<{ notes: unknown }>(run(QURAN)).notes).toBeNull();
+    expect(payloadOf<{ notes: unknown }>(run({ ...QURAN, notes: [] })).notes).toEqual([]);
+  });
+
+  it('names a note of an ayah not carried, or with no words — never re-placing it', () => {
+    for (const ayah of [3, null]) {
+      const result = run({
+        ...QURAN,
+        notes: [{ ayah, marker: '٭', text: 'Synthetic note' }],
+      });
+      expect(result.issues).toEqual(['ayah-invalid']);
+      expect(payloadOf<{ notes: unknown }>(result).notes).toEqual([]);
+    }
+    const empty = run({ ...QURAN, notes: [{ ayah: 1, marker: '٭', text: ' \n ' }] });
+    expect(empty.issues).toEqual(['body-missing']);
+    // A mark the staged shape does not know fails the strict schema.
+    const odd = run({ ...QURAN, notes: [{ ayah: 1, marker: '†', text: 'Synthetic' }] });
+    expect(odd.issues).toEqual(['payload-invalid']);
+  });
+
+  it('flags — but never alters — personal-data-like text in a note', () => {
+    const text = 'Call 0300 1234567';
+    const result = run({ ...QURAN, notes: [{ ayah: 1, marker: '٭', text }] });
+    expect(result.personalData).toBe(true);
+    expect(payloadOf<{ notes: { text: string }[] }>(result).notes[0]?.text).toBe(text);
+  });
+
+  it('reads a payload staged before notes were read as reading none', () => {
+    const schema = STAGED_PAYLOAD_SCHEMAS['quran.translation'];
+    const before = {
+      kind: 'quran.translation',
+      work: 'Synthetic',
+      languageCode: 'ur',
+      surah: 1,
+      ayat: [{ ayah: 1, text: 'Synthetic' }],
+      legacyIdentifier: null,
+    };
+    expect(schema.parse(before)).toMatchObject({ notes: null });
+    const note = (ayah: number) => ({ ayah, marker: '٭', text: 'Synthetic' });
+    const withAyat = {
+      ...before,
+      ayat: [...before.ayat, { ayah: 2, text: 'Synthetic' }],
+    };
+    expect(schema.safeParse({ ...withAyat, notes: [note(1), note(2)] }).success).toBe(
+      true,
+    );
+    // Out of place: an ayah not carried, out of ayah order, or more than twenty.
+    expect(schema.safeParse({ ...withAyat, notes: [note(3)] }).success).toBe(false);
+    expect(schema.safeParse({ ...withAyat, notes: [note(2), note(1)] }).success).toBe(
+      false,
+    );
+    expect(
+      schema.safeParse({ ...withAyat, notes: Array.from({ length: 21 }, () => note(1)) })
+        .success,
+    ).toBe(false);
   });
 });
 

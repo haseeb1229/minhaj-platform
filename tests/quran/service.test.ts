@@ -256,7 +256,11 @@ describe('authority — the layered works and the reads', () => {
   });
 
   it('accepts every change from a holder of quran.administer', async () => {
-    const { service } = harness({ permissions: ['quran.administer'] });
+    // A Translation's save reads the Ayah's held notes first (Quran Part 6).
+    const { service } = harness({
+      permissions: ['quran.administer'],
+      records: { translationTexts: [] },
+    });
     for (const [method, input] of WRITES)
       expect(await failure(invoke(service, method, [input])), method).toBe('accepted');
   });
@@ -357,7 +361,7 @@ describe('input is parsed strictly, before persistence', () => {
   });
 
   it('refuses religious text that would need repairing, and never repairs it', async () => {
-    const { service, calls } = harness();
+    const { service, calls } = harness({ records: { translationTexts: [] } });
     for (const text of [
       ' NON_QURAN_FIXTURE',
       'NON_QURAN_FIXTURE\n',
@@ -385,7 +389,9 @@ describe('input is parsed strictly, before persistence', () => {
       surah: 2,
       changes: [{ ayah: 3, text: exact }],
     });
-    expect(calls[0]?.args[0]).toMatchObject({ changes: [{ ayah: 3, text: exact }] });
+    expect(
+      calls.find((call) => call.method === 'saveTranslationTexts')?.args[0],
+    ).toMatchObject({ changes: [{ ayah: 3, text: exact }] });
   });
 
   it('attributes every write to the actor, never to a value the caller sent', async () => {
@@ -413,6 +419,162 @@ describe('input is parsed strictly, before persistence', () => {
         }),
       ),
     ).toBe('invalid');
+  });
+});
+
+describe('translator’s notes are tied to their text (Quran Part 6)', () => {
+  const save = (changes: readonly unknown[]) => ({
+    id: ID(1),
+    expectedVersion: 3,
+    surah: 2,
+    changes,
+  });
+  const held = (notes: readonly { marker: string; text: string }[]) => [
+    {
+      ayah: 3,
+      text: 'NON_QURAN_FIXTURE translation٭ text',
+      notes: notes.map((note, index) => ({ ordinal: index + 1, ...note })),
+    },
+  ];
+
+  it('saves notes that answer the text’s own marks, exactly as given', async () => {
+    const { service, calls } = harness({ records: { translationTexts: [] } });
+    const notes = [
+      { marker: '٭', text: 'NON_QURAN_FIXTURE_NOTE star' },
+      { marker: '1:-', text: 'NON_QURAN_FIXTURE_NOTE one' },
+      { marker: '2:-', text: 'NON_QURAN_FIXTURE_NOTE two\n\nsecond paragraph' },
+    ];
+    await service.saveTranslationTexts(
+      actor,
+      save([{ ayah: 3, text: 'NON_QURAN_FIXTURE (1) a ٭ b (2)', notes }]),
+    );
+    expect(calls.map((call) => call.method)).toEqual([
+      'translationTexts',
+      'saveTranslationTexts',
+    ]);
+    expect(calls[1]?.args[0]).toMatchObject({ changes: [{ ayah: 3, notes }] });
+  });
+
+  it('refuses a note that answers no mark, and never moves one to fit', async () => {
+    for (const [text, notes] of [
+      // Two star notes, one star mark.
+      [
+        'NON_QURAN_FIXTURE٭',
+        [
+          { marker: '٭', text: 'NON_QURAN_FIXTURE_NOTE a' },
+          { marker: '٭', text: 'NON_QURAN_FIXTURE_NOTE b' },
+        ],
+      ],
+      // A "**" note where the text marks only "*".
+      ['NON_QURAN_FIXTURE*', [{ marker: '**', text: 'NON_QURAN_FIXTURE_NOTE' }]],
+      // Numbered entries that do not answer "(1)" … "(m)" exactly.
+      ['NON_QURAN_FIXTURE (1)', [{ marker: '2:-', text: 'NON_QURAN_FIXTURE_NOTE' }]],
+      // An unmarked note beside another note.
+      [
+        'NON_QURAN_FIXTURE٭',
+        [
+          { marker: '', text: 'NON_QURAN_FIXTURE_NOTE a' },
+          { marker: '٭', text: 'NON_QURAN_FIXTURE_NOTE b' },
+        ],
+      ],
+      // An unmarked note with two marks to choose from.
+      ['NON_QURAN_FIXTURE٭ (1)', [{ marker: '', text: 'NON_QURAN_FIXTURE_NOTE' }]],
+    ] as const) {
+      const { service, calls } = harness({ records: { translationTexts: [] } });
+      expect(
+        await failure(
+          service.saveTranslationTexts(actor, save([{ ayah: 3, text, notes }])),
+        ),
+        text,
+      ).toBe('note-untied');
+      expect(calls.map((call) => call.method)).toEqual(['translationTexts']);
+    }
+  });
+
+  it('checks the notes an Ayah KEEPS against its new text', async () => {
+    const { service, calls } = harness({
+      records: {
+        translationTexts: held([
+          { marker: '٭', text: 'NON_QURAN_FIXTURE_NOTE a' },
+          { marker: '1:-', text: 'NON_QURAN_FIXTURE_NOTE b' },
+        ]),
+      },
+    });
+    // A numbered mark removed while its note is kept: refused, nothing saved.
+    expect(
+      await failure(
+        service.saveTranslationTexts(
+          actor,
+          save([{ ayah: 3, text: 'NON_QURAN_FIXTURE translation٭ text' }]),
+        ),
+      ),
+    ).toBe('note-untied');
+    // The text the notes answer, kept: a save.
+    expect(
+      await failure(
+        service.saveTranslationTexts(
+          actor,
+          save([{ ayah: 3, text: 'NON_QURAN_FIXTURE translation٭ text (1)' }]),
+        ),
+      ),
+    ).toBe('accepted');
+    // Removing the note with it, or removing the Ayah's text, is a save.
+    await service.saveTranslationTexts(
+      actor,
+      save([{ ayah: 3, text: 'NON_QURAN_FIXTURE translation text', notes: [] }]),
+    );
+    await service.saveTranslationTexts(actor, save([{ ayah: 3, text: null }]));
+    expect(calls.filter((call) => call.method === 'saveTranslationTexts')).toHaveLength(
+      3,
+    );
+  });
+
+  it('carries a star note on a text with no star mark as the Ayah’s own', async () => {
+    const { service, calls } = harness({ records: { translationTexts: [] } });
+    await service.saveTranslationTexts(
+      actor,
+      save([
+        {
+          ayah: 3,
+          text: 'NON_QURAN_FIXTURE text with no mark',
+          notes: [{ marker: '*', text: 'NON_QURAN_FIXTURE_NOTE' }],
+        },
+      ]),
+    );
+    expect(calls.map((call) => call.method)).toContain('saveTranslationTexts');
+  });
+
+  it('refuses a note that would need repairing, or a removed text carrying notes', async () => {
+    for (const change of [
+      { ayah: 3, text: 'NON_QURAN_FIXTURE٭', notes: [{ marker: '٭', text: ' padded' }] },
+      { ayah: 3, text: 'NON_QURAN_FIXTURE٭', notes: [{ marker: '#', text: 'x' }] },
+      { ayah: 3, text: 'NON_QURAN_FIXTURE٭', notes: [{ marker: '٭', text: '' }] },
+      { ayah: 3, text: null, notes: [{ marker: '٭', text: 'NON_QURAN_FIXTURE_NOTE' }] },
+      {
+        ayah: 3,
+        text: 'NON_QURAN_FIXTURE٭',
+        notes: Array.from({ length: 21 }, () => ({ marker: '', text: 'x' })),
+      },
+    ]) {
+      const { service, calls } = harness({ records: { translationTexts: [] } });
+      expect(
+        await failure(service.saveTranslationTexts(actor, save([change]))),
+        JSON.stringify(change).slice(0, 80),
+      ).toBe('invalid');
+      expect(calls).toEqual([]);
+    }
+  });
+
+  it('refuses the platform’s own compare address as a translation’s slug', async () => {
+    const { service, calls } = harness();
+    expect(
+      await failure(
+        service.createTranslation(actor, {
+          value: translationValue({ slug: 'compare' }),
+        }),
+      ),
+    ).toBe('invalid');
+    expect(calls).toEqual([]);
   });
 });
 

@@ -27,7 +27,7 @@ import {
 } from '@minhaj/contracts/quran';
 
 import { getDatabaseClient } from '../../client.ts';
-import { toEntry } from './layers.ts';
+import { TRANSLATION_NOTES, toEntry } from './layers.ts';
 import {
   activeMode,
   ayahRange,
@@ -511,9 +511,17 @@ export function createQuranPublicReader(
         },
         orderBy: [...CANONICAL_ORDER],
       }),
+      // Each text with its translator's notes — at most twenty to a text
+      // (`QuranTranslationNote_ck`), so the read stays bounded.
       db.quranTranslationText.findMany({
         where: { ...at, translation: publicWork(mode) },
-        select: { surahNumber: true, ayahNumber: true, text: true, translation: work },
+        select: {
+          surahNumber: true,
+          ayahNumber: true,
+          text: true,
+          translation: work,
+          notes: TRANSLATION_NOTES,
+        },
         take: WORK_LIST * refs.length,
       }),
       db.quranTransliterationText.findMany({
@@ -535,12 +543,29 @@ export function createQuranPublicReader(
       if (list === undefined) layers.set(key, [layer]);
       else list.push(layer);
     };
-    for (const entry of translations)
-      add(`${entry.surahNumber}:${entry.ayahNumber}`, {
-        kind: 'translation',
-        ...entry.translation,
-        text: entry.text,
-      });
+    // Quran Part 6: a public translation's notes are its `note` layers, kept
+    // apart from the texts — they are no layer of the stamp (a note changes
+    // only with its work's version, which the stamp already carries) and they
+    // follow every text, in work-slug order and then their own.
+    type Note = AyahSearchRecord['layers'][number] & { readonly ordinal: number };
+    const notes = new Map<string, Note[]>();
+    for (const entry of translations) {
+      const key = `${entry.surahNumber}:${entry.ayahNumber}`;
+      add(key, { kind: 'translation', ...entry.translation, text: entry.text });
+      for (const note of entry.notes) {
+        const layer: Note = {
+          kind: 'note',
+          slug: entry.translation.slug,
+          name: entry.translation.name,
+          languageCode: entry.translation.languageCode,
+          text: note.text,
+          ordinal: note.ordinal,
+        };
+        const list = notes.get(key);
+        if (list === undefined) notes.set(key, [layer]);
+        else list.push(layer);
+      }
+    }
     for (const entry of transliterations)
       add(`${entry.surahNumber}:${entry.ayahNumber}`, {
         kind: 'transliteration',
@@ -549,8 +574,10 @@ export function createQuranPublicReader(
       });
 
     return ayat.map((row) => {
-      const own = [...(layers.get(`${row.surahNumber}:${row.ayahNumber}`) ?? [])].sort(
-        bySlug,
+      const key = `${row.surahNumber}:${row.ayahNumber}`;
+      const own = [...(layers.get(key) ?? [])].sort(bySlug);
+      const annotations = [...(notes.get(key) ?? [])].sort(
+        (a, b) => bySlug(a, b) || a.ordinal - b.ordinal,
       );
       const topicIds = row.topics.map((topic) => topic.topicId);
       return {
@@ -559,7 +586,7 @@ export function createQuranPublicReader(
         text: row.text,
         stamp: stampOf(row.version, topicIds, own),
         topicIds,
-        layers: own.map((layer) => ({
+        layers: [...own, ...annotations].map((layer) => ({
           kind: layer.kind,
           slug: layer.slug,
           name: layer.name,
@@ -761,11 +788,56 @@ export function createQuranPublicReader(
           ayahNumber: ayahRange(from, to),
           translation: publicWork(mode),
         },
-        select: { ayahNumber: true, text: true },
+        select: { ayahNumber: true, text: true, notes: TRANSLATION_NOTES },
         orderBy: { ayahNumber: 'asc' },
         take: QURAN_AYAH_NUMBER_MAX,
       });
-      return rows.map((row) => ({ ayah: row.ayahNumber, text: row.text }));
+      return rows.map((row) => ({
+        ayah: row.ayahNumber,
+        text: row.text,
+        notes: row.notes.map((note) => ({ ...note })),
+      }));
+    },
+
+    /**
+     * Quran Part 6. Two grouped reads for every work named — texts and notes
+     * per work and Surah — each at most the works' Surahs, and only works that
+     * are public now: one that is not has no row and is absent.
+     */
+    async translationCoverage(workIds) {
+      const mode = await activeMode(db, admission);
+      if (mode === null) return [];
+      const ids = [...new Set(workIds)].slice(0, WORK_LIST);
+      if (ids.length === 0) return [];
+      const [texts, notes] = await Promise.all([
+        db.quranTranslationText.groupBy({
+          by: ['translationId', 'surahNumber'],
+          where: { translationId: { in: ids }, translation: publicWork(mode) },
+          _count: { _all: true },
+        }),
+        db.quranTranslationNote.groupBy({
+          by: ['translationId', 'surahNumber'],
+          where: {
+            translationId: { in: ids },
+            translationText: { translation: publicWork(mode) },
+          },
+          _count: { _all: true },
+        }),
+      ]);
+      const noted = new Map(
+        notes.map((row) => [`${row.translationId}:${row.surahNumber}`, row._count._all]),
+      );
+      return ids.flatMap((workId) => {
+        const surahs = texts
+          .filter((row) => row.translationId === workId)
+          .map((row) => ({
+            surah: row.surahNumber,
+            ayat: row._count._all,
+            notes: noted.get(`${workId}:${row.surahNumber}`) ?? 0,
+          }))
+          .sort((a, b) => a.surah - b.surah);
+        return surahs.length === 0 ? [] : [{ workId, surahs }];
+      });
     },
 
     async transliterationTexts(workId, surah, from, to) {

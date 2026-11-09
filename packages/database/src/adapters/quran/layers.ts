@@ -16,6 +16,7 @@ import {
   type TafsirRecord,
   type TajweedRuleRecord,
   type TranslationRecord,
+  type TranslationTextChange,
   type TransliterationRecord,
 } from '@minhaj/contracts/quran';
 
@@ -363,6 +364,62 @@ async function writeLayerTexts(
   return { saved: saved.length, removed: removed.length };
 }
 
+/**
+ * A Translation's translator's notes for one save (Quran Part 6), around its
+ * texts: `clearNotes` FIRST removes the notes of every Ayah whose change names
+ * its notes or removes its text — a text with notes cannot be removed while
+ * they stand (`QuranTranslationNote_text_fkey`) — and `insertNotes` LAST
+ * writes the named notes beside the texts just saved, numbered 1..n in the
+ * order given, as one bound JSON document read with `OPENJSON`. A note is
+ * never edited in place; every character arrives exactly as supplied.
+ */
+async function clearNotes(
+  tx: Client,
+  workId: string,
+  surah: number,
+  changes: readonly TranslationTextChange[],
+): Promise<number> {
+  const ayat = changes
+    .filter((change) => change.notes !== undefined || change.text === null)
+    .map((change) => change.ayah);
+  if (ayat.length === 0) return 0;
+  return tx.$executeRaw`DELETE FROM [dbo].[QuranTranslationNote]
+    WHERE [translationId] = ${workId} AND [surahNumber] = ${surah}
+      AND [ayahNumber] IN (SELECT CAST([value] AS INT) FROM OPENJSON(${JSON.stringify(ayat)}))`;
+}
+
+async function insertNotes(
+  tx: Client,
+  workId: string,
+  surah: number,
+  changes: readonly TranslationTextChange[],
+): Promise<number> {
+  const rows = changes.flatMap((change) =>
+    change.text === null || change.notes === undefined
+      ? []
+      : change.notes.map((note, index) => ({
+          ayah: change.ayah,
+          ordinal: index + 1,
+          marker: note.marker,
+          text: note.text,
+        })),
+  );
+  if (rows.length === 0) return 0;
+  const document = JSON.stringify(rows);
+  return tx.$executeRaw`INSERT INTO [dbo].[QuranTranslationNote]
+      ([translationId], [surahNumber], [ayahNumber], [ordinal], [marker], [text])
+    SELECT ${workId}, ${surah}, j.[ayah], j.[ordinal], j.[marker], j.[text]
+    FROM OPENJSON(${document}) WITH (
+      [ayah] INT '$.ayah', [ordinal] INT '$.ordinal',
+      [marker] NVARCHAR(8) '$.marker', [text] NVARCHAR(MAX) '$.text') j`;
+}
+
+/** One Ayah's notes as the ports carry them, in order. */
+export const TRANSLATION_NOTES = {
+  select: { ordinal: true, marker: true, text: true },
+  orderBy: { ordinal: 'asc' },
+} satisfies Prisma.QuranTranslationText$notesArgs;
+
 /* ===========================================================================
  * Reading a just-written record back
  * ========================================================================= */
@@ -438,7 +495,11 @@ type LayerPersistence = Pick<
 export function layerPersistence(): LayerPersistence {
   const db = getDatabaseClient();
 
-  /** A text save under the work's version; a PUBLISHED work's changed ayat are re-projected. */
+  /**
+   * A text save under the work's version; a PUBLISHED work's changed ayat are
+   * re-projected. A Translation's changes may carry their Ayah's notes (Quran
+   * Part 6), replaced in the same transaction around the texts.
+   */
   async function saveTexts(
     tx: Client,
     kind: 'translation' | 'transliteration',
@@ -447,11 +508,15 @@ export function layerPersistence(): LayerPersistence {
       readonly id: string;
       readonly expectedVersion: number;
       readonly surah: number;
-      readonly changes: readonly LayerTextChange[];
+      readonly changes: readonly (LayerTextChange | TranslationTextChange)[];
     },
   ): Promise<void> {
     const previous = await claim(tx, kind, input.id, input.expectedVersion);
+    const notes =
+      kind === 'translation' ? (input.changes as readonly TranslationTextChange[]) : [];
+    const notesRemoved = await clearNotes(tx, input.id, input.surah, notes);
     const written = await writeLayerTexts(tx, kind, input.id, input.surah, input.changes);
+    const notesSaved = await insertNotes(tx, input.id, input.surah, notes);
     if (previous.state === 'published')
       await requestAyahScopes(
         tx,
@@ -469,6 +534,9 @@ export function layerPersistence(): LayerPersistence {
         surah: String(input.surah),
         saved: String(written.saved),
         removed: String(written.removed),
+        ...(kind === 'translation'
+          ? { notesSaved: String(notesSaved), notesRemoved: String(notesRemoved) }
+          : {}),
       },
     });
   }
@@ -645,11 +713,15 @@ export function layerPersistence(): LayerPersistence {
     async translationTexts(id, surah) {
       const rows = await db.quranTranslationText.findMany({
         where: { translationId: id, surahNumber: surah },
-        select: { ayahNumber: true, text: true },
+        select: { ayahNumber: true, text: true, notes: TRANSLATION_NOTES },
         orderBy: { ayahNumber: 'asc' },
         take: QURAN_AYAH_NUMBER_MAX,
       });
-      return rows.map((row) => ({ ayah: row.ayahNumber, text: row.text }));
+      return rows.map((row) => ({
+        ayah: row.ayahNumber,
+        text: row.text,
+        notes: row.notes.map((note) => ({ ...note })),
+      }));
     },
 
     async saveTranslationTexts(input) {

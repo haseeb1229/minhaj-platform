@@ -3699,6 +3699,7 @@ try {
     app,
     'Quran child rows INSERT',
     `INSERT INTO [dbo].[QuranTranslationText] ([translationId],[surahNumber],[ayahNumber],[text]) VALUES (N'${quranTranslation}',1,1,N'${quranText('TRANSLATION', 1, 1)}'),(N'${quranTranslation}',1,2,N'${quranText('TRANSLATION', 1, 2)}');
+     INSERT INTO [dbo].[QuranTranslationNote] ([translationId],[surahNumber],[ayahNumber],[ordinal],[marker],[text]) VALUES (N'${quranTranslation}',1,1,1,N'*',N'NON_QURAN_FIXTURE note 1:1');
      INSERT INTO [dbo].[QuranTranslationContributor] ([translationId],[personId],[role],[position]) VALUES (N'${quranTranslation}',N'${quranPerson}',N'translator',0);
      INSERT INTO [dbo].[QuranTransliterationText] ([transliterationId],[surahNumber],[ayahNumber],[text]) VALUES (N'${quranTransliteration}',1,1,N'NON_QURAN_FIXTURE_TRANSLITERATION_1_1');
      INSERT INTO [dbo].[QuranTafsirText] ([id],[tafsirId],[surahNumber],[startAyah],[endAyah],[text]) VALUES (N'${quranEntry}',N'${quranTafsir}',1,1,2,N'${quranText('TAFSIR', 1, 1)}');
@@ -3710,7 +3711,7 @@ try {
      INSERT INTO [dbo].[SurahName] ([surahNumber],[locale],[name]) VALUES (1,N'en',N'NON_QURAN_FIXTURE name'),(1,N'ur',N'NON_QURAN_FIXTURE name ur');
      INSERT INTO [dbo].[QuranTopic] ([surahNumber],[ayahNumber],[topicId]) VALUES (1,1,N'${editorialTopic.id}');
      INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'quran-ayah',N'1:1');`,
-    'texts, entries, contributors, a timed segment, display names, a topic and Ayah search intent',
+    "texts, a translator's note, entries, contributors, a timed segment, display names, a topic and Ayah search intent",
   );
   await expectAllowed(
     app,
@@ -3728,7 +3729,8 @@ try {
   await expectAllowed(
     app,
     'Quran child rows DELETE',
-    `DELETE FROM [dbo].[QuranTranslationText] WHERE [translationId]=N'${quranTranslation}' AND [ayahNumber]=2;
+    `DELETE FROM [dbo].[QuranTranslationNote] WHERE [translationId]=N'${quranTranslation}' AND [ayahNumber]=1;
+     DELETE FROM [dbo].[QuranTranslationText] WHERE [translationId]=N'${quranTranslation}' AND [ayahNumber]=2;
      DELETE FROM [dbo].[QuranTranslationContributor] WHERE [translationId]=N'${quranTranslation}';
      DELETE FROM [dbo].[QuranTransliterationText] WHERE [transliterationId]=N'${quranTransliteration}';
      DELETE FROM [dbo].[QuranTafsirContributor] WHERE [tafsirId]=N'${quranTafsir}';
@@ -3786,6 +3788,11 @@ try {
       'QuranRecitationTiming UPDATE denied',
       'UPDATE [dbo].[QuranRecitationTiming] SET [endMs]=[endMs];',
     ],
+    // Quran Part 6: a translator's note is written once and replaced whole.
+    [
+      'QuranTranslationNote UPDATE denied',
+      'UPDATE [dbo].[QuranTranslationNote] SET [text]=[text];',
+    ],
     // A text is never re-parented: moving a published work's last text to
     // another work would empty it as surely as deleting it.
     [
@@ -3823,6 +3830,7 @@ try {
     'QuranTranslation',
     'QuranTranslationContributor',
     'QuranTranslationText',
+    'QuranTranslationNote',
     'QuranTransliteration',
     'QuranTransliterationText',
     'QuranTafsir',
@@ -3874,6 +3882,7 @@ try {
     QuranTafsirContributor: ['DELETE,INSERT,SELECT', ''],
     QuranRecitationSegment: ['DELETE,INSERT,SELECT', 'assetId'],
     QuranRecitationTiming: ['DELETE,INSERT,SELECT', ''],
+    QuranTranslationNote: ['DELETE,INSERT,SELECT', ''],
     QuranTopic: ['DELETE,INSERT,SELECT', ''],
   };
   const posture = await app.query<{

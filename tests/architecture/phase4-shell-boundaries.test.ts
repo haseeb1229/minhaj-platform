@@ -221,6 +221,8 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/quran/search/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/translations/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/translations/[slug]/page.tsx',
+  // Quran Part 6: every public translation of one Ayah, side by side.
+  'apps/web/src/app/[locale]/(public)/quran/translations/compare/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/tafsir/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/tafsir/[slug]/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/transliteration/page.tsx',

@@ -73,6 +73,7 @@ export function applyPresentation(
   reader.setAttribute('data-shown', presentation.shown);
   reader.setAttribute('data-leading', presentation.leading);
   reader.setAttribute('data-layout', presentation.layout);
+  reader.setAttribute('data-notes', presentation.notes);
   if (presentation.arabicScale === null)
     reader.style.removeProperty('--quran-arabic-scale');
   else reader.style.setProperty('--quran-arabic-scale', String(presentation.arabicScale));

@@ -43,6 +43,13 @@ export type Leading = (typeof LEADINGS)[number];
 export const TRANSLATION_LAYOUTS = Object.freeze(['stacked', 'side'] as const);
 export type TranslationLayout = (typeof TRANSLATION_LAYOUTS)[number];
 
+/**
+ * Where a translation's translator's notes are read (Quran Part 6): on
+ * request — a mark in the text opens its note — or under every Ayah.
+ */
+export const NOTE_DISPLAYS = Object.freeze(['request', 'inline'] as const);
+export type NoteDisplay = (typeof NOTE_DISPLAYS)[number];
+
 /** How far each size may move, as a multiple of the reader's base size. */
 export const SCALE = Object.freeze({ min: 0.8, max: 1.6, step: 0.1, initial: 1 });
 
@@ -63,6 +70,7 @@ export interface ReaderPreferences {
   readonly translationScale: number;
   readonly leading: Leading;
   readonly layout: TranslationLayout;
+  readonly notes: NoteDisplay;
 }
 
 export const DEFAULT_PREFERENCES: ReaderPreferences = Object.freeze({
@@ -73,6 +81,7 @@ export const DEFAULT_PREFERENCES: ReaderPreferences = Object.freeze({
   translationScale: SCALE.initial,
   leading: 'comfortable',
   layout: 'stacked',
+  notes: 'request',
 });
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -128,6 +137,7 @@ export function readPreferences(raw: string | null): ReaderPreferences {
     translationScale: scaleOf(parsed['translationScale']),
     leading: oneOf(LEADINGS, parsed['leading'], DEFAULT_PREFERENCES.leading),
     layout: oneOf(TRANSLATION_LAYOUTS, parsed['layout'], DEFAULT_PREFERENCES.layout),
+    notes: oneOf(NOTE_DISPLAYS, parsed['notes'], DEFAULT_PREFERENCES.notes),
   };
 }
 
@@ -140,6 +150,7 @@ export function writePreferences(preferences: ReaderPreferences): string {
     translationScale: preferences.translationScale,
     leading: preferences.leading,
     layout: preferences.layout,
+    notes: preferences.notes,
   });
 }
 
@@ -215,6 +226,7 @@ export interface ReaderPresentation {
   readonly shown: string;
   readonly leading: Leading;
   readonly layout: TranslationLayout;
+  readonly notes: NoteDisplay;
   readonly arabicScale: number | null;
   readonly translationScale: number;
 }
@@ -231,6 +243,7 @@ export function presentationOf(
     shown: shownOf(preferences, page).join(' '),
     leading: preferences.leading,
     layout: preferences.layout,
+    notes: preferences.notes,
     arabicScale: page.explicitSize ? null : preferences.arabicScale,
     translationScale: preferences.translationScale,
   };
@@ -245,7 +258,7 @@ export function presentationOf(
  * Its first act marks the element `data-script`, so controls that need script
  * are drawn from the first paint when script runs, and never without it.
  */
-export const READER_BOOT_SCRIPT = `(function(r){if(!r)return;r.setAttribute("data-script","");var p;try{p=JSON.parse(window.localStorage.getItem(${JSON.stringify(PREFERENCES_KEY)})||"null")}catch(e){return}if(!p||typeof p!=="object"||Array.isArray(p))return;function one(v,a){return typeof v==="string"&&a.indexOf(v)>=0}function sc(v){return typeof v==="number"&&isFinite(v)&&v>=${String(SCALE.min)}&&v<=${String(SCALE.max)}}if(r.hasAttribute("data-modes")&&one(p.mode,${JSON.stringify(READING_MODES)}))r.setAttribute("data-mode",p.mode);if(one(p.leading,${JSON.stringify(LEADINGS)}))r.setAttribute("data-leading",p.leading);if(one(p.layout,${JSON.stringify(TRANSLATION_LAYOUTS)}))r.setAttribute("data-layout",p.layout);if(!r.hasAttribute("data-fixed")){var s=(r.getAttribute("data-slugs")||"").split(" ").filter(Boolean),d=r.getAttribute("data-shown")||"",w=null;if(p.translationsOn===false||p.translations==="none")w="";else if(Array.isArray(p.translations)){var ok=true;for(var i=0;i<p.translations.length;i++)if(typeof p.translations[i]!=="string"||!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(p.translations[i])||p.translations[i].length<2||p.translations[i].length>120)ok=false;if(ok){if(p.translations.length===0)w="";else{var c=[];for(var j=0;j<p.translations.length&&j<${String(TRANSLATIONS_RENDERED_MAX)};j++){var k=s.indexOf(p.translations[j]);if(k>=0&&c.indexOf(k)<0)c.push(k)}c.sort(function(a,b){return a-b});w=c.length?c.join(" "):d}}}if(w!==null)r.setAttribute("data-shown",w)}if(sc(p.arabicScale)&&!r.hasAttribute("data-explicit-size"))r.style.setProperty("--quran-arabic-scale",String(p.arabicScale));if(sc(p.translationScale))r.style.setProperty("--quran-translation-scale",String(p.translationScale))})(document.currentScript&&document.currentScript.parentElement)`;
+export const READER_BOOT_SCRIPT = `(function(r){if(!r)return;r.setAttribute("data-script","");var p;try{p=JSON.parse(window.localStorage.getItem(${JSON.stringify(PREFERENCES_KEY)})||"null")}catch(e){return}if(!p||typeof p!=="object"||Array.isArray(p))return;function one(v,a){return typeof v==="string"&&a.indexOf(v)>=0}function sc(v){return typeof v==="number"&&isFinite(v)&&v>=${String(SCALE.min)}&&v<=${String(SCALE.max)}}if(r.hasAttribute("data-modes")&&one(p.mode,${JSON.stringify(READING_MODES)}))r.setAttribute("data-mode",p.mode);if(one(p.leading,${JSON.stringify(LEADINGS)}))r.setAttribute("data-leading",p.leading);if(one(p.layout,${JSON.stringify(TRANSLATION_LAYOUTS)}))r.setAttribute("data-layout",p.layout);if(one(p.notes,${JSON.stringify(NOTE_DISPLAYS)}))r.setAttribute("data-notes",p.notes);if(!r.hasAttribute("data-fixed")){var s=(r.getAttribute("data-slugs")||"").split(" ").filter(Boolean),d=r.getAttribute("data-shown")||"",w=null;if(p.translationsOn===false||p.translations==="none")w="";else if(Array.isArray(p.translations)){var ok=true;for(var i=0;i<p.translations.length;i++)if(typeof p.translations[i]!=="string"||!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(p.translations[i])||p.translations[i].length<2||p.translations[i].length>120)ok=false;if(ok){if(p.translations.length===0)w="";else{var c=[];for(var j=0;j<p.translations.length&&j<${String(TRANSLATIONS_RENDERED_MAX)};j++){var k=s.indexOf(p.translations[j]);if(k>=0&&c.indexOf(k)<0)c.push(k)}c.sort(function(a,b){return a-b});w=c.length?c.join(" "):d}}}if(w!==null)r.setAttribute("data-shown",w)}if(sc(p.arabicScale)&&!r.hasAttribute("data-explicit-size"))r.style.setProperty("--quran-arabic-scale",String(p.arabicScale));if(sc(p.translationScale))r.style.setProperty("--quran-translation-scale",String(p.translationScale))})(document.currentScript&&document.currentScript.parentElement)`;
 
 /* ===========================================================================
  * The last place read on this device

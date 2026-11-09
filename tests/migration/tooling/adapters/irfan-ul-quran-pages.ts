@@ -19,6 +19,20 @@
  *   ash-Shura 42:52   — numbered marks "(1)" "(2)" and ONE note holding
  *                       "1:-" … "2:-".
  *   Muhammad 47:19    — an ASCII "*" mark and a note opened by "٭".
+ *
+ * Quran Part 6 (parser version 3 reads the notes; rows copied from the pages
+ * fetched 2026-11-10, both note slots and both translations kept):
+ *
+ *   at-Tawbah 9:29    — ONE `p.en` holding two English notes, "*" and "**",
+ *                       a blank source line apart, for the marks "*" and "**".
+ *   at-Tawbah 9:101   — an English note whose translation carries no mark
+ *                       (the note is the ayah's as a whole); Urdu "٭" note.
+ *   an-Nur 24:35      — an English note of two paragraphs (`<br><br>`).
+ *   al-Ahzab 33:6     — an English slot holding only its mark "* ": no note.
+ *   al-Ahzab 33:37    — an Urdu note opened "٭:".
+ *   an-Najm 53:39     — an English note opened with no mark, for the one "*".
+ *   an-Nisa 4:34      — an English note whose words include a link and an
+ *                       italic: the words are read, never the address.
  */
 
 const lines = (rows: readonly string[]): string => rows.join('\n');
@@ -219,5 +233,82 @@ export const MUHAMMAD_19_ROW = lines([
   '<h2 class="ur dir-rtl">٭ (حالانکہ وہ فعل اپنی جگہ شرعاً بالکل جائز بلکہ مستحسن ہو گا مگر آپ صلی اﷲ علیہ وآلہ وسلم کا مقام و مرتبہ اور عظمت و رِفعت محض جواز اور استحسان کے مراتب سے بھی بہت بلند اور اَرفع و اَعلیٰ ہے)</h2>',
   '<h2 class="en page_speed_1274865235">19. Know that there is no god except Allah, and (O Prophet!) seek (Allah’s) protection from any action unworthy of your esteemed station. And (also) seek (His) pardon for the believing men and the believing women. And (O people!) Allah fully knows (about) your movements and your final abode (in the Hereafter).</h2>',
   '<p class="en page_speed_1300036006">* Given that the action may be a pious deed compatible with Islamic law, rather an act par excellence, your august station, majesty and exaltation is far elevated and dignified than mere permissibility and higher grades of moral excellence.</p>',
+  '</a></div></div>',
+]);
+
+export const AT_TAWBAH_29_ROW = lines([
+  '<div class="brows-job-list ayatno_" id="ayatno_29">',
+  '<div class="ayat-row-controls"><button type="button" class="ayat-menu-trigger" title="Options" data-sura="9" data-ayat="29"></button></div>',
+  '<div class="col-md-12 col-sm-12" id="joo29"><a class="ayat-div" href="/english/Surah-at-Tawbah-with-english-translation/29/">',
+  '<h2 class="ur dir-rtl">29. (اے مسلمانو!) تم اہلِ کتاب میں سے ان لوگوں کے ساتھ (بھی جوابی) جنگ کرو (جنہوں نے تمہارے ساتھ مدینہ میں کیے ہوئے معاہدۂ اَمن کو توڑ کر، جلا وطنی کے باوُجود جنگ اَحزاب میں مدینہ پر حملہ آور کفارِ مکہ کی اَفواج کی بھرپور مدد کی اور اب بھی تمہارے خلاف تمام ممکنہ سازشیں جاری رکھے ہوئے ہیں) جو نہ اللہ پر ایمان رکھتے ہیں نہ یومِ آخرت پر اور نہ ان چیزوں کو حرام جانتے ہیں جنہیں اللہ اور اس کے رسول (صلی اللہ علیہ وآلہ وسلم) نے حرام قرار دیا ہے اور نہ ہی دینِ حق اختیارکرتے ہیں، یہاں تک کہ وہ (ریاست کے دستور اور نظام کے) تابع ہو کر اپنے ہاتھ سے ریاستی حفاظت کا ٹیکس (جو عسکری خدمات سے اِستثناء کی صورت میں وصول کیا جاتا ہے) ادا کریں<span class="page_speed_981314611">o</span></h2>',
+  '<h2 class="ur dir-rtl"></h2>',
+  '<h2 class="en page_speed_684456012">29. Fight (the treacherous people) among those given the book who do not believe in Allah, nor the Last Day, nor do they forbid what Allah and His Messenger have forbidden, nor do they practise the true religion (instead, they have breached the Treaty of Medina by committing an act of treason against the state), until they pay the indemnity tax (al-Jizya) with a willing hand*, and they submit to the command of the state.**</h2>',
+  '<p class="en page_speed_117091857">* Jizya legally refers to an indemnity tax received from non-Muslim combatants who surrendered to the Muslim State through a treaty, demanding their security, indemnity from military services and exemption from prescribed alms, payable to the state. These non-Muslims were not citizens of the state; instead, they were security seekers after surrendering from the battlefield. They used to contribute tax to military defence for their exemption from army services, whereas, in contrast, Muslim citizens would offer their personal services for the protection of the state whenever invaded by their enemies. The Jizya tax would also exempt those non-Muslims from Zakat and Kharaj taxes (trade and agricultural taxes), which were obligatory for Muslims. This particular category of non-Muslims, being non-citizens, were known as ‘Treaty People’ (Ahl al-Dhimma) or ‘Covenant Holders’. The Islamic State would provide them with all rights of security, equality and freedom against the tax, known as Jizya, which means reward or compensation. Women, children, the elderly, the clergy, the poor, the sick and those unable to work were exempt from this tax. Those who opted to join the army were also exempt. Instead, the poor among them were supported financially by the state. The Muslim rulers would refund the Jizya, if they failed to protect their lives or possessions. This kind of taxation system has existed since ancient times; the Old Testament and the New Testament in the Bible provide several references regarding this practice. Islam did not introduce it; instead, Islam introduced many humanitarian reforms in this old existing tradition among the nations. This term does not entail disgrace, inequality or humiliation of non-Muslims, nor does it uniformly apply to any non-Muslim citizen of a Muslim state.\n\n** This verse refers to a retributive or punitive action taken against certain tribes, such as Qurayza and al-Nadir, who, in violation of the terms of alliance and the constitution, had supported the Meccan armies during their invasions of Medina, particularly in the battle of the confederates (al-Ahzab) by mobilizing them and providing them arms, ammunition and strategic information. Such punitive action against any party who breached the peace treaty and acted treacherously was repeatedly demanded in various articles of the constitution of Medina, jointly signed by the Jews and the Muslims years before.</p>',
+  '</a></div></div>',
+]);
+
+export const AT_TAWBAH_101_ROW = lines([
+  '<div class="brows-job-list ayatno_" id="ayatno_101">',
+  '<div class="ayat-row-controls"><button type="button" class="ayat-menu-trigger" title="Options" data-sura="9" data-ayat="101"></button></div>',
+  '<div class="col-md-12 col-sm-12" id="joo101"><a class="ayat-div" href="/english/Surah-at-Tawbah-with-english-translation/101/">',
+  '<h2 class="ur dir-rtl">101. اور (مسلمانو!) تمہارے گرد و نواح کے دیہاتی گنواروں میں بعض منافق ہیں اور بعض باشندگانِ مدینہ بھی، یہ لوگ نفاق پر اڑے ہوئے ہیں، آپ انہیں (اب تک) نہیں جانتے، ہم انہیں جانتے ہیں (بعد میں حضور صلی اللہ علیہ وآلہ وسلم کو بھی جملہ منافقین کا علم اور معرفت عطا کر دی گئی)۔ عنقریب ہم انہیں دو مرتبہ (دنیا ہی میں) عذاب دیں گے٭ پھر وہ (قیامت میں) بڑے عذاب کی طرف پلٹائے جائیں گے<span class="page_speed_981314611">o</span></h2>',
+  '<h2 class="ur dir-rtl">٭ ایک بار جب ان کی پہچان کرا دی گئی اور حضور صلی اللہ علیہ وآلہ وسلم نے خطبۂ جمعہ کے دوران ان منافقین کو نام لے لے کر مسجد سے نکال دیا، یہ پہلا عذاب بصورتِ ذلت و رسوائی تھا؛ اور دوسرا عذاب بصورتِ ہلاکت و مُقاتلہ ہوا جس کا حکم بعد میں آیا۔</h2>',
+  '<h2 class="en page_speed_684456012">101. (O believers!) Some of the Bedouins who dwell (in the deserts) around you are hypocrites, and some of the town people (of Medina) have grown bold in hypocrisy. You do not know them, but We know them well. We shall punish them twice. Then, they will be returned to (face) a grievous punishment (in the Hereafter).</h2>',
+  '<p class="en page_speed_117091857">* Firstly, they were identified and the Holy Messenger (blessings and peace be upon him) expelled them from the Mosque pointing them out by name during his Friday address. This was the first torment in the form of humiliation and ignominy. Secondly, they were punished through fighting and killings, for which the command came later.</p>',
+  '</a></div></div>',
+]);
+
+export const AN_NUR_35_ROW = lines([
+  '<div class="brows-job-list ayatno_" id="ayatno_35">',
+  '<div class="ayat-row-controls"><button type="button" class="ayat-menu-trigger" title="Options" data-sura="24" data-ayat="35"></button></div>',
+  '<div class="col-md-12 col-sm-12" id="joo35"><a class="ayat-div" href="/english/Surah-an-Nur-with-english-translation/35/">',
+  '<h2 class="ur dir-rtl">35. اللہ آسمانوں اور زمین کا نور ہے۔ اس کے نور کی مثال (جو نورِ محمدی کی شکل میں دنیا میں روشن ہے) اُس طاق (نما سینۂ اَقدس) جیسی ہے جس میں چراغِ (نبوت روشن) ہے؛ (وہ) چراغ (قلبِ محمدی کے) فانوس میں رکھا ہے۔ (یہ) فانوس (نورِ الٰہی کے پَرتو سے اس قدر منور ہے) گویا ایک درخشندہ ستارہ ہے (یہ چراغِ نبوت) جو زیتون کے مبارک درخت سے (یعنی عالم قدس کے بابرکت رابطہ وحی سے یا انبیاء و رُسل ہی کے مبارک شجرۂ نبوت سے) روشن ہوا ہے نہ (فقط) شرقی ہے اور نہ غربی (بلکہ اپنے فیضِ نور کی وسعت میں عالم گیر ہے)۔ ایسا معلوم ہوتا ہے کہ اس کا تیل (خود ہی) چمک رہا ہے اگرچہ ابھی اسے (وحیِ ربّانی اور معجزاتِ آسمانی کی) آگ نے چھوا بھی نہیں۔ (وہ) نور کے اوپر نور ہے (یعنی نورِ وجود پر نورِ نبوت گویا وہ ذات دوہرے نور کا پیکر ہے)۔ اللہ جسے چاہتا ہے اپنے نور (کی معرفت) تک پہنچا دیتا ہے، اور اللہ لوگوں (کی ہدایت) کے لیے مثالیں بیان فرماتا ہے، اور اللہ ہر چیز سے خوب آگاہ ہے٭<span class="page_speed_1793167989">o</span></h2>',
+  '<h2 class="ur dir-rtl">٭ یہ حضرت عبد ﷲ بن عباس اور عبد ﷲ بن عمر رضی اللہ عنہ کے علاوہ تابعین میں سے کعب الاحبار، سعید بن جبیر، ابو العالیہ اور الضحاک بن مزاحم کا بیان کردہ معنی ہے؛ جسے امام عبد بن حمید، ابن جریر الطبری، ابن المنذر، ابن ابی حاتم الرازی، ابو منصور الماتریدی، الطبرانی، ابو اللیث السمرقندی، السلمی، ابو اسحاق الثعلبی، مکی بن ابی طالب المقری، البغوی، القاضی عیاض، ابن عطیہ، ابن الجوزی، فخر الدین الرازی، القرطبی، ابن حیان، ابن القیم، ابو حفص الحنبلی، السیوطی، القسطلانی، الآلوسی اور دیگر بہت سے مفسرین نے بیان کیا ہے۔</h2>',
+  '<h2 class="en page_speed_678436958">35. Allah is the Light of the heavens and the earth. His Light is like a niche in which there is a lamp (and) the lamp is in a glass. The glass seems like a glittering star, kindled from a blessed olive tree. It is neither Eastern nor Western (rather universal in its luminosity). Its oil would almost shine, even if no fire touched it. Light upon light! Allah guides whomever He pleases to His Light. And Allah draws such parables for people, and Allah is All-Knowing of everything.*</h2>',
+  '<p class="en page_speed_1627832908">* The likeness of Allah’s Light refers to the light of Prophet Muhammad (blessings and peace be upon him). The niche refers to his sacred breast wherein the lamp of Prophethood is glowing. This lamp of Prophethood is placed in a glass, which is the radiant heart of the Prophet Muhammad (blessings and peace be upon him). This glass is shining like a glittering star. This lamp is lit with the sacred olive tree, which may refer to the blessing of Divine revelation or the blissful genealogical tree of the Prophets and the Messengers (peace be upon them). The blessing of Prophethood or the guidance of Divine revelation is neither Eastern nor Western. Instead, it is a universal and timeless guidance. This lamp of Muhammad’s Prophethood is almost shining due to its inherent qualities even before revelation had touched him. This Light of Prophethood radiates under the Light of the Holy Essence of God. In such a way, Allah guides people to understand the reality of His Light.\n<br><br>\n‘Abd Allah b. ‘Abbas (may God be pleased with both of them), ‘Abd Allah b. ‘Umar (may God be pleased with both of them), Ka‘b al-Ahbar, Sa‘id b. Jubayr, Abu al-‘Aliya and al-Dahhak b. Mazahim have described these meanings of the Verse of Light. ‘Abd b. Humayd, Ibn Jarir al-Tabari, Ibn al-Mundhir, Ibn Abi Hatim al-Razi, Abu Mansur al-Maturidi, al-Tabarani, Abu al-Layth al-Samarqandi, al-Sulami, Abu Ishaq al-Tha‘labi, Makki b. Abi Talib al-Muqri, al-Baghawi, al-Qadi ‘Iyad, Ibn ‘Atiyya, Ibn al-Jawzi, Fakhr al-Din al-Razi, al-Qurtubi, Ibn Hayyan, Ibn al-Qayyim, Abu Hafs al-Hanbali, al-Suyuti, al-Qastallani, al-Alusi and many other exegetes have reported the above-mentioned meanings. The parable of the light may also refer to the light in the heart of the believers. The niche can be the breast of the believers, the lamp can be the Qur’an and faith, and the glass can be the heart of the believers. Many other such interpretations have also been given for the Verse of Light.</p>',
+  '</a></div></div>',
+]);
+
+export const AL_AHZAB_6_ROW = lines([
+  '<div class="brows-job-list ayatno_" id="ayatno_6">',
+  '<div class="ayat-row-controls"><button type="button" class="ayat-menu-trigger" title="Options" data-sura="33" data-ayat="6"></button></div>',
+  '<div class="col-md-12 col-sm-12" id="joo6"><a class="ayat-div" href="/english/Surah-al-Ahzab-with-english-translation/6/">',
+  '<h2 class="ur dir-rtl">6. یہ نبیِ (مکرّم) مومنوں کے ساتھ اُن کی جانوں سے زیادہ قریب اور حق دار ہیں اور آپ کی اَزواجِ (مطہّرات) اُن کی مائیں ہیں، اور خونی رشتہ دار اللہ کی کتاب میں (دیگر) مومنین اور مہاجرین کی نسبت (تقسیمِ وراثت میں) ایک دوسرے کے زیادہ حق دار ہیں سوائے اس کے کہ تم اپنے دوستوں پر احسان کرنا چاہو، یہ حکم کتابِ (الٰہی) میں لکھا ہوا ہے<span class="page_speed_1346021979">o</span></h2>',
+  '<h2 class="ur dir-rtl"></h2>',
+  '<h2 class="en page_speed_1010692381">6. The Prophet (blessings and peace be upon him) is closer to the believers than their (own) souls,* while his wives are their mothers. The blood relatives are more entitled to inherit from one another according to the Book of Allah than (the rest of) the believers and the emigrants unless you show kindness to your close friends (through bequest). All this is written in the Book.</h2>',
+  '<p class="en page_speed_467896041">* </p>',
+  '</a></div></div>',
+]);
+
+export const AL_AHZAB_37_ROW = lines([
+  '<div class="brows-job-list ayatno_" id="ayatno_37">',
+  '<div class="ayat-row-controls"><button type="button" class="ayat-menu-trigger" title="Options" data-sura="33" data-ayat="37"></button></div>',
+  '<div class="col-md-12 col-sm-12" id="joo37"><a class="ayat-div" href="/english/Surah-al-Ahzab-with-english-translation/37/">',
+  '<h2 class="ur dir-rtl">37. اور (اے حبیب!) یاد کیجئے جب آپ نے اس شخص سے فرمایا جس پر اللہ نے انعام فرمایا تھا اور اس پر آپ نے (بھی) اِنعام فرمایا تھا کہ تُو اپنی بیوی (زینب) کو اپنی زوجیت میں روکے رکھ اور اللہ سے ڈر، اور آپ اپنے دل میں وہ بات٭ پوشیدہ رکھ رہے تھے جِسے اللہ ظاہر فرمانے والا تھا اور آپ (دل میں حیاءً) لوگوں (کی طعنہ زنی) کا خوف رکھتے تھے۔ (اے حبیب! لوگوں کو خاطر میں لانے کی کوئی ضرورت نہ تھی) اور فقط اللہ ہی زیادہ حق دار ہے کہ آپ اس کا خوف رکھیں (اور وہ آپ سے بڑھ کر کس میں ہے؟)، پھر جب (آپ کے متبنٰی) زید نے اسے طلاق دینے کی غرض پوری کرلی، تو ہم نے اس سے آپ کا نکاح کر دیا تاکہ مومنوں پر ان کے منہ بولے بیٹوں کی بیویوں (کے ساتھ نکاح) کے بارے میں کوئی حَرج نہ رہے جبکہ (طلاق دے کر) وہ ان سے بے غَرض ہو گئے ہوں، اور اللہ کا حکم تو پورا کیا جانے والا ہی تھا<span class="page_speed_1346021979">o</span></h2>',
+  '<h2 class="ur dir-rtl">٭: (کہ زینب کی تمہارے ساتھ مصالحت نہ ہو سکے گی اور منشاء ایزدی کے تحت وہ طلاق کے بعد اَزواجِ مطہرات میں داخل ہوں گی۔)</h2>',
+  '<h2 class="en page_speed_1010692381">37. And (remember) when you said to him whom Allah had blessed, and you (too) had blessed: ‘Retain your wife for yourself (in the bond of marriage) and be God-conscious.’ And you had concealed (the secret) within yourself; what Allah would reveal (later). And (out of decency) you were worried about the people (that they might misunderstand the situation). Whereas it is more befitting that you consider Allah’s command fearfully. But when (your adopted son) Zayd gave up his claim upon her (through divorce), We wedded her to you. So, there should be no restriction for the believers in (marrying) the ex-wives of their adopted sons when they have finished their marital relationship with them. And Allah’s command is bound to be fulfilled.</h2>',
+  '<p class="en page_speed_467896041">* This verse refers to the inability of Zaynab bint Jahsh to reconcile with Zayd b. Haritha because she insisted on getting a divorce. According to another report, Zayd insisted on divorcing her. Since Zayd and Zaynab came from two different social classes, the marriage was not successful, despite the Prophet’s advice to them on several occasions to retain the marriage. In contrast, Allah had willed that Zaynab would be wedded to the Prophet (blessings and peace be upon him) after her divorce. The Prophet (blessings and peace be upon him) was worried that people would misunderstand the situation. Hence, this verse was revealed.</p>',
+  '</a></div></div>',
+]);
+
+export const AN_NAJM_39_ROW = lines([
+  '<div class="brows-job-list ayatno_" id="ayatno_39">',
+  '<div class="ayat-row-controls"><button type="button" class="ayat-menu-trigger" title="Options" data-sura="53" data-ayat="39"></button></div>',
+  '<div class="col-md-12 col-sm-12" id="joo39"><a class="ayat-div" href="/english/Surah-an-Najm-with-english-translation/39/">',
+  '<h2 class="ur dir-rtl">39. اور یہ کہ انسان کو (عدل میں) وہی کچھ ملے گا جس کی اُس نے کوشش کی ہوگی (رہا فضل اس پر کسی کا حق نہیں وہ محض اللہ کی عطاء و رضا ہے جس پر جتنا چاہے کر دے)<span class="page_speed_1032486696">o</span></h2>',
+  '<h2 class="ur dir-rtl"></h2>',
+  '<h2 class="en page_speed_1162095385">39. And that nothing belongs to human being (as his right) except what he strives for.*</h2>',
+  '<p class="en page_speed_1871421829">As for Allah’s Grace, there are no limits. He can grant whatever He wills to whomever He pleases, as stated in <i>Sura al-Nur</i>, verse 38: <i>“So that Allah may reward them for the best of what they have performed and give them more out of His grace. And Allah provides for whomever He pleases without any measure.”</i></p>',
+  '</a></div></div>',
+]);
+
+export const AN_NISA_34_ROW = lines([
+  '<div class="brows-job-list ayatno_" id="ayatno_34">',
+  '<div class="ayat-row-controls"><button type="button" class="ayat-menu-trigger" title="Options" data-sura="4" data-ayat="34"></button></div>',
+  '<div class="col-md-12 col-sm-12" id="joo34"><a class="ayat-div" href="/english/Surah-an-Nisa-with-english-translation/34/">',
+  '<h2 class="ur dir-rtl">34. مَرد عورتوں (کی معاشی اور سکونتی ضروریات کی کفالت) کے ذِمہ دار اور منتظم ہیں اس لیے کہ اللہ نے ان میں سے بعض کو بعض پر فضیلت دی ہے اور اس وجہ سے (بھی) کہ مرد (ان پر) اپنے مال خرچ کرتے ہیں، پس نیک بیویاں اطاعت شعار ہوتی ہیں شوہروں کی عدم موجودگی میں اللہ کی حفاظت کے ساتھ (اپنی عزت کی) حفاظت کرنے والی ہوتی ہیں۔ اور تمہیں جن عورتوں کی نافرمانی و سرکشی کا اندیشہ ہو تو اُنہیں نصیحت کرو اور (اگر نہ سمجھیں تو) اُنہیں خواب گاہوں میں (خود سے) علیحدہ کر دو اور (اگر پھر بھی اِصلاح پذیر نہ ہوں تو) اُن سے (تادیباً) عارضی طور پر الگ ہو جاؤ؛ پھر اگر وہ (رضائے الٰہی کے لیے) تمہارے ساتھ تعاون کرنے لگیں تو ان کے خلاف کوئی راستہ تلاش نہ کرو۔ بے شک اللہ سب سے بلند سب سے بڑا ہے<span class="page_speed_925989838">o</span></h2>',
+  '<h2 class="ur dir-rtl"></h2>',
+  '<h2 class="en page_speed_341136627">34. Men are the caretakers of women (maintaining their financial and housing needs) through the blessings Allah has graced upon some of them above others and through what they spend out of their wealth (to support others). So righteous women are sincere, pious and guarding what Allah has (entrusted them to keep) protected in the absence (of their husbands). As for those (wives) you fear rebellious conduct on their part, (first) advise them, and (if ineffective) leave them alone in their beds, and (as a last resort) turn them away (from yourselves, striking a temporary separation)*. Then, if they cooperate with you, do not seek any course (of action) against them. Indeed, Allah is All-Exalted, All-Great.</h2>',
+  '<p class="en page_speed_1698440172"><a class="ayat-div" href="/english/Surah-an-Nisa-with-english-translation/34/">* For details about this translation and the linguistic and legal implications of ‘<i>wadribuhunna</i>’, see </a><a href="/english/tid/57724/Appendix-The-Linguistic-and-Legal-Im-plications-of-Wadribuhunna-in-Sura-al-Nisa-434.html">appendix</a>.</p>',
   '</a></div></div>',
 ]);

@@ -146,7 +146,8 @@ licensing or attribution requirements.
 **Current status — STILL OPEN; Irfan-ul-Quran appears in the staging reference preview (Rebaseline
 R2, 2026-11-06).** Under the same owner decision as §1.1, staging's reference preview shows
 Minhaj-ul-Quran's own **Irfan-ul-Quran** translation (Urdu and English, © Minhaj-ul-Quran
-International) — and no other translation. Its text is taken exactly as staged from the
+International) — and no other translation. Its text — and, since Quran Part 6 (2026-11-10), the
+translator's own notes beside it (DOMAIN_MODEL.md §8.6) — is taken exactly as staged from the
 review-only Irfan-ul-Quran migration revisions (MIGRATION_STRATEGY.md §19), through Quran's
 administrative service under `quran.administer`, by a host-side operator command
 (`quran-reference.sh translations`); a Surah whose staged revision fails validation is skipped and
