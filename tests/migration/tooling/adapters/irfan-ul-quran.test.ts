@@ -12,7 +12,14 @@ import {
 } from '../../../../scripts/migration/adapters/irfan-ul-quran.ts';
 
 import { evidenceOf, fakeSite, htmlPage, pendingItem, textFile } from './fake-site.ts';
-import { AL_IKHLAS_PAGE, AL_MUNAFIQUN_PAGE } from './irfan-ul-quran-pages.ts';
+import {
+  AL_IKHLAS_PAGE,
+  AL_KAWTHAR_PAGE,
+  AL_MUNAFIQUN_PAGE,
+  ASH_SHURA_52_ROW,
+  AZ_ZUMAR_31_ROW,
+  MUHAMMAD_19_ROW,
+} from './irfan-ul-quran-pages.ts';
 
 /**
  * The Irfan-ul-Quran translation adapter (REVIEW-ONLY kind) over SYNTHETIC
@@ -492,8 +499,13 @@ describe('real pages (trimmed)', () => {
       });
     // The translation without its mark.
     fails(AL_MUNAFIQUN_PAGE.replace('گریز کرتے ہیں٭', 'گریز کرتے ہیں'));
-    // The note without its opening mark.
-    fails(AL_MUNAFIQUN_PAGE.replace(NOTE_OPENING, 'یہ آیت عبد اللہ بن اُبیّ'));
+    // The note without its opening mark, and no English note to corroborate it.
+    fails(
+      AL_MUNAFIQUN_PAGE.replace(NOTE_OPENING, 'یہ آیت عبد اللہ بن اُبیّ').replace(
+        /<p class="en page_speed_1425939351">\* This verse[\s\S]*?<\/p>/,
+        '<p class="en page_speed_1425939351"></p>',
+      ),
+    );
     // A second note for the one mark.
     fails(
       AL_MUNAFIQUN_PAGE.replace(
@@ -518,18 +530,132 @@ describe('real pages (trimmed)', () => {
     );
   });
 
+  it('reads a surah whose note opens with no mark, corroborated by its English note', () => {
+    const url = `${SITE}${irfanUlQuranSurahPath(108)}`;
+    const ayat = ayatOf(real(AL_KAWTHAR_PAGE, 108, url));
+    expect(ayat.map((entry) => entry.ayah)).toEqual([1, 2, 3]);
+    expect(ayat[0]).toEqual({
+      ayah: 1,
+      text: 'بیشک ہم نے آپ کو (ہر خیر و فضیلت میں) بے انتہا کثرت بخشی ہے٭',
+    });
+    expect(JSON.stringify(ayat)).not.toContain('کوثر سے مراد');
+    expect(ayatOf(real(AL_KAWTHAR_PAGE, 108, url, 'en'))).toHaveLength(3);
+    // Without the English note, or without the mark, it is not a known note.
+    const fails = (html: string) =>
+      expect(real(html, 108, url)).toEqual({
+        kind: 'failed',
+        detail: 'translation-structure-unexpected',
+      });
+    fails(
+      AL_KAWTHAR_PAGE.replace(
+        /<p class="en page_speed_1483626782">[\s\S]*?<\/p>/,
+        '<p class="en page_speed_1483626782"></p>',
+      ),
+    );
+    fails(AL_KAWTHAR_PAGE.replace('کثرت بخشی ہے٭', 'کثرت بخشی ہے'));
+    // Two marks leave an unmarked note unattributable.
+    fails(AL_KAWTHAR_PAGE.replace('کثرت بخشی ہے٭', 'کثرت٭ بخشی ہے٭'));
+  });
+
+  describe('a long surah’s real note row among synthetic rows', () => {
+    const among = (surah: number, ayah: number, realRow: string) =>
+      surahPage(
+        Array.from({ length: SURAH_AYAH_COUNTS[surah - 1] ?? 0 }, (_, index) =>
+          index + 1 === ayah ? realRow : row(index + 1, { sura: surah }),
+        ),
+      );
+    const read = (surah: number, html: string) =>
+      real(html, surah, `${SITE}${irfanUlQuranSurahPath(surah)}`);
+    const unexpected = { kind: 'failed', detail: 'translation-structure-unexpected' };
+
+    it('reads an ASCII "*" mark and its "*" note (39:31)', () => {
+      const ayat = ayatOf(read(39, among(39, 31, AZ_ZUMAR_31_ROW)));
+      expect(ayat).toHaveLength(75);
+      expect(ayat[30]).toEqual({
+        ayah: 31,
+        text: 'پھر بلاشبہ تم لوگ قیامت کے دن اپنے رب کے حضور باہم جھگڑا کروگے*',
+      });
+      expect(JSON.stringify(ayat)).not.toContain('ایک گروہ دوسرے کو');
+      const unmarked = AZ_ZUMAR_31_ROW.replace('جھگڑا کروگے*', 'جھگڑا کروگے');
+      expect(read(39, among(39, 31, unmarked))).toEqual(unexpected);
+    });
+
+    it('reads an ASCII "*" mark whose note opens with "٭" (47:19)', () => {
+      const ayat = ayatOf(read(47, among(47, 19, MUHAMMAD_19_ROW)));
+      expect(ayat).toHaveLength(38);
+      expect(ayat[18]?.ayah).toBe(19);
+      expect(
+        ayat[18]?.text.startsWith('پس جان لیجیے کہ اللہ کے سوا کوئی معبود نہیں'),
+      ).toBe(true);
+      expect(ayat[18]?.text).toContain('صادر نہ ہو جائے* اور مومن مردوں');
+      expect(JSON.stringify(ayat)).not.toContain('حالانکہ وہ فعل');
+      const unmarked = MUHAMMAD_19_ROW.replace('صادر نہ ہو جائے*', 'صادر نہ ہو جائے');
+      expect(read(47, among(47, 19, unmarked))).toEqual(unexpected);
+    });
+
+    it('reads numbered marks and their one numbered note (42:52)', () => {
+      const ayat = ayatOf(read(42, among(42, 52, ASH_SHURA_52_ROW)));
+      expect(ayat).toHaveLength(53);
+      expect(ayat[51]?.ayah).toBe(52);
+      expect(ayat[51]?.text.startsWith('سو اسی طرح ہم نے آپ کی طرف اپنے حکم سے')).toBe(
+        true,
+      );
+      expect(ayat[51]?.text).toContain('مقرر ہوئیں)(1) مگر ہم نے');
+      expect(ayat[51]?.text.endsWith('صراطِ مستقیم کی طرف ہدایت عطا فرماتے ہیں(2)')).toBe(
+        true,
+      );
+      expect(JSON.stringify(ayat)).not.toContain('شانِ اُمّیت');
+      // The entries must be exactly the marks, 1…m, in order.
+      for (const broken of [
+        ASH_SHURA_52_ROW.replace(' 2:- ', ' '),
+        ASH_SHURA_52_ROW.replace('عطا فرماتے ہیں(2)', 'عطا فرماتے ہیں'),
+        ASH_SHURA_52_ROW.replace('مقرر ہوئیں)(1)', 'مقرر ہوئیں)(3)'),
+        ASH_SHURA_52_ROW.replace('1:- آپ', '2:- آپ'),
+      ])
+        expect(read(42, among(42, 52, broken))).toEqual(unexpected);
+    });
+  });
+
   it('accepts notes only as the Urdu marks admit them', () => {
+    const notesOnly = (
+      notes: string[],
+      translationText: string,
+      translation: IrfanUlQuranTranslation = 'ur',
+      englishNoteSlotFilled = true,
+    ) =>
+      translatorNotesOnly({ notes, translationText, englishNoteSlotFilled }, translation);
     const marked = 'مصنوعی٭ مزید';
-    expect(translatorNotesOnly([], 'مصنوعی', 'ur')).toBe(true);
-    expect(translatorNotesOnly([], 'Synthetic*', 'en')).toBe(true);
-    expect(translatorNotesOnly(['٭ مصنوعی'], marked, 'ur')).toBe(true);
-    // The site also opens a note "٭:" (an-Ahzab 33:37).
-    expect(translatorNotesOnly(['٭: (مصنوعی)'], marked, 'ur')).toBe(true);
-    expect(translatorNotesOnly(['٭ ایک', '٭ دو'], 'ایک٭ دو٭', 'ur')).toBe(true);
-    expect(translatorNotesOnly(['٭ ایک', '٭ دو'], marked, 'ur')).toBe(false);
-    expect(translatorNotesOnly(['مصنوعی ٭'], marked, 'ur')).toBe(false);
-    expect(translatorNotesOnly(['٭ مصنوعی'], 'مصنوعی', 'ur')).toBe(false);
-    expect(translatorNotesOnly(['* Synthetic'], 'Synthetic*', 'en')).toBe(false);
-    expect(translatorNotesOnly(['٭ مصنوعی'], marked, 'en')).toBe(false);
+    expect(notesOnly([], 'مصنوعی')).toBe(true);
+    expect(notesOnly([], 'Synthetic*', 'en')).toBe(true);
+    // Star notes: "٭" or "*", either way round, no more notes than star marks.
+    expect(notesOnly(['٭ مصنوعی'], marked)).toBe(true);
+    expect(notesOnly(['٭ مصنوعی'], marked, 'ur', false)).toBe(true);
+    // The site also opens a note "٭:" (an-Ahzab 33:37) or "٭" with no space (39:30).
+    expect(notesOnly(['٭: (مصنوعی)'], marked)).toBe(true);
+    expect(notesOnly(['٭مصنوعی'], marked)).toBe(true);
+    expect(notesOnly(['* مصنوعی'], 'مصنوعی*')).toBe(true);
+    expect(notesOnly(['٭ مصنوعی'], 'مصنوعی*')).toBe(true);
+    expect(notesOnly(['٭ ایک', '* دو'], 'ایک٭ دو*')).toBe(true);
+    expect(notesOnly(['٭ ایک', '٭ دو'], marked)).toBe(false);
+    expect(notesOnly(['٭ مصنوعی'], 'مصنوعی')).toBe(false);
+    // Numbered: one note, entries exactly the marks 1…m in order.
+    expect(notesOnly(['1:- ایک 2:- دو'], 'ایک(1) دو(2)')).toBe(true);
+    expect(notesOnly(['1:- ایک'], 'ایک(1)')).toBe(true);
+    expect(notesOnly(['1:- ایک'], 'ایک(1) دو(2)')).toBe(false);
+    expect(notesOnly(['1:- ایک 2:- دو'], 'ایک(1)')).toBe(false);
+    expect(notesOnly(['1:- ایک 3:- دو'], 'ایک(1) دو(3)')).toBe(false);
+    expect(notesOnly(['1:- ایک', '1:- ایک'], 'ایک(1)')).toBe(false);
+    expect(notesOnly(['1:- ایک'], 'مصنوعی')).toBe(false);
+    expect(notesOnly(['1:- ایک'], marked)).toBe(false);
+    // Unmarked: the only note, one mark of any form, and the English note slot filled.
+    expect(notesOnly(['مصنوعی حاشیہ'], marked)).toBe(true);
+    expect(notesOnly(['مصنوعی حاشیہ'], 'ایک(1)')).toBe(true);
+    expect(notesOnly(['مصنوعی حاشیہ'], marked, 'ur', false)).toBe(false);
+    expect(notesOnly(['مصنوعی حاشیہ'], 'مصنوعی')).toBe(false);
+    expect(notesOnly(['مصنوعی حاشیہ'], 'ایک٭ دو٭')).toBe(false);
+    expect(notesOnly(['مصنوعی حاشیہ', '٭ دو'], 'ایک٭ دو٭')).toBe(false);
+    // The English page has no note headings at all.
+    expect(notesOnly(['* Synthetic'], 'Synthetic*', 'en')).toBe(false);
+    expect(notesOnly(['٭ مصنوعی'], marked, 'en')).toBe(false);
   });
 });

@@ -834,7 +834,7 @@ seconds. A fixture never becomes an authorised source, nor the reverse.
 | Magazines (minhaj.info) | `minhaj-info-magazines` (`library.magazine`) · `minhaj-info-issues-mq`, `minhaj-info-issues-di` (`library.magazine-issue`) | Issue pages with their table of contents; no PDFs or covers |
 | Minhaj.TV | `minhaj-tv-videos` (`media.video`) | YouTube identifiers and metadata from `/english/` pages only (`robots.txt`); audio is a SoundCloud embed, which the storage-backed audio model (§4.9) cannot hold — **source-limited** |
 | TheFatwa | `thefatwa-rulings` (`fatwa.ruling`, review-only) | Published rulings; the asker's name and place are never read |
-| Irfan-ul-Quran | `irfan-ul-quran-ur`, `irfan-ul-quran-en` (`quran.translation`, review-only) | Translation text per surah, exactly; no Arabic text, tafsir, translator's notes or recitation (§19, parser version 2) |
+| Irfan-ul-Quran | `irfan-ul-quran-ur`, `irfan-ul-quran-en` (`quran.translation`, review-only) | Translation text per surah, exactly; no Arabic text, tafsir, translator's notes or recitation (§19, parser version 2: star, numbered and unmarked notes) |
 | eLearning (equranclass.com / femaletutor.com) | — | **Source-limited:** the public catalogue has no syllabus, and Learning cannot publish a course without one; a syllabus is never invented |
 
 **Eight content kinds.** `media.video`, `library.work`, `library.magazine`,
@@ -1475,13 +1475,33 @@ unless the translation sets the mark "٭" — then it holds the translator's not
 opened by the same mark (2:9, 9:101, 24:11 and 24:35, 33:37, 63:5 among the surveyed pages; the
 English page keeps the same notes in `p.en`, which it never read). Version 1 refused any non-empty
 second heading. Version 2 (`cheerio-irfan-ul-quran-translation`, adapter
-`scripts/migration/adapters/irfan-ul-quran.ts`) recognises a later `h2.ur` as a note only when it
-opens with "٭" and the row's translation carries at least as many marks as the row has notes; the
-note is commentary and is **not read**, the mark stays in the ayah's text exactly as written, and
-anything else in a later heading — or any later non-empty `h2.en` — still fails the page. The check
-that the rows are exactly ayat 1…N of the surah, once each and in order, is unchanged. The English
-output is unchanged by version 2. A replay of the Urdu source's retained evidence re-reads all 114
-surahs.
+`scripts/migration/adapters/irfan-ul-quran.ts`) as first deployed (`878e323`) recognised a later
+`h2.ur` as a note only when it opened with "٭" and the row's translation carried at least as many
+"٭" marks as the row had notes; the note is commentary and is **not read**, the mark stays in the
+ayah's text exactly as written, and anything else in a later heading — or any later non-empty
+`h2.en` — still fails the page. The check that the rows are exactly ayat 1…N of the surah, once
+each and in order, is unchanged. The English output is unchanged by version 2. A replay of the Urdu
+source's retained evidence re-reads all 114 surahs.
+
+**Three more note forms (2026-11-10).** The version-2 replay staged 110 of 114; surahs 39, 42, 47
+and 108 still failed. Their pages show three forms the first rule did not know, all still tied to
+the translation's own marks (`translatorNotesOnly`):
+
+- **ASCII star.** The translation may mark with "*" instead of "٭", and a note may open with
+  either, mixed (39:31 "*" and "*"; 47:19 "*" and "٭"). A star note is admitted while the row has
+  no more star notes than star marks of either kind.
+- **Numbered.** The translation marks "(1)", "(2)" … and ONE note holds the entries "1:-",
+  "2:-" … (42:52). Admitted only when the marks are exactly 1…m in order and the note's entries
+  are exactly 1…m in order.
+- **Unmarked.** The note opens with no mark (108:1). Admitted only as the row's only note, when
+  the translation carries exactly one mark of any form and the row's English note slot `p.en` is
+  filled (its text is still never read; every surveyed note row has one).
+
+Every row the first rule admitted is admitted unchanged and the text read is the same, so every
+surah it parsed parses byte-identically (checked on 2, 9, 24, 33, 36, 63 and 112); the parser
+therefore stays at **version 2** and a replay leaves the 110 staged surahs unchanged while
+re-reading the four that have no staged revision. Anything else in a later heading still fails the
+page.
 
 ### 19.1 Run plan on staging — PLANNED, not yet run
 

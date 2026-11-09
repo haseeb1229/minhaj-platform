@@ -1,19 +1,27 @@
 /**
- * TRIMMED REAL surah pages of www.irfan-ul-quran.com (fetched 2026-11-09),
- * first-party Minhaj-ul-Quran text admitted under
+ * TRIMMED REAL surah pages and rows of www.irfan-ul-quran.com (fetched
+ * 2026-11-09 and 2026-11-10), first-party Minhaj-ul-Quran text admitted under
  * OWNER-ATTESTATION-2026-11-06-R2-COMPREHENSIVE-PRESENTATION-CORPUS. Every
  * row keeps exactly what the parser reads, as the site wrote it — the ayah
  * trigger's `data-sura`/`data-ayat`, both `h2.ur`, `h2.en` and the
  * `p.en` note slot — and the Urdu and English labels; the Arabic, the other
- * translations, the copy payloads, scripts and page chrome are cut. A surah
- * is kept whole because the parser refuses a partial one.
+ * translations, the copy payloads, scripts and page chrome are cut. A short
+ * surah is kept whole because the parser refuses a partial one; a long
+ * surah's note row is kept alone, for a test to place among synthetic rows.
  *
- *   al-Munafiqun (63) — the Urdu translator's note: ayah 5 carries the "٭"
- *                       mark and its row's second `h2.ur` holds the note
- *                       (the English keeps the same note in `p.en`). Before
- *                       parser version 2 this page failed.
+ *   al-Munafiqun (63) — a "٭" note: ayah 5 carries the "٭" mark and its
+ *                       row's second `h2.ur` holds the note opened by it (the
+ *                       English keeps the same note in `p.en`).
  *   al-Ikhlas (112)   — no note: every second `h2.ur` empty.
+ *   al-Kawthar (108)  — an unmarked note: ayah 1 carries "٭", its note opens
+ *                       with no mark, and its `p.en` is filled.
+ *   az-Zumar 39:31    — an ASCII "*" mark and a note opened by "*".
+ *   ash-Shura 42:52   — numbered marks "(1)" "(2)" and ONE note holding
+ *                       "1:-" … "2:-".
+ *   Muhammad 47:19    — an ASCII "*" mark and a note opened by "٭".
  */
+
+const lines = (rows: readonly string[]): string => rows.join('\n');
 
 const page = (rows: readonly string[]): string =>
   [
@@ -150,4 +158,66 @@ export const AL_IKHLAS_PAGE = page([
   '</a></div></div>',
   '<div data-type="ur" class="item sortable-item"><span class="text">Urdu</span></div>',
   '<div data-type="en" class="item sortable-item"><span class="text">English - Manifest</span></div>',
+]);
+
+export const AL_KAWTHAR_PAGE = page([
+  '<div class="brows-job-list ayatno_" id="ayatno_1">',
+  '<div class="ayat-row-controls"><button type="button" class="ayat-menu-trigger" title="Options" data-sura="108" data-ayat="1"></button></div>',
+  '<div class="col-md-12 col-sm-12" id="joo1"><a class="ayat-div" href="/english/Surah-al-Kawthar-with-english-translation/1/">',
+  '<h2 class="ur dir-rtl">1. بیشک ہم نے آپ کو (ہر خیر و فضیلت میں) بے انتہا کثرت بخشی ہے٭<span class="page_speed_1364871071">o</span></h2>',
+  '<h2 class="ur dir-rtl">کوثر سے مراد حوض کوثر یا نہر جنت بھی ہے اور قرآن اور نبوت و حکمت بھی، فضائل و معجزات کی کثرت یا اصحاب و اتباع اور امت کی کثرت بھی مراد لی گئی ہے۔ رفعت ذکر اور خلق عظیم بھی مراد ہے اور دنیا و آخرت کی نعمتیں بھی، نصرت الٰہیہ اور کثرت فتوحات بھی مراد ہیں اور روز قیامت مقام محمود اور شفاعت عظمیٰ بھی مراد لی گئی ہے۔</h2>',
+  '<h2 class="en page_speed_482181316">1. (O Prophet!) Indeed, We have granted you an infinite abundance of goodness.*</h2>',
+  '<p class="en page_speed_1483626782">* There are numerous meanings of <i>al-Kawthar</i> mentioned by the great scholars. According to the most popular view, it is the abundant goodness that Allah has bestowed upon His beloved Messenger (blessings and peace be upon him). According to another widespread opinion, it is a river in Paradise whose banks are of gold and its water flows over rubies and pearls. The scent of this water is finer than musk and sweeter than honey and it is whiter than milk. It also refers to the greater intercession upon the praised station gifted to the Prophet Muhammad (blessings and peace be upon him) on the Day of Judgement. It also refers to the highly esteemed status of his Prophethood. It also refers to the Prophet’s numerous miracles and exclusive virtues. It also refers to the Prophet’s unimaginable expanse in knowledge. Some commentators say that it refers to the abundance of the Prophet’s progeny. Moreover, it may also refer to the abundance of great scholars in his <i>Umma</i>. It may also refer to the uncountable virtues of the Qur’an and Islam. It may also refer to the abundance of his lovers, followers and community members compared to all other communities. It also refers to the abundance of his beautiful moral values and spiritual virtues of his noble conduct. It also refers to the unlimited blessings and favours of Allah Almighty bestowed upon the esteemed Prophet (blessings and peace be upon him) in this world and the Hereafter. It also refers to the everlasting remembrance of the Holy Prophet (blessings and peace be upon him) and the inseparable mentioning of his name along with the name and remembrance of Almighty Allah.</p>',
+  '</a></div></div>',
+  '<div class="brows-job-list ayatno_" id="ayatno_2">',
+  '<div class="ayat-row-controls"><button type="button" class="ayat-menu-trigger" title="Options" data-sura="108" data-ayat="2"></button></div>',
+  '<div class="col-md-12 col-sm-12" id="joo2"><a class="ayat-div" href="/english/Surah-al-Kawthar-with-english-translation/2/">',
+  '<h2 class="ur dir-rtl">2. پس آپ اپنے رب کے لئے نماز پڑھا کریں اور قربانی دیا کریں (یہ ہدیۂ تشکرّ ہے)<span class="page_speed_1364871071">o</span></h2>',
+  '<h2 class="ur dir-rtl"></h2>',
+  '<h2 class="en page_speed_482181316">2. So pray to your Lord and offer sacrifice.</h2>',
+  '<p class="en page_speed_1483626782"></p>',
+  '</a></div></div>',
+  '<div class="brows-job-list ayatno_" id="ayatno_3">',
+  '<div class="ayat-row-controls"><button type="button" class="ayat-menu-trigger" title="Options" data-sura="108" data-ayat="3"></button></div>',
+  '<div class="col-md-12 col-sm-12" id="joo3"><a class="ayat-div" href="/english/Surah-al-Kawthar-with-english-translation/3/">',
+  '<h2 class="ur dir-rtl">3. بیشک آپ کا دشمن ہی بے نسل اور بے نام و نشاں ہوگا<span class="page_speed_1364871071">o</span></h2>',
+  '<h2 class="ur dir-rtl"></h2>',
+  '<h2 class="en page_speed_482181316">3. Indeed, your enemy shall be the one without posterity. (Or: indeed, your enemy shall be the one cut off from all goodness.)</h2>',
+  '<p class="en page_speed_1483626782"></p>',
+  '</a></div></div>',
+  '<div data-type="ur" class="item sortable-item"><span class="text">Urdu</span></div>',
+  '<div data-type="en" class="item sortable-item"><span class="text">English - Manifest</span></div>',
+]);
+
+export const AZ_ZUMAR_31_ROW = lines([
+  '<div class="brows-job-list ayatno_" id="ayatno_31">',
+  '<div class="ayat-row-controls"><button type="button" class="ayat-menu-trigger" title="Options" data-sura="39" data-ayat="31"></button></div>',
+  '<div class="col-md-12 col-sm-12" id="joo31"><a class="ayat-div" href="/english/Surah-az-Zumar-with-english-translation/31/">',
+  '<h2 class="ur dir-rtl">31. پھر بلاشبہ تم لوگ قیامت کے دن اپنے رب کے حضور باہم جھگڑا کروگے*<span class="page_speed_429588967">o</span></h2>',
+  '<h2 class="ur dir-rtl">* ایک گروہ دوسرے کو کہے گا کہ ہمیں مقامِ نبوّت اور شانِ رسالت کو سمجھنے سے تم نے روکا تھا، وہ کہیں گے: نہیں تم خود ہی بدبخت اور گمراہ تھے۔</h2>',
+  '<h2 class="en page_speed_1893945610">31. Then, on the Day of Resurrection, you will dispute with one another before your Lord.*</h2>',
+  '<p class="en page_speed_1842245304">* One group will say to the other: ‘You stopped us from understanding the esteemed station of the Prophet and accepting his glorious message.’ Others will reply: ‘No, you were misguided yourselves.’</p>',
+  '</a></div></div>',
+]);
+
+export const ASH_SHURA_52_ROW = lines([
+  '<div class="brows-job-list ayatno_" id="ayatno_52">',
+  '<div class="ayat-row-controls"><button type="button" class="ayat-menu-trigger" title="Options" data-sura="42" data-ayat="52"></button></div>',
+  '<div class="col-md-12 col-sm-12" id="joo52"><a class="ayat-div" href="/english/Surah-ash-Shura-with-english-translation/52/">',
+  '<h2 class="ur dir-rtl">52. سو اسی طرح ہم نے آپ کی طرف اپنے حکم سے روحِ (قلوب و ارواح) کی وحی فرمائی (جو قرآن ہے)، اور آپ (وحی سے قبل اپنی ذاتی درایت و فکر سے) نہ یہ جانتے تھے کہ کتاب کیا ہے اور نہ ایمان (کے شرعی احکام کی تفصیلات کو ہی جانتے تھے جو بعد میں نازل اور مقرر ہوئیں)(1) مگر ہم نے اسے نور بنا دیا۔ ہم اِس (نور) کے ذریعہ اپنے بندوں میں سے جسے چاہتے ہیں ہدایت سے نوازتے ہیں، اور بیشک آپ ہی صراطِ مستقیم کی طرف ہدایت عطا فرماتے ہیں(2)<span class="page_speed_993339367">o</span></h2>',
+  '<h2 class="ur dir-rtl">1:- آپ صلی اللہ علیہ وآلہ وسلم کی شانِ اُمّیت کی طرف اشارہ ہے تاکہ کفّار آپ کی زبان سے قرآن کی آیات اور ایمان کی تفصیلات سن کر یہ بدگمانی نہ پھیلائیں کہ یہ سب کچھ حضرت محمد مصطفی صلی اللہ علیہ وآلہ وسلم نے اپنے ذاتی علم اور تفکر سے گھڑ لیا ہے کچھ نازل نہیں ہوا، سو یہ اَز خود نہ جاننا حضور صلی اللہ علیہ وآلہ وسلم کا عظیم معجزہ بنا دیا گیا۔ 2:- اے حبیب! آپ کا ہدایت دینا اور ہمارا ہدایت دینا دونوں کی حقیقت ایک ہی ہے اور صرف انہی کو ہدایت نصیب ہوتی ہے جو اس حقیقت کی معرفت اور اس سے وابستگی رکھتے ہیں۔</h2>',
+  '<h2 class="en page_speed_141907104">52. Thus have We revealed to you the Spirit of Our command (i.e. the Qur’an). You did not know (before the revelation) what the Book was nor (the details of) the faith.* But We made it a Light by which We may guide whomever We wish among Our servants. And indeed, you guide (people)to the straight path.</h2>',
+  '<p class="en page_speed_1831169097">* This verse refers to the unique status of the Holy Prophet (blessings and peace be upon him) as being an <i>Ummi</i>, not tutored by anyone to read or write. So, after hearing the verses of the Qur’an and the details of the faith, the disbelievers may not have any plausible reason to accuse him of being the inventor of the Book through acquired knowledge and scholarship.</p>',
+  '</a></div></div>',
+]);
+
+export const MUHAMMAD_19_ROW = lines([
+  '<div class="brows-job-list ayatno_" id="ayatno_19">',
+  '<div class="ayat-row-controls"><button type="button" class="ayat-menu-trigger" title="Options" data-sura="47" data-ayat="19"></button></div>',
+  '<div class="col-md-12 col-sm-12" id="joo19"><a class="ayat-div" href="/english/Surah-Muhammad-with-english-translation/19/">',
+  '<h2 class="ur dir-rtl">19. پس جان لیجیے کہ اللہ کے سوا کوئی معبود نہیں اور آپ (اظہارِ عبودیت اور تعلیمِ امت کی خاطر اللہ سے) معافی مانگتے رہا کریں کہ کہیں آپ سے (اپنی شان اقدس اور خصوصی عظمت و رِفعت کے تناظر میں) خلافِ اَولیٰ فعل صادر نہ ہو جائے* اور مومن مردوں اور مومن عورتوں کے لیے بھی طلبِ مغفرت (یعنی ان کی شفاعت) فرماتے رہا کریں (یہی ان کا سامان بخشش ہے)، اور (اے لوگو!) اللہ (دنیا میں) تمہارے چلنے پھرنے کے ٹھکانے اور (آخرت میں) تمہارے ٹھہرنے کی منزلیں (سب) جانتا ہے<span class="page_speed_1397614354">o</span></h2>',
+  '<h2 class="ur dir-rtl">٭ (حالانکہ وہ فعل اپنی جگہ شرعاً بالکل جائز بلکہ مستحسن ہو گا مگر آپ صلی اﷲ علیہ وآلہ وسلم کا مقام و مرتبہ اور عظمت و رِفعت محض جواز اور استحسان کے مراتب سے بھی بہت بلند اور اَرفع و اَعلیٰ ہے)</h2>',
+  '<h2 class="en page_speed_1274865235">19. Know that there is no god except Allah, and (O Prophet!) seek (Allah’s) protection from any action unworthy of your esteemed station. And (also) seek (His) pardon for the believing men and the believing women. And (O people!) Allah fully knows (about) your movements and your final abode (in the Hereafter).</h2>',
+  '<p class="en page_speed_1300036006">* Given that the action may be a pious deed compatible with Islamic law, rather an act par excellence, your august station, majesty and exaltation is far elevated and dignified than mere permissibility and higher grades of moral excellence.</p>',
+  '</a></div></div>',
 ]);
