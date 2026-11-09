@@ -39,12 +39,17 @@ import {
  *                        site wrote it, minus only the leading "{n}." the
  *                        site prepends — and only when n IS that row's
  *                        ayah. Every later `h2` of the class in the row must
- *                        be empty, and the rows must be exactly ayat
- *                        1…count of the surah, or the page FAILS: religious
- *                        text is never silently partial.
+ *                        be empty or, on the Urdu page only, the
+ *                        translator's note: opened by the "٭" mark the
+ *                        translation carries, no more notes than marks
+ *                        (`translatorNotesOnly`; parser version 2). The rows
+ *                        must be exactly ayat 1…count of the surah, or the
+ *                        page FAILS: religious text is never silently partial.
  *              NOT READ: the Arabic in any script (not this kind; the
  *              `data-uthmani` attribute is font glyph codes, not text), the
- *              other translations, the copy payloads, recitation audio.
+ *              other translations, the copy payloads, recitation audio, the
+ *              translator's notes (commentary, not the translation: the "٭"
+ *              mark stays in the ayah's text as written).
  */
 
 export const IRFAN_UL_QURAN_ADAPTER_KEY = 'irfan-ul-quran-translation';
@@ -208,6 +213,34 @@ export function withoutAyahPrefix(text: string, ayah: number): string {
   return text.slice(match[0].length);
 }
 
+/** The mark the Urdu translation sets in an ayah and opens its note with. */
+const IRFAN_UL_QURAN_URDU_NOTE_MARKER = '٭';
+
+/**
+ * Whether a row's later, non-empty `h2` texts are the translator's own notes
+ * and nothing else. Only the Urdu page has them: each row carries a second
+ * `h2.ur`, empty unless the translation sets the "٭" mark, and then holding
+ * the note that mark points to, opened by the same mark (the English page
+ * keeps its notes in `p.en`, which is never read). A note is commentary, not
+ * the ayah's translation: it is recognised and NOT read, and the mark stays
+ * in the translation exactly as written. Every note must open with the mark,
+ * and there may be no more notes than marks in the translation — anything
+ * else is not a note and fails the page.
+ */
+export function translatorNotesOnly(
+  notes: readonly string[],
+  translationText: string,
+  translation: IrfanUlQuranTranslation,
+): boolean {
+  if (notes.length === 0) return true;
+  if (translation !== 'ur') return false;
+  const marks = translationText.split(IRFAN_UL_QURAN_URDU_NOTE_MARKER).length - 1;
+  return (
+    notes.length <= marks &&
+    notes.every((note) => note.startsWith(IRFAN_UL_QURAN_URDU_NOTE_MARKER))
+  );
+}
+
 export function createIrfanUlQuranTranslationAdapter(
   options: IrfanUlQuranTranslationAdapterOptions,
 ): MigrationSourceAdapter {
@@ -244,7 +277,7 @@ export function createIrfanUlQuranTranslationAdapter(
     adapterKey: IRFAN_UL_QURAN_ADAPTER_KEY,
     adapterVersion: '1',
     parserKey: 'cheerio-irfan-ul-quran-translation',
-    parserVersion: '1',
+    parserVersion: '2',
     contentKind: 'quran.translation',
     accessMethod: 'http',
 
@@ -283,12 +316,12 @@ export function createIrfanUlQuranTranslationAdapter(
         const headings = row.find(`h2.${translation}`);
         if (headings.length === 0)
           return { kind: 'failed', detail: 'translation-missing' };
-        if (
-          headings
-            .slice(1)
-            .toArray()
-            .some((extra) => cleanText($(extra).text()).length > 0)
-        )
+        const notes = headings
+          .slice(1)
+          .toArray()
+          .map((extra) => cleanText($(extra).text()))
+          .filter((text) => text.length > 0);
+        if (!translatorNotesOnly(notes, headings.first().text(), translation))
           return { kind: 'failed', detail: 'translation-structure-unexpected' };
         // Exactly the site's text (an empty one is left for validation to
         // name), minus only its own "{n}." prefix and its own end-of-ayah

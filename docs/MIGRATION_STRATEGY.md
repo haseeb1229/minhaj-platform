@@ -834,7 +834,7 @@ seconds. A fixture never becomes an authorised source, nor the reverse.
 | Magazines (minhaj.info) | `minhaj-info-magazines` (`library.magazine`) · `minhaj-info-issues-mq`, `minhaj-info-issues-di` (`library.magazine-issue`) | Issue pages with their table of contents; no PDFs or covers |
 | Minhaj.TV | `minhaj-tv-videos` (`media.video`) | YouTube identifiers and metadata from `/english/` pages only (`robots.txt`); audio is a SoundCloud embed, which the storage-backed audio model (§4.9) cannot hold — **source-limited** |
 | TheFatwa | `thefatwa-rulings` (`fatwa.ruling`, review-only) | Published rulings; the asker's name and place are never read |
-| Irfan-ul-Quran | `irfan-ul-quran-ur`, `irfan-ul-quran-en` (`quran.translation`, review-only) | Translation text per surah, exactly; no Arabic text, tafsir or recitation |
+| Irfan-ul-Quran | `irfan-ul-quran-ur`, `irfan-ul-quran-en` (`quran.translation`, review-only) | Translation text per surah, exactly; no Arabic text, tafsir, translator's notes or recitation (§19, parser version 2) |
 | eLearning (equranclass.com / femaletutor.com) | — | **Source-limited:** the public catalogue has no syllabus, and Learning cannot publish a course without one; a syllabus is never invented |
 
 **Eight content kinds.** `media.video`, `library.work`, `library.magazine`,
@@ -1466,6 +1466,22 @@ sources' revisions stay review-only and are never in a manifest (§14). On stagi
 saves each surah through Quran's own administrative service as the layered `reference` translation
 beside the Tanzil text; a surah whose staged revision fails validation is skipped and reported, never
 repaired (DOMAIN_MODEL.md §8.4; OPEN_DECISIONS.md §1.2).
+
+**The Urdu translator's notes (parser version 2, 2026-11-09).** The first staging run of
+`irfan-ul-quran-ur` over all 114 surahs staged 77 and failed 37 at parse
+(`translation-structure-unexpected`); `irfan-ul-quran-en` staged all 114. Every surah is one page
+(no pagination), and every ayah row carries two `h2.ur`: the translation, and a second that is empty
+unless the translation sets the mark "٭" — then it holds the translator's note that mark points to,
+opened by the same mark (2:9, 9:101, 24:11 and 24:35, 33:37, 63:5 among the surveyed pages; the
+English page keeps the same notes in `p.en`, which it never read). Version 1 refused any non-empty
+second heading. Version 2 (`cheerio-irfan-ul-quran-translation`, adapter
+`scripts/migration/adapters/irfan-ul-quran.ts`) recognises a later `h2.ur` as a note only when it
+opens with "٭" and the row's translation carries at least as many marks as the row has notes; the
+note is commentary and is **not read**, the mark stays in the ayah's text exactly as written, and
+anything else in a later heading — or any later non-empty `h2.en` — still fails the page. The check
+that the rows are exactly ayat 1…N of the surah, once each and in order, is unchanged. The English
+output is unchanged by version 2. A replay of the Urdu source's retained evidence re-reads all 114
+surahs.
 
 ### 19.1 Run plan on staging — PLANNED, not yet run
 

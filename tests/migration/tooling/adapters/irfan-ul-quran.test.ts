@@ -6,16 +6,19 @@ import {
   IRFAN_UL_QURAN_ADAPTER_KEY,
   IRFAN_UL_QURAN_SURAH_SLUGS,
   irfanUlQuranSurahPath,
+  translatorNotesOnly,
   withoutAyahPrefix,
   type IrfanUlQuranTranslation,
 } from '../../../../scripts/migration/adapters/irfan-ul-quran.ts';
 
 import { evidenceOf, fakeSite, htmlPage, pendingItem, textFile } from './fake-site.ts';
+import { AL_IKHLAS_PAGE, AL_MUNAFIQUN_PAGE } from './irfan-ul-quran-pages.ts';
 
 /**
  * The Irfan-ul-Quran translation adapter (REVIEW-ONLY kind) over SYNTHETIC
- * surah pages shaped like the real one. The "translations" here are
- * synthetic placeholder words, never Quran text.
+ * surah pages shaped like the real one — the "translations" there are
+ * synthetic placeholder words, never Quran text — and over two TRIMMED REAL
+ * pages (`irfan-ul-quran-pages.ts`) for the translator's-note structure.
  */
 
 const SITE = 'https://www.irfan-ul-quran.com';
@@ -87,7 +90,7 @@ describe('identity and construction', () => {
       adapterKey: IRFAN_UL_QURAN_ADAPTER_KEY,
       adapterVersion: '1',
       parserKey: 'cheerio-irfan-ul-quran-translation',
-      parserVersion: '1',
+      parserVersion: '2',
       contentKind: 'quran.translation',
       accessMethod: 'http',
     });
@@ -389,6 +392,25 @@ describe('parse', () => {
     ).toEqual({ kind: 'failed', detail: 'surah-mismatch' });
   });
 
+  it('fails a later heading that is not a note of a marked translation', () => {
+    // The synthetic rows' translations carry no "٭" mark.
+    const unmarked = fullFatihah((ayah) =>
+      ayah === 5 ? { extraUrdu: '٭ مصنوعی حاشیہ' } : {},
+    );
+    expect(parse(unmarked)).toEqual({
+      kind: 'failed',
+      detail: 'translation-structure-unexpected',
+    });
+    const marked = fullFatihah((ayah) =>
+      ayah === 5 ? { urdu: '5. مصنوعی٭', extraUrdu: '٭ مصنوعی حاشیہ' } : {},
+    );
+    const result = parse(marked);
+    if (result.kind !== 'parsed' || result.record.kind !== 'quran.translation')
+      throw new Error('expected a translation');
+    expect(result.record.ayat[4]).toEqual({ ayah: 5, text: 'مصنوعی٭' });
+    expect(JSON.stringify(result)).not.toContain('حاشیہ');
+  });
+
   it('turns decoding refusals into parse failures', () => {
     expect(adapter().parse(evidenceOf(fullFatihah(), FATIHAH_URL, null))).toEqual({
       kind: 'failed',
@@ -401,5 +423,113 @@ describe('parse', () => {
         finalUrl: FATIHAH_URL,
       }),
     ).toEqual({ kind: 'failed', detail: 'invalid-utf8' });
+  });
+});
+
+describe('real pages (trimmed)', () => {
+  const MUNAFIQUN_URL = `${SITE}${irfanUlQuranSurahPath(63)}`;
+  const IKHLAS_URL = `${SITE}${irfanUlQuranSurahPath(112)}`;
+  const real = (
+    html: string,
+    surah: number,
+    url: string,
+    translation: IrfanUlQuranTranslation = 'ur',
+  ) => adapter(translation, [surah]).parse(evidenceOf(html, url));
+  const ayatOf = (result: ReturnType<typeof real>) => {
+    if (result.kind !== 'parsed' || result.record.kind !== 'quran.translation')
+      throw new Error(`expected a translation, got ${JSON.stringify(result)}`);
+    return result.record.ayat;
+  };
+  // The translator's note on 63:5, as the second `h2.ur` of its row opens it.
+  const NOTE_OPENING = '٭ یہ آیت عبد اللہ بن اُبیّ';
+
+  it('reads a surah without notes exactly, minus the prefix and the ornament', () => {
+    const result = real(AL_IKHLAS_PAGE, 112, IKHLAS_URL);
+    expect(result).toMatchObject({
+      kind: 'parsed',
+      record: { work: 'Urdu', surah: 112, legacyIdentifier: 'surah-112-ur' },
+    });
+    expect(ayatOf(result)).toEqual([
+      { ayah: 1, text: '(اے نبئ مکرّم!) آپ فرما دیجئے: وہ اللہ ہے جو یکتا ہے' },
+      { ayah: 2, text: 'اللہ سب سے بے نیاز، سب کی پناہ اور سب پر فائق ہے' },
+      { ayah: 3, text: 'نہ اس سے کوئی پیدا ہوا ہے اور نہ ہی وہ پیدا کیا گیا ہے' },
+      { ayah: 4, text: 'اور نہ ہی اس کا کوئی ہمسر ہے' },
+    ]);
+  });
+
+  it("reads every ayah of a surah with the Urdu translator's note, and not the note", () => {
+    const ayat = ayatOf(real(AL_MUNAFIQUN_PAGE, 63, MUNAFIQUN_URL));
+    expect(ayat.map((entry) => entry.ayah)).toEqual(
+      Array.from({ length: SURAH_AYAH_COUNTS[62] ?? 0 }, (_, index) => index + 1),
+    );
+    expect(ayat).toHaveLength(11);
+    expect(ayat.every((entry) => entry.text.trim().length > 0)).toBe(true);
+    expect(ayat.every((entry) => !/^\s*[0-9]/.test(entry.text))).toBe(true);
+    // The mark stays exactly where the translation sets it; the note is not read.
+    expect(ayat[4]?.text.startsWith('اور جب اُن سے کہا جاتا ہے کہ آؤ رسول اللہ')).toBe(
+      true,
+    );
+    expect(ayat[4]?.text.endsWith('گریز کرتے ہیں٭')).toBe(true);
+    expect(
+      ayat.filter((entry) => entry.text.includes('٭')).map((entry) => entry.ayah),
+    ).toEqual([5]);
+    expect(JSON.stringify(ayat)).not.toContain('عبد اللہ بن اُبیّ');
+    expect(AL_MUNAFIQUN_PAGE).toContain(NOTE_OPENING);
+  });
+
+  it('reads the English of the same page, whose note is in p.en and never read', () => {
+    const ayat = ayatOf(real(AL_MUNAFIQUN_PAGE, 63, MUNAFIQUN_URL, 'en'));
+    expect(ayat).toHaveLength(11);
+    expect(JSON.stringify(ayat)).not.toContain('This verse was sent down');
+    expect(ayatOf(real(AL_IKHLAS_PAGE, 112, IKHLAS_URL, 'en'))).toHaveLength(4);
+  });
+
+  it('still fails the real page when its note is not exactly a note of a mark', () => {
+    const fails = (html: string, translation: IrfanUlQuranTranslation = 'ur') =>
+      expect(real(html, 63, MUNAFIQUN_URL, translation)).toEqual({
+        kind: 'failed',
+        detail: 'translation-structure-unexpected',
+      });
+    // The translation without its mark.
+    fails(AL_MUNAFIQUN_PAGE.replace('گریز کرتے ہیں٭', 'گریز کرتے ہیں'));
+    // The note without its opening mark.
+    fails(AL_MUNAFIQUN_PAGE.replace(NOTE_OPENING, 'یہ آیت عبد اللہ بن اُبیّ'));
+    // A second note for the one mark.
+    fails(
+      AL_MUNAFIQUN_PAGE.replace(
+        '<h2 class="ur dir-rtl">٭ یہ',
+        '<h2 class="ur dir-rtl">٭ مصنوعی</h2><h2 class="ur dir-rtl">٭ یہ',
+      ),
+    );
+    // A note in an empty slot of another row (whose translation has no mark).
+    fails(
+      AL_MUNAFIQUN_PAGE.replace(
+        '<h2 class="ur dir-rtl"></h2>',
+        '<h2 class="ur dir-rtl">٭ مصنوعی</h2>',
+      ),
+    );
+    // The English page has no note heading: a later `h2.en` is never one.
+    fails(
+      AL_MUNAFIQUN_PAGE.replace(
+        '<p class="en page_speed_1425939351">* This verse',
+        '<h2 class="en">* Synthetic note</h2><p class="en page_speed_1425939351">* This verse',
+      ),
+      'en',
+    );
+  });
+
+  it('accepts notes only as the Urdu marks admit them', () => {
+    const marked = 'مصنوعی٭ مزید';
+    expect(translatorNotesOnly([], 'مصنوعی', 'ur')).toBe(true);
+    expect(translatorNotesOnly([], 'Synthetic*', 'en')).toBe(true);
+    expect(translatorNotesOnly(['٭ مصنوعی'], marked, 'ur')).toBe(true);
+    // The site also opens a note "٭:" (an-Ahzab 33:37).
+    expect(translatorNotesOnly(['٭: (مصنوعی)'], marked, 'ur')).toBe(true);
+    expect(translatorNotesOnly(['٭ ایک', '٭ دو'], 'ایک٭ دو٭', 'ur')).toBe(true);
+    expect(translatorNotesOnly(['٭ ایک', '٭ دو'], marked, 'ur')).toBe(false);
+    expect(translatorNotesOnly(['مصنوعی ٭'], marked, 'ur')).toBe(false);
+    expect(translatorNotesOnly(['٭ مصنوعی'], 'مصنوعی', 'ur')).toBe(false);
+    expect(translatorNotesOnly(['* Synthetic'], 'Synthetic*', 'en')).toBe(false);
+    expect(translatorNotesOnly(['٭ مصنوعی'], marked, 'en')).toBe(false);
   });
 });
