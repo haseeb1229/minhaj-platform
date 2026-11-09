@@ -80,7 +80,11 @@ await runStagingCommand('staging:db:restore-proof', async () => {
     process.env['MINHAJ_RESTORE_STORAGE_ROOT'],
   );
 
-  const { master } = await openVerifiedMaster(command, { requireFingerprint: true });
+  // RESTORE and its read-back grow with the corpus, like the backup they prove.
+  const { master } = await openVerifiedMaster(command, {
+    requireFingerprint: true,
+    requestTimeoutMs: 1_800_000,
+  });
   const restoreDatabase = newRestoreDatabaseName(STAGING_BACKUP_NAMING);
 
   let restored: SqlSession | undefined;
