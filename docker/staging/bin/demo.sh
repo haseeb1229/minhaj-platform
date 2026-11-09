@@ -38,15 +38,6 @@
 readonly DEMO_CREDENTIALS=/etc/minhaj/secrets/demo-accounts.txt
 readonly DEMO_PERSONAS='student:amina.student@demo.minhaj.invalid teacher:yusuf.teacher@demo.minhaj.invalid member:bilal.member@demo.minhaj.invalid'
 
-# The running web service must be the deployment's non-indexable build.
-assert_not_indexable() {
-  local dir value
-  dir="$(current_release_dir)"
-  value="$(release_compose "$dir" exec -T web printenv PUBLIC_INDEXING_ENABLED 2> /dev/null | tr -d '\r')" \
-    || die "the web service is not running; deploy staging first"
-  [ "$value" = false ] || die "the deployed web service is not explicitly non-indexable"
-}
-
 # Creates the credentials file once (root-only), never printing a password.
 ensure_credentials() {
   [ -f "$DEMO_CREDENTIALS" ] && { assert_root_only "$DEMO_CREDENTIALS"; return 0; }

@@ -85,6 +85,9 @@ export {
   createAuthorizationReader,
 } from './authorization.ts';
 
+/** The session a staging host-issued step-up binds to — the staging operator root's only. */
+export { createHostStepUpSessions } from './host-step-up-sessions.ts';
+
 /** Current holders of one permission, by name — an assignment picker's choices. */
 export { createPermissionHolderReader } from './permission-holders.ts';
 export type { PermissionHolder, PermissionHolderReader } from './permission-holders.ts';

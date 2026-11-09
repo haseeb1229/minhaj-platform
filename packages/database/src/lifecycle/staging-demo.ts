@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword } from 'better-auth/crypto';
 
 import { assertMigrationProofDatabase } from './migration-proof-operator.ts';
 import type { SqlSession } from './sql-connection.ts';
+import { assertDeclaredStagingPosture, liveStepUpSessionIds } from './staging-step-up.ts';
 
 /**
  * THE OWNER SIDE of the staging demonstration data (Rebaseline R2; owner
@@ -133,14 +134,11 @@ export class DemoRefusal extends Error {
  * database is called.
  */
 export function assertDemoPosture(values: Record<string, string | undefined>): void {
-  if (values['MINHAJ_DEPLOYMENT_ENVIRONMENT'] !== 'staging')
-    throw new DemoRefusal(
-      'Demo data is staging-only: the process does not declare exactly the staging deployment.',
-    );
-  if (values['PUBLIC_INDEXING_ENABLED'] !== 'false')
-    throw new DemoRefusal(
-      'Demo data needs an explicitly non-indexable deployment (PUBLIC_INDEXING_ENABLED=false).',
-    );
+  assertDeclaredStagingPosture(
+    values,
+    'Demo data',
+    (message) => new DemoRefusal(message),
+  );
 }
 
 async function assertConnectedDatabase(sql: SqlSession): Promise<void> {
@@ -424,22 +422,15 @@ export async function liveStepUpSession(
 ): Promise<string> {
   if (!ACCOUNT.test(operator))
     throw new DemoRefusal('The operator must be an account identifier.');
-  const rows = await sql.query<{ sessionId: string }>(`
-    SELECT DISTINCT g.[sessionId]
-    FROM [dbo].[StepUpGrant] g
-    JOIN [dbo].[Session] s ON s.[id] = g.[sessionId] AND s.[userId] = g.[userId]
-      AND s.[expiresAt] > SYSUTCDATETIME()
-    WHERE g.[userId] = ${n(operator)} AND g.[purpose] = ${n(purpose)}
-      AND g.[expiresAt] > SYSUTCDATETIME();
-  `);
-  const [only] = rows;
-  if (only === undefined || rows.length !== 1)
+  const sessions = await liveStepUpSessionIds(sql, operator, purpose);
+  const [only] = sessions;
+  if (only === undefined || sessions.length !== 1)
     throw new DemoRefusal(
-      rows.length === 0
+      sessions.length === 0
         ? `The operator holds no live ${purpose} step-up; confirm it on the admin roles screen first.`
         : `The operator holds live ${purpose} step-ups on several sessions; name one with --session.`,
     );
-  return only.sessionId;
+  return only;
 }
 
 /* ===========================================================================

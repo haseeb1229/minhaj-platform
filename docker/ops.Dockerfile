@@ -93,7 +93,12 @@ COPY packages/storage/src ./packages/storage/src
 # (`scripts/demo`, owner command `staging-demo`) with its own node-runnable
 # root, the four further contexts it seeds through (Identity, Learning,
 # Membership, Donations), and the Stripe-protocol simulator it starts on
-# loopback inside its own process — no money moves.
+# loopback inside its own process — no money moves. And Identity's staging
+# host-issued step-up (`scripts/identity`, owner command `staging-step-up`)
+# with its own node-runnable root, composing the Identity context already here.
+# And the staging host review (`scripts/review`, owner command
+# `staging-migration-review`) with its own node-runnable root over the migration
+# tooling's root and the Editorial context already here.
 COPY packages/server-core/src ./packages/server-core/src
 COPY apps/web/src/composition/migration-runner.ts \
      apps/web/src/composition/migration-wiring.ts \
@@ -110,6 +115,8 @@ COPY apps/web/src/composition/migration-runner.ts \
      apps/web/src/composition/quran-reference-runner.ts \
      apps/web/src/composition/storage-derivatives-backfill.ts \
      apps/web/src/composition/staging-demo-runner.ts \
+     apps/web/src/composition/staging-step-up-runner.ts \
+     apps/web/src/composition/staging-review-runner.ts \
      ./apps/web/src/composition/
 COPY apps/web/src/contexts/migration-provenance ./apps/web/src/contexts/migration-provenance
 COPY apps/web/src/contexts/media ./apps/web/src/contexts/media
@@ -128,6 +135,8 @@ COPY scripts/migration ./scripts/migration
 COPY scripts/quran ./scripts/quran
 COPY scripts/storage ./scripts/storage
 COPY scripts/demo ./scripts/demo
+COPY scripts/identity ./scripts/identity
+COPY scripts/review ./scripts/review
 COPY scripts/shared/stripe-simulator.mjs ./scripts/shared/stripe-simulator.mjs
 
 # Generated from the schema alone; no database URL is read.

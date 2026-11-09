@@ -557,6 +557,22 @@ describe('migration.publish is externally gated and step-up scoped', () => {
         expect(returnTo).not.toMatch(/requirePrivilegedA|grantStepUp|verifyPublisher/u);
         continue;
       }
+      // OWNER-DECISION-2026-11-09-STAGING-HOST-STEP-UP: the staging host step-up
+      // names the purpose once, in its purpose → permission map, to ISSUE a
+      // grant for an account that already holds migration.publish. It spends
+      // nothing and verifies no publisher.
+      if (
+        file ===
+        'apps/web/src/contexts/identity-access/application/host-step-up-service.ts'
+      ) {
+        const host = withoutComments(await read(file));
+        expect(host.match(/'migration-publication'/gu)).toHaveLength(1);
+        expect(host).toContain(
+          "'migration-publication': Object.freeze(['migration.publish'] as const),",
+        );
+        expect(host).not.toMatch(/requirePrivilegedA|verifyPublisher/u);
+        continue;
+      }
       expect(withoutComments(await read(file)), file).not.toContain(
         "'migration-publication'",
       );

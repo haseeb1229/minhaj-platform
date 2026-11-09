@@ -238,10 +238,67 @@ describe('Phase 28 — the staging stack (compose)', () => {
     expect(script).toContain('/dev/urandom');
     expect(script).toContain('demo_ops "$@" < "$DEMO_CREDENTIALS"');
     expect(script).toContain('-e PUBLIC_INDEXING_ENABLED=false ops');
-    expect(script).toContain('[ "$value" = false ] || die');
+    expect(script).toContain('assert_not_indexable');
+    const lib = await readFile(
+      path.join(repoRoot, 'docker', 'staging', 'bin', 'lib.sh'),
+      'utf8',
+    );
+    expect(lib).toContain('assert_not_indexable() {');
+    expect(lib).toContain('[ "$value" = false ] || die');
     // The passwords never reach argv, the environment or the output.
     expect(script).not.toMatch(
       /printf '%s\\n' "\$password"|echo "\$password"|-e [A-Z_]*PASSWORD/,
+    );
+  });
+
+  it('issues a host step-up only on a proven, non-indexable staging host, without waiting on the host lock', async () => {
+    // OWNER-DECISION-2026-11-09-STAGING-HOST-STEP-UP.
+    const script = await readFile(
+      path.join(repoRoot, 'docker', 'staging', 'bin', 'step-up.sh'),
+      'utf8',
+    );
+    const body = code(script);
+    expect(body).toContain('staging_preflight');
+    expect(body).toContain('assert_not_indexable');
+    expect(body).toContain('-e PUBLIC_INDEXING_ENABLED=false ops');
+    expect(body).toContain(
+      'packages/database/scripts/staging-step-up.ts "$@" < /dev/null',
+    );
+    // Writing one grant conflicts with no ingest, backup or deploy, so it must
+    // not queue up to fifteen minutes behind one (the header says why).
+    expect(body).not.toContain('host_lock');
+    // The preflight comes before anything runs in a container.
+    expect(body.indexOf('staging_preflight')).toBeLessThan(
+      body.indexOf('release_compose'),
+    );
+    expect(body.indexOf('assert_not_indexable')).toBeLessThan(
+      body.indexOf('release_compose'),
+    );
+  });
+
+  it('runs the host review only on a proven, non-indexable staging host, under the host lock', async () => {
+    // Rebaseline R2: the review and publication acts of a completed run.
+    const script = await readFile(
+      path.join(repoRoot, 'docker', 'staging', 'bin', 'migration-review.sh'),
+      'utf8',
+    );
+    const body = code(script);
+    expect(body).toContain('staging_preflight');
+    expect(body).toContain('assert_not_indexable');
+    expect(body).toContain('host_lock');
+    expect(body).toContain('-e PUBLIC_INDEXING_ENABLED=false ops');
+    expect(body).toContain(
+      'packages/database/scripts/staging-migration-review.ts "$@" < /dev/null',
+    );
+    // Only the six acts reach a container; anything else is refused first.
+    expect(body).toContain(
+      'status | approve-run | rights | manifest | publish | editorial) ;;',
+    );
+    for (const step of ['assert_not_indexable', 'host_lock'])
+      expect(body.indexOf('staging_preflight')).toBeLessThan(body.indexOf(step));
+    expect(body.indexOf('host_lock')).toBeLessThan(body.indexOf('release_compose'));
+    expect(body.indexOf('assert_not_indexable')).toBeLessThan(
+      body.indexOf('release_compose'),
     );
   });
 

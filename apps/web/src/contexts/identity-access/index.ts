@@ -53,6 +53,28 @@ export type {
   PrivilegedSecurityState,
 } from './application/privileged-security-service.ts';
 
+/**
+ * The STAGING HOST-ISSUED step-up (OWNER-DECISION-2026-11-09-STAGING-HOST-STEP-UP).
+ * Composed only by the staging operator root; it cannot be constructed outside
+ * a declared non-indexable staging deployment, and no web request path
+ * composes it (tests/architecture/staging-host-step-up.test.ts).
+ */
+export {
+  HOST_STEP_UP_DECISION,
+  HOST_STEP_UP_DEFAULT_MINUTES,
+  HOST_STEP_UP_MAX_MINUTES,
+  HOST_STEP_UP_PERMISSIONS,
+  HostStepUpRefusal,
+  createHostStepUpService,
+} from './application/host-step-up-service.ts';
+
+export type {
+  HostStepUpFailure,
+  HostStepUpGrant,
+  HostStepUpService,
+  HostStepUpServiceDependencies,
+} from './application/host-step-up-service.ts';
+
 export {
   MESSAGE_LOCALES,
   MESSAGE_PURPOSES,

@@ -8,6 +8,8 @@
     "scripts/quran/**/*.ts",
     "scripts/storage/**/*.ts",
     "packages/database/src/lifecycle/mssql.d.ts",
-    "scripts/demo/**/*.ts"
+    "scripts/demo/**/*.ts",
+    "scripts/identity/**/*.ts",
+    "scripts/review/**/*.ts"
   ]
 }

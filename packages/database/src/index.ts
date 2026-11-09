@@ -82,6 +82,7 @@ export {
   AuthorizationDataError,
   createAuthorizationPersistence,
   createAuthorizationReader,
+  createHostStepUpSessions,
   createPermissionHolderReader,
 } from './adapters/identity-access/index.ts';
 

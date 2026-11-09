@@ -256,6 +256,10 @@ const INHERITED = Object.freeze([
   'CLAMAV_PORT',
   'CLAMAV_TIMEOUT_MS',
   'MINHAJ_RELEASE_SHA',
+  // The declared deployment and indexing posture — non-secret, and what the
+  // staging host step-up's own service refuses without.
+  'MINHAJ_DEPLOYMENT_ENVIRONMENT',
+  'PUBLIC_INDEXING_ENABLED',
 ]);
 
 /** The runtime principal's URL, in the shape the application's own `DATABASE_URL` has. */
@@ -329,12 +333,34 @@ export const STORAGE_DERIVATIVES_TOOL_ENTRY = path.join(
 export const DEMO_TOOL_ENTRY = path.join('scripts', 'demo', 'demo-runtime.ts');
 
 /**
+ * Identity's staging host-issued step-up (OWNER-DECISION-2026-11-09-STAGING-
+ * HOST-STEP-UP), run as the RUNTIME principal by `scripts/staging-step-up.ts`.
+ */
+export const HOST_STEP_UP_TOOL_ENTRY = path.join(
+  'scripts',
+  'identity',
+  'host-step-up.ts',
+);
+
+/**
+ * The staging host review (Rebaseline R2; OWNER-DECISION-2026-11-09-STAGING-
+ * HOST-STEP-UP): Migration's run-wide review and publication acts and the
+ * second administrator's Editorial batch, run as the RUNTIME principal by
+ * `scripts/staging-migration-review.ts`.
+ */
+export const MIGRATION_REVIEW_TOOL_ENTRY = path.join(
+  'scripts',
+  'review',
+  'review-runtime.ts',
+);
+
+/**
  * Runs one migration tool — the fixture proof, an authorised-source
- * registration or run, the Quran reference-preview tool or the staging demo
- * tool — as the RUNTIME principal against `runtime`'s database,
- * and returns its final JSON line. The child's environment is the allowlist
- * above plus the runtime URL: it never holds schema authority, the migration
- * URL or another principal's password. Its stderr passes through; its stdout
+ * registration or run, the Quran reference-preview tool, the staging demo
+ * tool, the staging host step-up or the staging host review — as the RUNTIME principal against
+ * `runtime`'s database, and returns its final JSON line. The child's
+ * environment is the allowlist above plus the runtime URL: it never holds
+ * schema authority, the migration URL or another principal's password. Its stderr passes through; its stdout
  * is captured, and only that last line is read.
  */
 export async function runMigrationTool(input: {
@@ -351,6 +377,8 @@ export async function runMigrationTool(input: {
     input.entry !== QURAN_REFERENCE_TOOL_ENTRY &&
     input.entry !== STORAGE_DERIVATIVES_TOOL_ENTRY &&
     input.entry !== DEMO_TOOL_ENTRY &&
+    input.entry !== HOST_STEP_UP_TOOL_ENTRY &&
+    input.entry !== MIGRATION_REVIEW_TOOL_ENTRY &&
     !Object.values(MIGRATION_TOOL_ENTRIES).includes(input.entry)
   )
     throw new Error('Not a migration tool this runner starts.');

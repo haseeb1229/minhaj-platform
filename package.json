@@ -49,6 +49,8 @@
     "staging:demo:seed": "node --conditions=react-server packages/database/scripts/staging-demo.ts seed",
     "staging:demo:status": "node --conditions=react-server packages/database/scripts/staging-demo.ts status",
     "staging:demo:reset": "node --conditions=react-server packages/database/scripts/staging-demo.ts reset",
+    "staging:step-up:grant": "node --conditions=react-server packages/database/scripts/staging-step-up.ts grant",
+    "staging:migration:review": "node --conditions=react-server packages/database/scripts/staging-migration-review.ts",
     "staging:identity:bootstrap": "node --conditions=react-server packages/database/scripts/staging-identity-bootstrap.ts",
     "quran:reference:import": "node --conditions=react-server packages/database/scripts/staging-quran-reference.ts import",
     "staging:storage:derivatives": "node --conditions=react-server packages/database/scripts/staging-storage-derivatives.ts",

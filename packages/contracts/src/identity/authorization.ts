@@ -488,3 +488,29 @@ export interface AuthorizationPersistencePort {
 
   readBootstrapStatus(): Promise<BootstrapStatus>;
 }
+
+/* ===========================================================================
+ * Staging host-issued step-up (OWNER-DECISION-2026-11-09-STAGING-HOST-STEP-UP)
+ * ========================================================================= */
+
+/** The session a host-issued step-up grant is bound to. */
+export interface LiveSessionSummary {
+  readonly sessionId: string;
+  readonly expiresAt: Date;
+}
+
+/**
+ * THE ONE READ the staging host step-up needs beyond the authorisation port:
+ * which session a grant may be bound to.
+ *
+ * Composed ONLY by the staging operator root
+ * (`apps/web/src/composition/staging-step-up-runner.ts`); no web request path
+ * wires it. It returns an identifier and an expiry — never a session token.
+ */
+export interface HostStepUpSessionPort {
+  /**
+   * The account's most recently created session that has not expired, or
+   * `null`. A revoked session is deleted, so it is never returned.
+   */
+  latestLiveSession(accountId: string): Promise<LiveSessionSummary | null>;
+}

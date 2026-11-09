@@ -11,6 +11,7 @@ import {
   runMigrationTool,
 } from './migration-proof-operator.ts';
 import type { SqlServerConnection, SqlSession } from './sql-connection.ts';
+import { liveStepUpSessionIds } from './staging-step-up.ts';
 import type { TanzilCorpus } from './tanzil-corpus.ts';
 
 /**
@@ -254,22 +255,15 @@ export async function liveCanonicalSession(
 ): Promise<string> {
   if (!ACCOUNT.test(operator))
     throw new Error('The operator must be an account identifier.');
-  const rows = await sql.query<{ sessionId: string }>(`
-    SELECT DISTINCT g.[sessionId]
-    FROM [dbo].[StepUpGrant] g
-    JOIN [dbo].[Session] s ON s.[id] = g.[sessionId] AND s.[userId] = g.[userId]
-      AND s.[expiresAt] > SYSUTCDATETIME()
-    WHERE g.[userId] = ${n(operator)} AND g.[purpose] = N'quran-canonical-edit'
-      AND g.[expiresAt] > SYSUTCDATETIME();
-  `);
-  const [only] = rows;
-  if (only === undefined || rows.length !== 1)
+  const sessions = await liveStepUpSessionIds(sql, operator, 'quran-canonical-edit');
+  const [only] = sessions;
+  if (only === undefined || sessions.length !== 1)
     throw new Error(
-      rows.length === 0
+      sessions.length === 0
         ? 'The operator holds no live quran-canonical-edit step-up; confirm it on the admin Quran screen first.'
         : 'The operator holds live quran-canonical-edit step-ups on several sessions; name one with --session.',
     );
-  return only.sessionId;
+  return only;
 }
 
 /* ===========================================================================

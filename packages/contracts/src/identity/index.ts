@@ -68,6 +68,8 @@ export type {
   AuthorizationReaderPort,
   BootstrapStatus,
   CreateCustomRoleInput,
+  HostStepUpSessionPort,
+  LiveSessionSummary,
   PrivilegeInvalidation,
   PrivilegedActor,
   PrivilegedPosture,

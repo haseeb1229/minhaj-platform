@@ -328,6 +328,17 @@ current_release_dir() {
   readlink -f "$RELEASES_DIR/current"
 }
 
+# The running web service must be the deployment's non-indexable build. The
+# staging-only operator commands (demo data, the host-issued step-up) refuse
+# without it, before their own command refuses again.
+assert_not_indexable() {
+  local dir value
+  dir="$(current_release_dir)"
+  value="$(release_compose "$dir" exec -T web printenv PUBLIC_INDEXING_ENABLED 2> /dev/null | tr -d '\r')" \
+    || die "the web service is not running; deploy staging first"
+  [ "$value" = false ] || die "the deployed web service is not explicitly non-indexable"
+}
+
 # ops <script> [args...] — one explicit operator command in the exact-SHA
 # operations image of that release. Prints the command's output.
 ops() {

@@ -752,7 +752,20 @@ describe('Donations adds exactly three keys and one step-up purpose', () => {
       // confirmed refund grant may send the person back to — the donation
       // record page — and grants nothing.
       `apps/web/src/composition/return-to.ts`,
+      // OWNER-DECISION-2026-11-09-STAGING-HOST-STEP-UP: the staging host step-up's
+      // purpose → permission map, which ISSUES a grant and refunds nothing.
+      `apps/web/src/contexts/identity-access/application/host-step-up-service.ts`,
     ]);
+    const host = withoutComments(
+      await read(
+        `apps/web/src/contexts/identity-access/application/host-step-up-service.ts`,
+      ),
+    );
+    expect(host.match(/'donation-refund'/gu)).toHaveLength(1);
+    expect(host).toContain(
+      "'donation-refund': Object.freeze(['donations.refund'] as const),",
+    );
+    expect(host).not.toMatch(/requirePrivilegedActor|\brefund\(/u);
     const returnTo = withoutComments(await read(`apps/web/src/composition/return-to.ts`));
     expect(returnTo.match(/'donation-refund'/gu)).toHaveLength(1);
     expect(returnTo).toContain(

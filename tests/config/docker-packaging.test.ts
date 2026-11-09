@@ -779,6 +779,8 @@ describe('Phase 28 — the operations image is a tool, never a service', () => {
     const ops = await stageOf('ops.Dockerfile', 'ops');
     expect(ops).toContain('COPY scripts/migration ./scripts/migration');
     expect(ops).toContain('COPY scripts/quran ./scripts/quran');
+    expect(ops).toContain('COPY scripts/identity ./scripts/identity');
+    expect(ops).toContain('COPY scripts/review ./scripts/review');
     expect(ops).toContain('COPY packages/server-core/src ./packages/server-core/src');
     for (const module of [
       'migration-runner.ts',
@@ -803,6 +805,10 @@ describe('Phase 28 — the operations image is a tool, never a service', () => {
       'scripts/quran/reference-runtime.ts',
       'scripts/storage/derivatives-backfill.ts',
       'scripts/demo/demo-runtime.ts',
+      // The staging host-issued step-up (OWNER-DECISION-2026-11-09).
+      'scripts/identity/host-step-up.ts',
+      // The staging host review of a completed run (Rebaseline R2).
+      'scripts/review/review-runtime.ts',
     ];
     while (queue.length > 0) {
       const file = queue.pop()!;
@@ -818,7 +824,9 @@ describe('Phase 28 — the operations image is a tool, never a service', () => {
           target.startsWith('scripts/migration/') ||
           target.startsWith('scripts/quran/') ||
           target.startsWith('scripts/storage/') ||
-          target.startsWith('scripts/demo/')
+          target.startsWith('scripts/demo/') ||
+          target.startsWith('scripts/identity/') ||
+          target.startsWith('scripts/review/')
         )
           queue.push(target);
       }
@@ -834,7 +842,7 @@ describe('Phase 28 — the operations image is a tool, never a service', () => {
         ).toBe(true);
     for (const entry of copied)
       expect(entry, 'the operations image copies only what the tooling loads').toMatch(
-        /^apps\/web\/src\/(?:composition\/migration-(?:runner|wiring|targets|target-router|target-support|library-targets|editorial-targets|global-targets|people-targets|collection-targets)\.ts|composition\/collection-member-owners\.ts|composition\/storage\.ts|composition\/quran-reference-runner\.ts|composition\/storage-derivatives-backfill\.ts|composition\/staging-demo-runner\.ts|contexts\/[a-z-]+|composition\/)$/u,
+        /^apps\/web\/src\/(?:composition\/migration-(?:runner|wiring|targets|target-router|target-support|library-targets|editorial-targets|global-targets|people-targets|collection-targets)\.ts|composition\/collection-member-owners\.ts|composition\/storage\.ts|composition\/quran-reference-runner\.ts|composition\/storage-derivatives-backfill\.ts|composition\/staging-demo-runner\.ts|composition\/staging-step-up-runner\.ts|composition\/staging-review-runner\.ts|contexts\/[a-z-]+|composition\/)$/u,
       );
     expect(ops).not.toMatch(/apps\/web\/src\/(?:app|components|i18n|config)\b/u);
   });
