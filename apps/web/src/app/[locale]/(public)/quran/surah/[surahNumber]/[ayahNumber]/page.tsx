@@ -1,18 +1,21 @@
-import { cache } from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
 import { citationOf } from '@minhaj/contracts/quran';
 
-import { quranReadRuntime } from '@/composition/quran-read';
 import {
   ayahPathOf,
   readAyahSegment,
   readReadingRequest,
   readSurahSegment,
 } from '@/components/quran/presentation';
-import { quranAvailability, quranMetadata, readSurah } from '@/components/quran/read';
+import {
+  quranAvailability,
+  quranMetadata,
+  readAyah,
+  readSurah,
+} from '@/components/quran/read';
 import { AyahPage, PERSONAL_ANCHOR } from '@/components/quran/reader';
 import { PersonalControls } from '@/components/personal-island/personal-controls';
 import { requireLocale } from '@/config/route-locale';
@@ -38,10 +41,6 @@ interface AyahParams {
   }>;
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
-
-const readAyah = cache((surah: number, ayah: number) =>
-  quranReadRuntime().reader.ayah({ surah, ayah }),
-);
 
 async function load(params: AyahParams['params']) {
   const { surahNumber, ayahNumber } = await params;

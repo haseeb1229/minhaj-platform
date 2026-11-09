@@ -9,7 +9,12 @@ import {
   localizedPath,
   UNPREFIXED_LOCALE,
 } from '@minhaj/contracts';
-import { QURAN_MODE_POSTURE, type QuranAvailability } from '@minhaj/contracts/quran';
+import {
+  QURAN_MODE_POSTURE,
+  type PublicAyah,
+  type QuranAvailability,
+  type QuranRef,
+} from '@minhaj/contracts/quran';
 
 import { quranReadRuntime } from '@/composition/quran-read';
 import { taxonomyRuntime } from '@/composition/taxonomy';
@@ -47,6 +52,27 @@ export const readSurah = cache((number: number) =>
 export const readSurahs = cache(() => quranReadRuntime().reader.surahs());
 
 export const readJuz = cache((number: number) => quranReadRuntime().reader.juz(number));
+
+/** One Ayah, read once per request however many parts of a page ask. */
+export const readAyah = cache((surah: number, ayah: number) =>
+  quranReadRuntime().reader.ayah({ surah, ayah }),
+);
+
+/** The highest mushaf page the corpus records; 0 when it records none. */
+export const readLastPage = cache(() => quranReadRuntime().reader.lastPage());
+
+/**
+ * The Ayah before a citation in canonical order — the previous one in its
+ * Surah, or the last of the previous Surah by that Surah's own count — so a
+ * page can tell whether a Juz, a hizb or a mushaf page BEGINS at its first
+ * Ayah. `null` at the very beginning of the corpus.
+ */
+export async function readAyahBefore(ref: QuranRef): Promise<PublicAyah | null> {
+  if (ref.ayah > 1) return readAyah(ref.surah, ref.ayah - 1);
+  if (ref.surah <= 1) return null;
+  const previous = await readSurah(ref.surah - 1);
+  return previous === null ? null : readAyah(previous.number, previous.ayahCount);
+}
 
 /**
  * The first Ayah of the corpus as stored — the Bismillah a reader shows at the

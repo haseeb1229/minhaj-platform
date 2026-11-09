@@ -19,12 +19,15 @@ import {
 } from '../../apps/web/src/components/quran/quick-jump.ts';
 import {
   DEFAULT_PREFERENCES,
+  PREFERENCES_KEY,
+  READER_BOOT_SCRIPT,
   SCALE,
-  availableShows,
-  defaultShow,
+  TRANSLATIONS_RENDERED_MAX,
+  defaultShown,
+  presentationOf,
   readLastRead,
   readPreferences,
-  resolveShow,
+  shownOf,
   stepScale,
   writeLastRead,
   writePreferences,
@@ -132,7 +135,21 @@ describe('the quick jump', () => {
       '/quran/surah/18/10',
     );
     expect(quickJumpPathOf({ kind: 'juz', juz: 15 })).toBe('/quran/juz/15');
+    expect(quickJumpPathOf({ kind: 'page', page: 50 })).toBe('/quran/page/50');
     expect(quickJumpPathOf({ kind: 'unknown' })).toBeNull();
+  });
+
+  it('opens a mushaf page only where the corpus records one (Quran Part 1)', () => {
+    expect(parseQuickJump('page 50', INDEX, 604)).toEqual({ kind: 'page', page: 50 });
+    expect(parseQuickJump('p50', INDEX, 604)).toEqual({ kind: 'page', page: 50 });
+    expect(parseQuickJump('Page. 604', INDEX, 604)).toEqual({ kind: 'page', page: 604 });
+    expect(parseQuickJump('صفحہ ۵۰', INDEX, 604)).toEqual({ kind: 'page', page: 50 });
+    expect(parseQuickJump('الصفحة 3', INDEX, 604)).toEqual({ kind: 'page', page: 3 });
+    expect(parseQuickJump('صفحة 3', INDEX, 604)).toEqual({ kind: 'page', page: 3 });
+    // Past the last recorded page, page 0, or a corpus that records no pages.
+    expect(parseQuickJump('page 605', INDEX, 604)).toEqual({ kind: 'unknown' });
+    expect(parseQuickJump('page 0', INDEX, 604)).toEqual({ kind: 'unknown' });
+    expect(parseQuickJump('page 5', INDEX)).toEqual({ kind: 'unknown' });
   });
 
   it('folds names for comparison only', () => {
@@ -145,9 +162,13 @@ describe('the quick jump', () => {
 describe('the reader’s preferences, as this browser stores them', () => {
   it('round-trips what it writes', () => {
     const stored = {
-      translations: 'both',
+      mode: 'mushaf',
+      translationsOn: true,
+      translations: ['work-b', 'work-a'],
       arabicScale: 1.3,
       translationScale: 0.9,
+      leading: 'spacious',
+      layout: 'side',
     } as const;
     expect(readPreferences(writePreferences(stored))).toEqual(stored);
   });
@@ -158,12 +179,43 @@ describe('the reader’s preferences, as this browser stores them', () => {
     expect(readPreferences('[]')).toEqual(DEFAULT_PREFERENCES);
     expect(
       readPreferences(
-        JSON.stringify({ translations: 'fr', arabicScale: 99, translationScale: '1.2' }),
+        JSON.stringify({
+          mode: 'audio',
+          translations: 'fr',
+          arabicScale: 99,
+          translationScale: '1.2',
+          leading: 'tight',
+          layout: 'grid',
+        }),
       ),
     ).toEqual(DEFAULT_PREFERENCES);
     expect(
       readPreferences(JSON.stringify({ arabicScale: Number.NaN, translationScale: -1 })),
     ).toEqual(DEFAULT_PREFERENCES);
+    // A list with anything but slugs in it is no choice at all.
+    expect(
+      readPreferences(JSON.stringify({ translations: ['ok-slug', '<b>'] })).translations,
+    ).toBeNull();
+    expect(
+      readPreferences(JSON.stringify({ translations: ['a1', 2] })).translations,
+    ).toBeNull();
+  });
+
+  it('reads the R2 shape: "none" keeps translations off, any other is the default', () => {
+    expect(readPreferences(JSON.stringify({ translations: 'none' }))).toEqual({
+      ...DEFAULT_PREFERENCES,
+      translationsOn: false,
+    });
+    expect(readPreferences(JSON.stringify({ translations: 'both' }))).toEqual(
+      DEFAULT_PREFERENCES,
+    );
+  });
+
+  it('keeps at most the rendered maximum of works, each once', () => {
+    const many = ['aa', 'aa', 'bb', 'cc', 'dd', 'ee'];
+    expect(readPreferences(JSON.stringify({ translations: many })).translations).toEqual([
+      ...new Set(many.slice(0, TRANSLATIONS_RENDERED_MAX)),
+    ]);
   });
 
   it('steps sizes on a clean grid and holds them inside the range', () => {
@@ -177,26 +229,37 @@ describe('the reader’s preferences, as this browser stores them', () => {
     expect(scale).toBe(SCALE.min);
   });
 
-  it('offers only the translation choices the page rendered', () => {
-    expect(availableShows(['ur', 'en'])).toEqual(['ur', 'en', 'both', 'none']);
-    expect(availableShows(['en'])).toEqual(['en', 'none']);
-    expect(availableShows([])).toEqual(['none']);
+  it('shows the interface language’s translation by default; none in Arabic', () => {
+    expect(defaultShown('ur', ['ur', 'en'])).toEqual([0]);
+    expect(defaultShown('en', ['ur', 'en-GB'])).toEqual([1]);
+    expect(defaultShown('ar', ['ur', 'en'])).toEqual([]);
+    expect(defaultShown('ur', ['en'])).toEqual([0]);
+    expect(defaultShown('en', [])).toEqual([]);
   });
 
-  it('defaults to the interface language’s translation; none in Arabic', () => {
-    expect(defaultShow('ur', ['ur', 'en'])).toBe('ur');
-    expect(defaultShow('en', ['ur', 'en'])).toBe('en');
-    expect(defaultShow('ar', ['ur', 'en'])).toBe('none');
-    expect(defaultShow('ur', ['en'])).toBe('en');
-    expect(defaultShow('en', [])).toBe('none');
-  });
-
-  it('honours a stored choice only where the page can, else its own default', () => {
-    expect(resolveShow('both', ['ur', 'en'], 'en')).toBe('both');
-    expect(resolveShow('ur', ['en'], 'en')).toBe('en');
-    expect(resolveShow('both', ['en'], 'en')).toBe('en');
-    expect(resolveShow('none', [], 'none')).toBe('none');
-    expect(resolveShow(null, ['ur', 'en'], 'ur')).toBe('ur');
+  it('shows the works chosen among those rendered, else the page’s own default', () => {
+    const page = {
+      slugs: ['ur-work', 'en-work', 'fr-work'],
+      defaults: [1],
+      fixed: false,
+    };
+    const base = DEFAULT_PREFERENCES;
+    expect(shownOf(base, page)).toEqual([1]);
+    expect(shownOf({ ...base, translations: ['fr-work', 'ur-work'] }, page)).toEqual([
+      0, 2,
+    ]);
+    // Nothing chosen is on this page: the default, never nothing by accident.
+    expect(shownOf({ ...base, translations: ['gone'] }, page)).toEqual([1]);
+    // Unticked on purpose, or switched off: none.
+    expect(shownOf({ ...base, translations: [] }, page)).toEqual([]);
+    expect(shownOf({ ...base, translationsOn: false }, page)).toEqual([]);
+    // A work the ADDRESS chose always shows.
+    expect(
+      shownOf(
+        { ...base, translationsOn: false },
+        { slugs: ['en-work'], defaults: [0], fixed: true },
+      ),
+    ).toEqual([0]);
   });
 
   it('keeps the last place read only when the corpus has it', () => {
@@ -215,6 +278,146 @@ describe('the reader’s preferences, as this browser stores them', () => {
     expect(readLastRead(JSON.stringify({ surah: '18', ayah: 1 }))).toBeNull();
     expect(readLastRead('{')).toBeNull();
     expect(readLastRead(null)).toBeNull();
+  });
+});
+
+/* ===========================================================================
+ * The boot script — the same rules before the first paint
+ * ========================================================================= */
+
+interface FakeReader {
+  readonly attributes: Map<string, string>;
+  readonly properties: Map<string, string>;
+}
+
+/** Runs the boot script against a fake reader element and a stored value. */
+function boot(raw: string | null, attributes: Record<string, string>, throws = false) {
+  const reader: FakeReader = {
+    attributes: new Map(Object.entries(attributes)),
+    properties: new Map(),
+  };
+  const element = {
+    hasAttribute: (name: string) => reader.attributes.has(name),
+    getAttribute: (name: string) => reader.attributes.get(name) ?? null,
+    setAttribute: (name: string, value: string) => reader.attributes.set(name, value),
+    style: {
+      setProperty: (name: string, value: string) => reader.properties.set(name, value),
+    },
+  };
+  const storage = {
+    getItem: (key: string) => {
+      if (throws) throw new Error('blocked');
+      return key === PREFERENCES_KEY ? raw : null;
+    },
+  };
+  // eslint-disable-next-line no-new-func -- the boot script is the code under test
+  new Function('window', 'document', READER_BOOT_SCRIPT)(
+    { localStorage: storage },
+    { currentScript: { parentElement: element } },
+  );
+  return reader;
+}
+
+const PAGES = [
+  {
+    attributes: {
+      'data-mode': 'translation',
+      'data-modes': '',
+      'data-slugs': 'ur-work en-work',
+      'data-shown': '1',
+      'data-leading': 'comfortable',
+      'data-layout': 'stacked',
+    },
+    page: {
+      slugs: ['ur-work', 'en-work'],
+      defaults: [1],
+      fixed: false,
+      modes: true,
+      explicitSize: false,
+    },
+  },
+  {
+    attributes: {
+      'data-mode': 'translation',
+      'data-slugs': 'en-work',
+      'data-shown': '0',
+      'data-fixed': '',
+      'data-explicit-size': '',
+      'data-leading': 'comfortable',
+      'data-layout': 'stacked',
+    },
+    page: {
+      slugs: ['en-work'],
+      defaults: [0],
+      fixed: true,
+      modes: false,
+      explicitSize: true,
+    },
+  },
+] as const;
+
+const STORED: readonly (string | null)[] = [
+  null,
+  'not json',
+  '[]',
+  '{}',
+  JSON.stringify({ translations: 'none' }),
+  JSON.stringify({ translations: 'both', arabicScale: 1.3 }),
+  JSON.stringify({
+    mode: 'reading',
+    leading: 'spacious',
+    layout: 'side',
+    translations: ['ur-work'],
+    translationScale: 0.9,
+  }),
+  JSON.stringify({ mode: 'mushaf', translations: ['en-work', 'ur-work'] }),
+  JSON.stringify({ mode: 'bogus', translations: ['B!'], arabicScale: 99 }),
+  JSON.stringify({ translations: [] }),
+  JSON.stringify({ translationsOn: false, leading: 'compact' }),
+  JSON.stringify({ translations: ['gone'] }),
+  JSON.stringify({
+    translations: ['en-work', 'en-work', 'en-work', 'en-work', 'ur-work'],
+  }),
+  JSON.stringify({ arabicScale: 1.6, translationScale: 0.8 }),
+];
+
+describe('the boot script', () => {
+  it('applies exactly what presentationOf decides, for every stored value', () => {
+    for (const { attributes, page } of PAGES) {
+      for (const raw of STORED) {
+        const reader = boot(raw, attributes);
+        const expected = presentationOf(readPreferences(raw), page);
+        const label = `${String(raw)} on ${JSON.stringify(page)}`;
+        expect(reader.attributes.get('data-mode'), label).toBe(
+          expected.mode ?? 'translation',
+        );
+        expect(reader.attributes.get('data-shown'), label).toBe(expected.shown);
+        expect(reader.attributes.get('data-leading'), label).toBe(expected.leading);
+        expect(reader.attributes.get('data-layout'), label).toBe(expected.layout);
+        const arabic = reader.properties.get('--quran-arabic-scale');
+        expect(
+          arabic === undefined ? (page.explicitSize ? null : 1) : Number(arabic),
+          label,
+        ).toBe(expected.arabicScale);
+        const translation = reader.properties.get('--quran-translation-scale');
+        expect(translation === undefined ? 1 : Number(translation), label).toBe(
+          expected.translationScale,
+        );
+      }
+    }
+  });
+
+  it('marks script as present, and leaves the render alone when storage throws', () => {
+    const first = PAGES[0];
+    const reader = boot('{"mode":"reading"}', first.attributes, true);
+    expect(reader.attributes.has('data-script')).toBe(true);
+    expect(reader.attributes.get('data-mode')).toBe('translation');
+    expect(reader.properties.size).toBe(0);
+  });
+
+  it('is one fixed string: no request value can reach it', () => {
+    expect(READER_BOOT_SCRIPT).not.toMatch(/<\/script/iu);
+    expect(READER_BOOT_SCRIPT).toContain(JSON.stringify(PREFERENCES_KEY));
   });
 });
 
@@ -312,6 +515,28 @@ describe('the rendered Ayah', () => {
     ).toEqual([]);
   });
 
+  it('draws the reading-mode button around the same mark, only when named', () => {
+    const tree = ArabicText({
+      id: 'arabic-2-3',
+      label: 'Arabic text',
+      text: SENTINEL,
+      ayah: 3,
+      open: 'Surah 2, Ayah 3: show its translation',
+    });
+    const [button, ...others] = all(tree, 'button');
+    expect(others).toEqual([]);
+    expect(button?.props['type']).toBe('button');
+    expect(button?.props['data-ayah-action']).toBe('open');
+    // Its name carries the mark it shows (WCAG 2.5.3, label in name).
+    expect(button?.props['aria-label']).toBe('۝٣ Surah 2, Ayah 3: show its translation');
+    // The text node is still the stored string, alone in its element.
+    const [arabic] = all(tree, 'p');
+    expect(arabic?.props['children']).toBe(SENTINEL);
+    expect(
+      all(ArabicText({ id: 'a', label: 'x', text: SENTINEL, ayah: 3 }), 'button'),
+    ).toEqual([]);
+  });
+
   it('marks a translation with its own language and names its work', () => {
     const tree = TranslationText({
       id: 'translation-2-3',
@@ -319,7 +544,7 @@ describe('the rendered Ayah', () => {
       name: 'Sample work',
       text: 'NON_QURAN_FIXTURE translation',
       language: { code: 'ur', direction: 'rtl' },
-      quickChoice: 'ur',
+      index: 1,
     });
     const [text, attribution] = all(tree, 'p');
     expect(text?.props['lang']).toBe('ur');
@@ -328,17 +553,8 @@ describe('the rendered Ayah', () => {
     expect(attribution?.props['id']).toBe('translation-2-3');
     expect(attribution?.props['lang']).toBeUndefined();
     const group = tree as ReactElement<Record<string, unknown>>;
-    expect(group.props['data-translation-language']).toBe('ur');
+    // Shown or hidden by its place among the rendered translations.
+    expect(group.props['data-translation-index']).toBe(1);
     expect(group.props['data-translation-work']).toBe('Sample work');
-    // A translation the address chose carries no quick-choice mark.
-    const chosen = TranslationText({
-      id: 'ayah-translation',
-      label: 'Translation: Sample work',
-      name: 'Sample work',
-      text: 'x',
-      language: { code: 'en', direction: 'ltr' },
-      quickChoice: null,
-    }) as ReactElement<Record<string, unknown>>;
-    expect('data-translation-language' in chosen.props).toBe(false);
   });
 });

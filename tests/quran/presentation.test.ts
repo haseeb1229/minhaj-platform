@@ -7,7 +7,6 @@ import type {
 import {
   DEFAULT_TEXT_SIZE,
   NO_READING_CHOICE,
-  ayahAnchor,
   ayahPath,
   ayahPathOf,
   juzPath,
@@ -51,7 +50,6 @@ describe('a citation has exactly one address', () => {
     expect(ayahPath('ur', { surah: 2, ayah: 3 })).toBe('/ur/quran/surah/2/3');
     expect(surahPath('ar', 7)).toBe('/ar/quran/surah/7');
     expect(juzPath('en', 4)).toBe('/quran/juz/4');
-    expect(ayahAnchor(12)).toBe('ayah-12');
   });
 
   it('addresses recitation bytes by recitation, segment and asset, encoded', () => {

@@ -128,6 +128,8 @@ describe('the shipped typefaces', () => {
     }
     expect(appliers.sort()).toEqual([
       'apps/web/src/app/[locale]/(public)/search/page.tsx',
+      // Quran Part 1: the reading-mode sheet shows the Ayah it was opened on.
+      'apps/web/src/components/quran/reader-controls.tsx',
       'apps/web/src/components/quran/reader.tsx',
       'apps/web/src/components/quran/scripture.tsx',
       'apps/web/src/components/quran/search.tsx',

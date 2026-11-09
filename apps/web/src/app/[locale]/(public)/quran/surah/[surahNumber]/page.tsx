@@ -23,6 +23,11 @@ import { requireLocale } from '@/config/route-locale';
  * canonical address is the bare Surah address — preferences are never part of
  * it (ROUTE_MAP.md §2.1).
  *
+ * ONE WINDOW AT A TIME (Quran Part 1). `?from=` names the window shown — a
+ * plain, bounded number checked against the Surah's own count; anything else
+ * is the first window — and the next window is a link the reader fetches as
+ * it nears it. The canonical address stays the bare Surah address.
+ *
  * A Surah that does not exist — or any Surah while no corpus is active — is a
  * 404: the resource is absent, not unavailable.
  */
@@ -59,12 +64,14 @@ export default async function SurahRoute({ params, searchParams }: SurahParams) 
   const locale = await requireLocale(params);
   const [availability, surah] = await Promise.all([quranAvailability(), load(params)]);
   if (!availability.active || surah === null) notFound();
+  const query = await searchParams;
   return (
     <SurahPage
       locale={locale}
       availability={availability}
       surah={surah}
-      request={readReadingRequest(await searchParams)}
+      request={readReadingRequest(query)}
+      from={query['from']}
     />
   );
 }

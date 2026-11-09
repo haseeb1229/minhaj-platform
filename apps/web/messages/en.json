@@ -3202,7 +3202,9 @@
     "fact": {
       "citation": "Citation",
       "juz": "Juz",
-      "sajdah": "Prostration"
+      "sajdah": "Prostration",
+      "page": "Mushaf page",
+      "hizb": "Hizb"
     },
     "surahNavigation": "Previous and next Surah",
     "ayahNavigation": "Previous and next Ayah",
@@ -3218,9 +3220,10 @@
       "submit": "Go",
       "surahMissing": "That Surah is not available. Choose one from the list.",
       "ayahMissing": "That Surah has no Ayah with that number.",
-      "queryMissing": "Nothing matches “{query}”. Try a Surah number such as 18, a citation such as 18:10, a Surah’s name, or Juz 15."
+      "queryMissing": "Nothing matches “{query}”. Try a Surah number such as 18, a citation such as 18:10, a Surah’s name, or Juz 15.",
+      "pageMissing": "That page is not in this text."
     },
-    "readIntro": "Choose where to begin. Nothing about your reading is stored: the address of the page you are on is all there is to come back to.",
+    "readIntro": "Choose where to begin: continue where you stopped, open a well-loved place, type a citation, or browse by Surah, Juz or mushaf page.",
     "beginAt": "Begin at Surah {number}",
     "reciter": "Reciter",
     "style": "Style",
@@ -3290,23 +3293,22 @@
       "tabs": "Index of the Quran"
     },
     "jump": {
-      "label": "Go to a Surah, Ayah or Juz",
-      "help": "For example 18, 18:10, a Surah’s name, or Juz 15.",
+      "label": "Go to a Surah, Ayah, Juz or page",
+      "help": "For example 18, 18:10, a Surah’s name, Juz 15 or page 50.",
       "submit": "Go",
       "opens": "Opens {target}",
       "none": "Nothing matches yet."
     },
     "continue": {
-      "heading": "Continue reading"
+      "heading": "Continue where you stopped",
+      "account": "Your reading position",
+      "device": "Last read on this device"
     },
     "reader": {
       "translationSwitch": "Translation",
       "settings": "Settings",
       "settingsTitle": "Reading settings",
       "close": "Close",
-      "translationHeading": "Translation",
-      "both": "Both",
-      "none": "None",
       "arabicSize": "Arabic text size",
       "translationSize": "Translation text size",
       "decrease": "Smaller",
@@ -3327,8 +3329,65 @@
       "status": {
         "copied": "Copied with its citation.",
         "linkCopied": "Link copied.",
-        "failed": "Copying is not available in this browser."
+        "failed": "Copying is not available in this browser.",
+        "loadFailed": "More ayat could not be loaded here. Use the link to continue."
+      },
+      "modes": {
+        "label": "Reading mode",
+        "translation": "Translation",
+        "reading": "Reading",
+        "mushaf": "Page"
+      },
+      "translationsLegend": "Translations to show",
+      "leading": {
+        "label": "Line spacing",
+        "compact": "Compact",
+        "comfortable": "Comfortable",
+        "spacious": "Spacious"
+      },
+      "layout": {
+        "label": "Several translations",
+        "stacked": "One under another",
+        "side": "Side by side on wide screens"
+      },
+      "openAyah": "Surah {surah}, Ayah {ayah}: show its translation",
+      "ayahSheet": {
+        "openPage": "Open this Ayah’s page",
+        "noTranslation": "No translation is shown on this page."
+      },
+      "window": {
+        "label": "More ayat of this Surah",
+        "earlier": "Earlier ayat: {start}–{end}",
+        "continue": "Continue reading: ayat {start}–{end}",
+        "position": "Ayat {start}–{end} of {count}"
+      },
+      "skip": "Skip to the text",
+      "pageSpan": "Pages {start}–{end}",
+      "marks": {
+        "page": "Page {number}",
+        "hizb": "Hizb {number}",
+        "sajdah": "Prostration"
       }
+    },
+    "start": {
+      "heading": "Popular places to begin",
+      "kursi": "Ayat al-Kursi",
+      "whole": "Whole Surah"
+    },
+    "browse": {
+      "heading": "Browse the whole text",
+      "pages": "By mushaf page",
+      "pagesBody": "Read page by page, from page 1 to page {last}."
+    },
+    "page": {
+      "title": "Page {number}",
+      "navigation": "Previous and next page",
+      "previous": "Previous page ({number})",
+      "next": "Next page ({number})",
+      "goTo": "Go to a page",
+      "number": "Page number",
+      "submit": "Go",
+      "onPage": "On this page"
     }
   },
   "quranAdmin": {

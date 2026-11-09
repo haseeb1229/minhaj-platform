@@ -518,6 +518,13 @@ p {
   --quran-arabic-scale: 1;
   --quran-translation-base: 1.0625rem;
   --quran-translation-scale: 1;
+  --quran-leading: 1;
+}
+.quran-reader[data-leading='compact'] {
+  --quran-leading: 0.88;
+}
+.quran-reader[data-leading='spacious'] {
+  --quran-leading: 1.18;
 }
 @media (min-width: 64rem) {
   .quran-reader {
@@ -537,7 +544,7 @@ p {
 .quran-ayah-text,
 .quran-bismillah {
   font-size: calc(var(--quran-arabic-base, 1.625rem) * var(--quran-arabic-scale, 1));
-  line-height: 2.05;
+  line-height: calc(2.05 * var(--quran-leading, 1));
   overflow-wrap: anywhere;
 }
 .quran-ayah-end {
@@ -548,29 +555,159 @@ p {
   font-size: calc(
     var(--quran-translation-base, 1.0625rem) * var(--quran-translation-scale, 1)
   );
-  line-height: 1.6;
+  line-height: calc(1.6 * var(--quran-leading, 1));
 }
 .quran-translation:lang(ur) {
   font-size: calc(
     1.2 * var(--quran-translation-base, 1.0625rem) * var(--quran-translation-scale, 1)
   );
-  line-height: 2.15;
+  line-height: calc(2.15 * var(--quran-leading, 1));
 }
 .quran-translation:lang(ar) {
   font-size: calc(
     1.15 * var(--quran-translation-base, 1.0625rem) * var(--quran-translation-scale, 1)
   );
-  line-height: 1.95;
+  line-height: calc(1.95 * var(--quran-leading, 1));
 }
-.quran-reader[data-translations='none'] [data-translation-language],
-.quran-reader[data-translations='ur']
-  [data-translation-language]:not([data-translation-language='ur']),
-.quran-reader[data-translations='en']
-  [data-translation-language]:not([data-translation-language='en']) {
+
+/*
+ * QURAN PART 1 (owner direction 2026-11-09) — which translations show, the
+ * three reading modes and the division markers, all from attributes on the
+ * reader element (`data-shown`, `data-mode`, `data-layout`) that the server
+ * renders and the reader's boot script and island change. One document serves
+ * every mode: switching never asks the server again.
+ *
+ * `data-shown` lists the indexes of the rendered translations that show; a
+ * page renders at most four (`TRANSLATIONS_RENDERED_MAX`).
+ */
+.quran-reader:not([data-shown~='0']) [data-translation-index='0'],
+.quran-reader:not([data-shown~='1']) [data-translation-index='1'],
+.quran-reader:not([data-shown~='2']) [data-translation-index='2'],
+.quran-reader:not([data-shown~='3']) [data-translation-index='3'] {
   display: none;
 }
-.quran-reader:not([data-enhanced]) .quran-ayah-tool {
+.quran-translations {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+@media (min-width: 64rem) {
+  .quran-reader[data-layout='side'] .quran-translations {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    column-gap: 2.5rem;
+    max-width: none;
+  }
+}
+
+/* The mode switch keeps its place without script, but shows only with it. */
+.quran-reader:not([data-script]) .quran-mode-switch {
+  visibility: hidden;
+}
+
+/* Copy, Share, Save-in-place and the reading-mode Ayah button need script. */
+.quran-reader:not([data-enhanced]) .quran-ayah-tool,
+.quran-ayah-open {
   display: none;
+}
+
+/* Division markers: quiet in translation mode, a page header in mushaf mode. */
+.quran-marks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding-block-start: 1.25rem;
+  font-size: var(--text-caption);
+  color: var(--color-foreground-muted);
+}
+.quran-mark-division {
+  border: 1px solid var(--color-accent-rule);
+  border-radius: 999px;
+  background: var(--color-accent-surface);
+  padding-inline: 0.625rem;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+.quran-mark-sajdah {
+  display: none;
+}
+/* The Juz and hizb a page header names: the mushaf mode's alone. */
+.quran-mark-context {
+  display: none;
+}
+.quran-reader[data-mode='mushaf'] .quran-mark-context {
+  display: inline;
+}
+.quran-reader[data-mode='mushaf']
+  .quran-marks:has(.quran-mark-page)
+  .quran-mark-division {
+  display: none;
+}
+
+/* READING and MUSHAF: the Arabic alone, flowing, each Ayah closed by its mark. */
+.quran-reader:is([data-mode='reading'], [data-mode='mushaf']) .quran-ayat {
+  display: block;
+  direction: rtl;
+  text-align: justify;
+  padding-block: 1.5rem;
+}
+.quran-reader:is([data-mode='reading'], [data-mode='mushaf'])
+  :is(.quran-ayat > li, .quran-ayah-body, .quran-ayah-arabic, .quran-ayah-text) {
+  display: inline;
+}
+.quran-reader:is([data-mode='reading'], [data-mode='mushaf']) .quran-ayah-body {
+  border: 0;
+  padding: 0;
+}
+.quran-reader:is([data-mode='reading'], [data-mode='mushaf'])
+  :is(.quran-ayah-head, .quran-translations, .quran-layer, .quran-tafsir) {
+  display: none;
+}
+.quran-reader[data-enhanced]:is([data-mode='reading'], [data-mode='mushaf'])
+  .quran-ayah-end {
+  display: none;
+}
+.quran-reader[data-enhanced]:is([data-mode='reading'], [data-mode='mushaf'])
+  .quran-ayah-open {
+  display: inline;
+}
+.quran-ayah-open {
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  padding: 0;
+  color: var(--color-accent);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.quran-ayah-open:hover {
+  background: var(--color-accent-surface);
+}
+.quran-reader:is([data-mode='reading'], [data-mode='mushaf']) .quran-marks {
+  display: inline-flex;
+  padding: 0;
+  margin-inline: 0.375rem;
+  vertical-align: middle;
+}
+.quran-reader:is([data-mode='reading'], [data-mode='mushaf']) .quran-mark-sajdah {
+  display: inline;
+}
+.quran-reader[data-mode='reading'] .quran-mark-page {
+  display: none;
+}
+.quran-reader[data-mode='mushaf'] .quran-marks:has(.quran-mark-page) {
+  display: flex;
+  justify-content: center;
+  margin-block: 1.75rem 1rem;
+  margin-inline: 0;
+  border-block-start: 1px solid var(--color-border);
+  padding-block-start: 1rem;
+}
+.quran-reader[data-mode='mushaf'] .quran-ayat > li:first-child .quran-marks {
+  margin-block-start: 0;
+  border-block-start: 0;
 }
 .quran-progress {
   appearance: none;

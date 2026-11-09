@@ -361,11 +361,14 @@ export async function ReadingForm({
   action,
   context,
   languages,
+  keep = {},
 }: {
   readonly locale: Locale;
   readonly action: string;
   readonly context: ReadingContext;
   readonly languages: ReadonlyMap<string, ContentLanguage>;
+  /** Where the reader is, kept across the form (a Surah window's `from`). */
+  readonly keep?: Readonly<Record<string, string>>;
 }) {
   const t = await getTranslations({ locale, namespace: 'quran' });
   const { options, choice } = context;
@@ -400,6 +403,9 @@ export async function ReadingForm({
         aria-label={t('reading.heading')}
         className="flex flex-col gap-4 border-t border-border px-5 pt-4 pb-5"
       >
+        {Object.entries(keep).map(([name, value]) => (
+          <input key={name} type="hidden" name={name} value={value} />
+        ))}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Field id="reading-translation" label={t('reading.translation')}>
             {(props) => (

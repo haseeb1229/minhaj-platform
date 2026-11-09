@@ -452,7 +452,12 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/quran/landing-islands.tsx',
     'apps/web/src/components/quran/quick-jump.ts',
     'apps/web/src/components/quran/reader-controls.tsx',
+    // Quran Part 1: the reader's shared preference store, its behaviours and
+    // the pure window, anchor and division rules.
+    'apps/web/src/components/quran/reader-effects.ts',
     'apps/web/src/components/quran/reader-preferences.ts',
+    'apps/web/src/components/quran/reader-store.ts',
+    'apps/web/src/components/quran/reading-layout.ts',
     'apps/web/src/components/quran/reference-sources.ts',
     'apps/web/src/components/quran/scripture.tsx',
     'apps/web/src/components/my/dashboard.ts',

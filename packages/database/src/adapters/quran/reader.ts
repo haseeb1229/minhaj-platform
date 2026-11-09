@@ -77,6 +77,8 @@ const PUBLIC_AYAH = {
   surahNumber: true,
   ayahNumber: true,
   juzNumber: true,
+  hizb: true,
+  page: true,
   sajdah: true,
   text: true,
 } satisfies Prisma.AyahSelect;
@@ -145,6 +147,8 @@ function toAyah(row: {
   readonly surahNumber: number;
   readonly ayahNumber: number;
   readonly juzNumber: number;
+  readonly hizb: number | null;
+  readonly page: number | null;
   readonly sajdah: string | null;
   readonly text: string;
 }): PublicAyah {
@@ -152,6 +156,8 @@ function toAyah(row: {
     surah: row.surahNumber,
     ayah: row.ayahNumber,
     juz: row.juzNumber,
+    hizb: row.hizb,
+    page: row.page,
     sajdah: row.sajdah as QuranSajdah | null,
     text: row.text,
   };
@@ -499,6 +505,28 @@ export function createQuranPublicReader(
         }),
       ]);
       return { items: rows.map(toAyah), total, offset: skip };
+    },
+
+    /**
+     * A mushaf page: the ayat whose stored page is this one, in canonical
+     * order. No page column is indexed — the canonical table is one corpus of
+     * a few thousand rows, so this is one bounded scan, never a read per Ayah.
+     */
+    async pageAyat(page) {
+      if ((await activeMode(db, admission)) === null) return [];
+      const rows = await db.ayah.findMany({
+        where: { page },
+        select: PUBLIC_AYAH,
+        orderBy: [...CANONICAL_ORDER],
+        take: QURAN_AYAH_NUMBER_MAX,
+      });
+      return rows.map(toAyah);
+    },
+
+    async lastPage() {
+      if ((await activeMode(db, admission)) === null) return 0;
+      const found = await db.ayah.aggregate({ _max: { page: true } });
+      return found._max.page ?? 0;
     },
 
     /* ---- Layered works ----------------------------------------------------- */

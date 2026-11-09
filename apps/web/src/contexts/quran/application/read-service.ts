@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   QURAN_AYAH_NUMBER_MAX,
   QURAN_JUZ_MAX,
+  QURAN_PAGE_NUMBER_MAX,
   QURAN_SURAH_MAX,
   quranIdSchema,
   quranRefSchema,
@@ -37,6 +38,8 @@ const ayahOk = (value: number) =>
   Number.isInteger(value) && value >= 1 && value <= QURAN_AYAH_NUMBER_MAX;
 const juzOk = (value: number) =>
   Number.isInteger(value) && value >= 1 && value <= QURAN_JUZ_MAX;
+const pageOk = (value: number) =>
+  Number.isInteger(value) && value >= 1 && value <= QURAN_PAGE_NUMBER_MAX;
 const idOk = (value: string) => quranIdSchema.safeParse(value).success;
 const slugOk = (value: string) => quranSlugSchema.safeParse(value).success;
 const refOk = (ref: QuranRef) => quranRefSchema.safeParse(ref).success;
@@ -80,6 +83,8 @@ export function createQuranReadService(
       juzOk(number) && offsetOk(offset)
         ? reader.juzAyat(number, offset)
         : emptyPage(offset),
+    pageAyat: (page) => (pageOk(page) ? reader.pageAyat(page) : none()),
+    lastPage: () => reader.lastPage(),
 
     translations: () => reader.translations(),
     translation: (slug) => (slugOk(slug) ? reader.translation(slug) : absent()),

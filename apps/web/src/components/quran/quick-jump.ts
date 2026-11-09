@@ -1,7 +1,7 @@
 import { QURAN_JUZ_MAX } from '@minhaj/contracts/quran';
 
 /**
- * QUICK JUMP — "18", "18:10", "kahf", "juz 15" → one place in the Quran
+ * QUICK JUMP — "18", "18:10", "kahf", "juz 15", "page 50" → one place in the Quran
  * (R2; benchmark pattern 10a). PURE and free of React, so the landing's GET
  * form (`/quran/read?q=`) and its client island answer the same input the same
  * way, and both are unit-tested here.
@@ -28,6 +28,7 @@ export type QuickJump =
   | { readonly kind: 'surah'; readonly surah: number }
   | { readonly kind: 'ayah'; readonly surah: number; readonly ayah: number }
   | { readonly kind: 'juz'; readonly juz: number }
+  | { readonly kind: 'page'; readonly page: number }
   | { readonly kind: 'unknown' };
 
 /** The longest input worth reading; anything longer matches nothing. */
@@ -89,11 +90,22 @@ export function foldName(value: string): string {
 const JUZ_PATTERN =
   /^(?:juz|juzz|juza|para|parah|sipara|پارہ|پاره|جزء|الجزء|جز)\s*(\d{1,2})$/u;
 
+/** The mushaf-page keywords, in the three interface languages (Quran Part 1). */
+const PAGE_PATTERN = /^(?:page|pg|p|safha|safhah|صفحہ|صفحه|صفحة|الصفحة)\.?\s*(\d{1,3})$/u;
+
 /** "18:10", "18 10", "18.10", "18-10", "18/10", "18،10". */
 const CITATION_PATTERN = /^(\d{1,3})\s*(?:[:.\-/,،]\s*|\s+)(\d{1,3})$/u;
 
-/** One place in the Quran, or `unknown` — never a guess beyond the index. */
-export function parseQuickJump(raw: string, index: readonly JumpSurah[]): QuickJump {
+/**
+ * One place in the Quran, or `unknown` — never a guess beyond the index.
+ * `lastPage` is the highest mushaf page the corpus records (0: none), so a
+ * page past it, or any page in a corpus without pages, matches nothing.
+ */
+export function parseQuickJump(
+  raw: string,
+  index: readonly JumpSurah[],
+  lastPage = 0,
+): QuickJump {
   if (raw.length > QUICK_JUMP_MAX_LENGTH) return UNKNOWN;
   const input = asciiDigits(raw).trim().replace(/\s+/g, ' ').toLowerCase();
   if (input === '') return UNKNOWN;
@@ -121,6 +133,12 @@ export function parseQuickJump(raw: string, index: readonly JumpSurah[]): QuickJ
       : UNKNOWN;
   }
 
+  const page = PAGE_PATTERN.exec(input);
+  if (page !== null) {
+    const number = Number(page[1]);
+    return number >= 1 && number <= lastPage ? { kind: 'page', page: number } : UNKNOWN;
+  }
+
   const wanted = foldName(input);
   if (wanted.length < 2) return UNKNOWN;
   const folded = index.map((surah) => ({
@@ -143,8 +161,8 @@ export function parseQuickJump(raw: string, index: readonly JumpSurah[]): QuickJ
 }
 
 /**
- * The LOCALE-FREE address a jump opens: a Surah, a canonical Ayah citation or
- * a Juz — built from numbers the index confirmed, never from the input.
+ * The LOCALE-FREE address a jump opens: a Surah, a canonical Ayah citation, a
+ * Juz or a mushaf page — built from numbers the index confirmed, never from the input.
  */
 export function quickJumpPathOf(jump: QuickJump): string | null {
   switch (jump.kind) {
@@ -154,6 +172,8 @@ export function quickJumpPathOf(jump: QuickJump): string | null {
       return `/quran/surah/${String(jump.surah)}/${String(jump.ayah)}`;
     case 'juz':
       return `/quran/juz/${String(jump.juz)}`;
+    case 'page':
+      return `/quran/page/${String(jump.page)}`;
     case 'unknown':
       return null;
   }

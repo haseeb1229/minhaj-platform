@@ -98,11 +98,19 @@ export function PersonalIsland({
   target,
   noteMax,
   labels,
+  recordHistory = true,
 }: {
   readonly locale: string;
   readonly target: PersonalTarget;
   readonly noteMax: number;
   readonly labels: PersonalIslandLabels;
+  /**
+   * Whether opening the island records a history entry. A content page
+   * records the visit; the Quran reader's per-Ayah sheet (Quran Part 1) is
+   * opened on a Surah page the person is already reading, not a visit to the
+   * Ayah, so it records nothing.
+   */
+  readonly recordHistory?: boolean;
 }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [draft, setDraft] = useState('');
@@ -135,7 +143,7 @@ export function PersonalIsland({
       setDraft(read.value.note?.body ?? '');
       setPhase({ kind: 'ready', state: read.value });
 
-      if (read.value.historyEnabled && !recorded.current) {
+      if (recordHistory && read.value.historyEnabled && !recorded.current) {
         recorded.current = true;
         void sendPersonal(
           'history',
@@ -146,7 +154,7 @@ export function PersonalIsland({
       }
     });
     return () => controller.abort();
-  }, [target]);
+  }, [target, recordHistory]);
 
   /** Applies a confirmed change to the state this island shows. */
   function patch(change: (state: TargetState) => Partial<TargetState>) {

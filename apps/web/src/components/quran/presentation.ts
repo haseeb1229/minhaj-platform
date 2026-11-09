@@ -5,6 +5,7 @@ import type { Locale } from '@minhaj/contracts';
 import {
   QURAN_AYAH_NUMBER_MAX,
   QURAN_JUZ_MAX,
+  QURAN_PAGE_NUMBER_MAX,
   QURAN_SURAH_MAX,
   numericSegment,
   quranSlugSchema,
@@ -98,11 +99,6 @@ export function recitationAssetPath(segment: {
   return `/assets/quran/recitations/${part(segment.recitationId)}/${part(segment.segmentId)}/${part(segment.assetId)}`;
 }
 
-/** The `#ayah-{n}` anchor every Ayah carries on a Surah page. */
-export function ayahAnchor(ayah: number): string {
-  return `ayah-${String(ayah)}`;
-}
-
 /* ===========================================================================
  * Path segments
  * ========================================================================= */
@@ -118,6 +114,11 @@ export function readAyahSegment(value: string): number | null {
 
 export function readJuzSegment(value: string): number | null {
   return numericSegment(value, QURAN_JUZ_MAX);
+}
+
+/** A mushaf page number from a path segment or a query value, or `null`. */
+export function readPageSegment(value: string): number | null {
+  return numericSegment(value, QURAN_PAGE_NUMBER_MAX);
 }
 
 /** A layered work's or a rule's slug from a path segment, or `null`. */

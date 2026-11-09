@@ -492,6 +492,10 @@ describe('the mutation surface', () => {
         // Rebaseline R1: whether this browser is signed in — one boolean, for
         // the public header's account island. Same transport, same guards.
         'apps/web/src/app/api/my/account-state/route.ts',
+        // Quran Part 1: the person's own Quran position, read back for the
+        // reader's "Continue" card — a GET alone; it is moved only by
+        // `quran-progress`'s POST. Same transport, same guards.
+        'apps/web/src/app/api/my/quran-position/route.ts',
         // Phase 22: Learning's handlers beneath the same prefix, admitted by
         // the same transport — one GET of the person's state on one Course,
         // two Class-A mutations (enrol, request a trial class) and Learning's
@@ -603,7 +607,7 @@ describe('the mutation surface', () => {
       /if \(!isSameOriginMutation\(request, \w+\)\) return failed\('denied'\)/u,
     );
     const personal = routes.filter((entry) => entry.includes('/api/my/'));
-    expect(personal).toHaveLength(15);
+    expect(personal).toHaveLength(16);
     for (const route of personal) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');
       for (const verb of ['PUT', 'PATCH', 'DELETE'])

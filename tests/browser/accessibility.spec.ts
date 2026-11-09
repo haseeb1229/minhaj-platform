@@ -38,6 +38,9 @@ const BLOCKING = new Set(['serious', 'critical']);
 const PUBLIC_PATHS = [
   '',
   '/quran',
+  // Quran Part 1: the reader entry — the honest unavailable state or the start
+  // page, whichever the run's corpus gives; both must pass.
+  '/quran/read',
   '/library',
   '/watch',
   '/news',

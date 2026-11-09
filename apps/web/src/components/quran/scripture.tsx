@@ -24,21 +24,32 @@ import { arabicIndic } from './citation';
  * the stored string — so the text node, what a screen reader reads and what
  * is copied all stay exactly as stored. Its size is the reader's
  * (`.quran-reader` in `globals.css`), so a page's size setting moves it too.
+ *
+ * THE READING-MODE BUTTON (Quran Part 1). With `open`, the same mark is also
+ * drawn inside a button named by the mark it shows and `open` ("۝٣ Surah 2,
+ * Ayah 3: show its translation" — the visible label is in the name, WCAG 2.5.3), which the reading and mushaf modes show in place of the plain
+ * mark once the reader island can answer it — so in flowing Arabic every Ayah
+ * is one keyboard stop that opens its translation. The button holds only the
+ * presentational mark; the text node is untouched.
  */
 export function ArabicText({
   id,
   label,
   text,
   ayah,
+  open,
 }: {
   readonly id: string;
   readonly label: string;
   readonly text: string;
   /** The Ayah's number, for the presentational end mark. */
   readonly ayah?: number;
+  /** The accessible name of the reading-mode button, when there is one. */
+  readonly open?: string;
 }) {
+  const mark = ayah === undefined ? null : `۝${arabicIndic(ayah)}`;
   return (
-    <div role="group" aria-labelledby={id} className="min-w-0">
+    <div role="group" aria-labelledby={id} className="quran-ayah-arabic min-w-0">
       <span id={id} className="sr-only">
         {label}
       </span>
@@ -52,12 +63,27 @@ export function ArabicText({
         >
           {text}
         </p>
-        {ayah === undefined ? null : (
+        {mark === null ? null : (
           <>
             {' '}
             <span aria-hidden="true" lang="ar" className="quran-name quran-ayah-end">
-              {`۝${arabicIndic(ayah)}`}
+              {mark}
             </span>
+          </>
+        )}
+        {mark === null || open === undefined ? null : (
+          <>
+            {' '}
+            <button
+              type="button"
+              data-ayah-action="open"
+              aria-label={`${mark} ${open}`}
+              className="quran-ayah-open"
+            >
+              <span aria-hidden="true" lang="ar" className="quran-name">
+                {mark}
+              </span>
+            </button>
           </>
         )}
       </div>
@@ -72,9 +98,9 @@ export function ArabicText({
  * from beneath it as its attribution. The group is NAMED by that attribution,
  * so a screen reader announces whose translation it is.
  *
- * `quickChoice` marks a default translation the reader's quick choice may hide
- * by language (`data-translations` on the reader); a translation the address
- * chose is always shown. `data-translation-*` is what Copy reads.
+ * `index` is the work's place among the translations the page rendered: the
+ * reader shows or hides each by it (`data-shown` on the reader, Quran Part 1).
+ * `data-translation-*` is what Copy and the reading-mode sheet read.
  */
 export function TranslationText({
   id,
@@ -82,7 +108,7 @@ export function TranslationText({
   name,
   text,
   language,
-  quickChoice,
+  index,
 }: {
   readonly id: string;
   /** "Translation: {name}" — the accessible name. */
@@ -90,7 +116,7 @@ export function TranslationText({
   readonly name: string;
   readonly text: string;
   readonly language: { readonly code: string; readonly direction: 'ltr' | 'rtl' };
-  readonly quickChoice: string | null;
+  readonly index: number;
 }) {
   return (
     <div
@@ -98,8 +124,8 @@ export function TranslationText({
       aria-labelledby={id}
       dir={language.direction}
       data-translation-work={name}
-      {...(quickChoice === null ? {} : { 'data-translation-language': quickChoice })}
-      className="flex min-w-0 flex-col gap-1.5"
+      data-translation-index={index}
+      className="flex min-w-0 max-w-[68ch] flex-col gap-1.5"
     >
       <p
         lang={language.code}

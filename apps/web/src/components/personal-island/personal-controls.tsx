@@ -20,18 +20,16 @@ import { PersonalIsland, type PersonalIslandLabels } from './personal-island';
  * `framed` gives the island its own column and spacing when the page's body is
  * a component it cannot reach into; otherwise it sits inside the page's flow.
  */
-export async function PersonalControls({
-  locale,
-  target,
-  framed = false,
-}: {
-  readonly locale: Locale;
-  readonly target: PersonalTarget;
-  readonly framed?: boolean;
-}) {
+/**
+ * The island's words, from the public message catalogue — the same for every
+ * visitor. Shared with the Quran reader, whose per-Ayah sheet places the same
+ * island on a Surah page (Quran Part 1).
+ */
+export async function personalIslandLabels(
+  locale: Locale,
+): Promise<PersonalIslandLabels> {
   const t = await getTranslations({ locale, namespace: 'personalIsland' });
-
-  const labels: PersonalIslandLabels = {
+  return {
     heading: t('heading'),
     privacy: t('privacy'),
     signedOutPrompt: t('signedOutPrompt'),
@@ -74,13 +72,23 @@ export async function PersonalControls({
       unavailable: t('failureUnavailable'),
     },
   };
+}
 
+export async function PersonalControls({
+  locale,
+  target,
+  framed = false,
+}: {
+  readonly locale: Locale;
+  readonly target: PersonalTarget;
+  readonly framed?: boolean;
+}) {
   const island = (
     <PersonalIsland
       locale={locale}
       target={target}
       noteMax={PERSONAL_LIMITS.noteMax}
-      labels={labels}
+      labels={await personalIslandLabels(locale)}
     />
   );
 

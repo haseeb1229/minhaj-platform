@@ -112,6 +112,13 @@ export interface QuranPublicReaderPort {
   juz(number: number): Promise<PublicJuz | null>;
   /** One bounded page of a Juz's ayat in canonical order. */
   juzAyat(number: number, offset: number): Promise<PublicAyahPage>;
+  /**
+   * The ayat the source placed on one mushaf page, in canonical order — ONE
+   * bounded read. Empty for a page no public Ayah carries (Quran Part 1).
+   */
+  pageAyat(page: number): Promise<readonly PublicAyah[]>;
+  /** The highest mushaf page any public Ayah carries; 0 when none records one. */
+  lastPage(): Promise<number>;
 
   translations(): Promise<readonly PublicLayerWork[]>;
   translation(slug: string): Promise<PublicLayerWork | null>;

@@ -26,17 +26,24 @@ import { pathFor, requireRoute } from '@/shell/registry';
 import { ContinueReading, QuickJumpForm } from './landing-islands';
 import { AboutThisText, CorpusNotice, quranTrail } from './parts';
 import { quranPath } from './presentation';
-import { readQuranTopic, readSurahs } from './read';
-import { JuzIndexList, SurahIndexList, jumpIndex, quickJumpLabels } from './reader';
+import { readLastPage, readQuranTopic, readSurahs } from './read';
+import {
+  JuzIndexList,
+  SurahIndexList,
+  continueProps,
+  jumpIndex,
+  quickJumpLabels,
+} from './reader';
 import { RELATED_KINDS } from './related';
 
 /**
  * `/quran` — the Quran landing (ROUTE_MAP.md §3.3; R2).
  *
  * THE WAY IN FIRST. It opens with where a reader wants to go — type a place
- * ("18:10", a Surah's name, "juz 15"), search the text and its published
- * translations for words (a GET form to `/quran/search`, working without
- * JavaScript), continue where this browser last read, or start at the
+ * ("18:10", a Surah's name, "juz 15", "page 50"), search the text and its
+ * published translations for words (a GET form to `/quran/search`, working
+ * without JavaScript), continue where the reader stopped (their own signed-in
+ * position, else this browser's last place — Quran Part 1), or start at the
  * beginning — and then lays the whole text out as an index:
  * every Surah (number, title, ayat, revelation and its Arabic name in the
  * Quran face) and, in the second tab, every Juz. Below it a quiet directory
@@ -70,6 +77,7 @@ export async function QuranLandingPage({
     tajweed,
     recitations,
     topic,
+    lastPage,
   ] = await Promise.all([
     readSurahs(),
     reader.juzList(),
@@ -79,6 +87,7 @@ export async function QuranLandingPage({
     reader.tajweedRules(),
     reader.recitations(),
     readQuranTopic(locale),
+    readLastPage(),
   ]);
 
   const section = (key: string): Link => ({ key, href: quranPath(locale, key) });
@@ -155,14 +164,7 @@ export async function QuranLandingPage({
         lede={t('intro')}
         actions={
           <>
-            <ContinueReading
-              locale={locale}
-              ayahCounts={surahs.map((surah) => [surah.number, surah.ayahCount] as const)}
-              labels={{
-                heading: t('continue.heading'),
-                place: t.raw('ayahName') as string,
-              }}
-            />
+            <ContinueReading {...await continueProps(locale, surahs)} />
             <ActionLink href={quranPath(locale, 'read')} tone="secondary">
               {t('sections.read')}
             </ActionLink>
@@ -174,6 +176,7 @@ export async function QuranLandingPage({
             locale={locale}
             action={quranPath(locale, 'read')}
             index={jumpIndex(surahs)}
+            lastPage={lastPage}
             labels={await quickJumpLabels(locale)}
           />
         )}

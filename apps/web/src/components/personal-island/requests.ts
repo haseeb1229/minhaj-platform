@@ -77,6 +77,53 @@ export async function readTargetState(
   }
 }
 
+export type QuranPositionRead =
+  | { readonly state: 'signed-out' }
+  | {
+      readonly state: 'signed-in';
+      readonly position: { readonly surah: number; readonly ayah: number } | null;
+    }
+  | { readonly state: 'failed' };
+
+const wholeNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 999;
+
+/**
+ * The signed-in reader's own Quran position, after the page has rendered
+ * (Quran Part 1). Only the two numbers are kept from the answer; whether the
+ * corpus still holds that place is the caller's question.
+ */
+export async function readQuranPosition(signal: AbortSignal): Promise<QuranPositionRead> {
+  try {
+    const response = await fetch('/api/my/quran-position', {
+      method: 'GET',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { accept: 'application/json' },
+      signal,
+    });
+    if (!response.ok) return { state: 'failed' };
+    const body: unknown = await response.json();
+    if (!isRecord(body)) return { state: 'failed' };
+    if (body['signedIn'] === false) return { state: 'signed-out' };
+    if (body['signedIn'] !== true) return { state: 'failed' };
+    const position = body['position'];
+    if (position === null) return { state: 'signed-in', position: null };
+    if (
+      !isRecord(position) ||
+      !wholeNumber(position['surah']) ||
+      !wholeNumber(position['ayah'])
+    )
+      return { state: 'failed' };
+    return {
+      state: 'signed-in',
+      position: { surah: position['surah'], ayah: position['ayah'] },
+    };
+  } catch {
+    return { state: 'failed' };
+  }
+}
+
 /** One personal POST. A 204 is success with no version. */
 export async function sendPersonal(
   path: 'bookmarks' | 'notes' | 'collection-items' | 'history' | 'quran-progress',

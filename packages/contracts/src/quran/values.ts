@@ -44,6 +44,14 @@ export const QURAN_JUZ_MAX = 30;
  */
 export const QURAN_AYAH_NUMBER_MAX = 999;
 
+/**
+ * A structural ceiling on a mushaf PAGE number an address may name (Quran
+ * Part 1, 2026-11-09). It is NOT the length of any mushaf: which pages exist
+ * is the source's fact, recorded on each Ayah row (`Ayah.page`), and a page no
+ * Ayah carries is simply absent.
+ */
+export const QURAN_PAGE_NUMBER_MAX = 999;
+
 export const surahNumberSchema = z.number().int().min(1).max(QURAN_SURAH_MAX);
 export const juzNumberSchema = z.number().int().min(1).max(QURAN_JUZ_MAX);
 export const ayahNumberSchema = z.number().int().min(1).max(QURAN_AYAH_NUMBER_MAX);
@@ -772,6 +780,10 @@ export interface PublicAyah {
   readonly surah: number;
   readonly ayah: number;
   readonly juz: number;
+  /** The source's hizb (1–60), when it recorded one. */
+  readonly hizb: number | null;
+  /** The source's mushaf page, when it recorded one. */
+  readonly page: number | null;
   readonly sajdah: QuranSajdah | null;
   readonly text: string;
 }

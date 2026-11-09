@@ -213,6 +213,8 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/quran/surah/[surahNumber]/[ayahNumber]/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/juz/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/juz/[juzNumber]/page.tsx',
+  // Quran Part 1: one mushaf page, through the same public reader.
+  'apps/web/src/app/[locale]/(public)/quran/page/[pageNumber]/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/search/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/translations/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/translations/[slug]/page.tsx',

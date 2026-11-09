@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { AxeBuilder } from '@axe-core/playwright';
 import type { BrowserContext, Locator, Page, Response } from '@playwright/test';
 
 import type { SqlSession } from '../../packages/database/src/lifecycle/sql-connection.ts';
@@ -56,9 +57,10 @@ import {
  *
  * NOTHING HERE IS THE QURAN. Every text is a `NON_QURAN_FIXTURE_…` sentinel
  * followed by the neutral Arabic phrase "non-Quranic test text"; the structure
- * (three ayat in Surah 1, four in Surah 2, Juz 2 beginning at 2:3) is
- * engineering scaffolding that claims nothing about any real Surah, count or
- * Juz boundary; the reciter is fictional; the audio is synthetic silence; and
+ * (three ayat in Surah 1, four in Surah 2, forty-five in Surah 3 — one more
+ * than a reading window — Juz 2 beginning at 2:3, and made-up hizb and page
+ * numbers) is engineering scaffolding that claims nothing about any real
+ * Surah, count, Juz, hizb or mushaf page; the reciter is fictional; the audio is synthetic silence; and
  * every source is of `fixture` authority. Owner-only rows — the registered
  * sources, the accepted corpus, the activation — are written on the MIGRATION
  * connection, exactly as the operator writes them, because no HTTP path may.
@@ -91,16 +93,29 @@ const BEH_KASRA = 'بِ';
 /** A unique word the search proof looks for, carried by one translation text. */
 const WORD = `qurfixture${run}`;
 
-/** The fictional structure: [surah, ayah, juz]. Not a real count or boundary. */
-const STRUCTURE = [
-  [1, 1, 1],
-  [1, 2, 1],
-  [1, 3, 1],
-  [2, 1, 1],
-  [2, 2, 1],
-  [2, 3, 2],
-  [2, 4, 2],
-] as const;
+/**
+ * The fictional structure: [surah, ayah, juz, hizb, page]. Not a real count,
+ * boundary or page. Surah 3 is longer than one reading window (40 ayat), so
+ * the windows, the deep links and the loading of the next window are proved
+ * against it; its pages and hizb are as made up as the rest.
+ */
+const STRUCTURE: readonly (readonly [number, number, number, number, number])[] = [
+  [1, 1, 1, 1, 1],
+  [1, 2, 1, 1, 1],
+  [1, 3, 1, 1, 2],
+  [2, 1, 1, 1, 2],
+  [2, 2, 1, 2, 3],
+  [2, 3, 2, 3, 3],
+  [2, 4, 2, 3, 4],
+  ...Array.from(
+    { length: 45 },
+    (_, index) =>
+      [3, index + 1, 2, index < 19 ? 3 : 4, 4 + Math.floor(index / 15)] as const,
+  ),
+];
+
+/** The highest made-up page above. */
+const LAST_PAGE = 6;
 
 const canonicalText = (surah: number, ayah: number) =>
   `NON_QURAN_FIXTURE_CANONICAL_${String(surah)}_${String(ayah)} ${NEUTRAL}${
@@ -117,11 +132,16 @@ const translationText = (surah: number, ayah: number) =>
     surah === 1 && ayah === 2 ? ` ${WORD}` : ''
   }`;
 
+/** A second, Urdu-language translation's text: a sentinel and neutral Urdu ("test text"). */
+const urduText = (surah: number, ayah: number) =>
+  `NON_QURAN_FIXTURE_URDU_${String(surah)}_${String(ayah)} آزمائشی متن`;
+
 const ids = {
   source: randomUUID(),
   correctionSource: randomUUID(),
   acceptance: randomUUID(),
   translation: randomUUID(),
+  urdu: randomUUID(),
   transliteration: randomUUID(),
   tafsir: randomUUID(),
   tafsirEntry: randomUUID(),
@@ -135,6 +155,7 @@ const ids = {
 
 const slug = {
   translation: `fixture-translation-${run}`,
+  urdu: `fixture-urdu-${run}`,
   transliteration: `fixture-transliteration-${run}`,
   tafsir: `fixture-tafsir-${run}`,
   rule: `fixture-tajweed-${run}`,
@@ -148,6 +169,7 @@ const slug = {
 
 const NAME = {
   translation: `NON_QURAN_FIXTURE translation ${run}`,
+  urdu: `NON_QURAN_FIXTURE urdu translation ${run}`,
   transliteration: `NON_QURAN_FIXTURE transliteration ${run}`,
   tafsir: `NON_QURAN_FIXTURE tafsir ${run}`,
   rule: `NON_QURAN_FIXTURE tajweed rule ${run}`,
@@ -240,6 +262,11 @@ async function visitFixture(
   return response as Response;
 }
 
+/** Waits until the reader's island has mounted, so its controls answer. */
+async function readerReady(page: Page): Promise<void> {
+  await expect(page.locator('#quran-reader')).toHaveAttribute('data-enhanced', '');
+}
+
 /** Moves focus by Tab alone until it lands on `target`. */
 async function tabTo(page: Page, target: Locator): Promise<void> {
   const handle = await target.elementHandle();
@@ -302,8 +329,8 @@ async function seedAsset(id: string): Promise<void> {
  */
 async function seedCorpus(): Promise<void> {
   const ayat = STRUCTURE.map(
-    ([surah, ayah, juz]) =>
-      `(N'${ids.source}', ${String(surah)}, ${String(ayah)}, ${String(juz)}, ${n(canonicalText(surah, ayah))})`,
+    ([surah, ayah, juz, hizb, page]) =>
+      `(N'${ids.source}', ${String(surah)}, ${String(ayah)}, ${String(juz)}, ${String(hizb)}, ${String(page)}, ${n(canonicalText(surah, ayah))})`,
   ).join(',');
   await sql.query(`
     INSERT INTO [dbo].[QuranSource] ([id],[code],[authority],[title],[version],[encoding],[script]) VALUES
@@ -312,10 +339,11 @@ async function seedCorpus(): Promise<void> {
     INSERT INTO [dbo].[QuranSourceSurah] ([sourceId],[number],[ayahCount],[revelation],[nameArabic]) VALUES
       (N'${ids.source}', 1, 3, NULL, N'NON_QURAN_FIXTURE_SURAH_1'),
       (N'${ids.source}', 2, 4, NULL, N'NON_QURAN_FIXTURE_SURAH_2'),
+      (N'${ids.source}', 3, 45, NULL, N'NON_QURAN_FIXTURE_SURAH_3'),
       (N'${ids.correctionSource}', 1, 1, NULL, NULL);
-    INSERT INTO [dbo].[QuranSourceAyah] ([sourceId],[surahNumber],[ayahNumber],[juzNumber],[text]) VALUES
+    INSERT INTO [dbo].[QuranSourceAyah] ([sourceId],[surahNumber],[ayahNumber],[juzNumber],[hizb],[page],[text]) VALUES
       ${ayat},
-      (N'${ids.correctionSource}', 1, 1, 1, ${n(CORRECTED)});
+      (N'${ids.correctionSource}', 1, 1, 1, 1, 1, ${n(CORRECTED)});
 
     INSERT INTO [dbo].[QuranVerificationRun] ([id],[kind],[outcome],[sourceId],[checked],[mismatches],[actorId],[createdAt])
       VALUES (N'${ids.acceptance}', N'corpus-acceptance', N'passed', N'${ids.source}', ${String(STRUCTURE.length)}, 0, NULL, SYSUTCDATETIME());
@@ -323,16 +351,18 @@ async function seedCorpus(): Promise<void> {
       (1, N'${ids.source}', SYSUTCDATETIME()), (2, N'${ids.source}', SYSUTCDATETIME());
     INSERT INTO [dbo].[Surah] ([number],[ayahCount],[revelation],[nameArabic],[sourceId],[createdAt],[updatedAt]) VALUES
       (1, 3, NULL, N'NON_QURAN_FIXTURE_SURAH_1', N'${ids.source}', SYSUTCDATETIME(), SYSUTCDATETIME()),
-      (2, 4, NULL, N'NON_QURAN_FIXTURE_SURAH_2', N'${ids.source}', SYSUTCDATETIME(), SYSUTCDATETIME());
-    INSERT INTO [dbo].[Ayah] ([surahNumber],[ayahNumber],[juzNumber],[text],[sourceId],[version],[createdAt],[updatedAt])
-      SELECT [surahNumber],[ayahNumber],[juzNumber],[text],[sourceId],1,SYSUTCDATETIME(),SYSUTCDATETIME()
+      (2, 4, NULL, N'NON_QURAN_FIXTURE_SURAH_2', N'${ids.source}', SYSUTCDATETIME(), SYSUTCDATETIME()),
+      (3, 45, NULL, N'NON_QURAN_FIXTURE_SURAH_3', N'${ids.source}', SYSUTCDATETIME(), SYSUTCDATETIME());
+    INSERT INTO [dbo].[Ayah] ([surahNumber],[ayahNumber],[juzNumber],[hizb],[page],[text],[sourceId],[version],[createdAt],[updatedAt])
+      SELECT [surahNumber],[ayahNumber],[juzNumber],[hizb],[page],[text],[sourceId],1,SYSUTCDATETIME(),SYSUTCDATETIME()
       FROM [dbo].[QuranSourceAyah] WHERE [sourceId]=N'${ids.source}';
     INSERT INTO [dbo].[QuranAyahRevision] ([surahNumber],[ayahNumber],[version],[text],[sourceId],[verificationRunId],[actorId],[stepUpGrantId],[reason],[createdAt])
       SELECT [surahNumber],[ayahNumber],1,[text],[sourceId],N'${ids.acceptance}',NULL,NULL,NULL,SYSUTCDATETIME()
       FROM [dbo].[QuranSourceAyah] WHERE [sourceId]=N'${ids.source}';
     INSERT INTO [dbo].[SurahName] ([surahNumber],[locale],[name]) VALUES
       (1, N'en', N'NON_QURAN_FIXTURE Surah One'),
-      (2, N'en', N'NON_QURAN_FIXTURE Surah Two');
+      (2, N'en', N'NON_QURAN_FIXTURE Surah Two'),
+      (3, N'en', N'NON_QURAN_FIXTURE Surah Three');
   `);
 }
 
@@ -346,6 +376,10 @@ async function seedWorks(): Promise<void> {
     ([surah, ayah]) =>
       `(N'${ids.translation}', ${String(surah)}, ${String(ayah)}, ${n(translationText(surah, ayah))})`,
   ).join(',');
+  const urduRows = STRUCTURE.map(
+    ([surah, ayah]) =>
+      `(N'${ids.urdu}', ${String(surah)}, ${String(ayah)}, ${n(urduText(surah, ayah))})`,
+  ).join(',');
   await sql.query(`
     INSERT INTO [dbo].[Person] ([id],[slug],[primaryLocale],[status]) VALUES (N'${ids.reciter}', N'${slug.reciter}', N'en', N'published');
     INSERT INTO [dbo].[PersonTranslation] ([personId],[locale],[name],[biography]) VALUES (N'${ids.reciter}', N'en', ${n(NAME.reciter)}, NULL);
@@ -354,6 +388,11 @@ async function seedWorks(): Promise<void> {
       (N'${ids.translation}', N'${slug.translation}', N'en', ${n(NAME.translation)}, N'NON_QURAN_FIXTURE browser translation.', NULL, N'draft', 1, SYSUTCDATETIME(), SYSUTCDATETIME());
     INSERT INTO [dbo].[QuranTranslationText] ([translationId],[surahNumber],[ayahNumber],[text]) VALUES ${translationRows};
     UPDATE [dbo].[QuranTranslation] SET [state]=N'published', [sourceId]=N'${ids.source}', [publishedAt]=SYSUTCDATETIME(), [version]=2, [updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${ids.translation}';
+
+    INSERT INTO [dbo].[QuranTranslation] ([id],[slug],[languageCode],[name],[description],[attribution],[state],[version],[createdAt],[updatedAt]) VALUES
+      (N'${ids.urdu}', N'${slug.urdu}', N'ur', ${n(NAME.urdu)}, N'NON_QURAN_FIXTURE browser Urdu-language translation.', NULL, N'draft', 1, SYSUTCDATETIME(), SYSUTCDATETIME());
+    INSERT INTO [dbo].[QuranTranslationText] ([translationId],[surahNumber],[ayahNumber],[text]) VALUES ${urduRows};
+    UPDATE [dbo].[QuranTranslation] SET [state]=N'published', [sourceId]=N'${ids.source}', [publishedAt]=SYSUTCDATETIME(), [version]=2, [updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${ids.urdu}';
 
     INSERT INTO [dbo].[QuranTransliteration] ([id],[slug],[languageCode],[name],[scheme],[state],[version],[createdAt],[updatedAt]) VALUES
       (N'${ids.transliteration}', N'${slug.transliteration}', N'en', ${n(NAME.transliteration)}, N'NON_QURAN_FIXTURE scheme', N'draft', 1, SYSUTCDATETIME(), SYSUTCDATETIME());
@@ -542,9 +581,10 @@ test.describe('a fixture corpus', () => {
   }) => {
     await visitFixture(page, '/quran/surah');
     const index = page.getByRole('list', { name: 'Surahs' });
-    await expect(index.getByRole('listitem')).toHaveCount(2);
+    await expect(index.getByRole('listitem')).toHaveCount(3);
     await expect(index).toContainText('3 ayat');
     await expect(index).toContainText('4 ayat');
+    await expect(index).toContainText('45 ayat');
 
     await tabTo(page, index.getByRole('link', { name: /^Surah 1\b/ }));
     await page.keyboard.press('Enter');
@@ -553,7 +593,7 @@ test.describe('a fixture corpus', () => {
 
     const article = page.getByRole('article', { name: 'Surah 1, Ayah 2' });
     await expect(article).toBeVisible();
-    await expect(page.locator('li#ayah-2')).toContainText(canonicalText(1, 2));
+    await expect(page.locator('li#ayah-1-2')).toContainText(canonicalText(1, 2));
     const citation = article.getByRole('link', { name: '1:2' });
     await expect(citation).toHaveAttribute('href', '/quran/surah/1/2');
 
@@ -743,7 +783,7 @@ test.describe('a fixture corpus', () => {
 
     // …and with script, from the landing, straight to the citation.
     await visitFixture(page, '/quran');
-    await page.getByLabel('Go to a Surah, Ayah or Juz').fill('1:2');
+    await page.getByLabel('Go to a Surah, Ayah, Juz or page').fill('1:2');
     await page.keyboard.press('Enter');
     await page.waitForURL(/\/quran\/surah\/1\/2$/);
 
@@ -756,22 +796,40 @@ test.describe('a fixture corpus', () => {
       'aria-hidden',
       'true',
     );
-    // The default translation for an English interface is shown without asking.
-    await expect(article.locator('[data-translation-language="en"]')).toBeVisible();
+    // Both public translations are rendered; the English interface shows the
+    // English one without asking, and the Urdu-language one waits, hidden.
+    const english = article.locator(`[data-translation-work="${NAME.translation}"]`);
+    const urdu = article.locator(`[data-translation-work="${NAME.urdu}"]`);
+    await expect(english).toBeVisible();
+    await expect(urdu).toBeHidden();
 
-    // Settings: no translation, kept across a reload in this browser only.
+    await readerReady(page);
+    // Settings: the Urdu-language work as well, then no translation at all —
+    // each kept across a reload in this browser only.
     await page.getByRole('button', { name: 'Settings' }).click();
     const sheet = page.getByRole('dialog', { name: 'Reading settings' });
     await expect(sheet).toBeVisible();
-    await sheet.locator('input[type="radio"][value="none"]').check();
-    await expect(article.locator('[data-translation-language="en"]')).toBeHidden();
+    await sheet.getByRole('checkbox', { name: new RegExp(NAME.urdu) }).check();
+    await expect(urdu).toBeVisible();
+    await expect(english).toBeVisible();
     await page.keyboard.press('Escape');
+    await page.reload();
+    await readerReady(page);
+    await expect(urdu).toBeVisible();
+    await page.getByRole('switch', { name: 'Translation' }).uncheck();
+    await expect(english).toBeHidden();
+    await expect(urdu).toBeHidden();
     await page.reload();
     await expect(
       page
         .getByRole('article', { name: 'Surah 1, Ayah 2' })
-        .locator('[data-translation-language="en"]'),
-    ).toBeHidden();
+        .locator('[data-translation-index]'),
+    ).toHaveCount(2);
+    await expect(english).toBeHidden();
+    await expect(urdu).toBeHidden();
+    await readerReady(page);
+    await page.getByRole('switch', { name: 'Translation' }).check();
+    await expect(english).toBeVisible();
 
     // Copy: the clipboard begins with the stored Arabic, byte for byte.
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -785,6 +843,289 @@ test.describe('a fixture corpus', () => {
     expect(copied).toContain('1:2');
   });
 
+  test('Part 1: a long Surah is read in windows, and a deep link lands on its Ayah', async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(150_000);
+    // WITHOUT SCRIPT: the first window, complete, with a plain link onwards…
+    const first = await request.get('/quran/surah/3');
+    expect(first.status()).toBe(200);
+    const html = await first.text();
+    expect(html).toContain('id="ayah-3-40"');
+    expect(html).not.toContain('id="ayah-3-41"');
+    expect(html).toContain('href="/quran/surah/3?from=41"');
+    // …and the next window at that address, with the way back.
+    const second = await request.get('/quran/surah/3?from=41');
+    const rest = await second.text();
+    expect(rest).toContain('id="ayah-3-41"');
+    expect(rest).toContain('id="ayah-3-45"');
+    expect(rest).not.toContain('id="ayah-3-40"');
+    expect(rest).toContain('Earlier ayat: 1–40');
+    // Any Ayah opens the window it is in; noise is the first window.
+    expect(await (await request.get('/quran/surah/3?from=44')).text()).toContain(
+      'id="ayah-3-44"',
+    );
+    expect(await (await request.get('/quran/surah/3?from=x41')).text()).toContain(
+      'id="ayah-3-1"',
+    );
+
+    // WITH SCRIPT: the next window arrives as the reader nears it.
+    await visitFixture(page, '/quran/surah/3');
+    const rows = page.locator('#quran-ayat > li[data-ayah]');
+    await expect(rows).toHaveCount(40);
+    await page.locator('a[data-window-next]').scrollIntoViewIfNeeded();
+    await expect(rows).toHaveCount(45);
+    await expect(page.locator('a[data-window-next]')).toHaveCount(0);
+    await expect(page.locator('#ayah-3-45')).toContainText(canonicalText(3, 45));
+
+    // On the page that already holds it, a fragment is landed in place.
+    await page.evaluate(() => {
+      window.location.hash = '#ayah-3-42';
+    });
+    await expect(page.locator('#ayah-3-42')).toHaveAttribute('aria-current', 'location');
+    await expect(page.locator('#ayah-3-42')).toBeInViewport();
+
+    // A deep link, OPENED, to an Ayah the first window does not hold lands on
+    // it — in the current anchor form and in the earlier one.
+    for (const fragment of ['#ayah-3-44', '#ayah-44']) {
+      await page.goto('about:blank');
+      await page.goto(`/quran/surah/3${fragment}`);
+      await page.waitForURL(/\/quran\/surah\/3\?from=41#ayah-3-44$/);
+      const target = page.locator('#ayah-3-44');
+      await expect(target).toHaveAttribute('aria-current', 'location');
+      await expect(target).toBeInViewport();
+    }
+    // The canonical citation and the Surah's own "Go to an Ayah" reach it too.
+    await visitFixture(page, '/quran/surah/3/44');
+    await visitFixture(page, '/quran/surah/3');
+    await readerReady(page);
+    await page.getByLabel('Ayah number').fill('44');
+    await page.getByRole('form', { name: 'Go to an Ayah' }).getByRole('button').click();
+    await page.waitForURL(/\/quran\/surah\/3\?from=41#ayah-3-44$/);
+    await expect(page.locator('#ayah-3-44')).toBeInViewport();
+
+    // The page header: names, count, the Juz and pages it spans.
+    await visitFixture(page, '/quran/surah/2');
+    await expect(page.getByRole('main').locator('header').first()).toContainText(
+      '4 ayat · Juz 1–2 · Pages 2–4',
+    );
+  });
+
+  test('Part 1: three reading modes, remembered, over one document', async ({ page }) => {
+    await visitFixture(page, '/quran/surah/2');
+    await readerReady(page);
+    const reader = page.locator('#quran-reader');
+    await expect(reader).toHaveAttribute('data-mode', 'translation');
+    // Divisions where they begin, from the stored numbers only.
+    await expect(page.locator('#ayah-2-2 .quran-mark-page')).toContainText('Page 3');
+    await expect(page.locator('#ayah-2-2 .quran-mark-division')).toHaveText('Hizb 2');
+    await expect(page.locator('#ayah-2-3 .quran-mark-division')).toHaveText([
+      'Juz 2',
+      'Hizb 3',
+    ]);
+    await expect(page.locator('#ayah-2-3 .quran-mark-page')).toHaveCount(0);
+
+    const modes = page.getByRole('group', { name: 'Reading mode' }).first();
+    await modes.getByText('Reading', { exact: true }).click();
+    await expect(modes.getByLabel('Reading')).toBeChecked();
+    await expect(reader).toHaveAttribute('data-mode', 'reading');
+    const article = page.getByRole('article', { name: 'Surah 2, Ayah 3' });
+    await expect(article.locator('[data-translation-index]').first()).toBeHidden();
+    await expect(article.locator('p[lang="ar"]')).toHaveText(canonicalText(2, 3));
+    // Every Ayah is one keyboard stop that opens its translation.
+    const open = article.getByRole('button', {
+      name: /Surah 2, Ayah 3: show its translation$/,
+    });
+    await open.focus();
+    await page.keyboard.press('Enter');
+    const sheet = page.getByRole('dialog', { name: 'Surah 2, Ayah 3' });
+    await expect(sheet).toContainText(translationText(2, 3));
+    await expect(sheet.locator('p[lang="ar"]')).toHaveText(canonicalText(2, 3));
+    await expect(
+      sheet.getByRole('link', { name: 'Open this Ayah’s page' }),
+    ).toHaveAttribute('href', '/quran/surah/2/3');
+    await page.keyboard.press('Escape');
+    await expect(open).toBeFocused();
+
+    // Mushaf mode: the same ayat under page headers, kept across a reload and
+    // in place before the island has loaded (the boot script).
+    await modes.getByText('Page', { exact: true }).click();
+    await expect(modes.getByLabel('Page')).toBeChecked();
+    await expect(reader).toHaveAttribute('data-mode', 'mushaf');
+    await expect(page.locator('#ayah-2-2 .quran-mark-page')).toContainText(
+      'Page 3 · Juz 1 · Hizb 2',
+    );
+    await page.reload({ waitUntil: 'commit' });
+    await expect(page.locator('#quran-reader')).toHaveAttribute('data-mode', 'mushaf');
+    // The island answers only once it has mounted.
+    await expect(reader).toHaveAttribute('data-enhanced', '');
+
+    // Settings: line spacing and the translations' layout, kept as well.
+    await page.getByRole('button', { name: 'Settings' }).click();
+    const settings = page.getByRole('dialog', { name: 'Reading settings' });
+    await settings.getByLabel('Spacious').check();
+    await settings.getByLabel('Side by side on wide screens').check();
+    await settings.getByLabel('Translation', { exact: true }).check();
+    await page.keyboard.press('Escape');
+    await expect(reader).toHaveAttribute('data-leading', 'spacious');
+    await expect(reader).toHaveAttribute('data-layout', 'side');
+    await expect(reader).toHaveAttribute('data-mode', 'translation');
+    await page.reload();
+    await expect(page.locator('#quran-reader')).toHaveAttribute(
+      'data-leading',
+      'spacious',
+    );
+    await expect(reader).toHaveAttribute('data-enhanced', '');
+
+    // The Save tool opens the private island in place — signed out, it offers
+    // sign-in — and without leaving the Surah.
+    await page
+      .getByRole('article', { name: 'Surah 2, Ayah 3' })
+      .getByRole('link', { name: 'Save to My Minhaj' })
+      .click();
+    await expect(page).toHaveURL(/\/quran\/surah\/2$/);
+    await expect(page.getByRole('dialog', { name: 'Surah 2, Ayah 3' })).toBeVisible();
+    await page.keyboard.press('Escape');
+  });
+
+  test('Part 1: a mushaf page by its number, and absent outside the corpus', async ({
+    page,
+    request,
+  }) => {
+    await visitFixture(page, '/quran/page/3');
+    await expect(page.getByRole('heading', { level: 1, name: 'Page 3' })).toBeVisible();
+    await expect(page.getByRole('article', { name: 'Surah 2, Ayah 2' })).toBeVisible();
+    await expect(page.getByRole('article', { name: 'Surah 2, Ayah 3' })).toBeVisible();
+    await expect(page.getByRole('article', { name: 'Surah 2, Ayah 1' })).toHaveCount(0);
+    const pages = page.getByRole('navigation', { name: 'Previous and next page' });
+    await expect(pages.getByRole('link', { name: 'Previous page (2)' })).toHaveAttribute(
+      'href',
+      '/quran/page/2',
+    );
+    await expect(pages.getByRole('link', { name: 'Next page (4)' })).toHaveAttribute(
+      'href',
+      '/quran/page/4',
+    );
+    // A page that opens a Surah names it; the last page offers no next page.
+    await visitFixture(page, `/quran/page/${String(LAST_PAGE)}`);
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Previous and next page' })
+        .getByRole('link', { name: /Next page/ }),
+    ).toHaveCount(0);
+    await visitFixture(page, '/ur/quran/page/1', 'ur');
+
+    for (const missing of [
+      `/quran/page/${String(LAST_PAGE + 1)}`,
+      '/quran/page/0',
+      '/quran/page/01',
+      '/quran/page/abc',
+      '/quran/page/1000',
+    ]) {
+      const response = await request.get(missing, { maxRedirects: 0 });
+      expect(response.status(), missing).toBe(404);
+    }
+    // Reached from the reader entry and the quick jump, by number only.
+    const jump = await request.get('/quran/read?q=page%204', { maxRedirects: 0 });
+    expect(new URL(jump.headers()['location'] ?? '', baseUrl()).pathname).toBe(
+      '/quran/page/4',
+    );
+    const go = await request.get('/quran/read?page=5', { maxRedirects: 0 });
+    expect(new URL(go.headers()['location'] ?? '', baseUrl()).pathname).toBe(
+      '/quran/page/5',
+    );
+    const far = await request.get(`/quran/read?page=${String(LAST_PAGE + 1)}`, {
+      maxRedirects: 0,
+    });
+    expect(far.status()).toBe(200);
+    expect(await far.text()).toContain('That page is not in this text.');
+  });
+
+  test('Part 1: no sideways scroll and no serious accessibility finding in any mode', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(240_000);
+    for (const mode of ['translation', 'reading', 'mushaf'] as const) {
+      await page.addInitScript((value) => {
+        try {
+          window.localStorage.setItem(
+            'minhaj.quran.reader',
+            JSON.stringify({ mode: value }),
+          );
+        } catch {
+          /* Storage unavailable: the default mode is still proved. */
+        }
+      }, mode);
+      for (const width of [320, 390]) {
+        await page.setViewportSize({ width, height: 800 });
+        for (const target of [
+          '/ur/quran/surah/2',
+          '/ar/quran/surah/3',
+          '/ur/quran/page/3',
+        ]) {
+          await page.goto(target);
+          await expect(page.locator('#quran-reader')).toHaveAttribute('data-mode', mode);
+          const { overflow, offenders } = await overflowOf(page);
+          expect(
+            overflow,
+            `${mode} ${String(width)}px ${target} — beyond the viewport: ${offenders.join(', ')}`,
+          ).toBeLessThanOrEqual(0);
+        }
+      }
+      for (const target of ['/quran/surah/2', '/ur/quran/surah/2', '/quran/read']) {
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.goto(target);
+        const results = await new AxeBuilder({ page })
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+          .analyze();
+        const blocking = results.violations.filter(
+          (violation) =>
+            violation.impact === 'serious' || violation.impact === 'critical',
+        );
+        for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+          testInfo.annotations.push({
+            type: 'axe',
+            description: `${mode} ${target}: ${finding.id} (${String(finding.impact)})`,
+          });
+        expect(
+          blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+          `${mode} ${target}`,
+        ).toEqual([]);
+      }
+    }
+  });
+
+  test('Part 1: where to begin — popular places, the quick jump and this browser’s last place', async ({
+    page,
+  }) => {
+    await visitFixture(page, '/quran/read');
+    // Only the starting points the corpus holds: the first Surah's opening.
+    const start = page.getByRole('region', { name: 'Popular places to begin' });
+    await expect(start.getByRole('link')).toHaveCount(1);
+    await expect(start.getByRole('link')).toHaveAttribute('href', '/quran/surah/1');
+    // No place read yet: no card.
+    await expect(
+      page.getByRole('region', { name: 'Continue where you stopped' }),
+    ).toHaveCount(0);
+
+    // Read a little of Surah 3's second window; the card offers it back.
+    await page.goto('/quran/surah/3?from=41#ayah-3-43');
+    await expect(page.locator('#ayah-3-43')).toBeInViewport();
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.localStorage.getItem('minhaj.quran.lastRead')),
+      )
+      .not.toBeNull();
+    await page.goto('/quran/read');
+    const card = page.getByRole('region', { name: 'Continue where you stopped' });
+    await expect(card).toContainText('Last read on this device');
+    await expect(card.getByRole('link')).toHaveAttribute(
+      'href',
+      /^\/quran\/surah\/3\?from=41#ayah-3-4\d$/,
+    );
+  });
+
   test('a Juz lists its ayat, each linking to its citation', async ({ page }) => {
     await visitFixture(page, '/quran/juz');
     const list = page.getByRole('list', { name: 'Juz' });
@@ -792,7 +1133,7 @@ test.describe('a fixture corpus', () => {
       'href',
       '/quran/juz/1',
     );
-    await expect(list).toContainText('From 2:3 to 2:4');
+    await expect(list).toContainText('From 2:3 to 3:45');
 
     await visitFixture(page, '/quran/juz/2');
     for (const ayah of [3, 4]) {
@@ -1129,7 +1470,7 @@ test.describe('a reader’s own reading position', () => {
     );
     expect(await position()).toBeNull();
     // Cleared: the home page no longer offers it (a module renders only with
-    // something in it).
+    // something in it). (The card on /quran/read is proved below.)
     await reader.goto('/my');
     await expect(
       reader
@@ -1137,6 +1478,95 @@ test.describe('a reader’s own reading position', () => {
         .getByRole('region', { name: CONTINUE, exact: true })
         .locator(`a[href="${AYAH}"]`),
     ).toHaveCount(0);
+  });
+});
+
+test.describe('the reading position, read back by the reader (Part 1)', () => {
+  let reader: Page;
+
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(120_000);
+    const context = await browser.newContext({
+      baseURL: baseUrl(),
+      extraHTTPHeaders: { 'x-forwarded-for': '100.64.242.9' },
+    });
+    contexts.push(context);
+    reader = await context.newPage();
+    await registerAndSignIn(reader, 'quran-continue');
+  });
+
+  test('the private read answers only the session’s own position, and refuses cross-site', async ({
+    request,
+  }) => {
+    const anonymous = await request.get('/api/my/quran-position');
+    expect(anonymous.status()).toBe(200);
+    expect(anonymous.headers()['cache-control']).toBe('private, no-store');
+    expect(anonymous.headers()['x-robots-tag']).toBe('noindex');
+    expect(await anonymous.json()).toEqual({ signedIn: false });
+
+    for (const site of ['cross-site', 'same-site']) {
+      const refused = await reader.context().request.get('/api/my/quran-position', {
+        headers: { 'sec-fetch-site': site },
+      });
+      expect(refused.status(), site).toBe(403);
+    }
+    // The address names nothing: no query can choose another account or target.
+    const named = await reader
+      .context()
+      .request.get('/api/my/quran-position?accountId=someone-else');
+    expect(named.status()).toBe(400);
+
+    const none = await reader.context().request.get('/api/my/quran-position');
+    expect(await none.json()).toEqual({ signedIn: true, position: null });
+  });
+
+  test('the card offers the signed-in position; the page itself is the same for everyone', async ({
+    request,
+  }) => {
+    test.setTimeout(120_000);
+    const state = reader.waitForResponse((response) =>
+      response.url().includes('/api/my/target-state'),
+    );
+    await reader.goto('/quran/surah/3/42');
+    await state;
+    const positionSet = (
+      JSON.parse(readFileSync(path.join(MESSAGES, 'en.json'), 'utf8')) as {
+        personalIsland: Record<string, string>;
+      }
+    ).personalIsland['positionSet'];
+    await reader
+      .locator('#personal')
+      .getByRole('button', { name: positionSet ?? '' })
+      .click();
+    await expect
+      .poll(async () =>
+        (await reader.context().request.get('/api/my/quran-position')).json(),
+      )
+      .toEqual({ signedIn: true, position: { surah: 3, ayah: 42 } });
+
+    await reader.goto('/quran/read');
+    const card = reader.getByRole('region', { name: 'Continue where you stopped' });
+    await expect(card).toContainText('Your reading position');
+    await expect(card.getByRole('link')).toHaveAttribute(
+      'href',
+      '/quran/surah/3?from=41#ayah-3-42',
+    );
+
+    // BYTE FOR BYTE: the start page carries nothing per visitor.
+    const { anonymous, signedIn } = await asTwoVisitors(
+      request,
+      reader.context().request,
+      '/quran/read',
+    );
+    expect(anonymous.headers()['set-cookie']).toBeUndefined();
+    expect(signedIn.headers()['set-cookie']).toBeUndefined();
+    expect(
+      documentDifference(
+        knowledgeOf(await anonymous.text()),
+        knowledgeOf(await signedIn.text()),
+      ),
+      'the reader entry differs signed in',
+    ).toBe('identical');
   });
 });
 
