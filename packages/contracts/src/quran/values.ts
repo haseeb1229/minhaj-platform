@@ -255,6 +255,131 @@ export const RECITATION_AUDIO_MEDIA_TYPES = Object.freeze(['audio/mpeg'] as cons
 export const RECITATION_UPLOAD_MAX_BYTES = 64 * 1024 * 1024;
 
 /* ===========================================================================
+ * Recitation — streamed audio and per-Ayah timing (Quran Part 5)
+ * ========================================================================= */
+
+/**
+ * WHERE A STREAMED RECITATION'S AUDIO MAY LIVE — an exhaustive allowlist of
+ * providers, each ONE exact https origin and ONE path shape (owner decision
+ * 2026-11-09, OPEN_DECISIONS.md §1.2: mp3quran.net's qaris, streamed from its
+ * CDN, on staging only). A stored stream is never a URL: it is a provider key
+ * and a path the shape admits, and the address of Surah N is DERIVED from them
+ * (`recitationStreamUrl`). No form, field or request can name another host,
+ * scheme, port, query or file — so an operator cannot type a URL into a
+ * recitation, and a page cannot be made to load audio from anywhere else.
+ *
+ * The same origins are the ONLY media sources the Quran routes' policy admits
+ * (`media-src`, `apps/web/next.config.ts`).
+ */
+export const RECITATION_STREAM_PROVIDERS = Object.freeze({
+  mp3quran: Object.freeze({
+    /** The CDN serving mp3quran's per-Surah files. */
+    origin: 'https://cdn.mp3quran.net',
+    /** `audio/{reciter-folder}/r{n}` — the folder of one moshaf on that CDN. */
+    path: /^audio\/[a-z0-9]+(?:-[a-z0-9]+)*\/r[1-9][0-9]?$/,
+  }),
+});
+
+export type RecitationStreamProvider = keyof typeof RECITATION_STREAM_PROVIDERS;
+export const RECITATION_STREAM_PROVIDER_KEYS = Object.freeze(
+  Object.keys(RECITATION_STREAM_PROVIDERS) as RecitationStreamProvider[],
+);
+
+/** Every origin a streamed recitation can be played from, for the media policy. */
+export const RECITATION_STREAM_ORIGINS: readonly string[] = Object.freeze(
+  RECITATION_STREAM_PROVIDER_KEYS.map((key) => RECITATION_STREAM_PROVIDERS[key].origin),
+);
+
+/** The width of the stored path; the database column and CHECK hold the same. */
+export const RECITATION_STREAM_PATH_MAX = 200;
+
+export const recitationStreamSchema = z
+  .strictObject({
+    provider: z.enum(['mp3quran']),
+    path: z.string().min(1).max(RECITATION_STREAM_PATH_MAX),
+  })
+  .refine((value) => RECITATION_STREAM_PROVIDERS[value.provider].path.test(value.path), {
+    path: ['path'],
+    message: 'The path is not one this provider serves.',
+  });
+export type RecitationStream = z.output<typeof recitationStreamSchema>;
+
+/**
+ * A stored provider and path as a stream, or `null` for anything the
+ * allowlist does not admit — an unknown provider or a path of another shape is
+ * never guessed into an address (fail closed: the recitation has no audio).
+ */
+export function recitationStreamOf(
+  provider: string | null,
+  path: string | null,
+): RecitationStream | null {
+  if (provider === null || path === null) return null;
+  const parsed = recitationStreamSchema.safeParse({ provider, path });
+  return parsed.success ? parsed.data : null;
+}
+
+/** The ONE address of one Surah's file: `{origin}/{path}/{NNN}.mp3`. */
+export function recitationStreamUrl(stream: RecitationStream, surah: number): string {
+  if (!surahNumberSchema.safeParse(surah).success)
+    throw new Error('A stream address needs a Surah number.');
+  const checked = recitationStreamOf(stream.provider, stream.path);
+  if (checked === null) throw new Error('A stream address needs an admitted stream.');
+  return `${RECITATION_STREAM_PROVIDERS[checked.provider].origin}/${checked.path}/${String(surah).padStart(3, '0')}.mp3`;
+}
+
+/**
+ * The structural ceiling on a timing, in milliseconds: twelve hours. It is not
+ * any recording's length — the longest Surah recited slowly with a translation
+ * is a few hours — only a bound that refuses an impossible number. The REAL
+ * bound, the file's own duration, is known only to the player once the audio
+ * has loaded: a timing that runs past it is set aside and the segment plays
+ * untimed (`timingFits`, the player's pure rules; DOMAIN_MODEL.md §8.5).
+ */
+export const RECITATION_TIMING_MAX_MS = 12 * 60 * 60 * 1000;
+
+/** Where one Ayah is heard in a segment's audio: `[startMs, endMs)`. */
+export const ayahTimingSchema = z.strictObject({
+  ayah: ayahNumberSchema,
+  startMs: z.number().int().min(0).max(RECITATION_TIMING_MAX_MS),
+  endMs: z.number().int().min(1).max(RECITATION_TIMING_MAX_MS),
+});
+export type AyahTiming = z.output<typeof ayahTimingSchema>;
+
+/**
+ * Why a segment's timing cannot be recorded — a category, never a number.
+ *
+ *   coverage    not exactly one timing for every Ayah of the range
+ *   empty-span  an Ayah ends at or before it starts
+ *   overlap     an Ayah starts before the previous Ayah ends
+ */
+export type TimingProblem = 'coverage' | 'empty-span' | 'overlap';
+
+/**
+ * THE TIMING RULE, ONE PURE FUNCTION (the database enforces it again): a
+ * segment's timing covers EACH Ayah of its range EXACTLY ONCE, each Ayah's
+ * span is non-empty, and the spans are monotonic — every Ayah starts at or
+ * after the previous one ends. Gaps are allowed (the reciter's opening
+ * isti'adha and basmala, a pause), overlaps are not.
+ */
+export function timingProblem(
+  range: { readonly startAyah: number; readonly endAyah: number },
+  timings: readonly AyahTiming[],
+): TimingProblem | null {
+  const ordered = [...timings].sort((a, b) => a.ayah - b.ayah);
+  if (ordered.length !== range.endAyah - range.startAyah + 1) return 'coverage';
+  for (const [index, timing] of ordered.entries()) {
+    if (timing.ayah !== range.startAyah + index) return 'coverage';
+  }
+  let previousEnd = 0;
+  for (const timing of ordered) {
+    if (timing.endMs <= timing.startMs) return 'empty-span';
+    if (timing.startMs < previousEnd) return 'overlap';
+    previousEnd = timing.endMs;
+  }
+  return null;
+}
+
+/* ===========================================================================
  * Text — exact, never normalised
  * ========================================================================= */
 
@@ -339,6 +464,12 @@ export const recitationInputSchema = z.strictObject({
   style: labelText(QURAN_LIMITS.style).nullable(),
   attribution: labelText(QURAN_LIMITS.attribution).nullable(),
   sourceId: quranIdSchema.nullable(),
+  /**
+   * The language the listener HEARS (Quran Part 5): `ar` for a recitation of
+   * the Arabic, `ur` for a narration of an Urdu translation. A content
+   * Language (Taxonomy), as every layered work names one.
+   */
+  languageCode: quranLanguageCodeSchema,
 });
 export type RecitationValue = z.output<typeof recitationInputSchema>;
 
@@ -398,17 +529,30 @@ export const tafsirEntryInputSchema = z
   });
 export type TafsirEntryValue = z.output<typeof tafsirEntryInputSchema>;
 
-/** A recitation segment: one audio file covering a same-Surah range. */
+/**
+ * A recitation segment: one audio file covering a same-Surah range — with,
+ * where its source supplies one, the timing of every Ayah in it (Quran Part 5).
+ * A segment is timed completely or not at all (`timingProblem`).
+ */
 export const recitationSegmentInputSchema = z
   .strictObject({
     surah: surahNumberSchema,
     startAyah: ayahNumberSchema,
     endAyah: ayahNumberSchema,
+    timings: z.array(ayahTimingSchema).min(1).max(QURAN_AYAH_NUMBER_MAX).optional(),
   })
   .refine((value) => value.startAyah <= value.endAyah, {
     path: ['endAyah'],
     message: 'A range ends at or after where it starts.',
-  });
+  })
+  .refine(
+    (value) =>
+      value.timings === undefined || timingProblem(value, value.timings) === null,
+    {
+      path: ['timings'],
+      message: 'The timing does not cover the range exactly once, in order.',
+    },
+  );
 export type RecitationSegmentValue = z.output<typeof recitationSegmentInputSchema>;
 
 /**
@@ -652,6 +796,14 @@ export interface RecitationRecord {
   readonly attribution: string | null;
   readonly sourceId: string | null;
   readonly sourceAuthority: QuranSourceAuthority | null;
+  /** The language heard; `null` only for a recitation recorded before Part 5. */
+  readonly languageCode: string | null;
+  /**
+   * Where a STREAMED recitation's audio lives (an allowlisted provider), or
+   * `null` for first-party audio in Storage. Set only when the recitation is
+   * created, by the operator import — never by a form.
+   */
+  readonly stream: RecitationStream | null;
   readonly state: QuranLayerState;
   readonly version: number;
   readonly segmentCount: number;
@@ -665,8 +817,10 @@ export interface RecitationSegmentRecord {
   readonly surah: number;
   readonly startAyah: number;
   readonly endAyah: number;
-  /** The Storage asset holding this segment's audio, or none yet. */
+  /** The Storage asset holding this segment's audio, or none yet (always none when streamed). */
   readonly assetId: string | null;
+  /** How many of its ayat are timed: none, or every one (`timingProblem`). */
+  readonly timedAyat: number;
 }
 
 export interface RecitationDetail extends RecitationRecord {
@@ -849,16 +1003,39 @@ export interface PublicRecitation {
   readonly reciterId: string;
   readonly style: string | null;
   readonly attribution: string | null;
+  readonly languageCode: string | null;
+  /** The allowlisted provider streaming it, or `null` for first-party audio. */
+  readonly stream: RecitationStream | null;
+  /** How many Surahs it has audio for. */
+  readonly surahCount: number;
+  /** The first Surah it has audio for — where a catalogue's Play begins — or null. */
+  readonly firstSurah: number | null;
+  /** Whether EVERY segment with audio carries per-Ayah timing. */
+  readonly timed: boolean;
   readonly publishedAt: Date;
 }
 
-/** A public segment; its audio is servable only if Storage also says so. */
+/**
+ * A public segment with audio. First-party audio names its Storage asset (and
+ * is servable only if Storage also says so); a streamed recitation's segment
+ * names none — its address is derived from the stream and the Surah.
+ */
 export interface PublicRecitationSegment {
   readonly id: string;
   readonly surah: number;
   readonly startAyah: number;
   readonly endAyah: number;
-  readonly assetId: string;
+  readonly assetId: string | null;
+  /** Whether every Ayah of the segment is timed. */
+  readonly timed: boolean;
+}
+
+/** Where one Ayah is heard in one public segment's audio. */
+export interface PublicAyahTiming {
+  readonly segmentId: string;
+  readonly ayah: number;
+  readonly startMs: number;
+  readonly endMs: number;
 }
 
 export interface PublicTajweedRule {

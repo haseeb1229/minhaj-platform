@@ -1,7 +1,10 @@
 import 'server-only';
 
 import {
+  createAuthorizationPersistence,
   createAuthorizationReader,
+  createPeoplePersistence,
+  createPeopleReader,
   createQuranCanonical,
   createQuranPersistence,
 } from '@minhaj/database';
@@ -9,14 +12,17 @@ import type { PrivilegedActor, ResolvedSession } from '@minhaj/contracts/identit
 import type { QuranAuthorityPort } from '@minhaj/contracts/quran';
 import { createAuthorizationService } from '@minhaj/server-core/authorization';
 
+import { createPeopleService } from '../contexts/people-contributors/index.ts';
 import {
   createQuranCanonicalService,
   createQuranService,
+  createRecitationUpload,
   type QuranCanonicalService,
   type QuranService,
 } from '../contexts/quran/index.ts';
 import { composeMigrationRunner } from './migration-runner.ts';
 import type { MigrationServices } from './migration-wiring.ts';
+import { storageRuntime } from './storage.ts';
 
 /**
  * The Quran REFERENCE-PREVIEW tooling's composition root — Layer 4
@@ -40,6 +46,11 @@ import type { MigrationServices } from './migration-wiring.ts';
  *     (`quran.administer`, re-read live on every call).
  *   - `migration`: Migration & Provenance's read and source services, under
  *     `migration.read`, for the staged Irfan-ul-Quran revisions.
+ *   - Quran Part 5's recitation import: `upload` — Quran's own segment upload
+ *     into Storage (sniffed, size-bounded, ClamAV-scanned, recorded only when
+ *     clean) — and `people`, People's administrative service for the reciters'
+ *     records, gated by `permits` (`people.administer`, read live), exactly as
+ *     the People admin's Server Actions gate it.
  *
  * THE DATABASE is whatever `DATABASE_URL` names — the RUNTIME principal's URL.
  * Registering sources and activating the corpus are the OWNER's acts and are
@@ -52,6 +63,10 @@ export interface QuranReferenceRunner {
   requireCanonicalActor(session: ResolvedSession): Promise<PrivilegedActor | null>;
   readonly canonical: QuranCanonicalService;
   readonly quran: QuranService;
+  readonly upload: ReturnType<typeof createRecitationUpload>;
+  readonly people: ReturnType<typeof createPeopleService>;
+  /** The operator's CURRENT permission, read live (the People gate's question). */
+  permits(accountId: string, permission: string): Promise<boolean>;
   readonly migration: Pick<MigrationServices, 'read' | 'sources'>;
 }
 
@@ -73,6 +88,7 @@ export function composeQuranReferenceRunner(
   };
   const persistence = createQuranPersistence();
   const migration = composeMigrationRunner(env);
+  const authorizationPersistence = createAuthorizationPersistence();
 
   return {
     async requireCanonicalActor(session) {
@@ -89,6 +105,20 @@ export function composeQuranReferenceRunner(
       authority,
     }),
     quran: createQuranService({ persistence, authority }),
+    upload: createRecitationUpload({ persistence, authority, storage: storageRuntime }),
+    people: createPeopleService({
+      reader: createPeopleReader(),
+      people: createPeoplePersistence(),
+      accounts: {
+        capabilities: (accountId) => authorization.contributorCapabilities(accountId),
+        closedAccounts: async (ids) =>
+          ids.length === 0 ? [] : authorizationPersistence.closedAccountIds(ids),
+      },
+      // A reciter imported here has no portrait.
+      images: { servableImages: async () => new Set<string>() },
+    }),
+    permits: (accountId, permission) =>
+      authorization.hasPermission(accountId, permission),
     migration: { read: migration.read, sources: migration.sources },
   };
 }

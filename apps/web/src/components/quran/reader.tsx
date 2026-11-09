@@ -11,13 +11,18 @@ import {
   type PublicAyah,
   type PublicJuz,
   type PublicLayerWork,
+  type PublicRecitation,
   type PublicSurah,
   type QuranAvailability,
   type QuranRef,
   type TafsirEntryRecord,
 } from '@minhaj/contracts/quran';
 
-import { contentLanguages, type ContentLanguage } from '@/composition/public-references';
+import {
+  contentLanguages,
+  referenceNames,
+  type ContentLanguage,
+} from '@/composition/public-references';
 import { directionOf } from '@/config/locale';
 import { playableSegments } from '@/composition/quran-assets';
 import { quranReadRuntime } from '@/composition/quran-read';
@@ -35,7 +40,6 @@ import {
   PageHeading,
   Panel,
   Prose,
-  SectionHeading,
   Select,
   StatusBadge,
   TextInput,
@@ -84,6 +88,8 @@ import {
 } from './juz-layout';
 import { JuzIndex, type JuzIndexLabels } from './juz-index-island';
 import { QUICK_JUMP_MAX_LENGTH, hizbJuzOf, type JumpSurah } from './quick-jump';
+import { listenLabels } from './recitation-host';
+import { RecitationListen } from './recitation-listen';
 import { ArabicText, TranslationText } from './scripture';
 import { juzSpans, type SurahIndexQuery, type SurahIndexRow } from './surah-index';
 import { SurahIndex, type SurahIndexLabels } from './surah-index-island';
@@ -746,10 +752,13 @@ export const PERSONAL_ANCHOR = 'personal';
  * no script at all — and, once the island is there, opens those same controls
  * in a sheet on the page being read (Quran Part 1).
  *
- * THE SEAM FOR RECITATION. Nothing here plays: a player that highlights the
- * Ayah being recited finds each row by its stable `id` (`ayah-{s}-{a}`) and
- * `data-ayah`, and adds its own control beside these when it exists. No
- * placeholder control is drawn before then.
+ * PLAY FROM HERE (Quran Part 5). The recitation player, mounted by the Quran
+ * layout, serves this button by delegation: it plays the chosen recitation
+ * from this row's Ayah (`data-ayah`) and marks the row it is reciting by its
+ * stable `id` (`ayah-{s}-{a}`). The button shows only while that player is
+ * ready AND the chosen recitation is timed (`data-quran-player="timed"` on
+ * the document) — a recitation without per-Ayah timing cannot begin at an
+ * Ayah, and a page without script has no player to ask.
  */
 function AyahTools({
   t,
@@ -764,6 +773,14 @@ function AyahTools({
       aria-label={t('reader.actions.group')}
       className="flex items-center"
     >
+      <button
+        type="button"
+        data-ayah-action="play"
+        aria-label={t('reader.actions.play')}
+        className={`quran-ayah-play ${TOOL}`}
+      >
+        <Icon name="play" size={20} />
+      </button>
       <button
         type="button"
         data-ayah-action="copy"
@@ -791,6 +808,89 @@ function AyahTools({
         </a>
       )}
     </div>
+  );
+}
+
+/**
+ * LISTEN (Quran Part 5) — a page's way into the recitation player: which
+ * recitation, and Play from the start of the Surah, of the Juz, or from the
+ * Ayah a citation page shows. The controls are the player's own island and
+ * show only once it is ready.
+ *
+ * THE NO-SCRIPT STORY IS HONEST. Without JavaScript the same section offers
+ * plain links that open this page with a recitation chosen (`?reciter=`),
+ * where each segment is the browser's own `<audio controls>` (`children`).
+ * Once the player is there those fallbacks are hidden (`.quran-audio-fallback`
+ * under `data-quran-audio`), so a page never shows two players. Nothing is
+ * rendered when no recitation is public.
+ */
+async function ListenSection({
+  locale,
+  id,
+  scope,
+  start,
+  recitations,
+  path,
+  choice,
+  children,
+}: {
+  readonly locale: Locale;
+  readonly id: string;
+  readonly scope: 'surah' | 'juz' | 'ayah';
+  /** Where Play begins. */
+  readonly start: QuranRef;
+  readonly recitations: readonly PublicRecitation[];
+  /** This page's own address, which the fallback links choose a recitation on. */
+  readonly path: string;
+  readonly choice: ReadingChoice;
+  /** The chosen recitation's native players, when the address chose one. */
+  readonly children?: ReactNode;
+}) {
+  const playable = recitations.filter((recitation) => recitation.surahCount > 0);
+  if (playable.length === 0) return null;
+  const [t, labels, names] = await Promise.all([
+    getTranslations({ locale, namespace: 'quran' }),
+    listenLabels(locale, scope),
+    referenceNames(
+      { personIds: playable.map((recitation) => recitation.reciterId), topicIds: [] },
+      locale,
+    ),
+  ]);
+  return (
+    <section
+      aria-labelledby={id}
+      className="quran-listen flex min-w-0 flex-col gap-4 rounded-panel border border-border bg-surface-raised p-4 sm:p-5"
+    >
+      <h2 id={id} className="flex items-center gap-2 text-lg font-semibold">
+        <Icon name="audio" size={20} className="text-accent" />
+        {labels.heading}
+      </h2>
+      <RecitationListen surah={start.surah} ayah={start.ayah} labels={labels} />
+      <div className="quran-audio-fallback flex min-w-0 flex-col gap-3">
+        {children ?? (
+          <>
+            <p className="text-sm text-foreground-muted">{t('listen.fallback')}</p>
+            <ul className="flex flex-wrap gap-2">
+              {playable.map((recitation) => {
+                const reciter = names.people.get(recitation.reciterId)?.name;
+                return (
+                  <li key={recitation.id} className="min-w-0">
+                    <a
+                      href={withReading(path, { ...choice, reciter: recitation.slug })}
+                      className="inline-flex min-h-11 max-w-full items-center rounded-full border border-border-strong px-4 text-sm font-medium text-foreground no-underline hover:bg-surface-sunken"
+                    >
+                      <span className="truncate" dir="auto">
+                        {reciter === undefined ? recitation.name : reciter}
+                      </span>
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -1126,6 +1226,7 @@ async function controlLabels(locale: Locale): Promise<ReaderControlLabels> {
     noTranslation: t('reader.ayahSheet.noTranslation'),
     copy: t('reader.actions.copy'),
     share: t('reader.actions.share'),
+    play: t('reader.actions.play'),
     save: t('reader.actions.save'),
     copied: t('reader.status.copied'),
     linkCopied: t('reader.status.linkCopied'),
@@ -1436,40 +1537,48 @@ export async function SurahPage({
 
         <LayerNotices locale={locale} unavailable={context.unavailable} />
 
-        {reciter === null ? null : (
-          <section className="flex flex-col gap-4" aria-labelledby="surah-recitation">
-            <SectionHeading>
-              <span id="surah-recitation">
+        <ListenSection
+          locale={locale}
+          id="surah-recitation"
+          scope="surah"
+          start={{ surah: surah.number, ayah: 1 }}
+          recitations={context.options.recitations}
+          path={path}
+          choice={choice}
+        >
+          {reciter === null ? null : (
+            <>
+              <p className="text-sm font-semibold">
                 {t('recitationOf', { name: reciter.name })}
-              </span>
-            </SectionHeading>
-            {segments.length === 0 ? (
-              <Alert tone="info">{t('recitationNone')}</Alert>
-            ) : (
-              <ol className="flex flex-col gap-4" aria-labelledby="surah-recitation">
-                {segments.map((segment) => (
-                  <li key={segment.id} className="flex flex-col gap-2">
-                    <p className="text-sm font-medium">
-                      <TextLink
-                        href={surahPlacePath(locale, {
-                          surah: segment.surah,
-                          ayah: segment.startAyah,
-                        })}
-                      >
-                        {segmentRange(t, segment)}
-                      </TextLink>
-                    </p>
-                    <SegmentPlayer
-                      locale={locale}
-                      recitation={reciter}
-                      segment={segment}
-                    />
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
-        )}
+              </p>
+              {segments.length === 0 ? (
+                <Alert tone="info">{t('recitationNone')}</Alert>
+              ) : (
+                <ol className="flex flex-col gap-4">
+                  {segments.map((segment) => (
+                    <li key={segment.id} className="flex flex-col gap-2">
+                      <p className="text-sm font-medium">
+                        <TextLink
+                          href={surahPlacePath(locale, {
+                            surah: segment.surah,
+                            ayah: segment.startAyah,
+                          })}
+                        >
+                          {segmentRange(t, segment)}
+                        </TextLink>
+                      </p>
+                      <SegmentPlayer
+                        locale={locale}
+                        recitation={reciter}
+                        segment={segment}
+                      />
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </>
+          )}
+        </ListenSection>
 
         <ReadingFrame
           locale={locale}
@@ -2192,22 +2301,32 @@ export async function AyahPage({
           </section>
         )}
 
-        {context.chosen.reciter === null ? null : (
-          <section className="flex flex-col gap-3" aria-labelledby="ayah-recitation">
-            <h2 id="ayah-recitation" className="text-lg font-semibold">
-              {t('recitationOf', { name: context.chosen.reciter.name })}
-            </h2>
-            {segment === null ? (
-              <Alert tone="info">{t('recitationNoneForAyah')}</Alert>
-            ) : (
-              <SegmentPlayer
-                locale={locale}
-                recitation={context.chosen.reciter}
-                segment={segment}
-              />
-            )}
-          </section>
-        )}
+        <ListenSection
+          locale={locale}
+          id="ayah-recitation"
+          scope="ayah"
+          start={ref}
+          recitations={context.options.recitations}
+          path={path}
+          choice={choice}
+        >
+          {context.chosen.reciter === null ? null : (
+            <>
+              <p className="text-sm font-semibold">
+                {t('recitationOf', { name: context.chosen.reciter.name })}
+              </p>
+              {segment === null ? (
+                <Alert tone="info">{t('recitationNoneForAyah')}</Alert>
+              ) : (
+                <SegmentPlayer
+                  locale={locale}
+                  recitation={context.chosen.reciter}
+                  segment={segment}
+                />
+              )}
+            </>
+          )}
+        </ListenSection>
 
         <nav
           aria-label={t('ayahNavigation')}
@@ -2558,6 +2677,16 @@ export async function JuzPage({
         </header>
 
         <LayerNotices locale={locale} unavailable={context.unavailable} />
+
+        <ListenSection
+          locale={locale}
+          id="juz-recitation"
+          scope="juz"
+          start={juz.start}
+          recitations={context.options.recitations}
+          path={surahPath(locale, juz.start.surah)}
+          choice={choice}
+        />
 
         {windows.length === 0 ? null : (
           <nav

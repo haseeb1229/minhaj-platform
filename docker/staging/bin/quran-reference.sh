@@ -6,6 +6,8 @@
 #   quran-reference.sh import --sha256 <hex> --operator <accountId> [--session <sessionId>]
 #   quran-reference.sh translations --operator <accountId>
 #   quran-reference.sh names --sha256 <metadata hex> --operator <accountId>
+#   quran-reference.sh recitations-mp3quran --operator <accountId>
+#   quran-reference.sh recitations-irfan-urdu --operator <accountId>
 #
 # Owner decision 2026-11-06 (OPEN_DECISIONS.md §1.1): staging may show the
 # Tanzil Uthmani 1.1 text, verbatim (CC BY 3.0), with Minhaj-ul-Quran's own
@@ -35,6 +37,24 @@
 # account holding quran.read and quran.administer, keeps any name an operator
 # recorded, and changes nothing on a re-run.
 #
+# `recitations-mp3quran` (Quran Part 5; owner decision 2026-11-09) imports
+# mp3quran.net's curated Ayah-timed Hafs reads as STREAMED recitations — the
+# audio stays on mp3quran's CDN — with one timed segment per Surah and each
+# reciter as a People record. It runs in the `ingest` container, the one with
+# an outbound network; the safe fetch boundary pins every request to the API's
+# one host, a second apart. It needs an account holding quran.read,
+# quran.administer and people.administer, and takes about half an hour; a
+# re-run adds only what is missing.
+#
+# `recitations-irfan-urdu` downloads Minhaj-ul-Quran's Irfan-ul-Quran Urdu
+# narration archive (owner attestation of 2026-11-06) ONCE into
+#   /srv/minhaj/imports/quran-recitations/
+# (created here, owned by uid 1000, mounted read-write into `ingest` only),
+# refuses any size but the attested 687,598,353 bytes, records its SHA-256 in
+# the provenance source, and stores each Surah's MP3 into Storage — scanned by
+# ClamAV, unaltered — as a first-party, untimed recitation. Same account; a
+# re-run keeps the downloaded archive and stores only what is missing.
+#
 # The last output line is the command's JSON summary: identifiers and counts.
 # =============================================================================
 
@@ -42,6 +62,8 @@
 
 readonly IMPORT_DIR="$MINHAJ_SRV/imports/quran-reference"
 readonly MOUNTED=/var/lib/minhaj/quran-reference
+readonly RECITATION_DIR="$MINHAJ_SRV/imports/quran-recitations"
+readonly RECITATION_MOUNT=/var/lib/minhaj/quran-recitations
 
 staging_preflight
 host_lock
@@ -72,5 +94,20 @@ case "${1:-}" in
       --meta "$MOUNTED/quran-data.xml" \
       | tail -n 1 | jq -c . || die "staging-quran-reference did not end with a JSON summary"
     ;;
-  *) die "usage: quran-reference.sh import --sha256 <hex> --operator <accountId> [--session <sessionId>] | translations --operator <accountId> | names --sha256 <metadata hex> --operator <accountId>" ;;
+  recitations-mp3quran)
+    release_compose "$(current_release_dir)" --profile ingest run --rm --no-deps -T ingest \
+      packages/database/scripts/staging-quran-reference.ts "$@" \
+      | tail -n 1 | jq -c . || die "staging-quran-reference did not end with a JSON summary"
+    ;;
+  recitations-irfan-urdu)
+    case " $* " in
+      *' --dir '*) die "the archive is kept in $RECITATION_DIR, not named on the command line" ;;
+    esac
+    install -d -o 1000 -g 1000 -m 0750 "$RECITATION_DIR"
+    release_compose "$(current_release_dir)" --profile ingest run --rm --no-deps -T \
+      -v "$RECITATION_DIR:$RECITATION_MOUNT" ingest \
+      packages/database/scripts/staging-quran-reference.ts "$@" --dir "$RECITATION_MOUNT" \
+      | tail -n 1 | jq -c . || die "staging-quran-reference did not end with a JSON summary"
+    ;;
+  *) die "usage: quran-reference.sh import --sha256 <hex> --operator <accountId> [--session <sessionId>] | translations --operator <accountId> | names --sha256 <metadata hex> --operator <accountId> | recitations-mp3quran --operator <accountId> | recitations-irfan-urdu --operator <accountId>" ;;
 esac

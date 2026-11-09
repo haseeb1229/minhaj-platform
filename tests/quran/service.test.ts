@@ -113,6 +113,8 @@ const layerRecord = (overrides: Record<string, unknown> = {}) => ({
   sourceId: ID(7),
   sourceAuthority: 'fixture',
   textCount: 2,
+  // A first-party recitation (Quran Part 5): its audio is its segments' files.
+  stream: null,
   ...overrides,
 });
 
@@ -198,6 +200,7 @@ const WRITES = [
         style: null,
         attribution: null,
         sourceId: null,
+        languageCode: 'ar',
       },
     },
   ],
@@ -447,6 +450,23 @@ describe('publication is checked before the adapter checks it again', () => {
     });
     expect(await failure(heard.service.setRecitationState(actor, publish))).toBe(
       'accepted',
+    );
+    // Quran Part 5: a STREAMED recitation's audio is its stream — a segment is
+    // enough; with none there is nothing to hear.
+    const stream = { provider: 'mp3quran', path: 'audio/fixture-reciter/r1' };
+    const streamed = harness({
+      records: {
+        recitation: layerRecord({ stream, segments: [{ id: ID(2), assetId: null }] }),
+      },
+    });
+    expect(await failure(streamed.service.setRecitationState(actor, publish))).toBe(
+      'accepted',
+    );
+    const empty = harness({
+      records: { recitation: layerRecord({ stream, segments: [] }) },
+    });
+    expect(await failure(empty.service.setRecitationState(actor, publish))).toBe(
+      'audio-required',
     );
   });
 
@@ -872,6 +892,7 @@ const recitation = (overrides: Partial<RecitationDetail> = {}) =>
   ({
     id: ID(1),
     version: 3,
+    stream: null,
     segments: [{ id: ID(2), surah: 2, startAyah: 1, endAyah: 3, assetId: null }],
     ...overrides,
   }) as RecitationDetail;
@@ -948,6 +969,14 @@ describe('recitation upload', () => {
     const other = uploadHarness({ current: recitation({ segments: [] }) });
     expect(await failure(other.send())).toBe('not-found');
     expect(other.calls).toEqual(['recitation']);
+    // A streamed recitation takes no file, and is refused before a byte is stored.
+    const streamed = uploadHarness({
+      current: recitation({
+        stream: { provider: 'mp3quran', path: 'audio/fixture-reciter/r1' },
+      }),
+    });
+    expect(await failure(streamed.send())).toBe('invalid');
+    expect(streamed.calls).toEqual(['recitation']);
   });
 
   it("asks Storage with Quran's own audio policy and records only a clean asset", async () => {

@@ -80,6 +80,9 @@ export function createRecitationUpload(deps: {
       const current = await deps.persistence.recitation(id.data).catch(asRefusal);
       if (current === null) throw new QuranRefusal('not-found');
       if (current.version !== version.data) throw new QuranRefusal('conflict');
+      // A STREAMED recitation's audio is its stream (Quran Part 5): no file is
+      // stored for it, so none is accepted — before a byte costs storage.
+      if (current.stream !== null) throw new QuranRefusal('invalid');
       if (!current.segments.some((entry) => entry.id === segment.data))
         throw new QuranRefusal('not-found');
 

@@ -51,6 +51,9 @@ export const readSurah = cache((number: number) =>
 
 export const readSurahs = cache(() => quranReadRuntime().reader.surahs());
 
+/** Every public recitation, read once per request — the page and the Quran layout's player share it. */
+export const readRecitations = cache(() => quranReadRuntime().reader.recitations());
+
 export const readJuz = cache((number: number) => quranReadRuntime().reader.juz(number));
 
 /** Where each Ayah of a Juz falls (no text), read once per request. */
@@ -124,7 +127,7 @@ export async function readingContext(request: ReadingRequest) {
     reader.translations(),
     reader.transliterations(),
     reader.tafsirs(),
-    reader.recitations(),
+    readRecitations(),
   ]);
 
   const pick = <T extends { readonly slug: string }>(

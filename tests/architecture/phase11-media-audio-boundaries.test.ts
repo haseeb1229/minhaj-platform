@@ -221,10 +221,14 @@ describe('the one large browser upload is a Class-A route, and changes nothing e
     expect(config).not.toContain('serverActions');
   });
 
-  it('widens no Content-Security-Policy for audio', async () => {
+  it('widens no Content-Security-Policy for Media audio', async () => {
     const config = uncommented(await read('apps/web/next.config.ts'));
-    // First-party bytes need nothing beyond `default-src 'self'`.
-    expect(config).not.toContain('media-src');
+    // First-party bytes need nothing beyond `default-src 'self'`. The ONE
+    // `media-src` is Quran Part 5's, built from the recitation stream allowlist
+    // and applied to the Quran routes alone — never to Listen or Media.
+    expect(config.match(/media-src/g) ?? []).toHaveLength(1);
+    expect(config).toContain("`media-src 'self' ${mediaSources.join(' ')}`");
+    expect(config).toContain('RECITATION_STREAM_ORIGINS,');
     expect(config).not.toContain('/listen');
   });
 

@@ -533,6 +533,16 @@ export async function verifyRestoredSchema(
       );
   }
 
+  // Quran Part 5. Its history row without the per-Ayah timing table would
+  // report an applied migration over a database that cannot follow a recitation.
+  if (
+    expectedMigrationIds.some((id) => id.includes('r2_quran_recitation_timing')) &&
+    !tables.includes('QuranRecitationTiming')
+  )
+    throw new Error(
+      'Restored database is missing the Quran Part 5 table: QuranRecitationTiming',
+    );
+
   // Phase 19. A restore that carried the Hadith migration's history row but not
   // its source-qualified records, their evidence or the citation mapping would
   // report an applied migration over a database that has lost the identity

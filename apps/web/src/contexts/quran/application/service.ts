@@ -10,6 +10,7 @@ import {
   quranVersionSchema,
   recitationInputSchema,
   recitationSegmentInputSchema,
+  recitationStreamSchema,
   surahNamesInputSchema,
   surahNumberSchema,
   tafsirEntryInputSchema,
@@ -122,6 +123,16 @@ const transliterationEdit = versioned(transliterationInputSchema);
 const tafsirCreate = creation(tafsirInputSchema);
 const tafsirEdit = versioned(tafsirInputSchema);
 const recitationCreate = creation(recitationInputSchema);
+/**
+ * A STREAMED recitation (Quran Part 5): its metadata and its allowlisted
+ * provider and path, fixed from creation. No administrative form builds this
+ * envelope — only the operator's import does — and even it can name nothing
+ * but an admitted provider's folder.
+ */
+const streamedRecitationCreate = z.strictObject({
+  value: recitationInputSchema,
+  stream: recitationStreamSchema,
+});
 const recitationEdit = versioned(recitationInputSchema);
 const segmentAddition = versioned(recitationSegmentInputSchema);
 const tajweedCreate = creation(tajweedRuleInputSchema);
@@ -459,7 +470,25 @@ export function createQuranService(deps: {
     async createRecitation(actor: QuranActor, input: In<typeof recitationCreate>) {
       await administer(actor);
       const { value } = parse(recitationCreate, input);
-      return run(store.createRecitation({ actorId: actor.accountId, value }));
+      return run(
+        store.createRecitation({ actorId: actor.accountId, value, stream: null }),
+      );
+    },
+
+    /**
+     * A recitation STREAMED from an allowlisted provider (Quran Part 5), under
+     * the same `quran.administer` as every recitation. Its segments are added
+     * as Surahs, each with its timing where the source supplies one; it is
+     * public only beside a reference corpus the deployment admits, because the
+     * database lets a stream name a `reference` source only.
+     */
+    async createStreamedRecitation(
+      actor: QuranActor,
+      input: In<typeof streamedRecitationCreate>,
+    ) {
+      await administer(actor);
+      const { value, stream } = parse(streamedRecitationCreate, input);
+      return run(store.createRecitation({ actorId: actor.accountId, value, stream }));
     },
 
     async updateRecitation(actor: QuranActor, input: In<typeof recitationEdit>) {
@@ -470,8 +499,9 @@ export function createQuranService(deps: {
 
     /**
      * A PUBLISHED RECITATION HAS AUDIO — at least one segment whose file
-     * Storage cleared and the upload recorded. A segment's FILE is never set
-     * here: it arrives only through `./recitation-upload.ts`.
+     * Storage cleared and the upload recorded, or, for a STREAMED recitation,
+     * at least one segment (the stream is its audio). A segment's FILE is never
+     * set here: it arrives only through `./recitation-upload.ts`.
      */
     async setRecitationState(actor: QuranActor, input: In<typeof stateChange>) {
       await administer(actor);
@@ -480,7 +510,10 @@ export function createQuranService(deps: {
         change.state,
         change.expectedVersion,
         () => store.recitation(change.id),
-        (work) => work.segments.some((segment) => segment.assetId !== null),
+        (work) =>
+          work.stream === null
+            ? work.segments.some((segment) => segment.assetId !== null)
+            : work.segments.length > 0,
         'audio-required',
       );
       return run(store.setRecitationState({ actorId: actor.accountId, ...change }));

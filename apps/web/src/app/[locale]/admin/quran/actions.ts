@@ -588,9 +588,12 @@ export async function saveRecitation(
       style: value(form, 'style'),
       attribution: value(form, 'attribution'),
       sourceId: value(form, 'sourceId'),
+      languageCode: form.get('languageCode'),
     });
     if (!parsed.success) return INVALID;
 
+    // No stream is accepted from a form: a recitation created here takes its
+    // audio by upload, segment by segment (Quran Part 5).
     const service = quranRuntime().quran;
     if (value(form, 'id') === null) {
       const created = await service.createRecitation(actor, { value: parsed.data });

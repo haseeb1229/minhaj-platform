@@ -2,12 +2,15 @@ import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import type { Locale } from '@minhaj/contracts';
+import type { LanguageView } from '@minhaj/contracts/taxonomy';
 import {
   QURAN_LIMITS,
   QURAN_PAGE,
   RECITATION_AUDIO_MEDIA_TYPES,
+  RECITATION_STREAM_PROVIDERS,
   RECITATION_UPLOAD_MAX_BYTES,
   type QuranSourceRecord,
+  type RecitationRecord,
   type RecitationDetail,
   type SurahRecord,
 } from '@minhaj/contracts/quran';
@@ -38,6 +41,9 @@ import {
   actorOf,
   EditIdentity,
   EditorHeading,
+  LanguageSelect,
+  languageIndex,
+  languageText,
   Pager,
   PeopleSearch,
   peopleChoices,
@@ -69,7 +75,32 @@ import {
  * field for an asset identifier and no file browser. An operator listens to it
  * through the private preview route before publishing, and publication itself
  * is refused by the service while a segment has no cleared audio.
+ *
+ * A STREAMED RECITATION (Quran Part 5) is created only by the operator's import
+ * from an allowlisted provider: its provider and folder are shown here, never
+ * edited, and there is no field anywhere for a URL. Its segments are whole
+ * Surahs with no file to upload; each segment says how much of it is timed.
  */
+
+/** Where a recitation's audio comes from, in words. */
+function AudioSource({
+  record,
+  copy,
+}: {
+  readonly record: Pick<RecitationRecord, 'stream'>;
+  readonly copy: Copy;
+}) {
+  const { t } = copy;
+  if (record.stream === null)
+    return <StatusBadge tone="neutral">{t('recitation.sourceStored')}</StatusBadge>;
+  return (
+    <StatusBadge tone="neutral">
+      {t('recitation.sourceStreamed', {
+        host: new URL(RECITATION_STREAM_PROVIDERS[record.stream.provider].origin).host,
+      })}
+    </StatusBadge>
+  );
+}
 
 function formatBytes(bytes: number, locale: Locale): string {
   const megabytes = bytes / (1024 * 1024);
@@ -92,9 +123,10 @@ export async function RecitationDirectory({ params, searchParams }: ListParams) 
   const offset = pageOffset(query, QURAN_PAGE);
   const reference = queryValue(query, 'q') ?? '';
 
-  const [page, status] = await Promise.all([
+  const [page, status, languages] = await Promise.all([
     quranRuntime().quran.recitations(actor, offset),
     quranRuntime().quran.corpusStatus(actor),
+    languageIndex(),
   ]);
   const people = await peopleChoices(
     locale,
@@ -118,6 +150,8 @@ export async function RecitationDirectory({ params, searchParams }: ListParams) 
             t('name'),
             t('recitation.reciter'),
             t('slug'),
+            t('language.label'),
+            t('recitation.audio'),
             t('source'),
             t('state'),
             t('recitation.segments'),
@@ -138,6 +172,14 @@ export async function RecitationDirectory({ params, searchParams }: ListParams) 
               </DataCell>
               <DataCell wrap>
                 <span dir="ltr">{item.slug}</span>
+              </DataCell>
+              <DataCell>
+                {item.languageCode === null
+                  ? t('none')
+                  : languageText(item.languageCode, languages)}
+              </DataCell>
+              <DataCell>
+                <AudioSource record={item} copy={copy} />
               </DataCell>
               <DataCell wrap>
                 <SourceName
@@ -173,6 +215,7 @@ export async function RecitationDirectory({ params, searchParams }: ListParams) 
               record={null}
               sources={status.sources}
               people={people.options}
+              languages={languages}
               copy={copy}
             />
           </div>
@@ -202,10 +245,11 @@ export async function RecitationEditor({ params, searchParams }: EditorParams) {
   if (record === null) notFound();
 
   const reference = queryValue(query, 'q') ?? '';
-  const [status, surahs, people] = await Promise.all([
+  const [status, surahs, people, languages] = await Promise.all([
     quranRuntime().quran.corpusStatus(actor),
     quranRuntime().quran.surahs(actor),
     peopleChoices(locale, administer ? reference : '', [record.reciterId], copy),
+    languageIndex(),
   ]);
   const source =
     record.sourceId === null
@@ -240,6 +284,25 @@ export async function RecitationEditor({ params, searchParams }: EditorParams) {
           <p className="text-sm">
             {t('source')}: <SourceName source={source} copy={copy} />
           </p>
+          <div className="flex flex-col gap-1 text-sm">
+            <p className="flex flex-wrap items-center gap-2">
+              {t('recitation.audio')}: <AudioSource record={record} copy={copy} />
+            </p>
+            {record.stream === null ? null : (
+              <p className="text-foreground-muted">
+                {t('recitation.streamFolder')}{' '}
+                <bdi dir="ltr" className="font-mono text-caption">
+                  {record.stream.path}
+                </bdi>
+              </p>
+            )}
+            <p>
+              {t('language.label')}:{' '}
+              {record.languageCode === null
+                ? t('none')
+                : languageText(record.languageCode, languages)}
+            </p>
+          </div>
           {administer ? (
             <StateControls
               kind="recitation"
@@ -264,6 +327,7 @@ export async function RecitationEditor({ params, searchParams }: EditorParams) {
               record={record}
               sources={status.sources}
               people={people.options}
+              languages={languages}
               copy={copy}
             />
           </section>
@@ -313,12 +377,26 @@ export async function RecitationEditor({ params, searchParams }: EditorParams) {
                       {surah === undefined ? null : (
                         <span>{surahText(surah, locale, copy)}</span>
                       )}
-                      <StatusBadge
-                        tone={segment.assetId === null ? 'caution' : 'positive'}
-                      >
-                        {segment.assetId === null
-                          ? t('recitation.audioNone')
-                          : t('recitation.audioAttached')}
+                      {record.stream === null ? (
+                        <StatusBadge
+                          tone={segment.assetId === null ? 'caution' : 'positive'}
+                        >
+                          {segment.assetId === null
+                            ? t('recitation.audioNone')
+                            : t('recitation.audioAttached')}
+                        </StatusBadge>
+                      ) : (
+                        <StatusBadge tone="positive">
+                          {t('recitation.audioStreamed')}
+                        </StatusBadge>
+                      )}
+                      <StatusBadge tone={segment.timedAyat > 0 ? 'positive' : 'neutral'}>
+                        {segment.timedAyat > 0
+                          ? t('recitation.timed', {
+                              timed: segment.timedAyat,
+                              count: segment.endAyah - segment.startAyah + 1,
+                            })
+                          : t('recitation.untimed')}
                       </StatusBadge>
                     </p>
                     {administer && segment.assetId !== null ? (
@@ -335,30 +413,32 @@ export async function RecitationEditor({ params, searchParams }: EditorParams) {
                     ) : null}
                     {administer ? (
                       <>
-                        <SegmentUploader
-                          recitationId={record.id}
-                          segmentId={segment.id}
-                          version={record.version}
-                          maxBytes={RECITATION_UPLOAD_MAX_BYTES}
-                          accept={[...RECITATION_AUDIO_MEDIA_TYPES, '.mp3'].join(',')}
-                          labels={{
-                            file:
-                              segment.assetId === null
-                                ? t('recitation.upload')
-                                : t('recitation.replace'),
-                            help: t('recitation.uploadHelp', {
-                              size: formatBytes(RECITATION_UPLOAD_MAX_BYTES, locale),
-                            }),
-                            submit:
-                              segment.assetId === null
-                                ? t('recitation.uploadSubmit')
-                                : t('recitation.replaceSubmit'),
-                            pending: t('recitation.uploading'),
-                            progress: t('recitation.progress'),
-                            success: t('recitation.uploaded'),
-                            failures: copy.messages,
-                          }}
-                        />
+                        {record.stream === null ? (
+                          <SegmentUploader
+                            recitationId={record.id}
+                            segmentId={segment.id}
+                            version={record.version}
+                            maxBytes={RECITATION_UPLOAD_MAX_BYTES}
+                            accept={[...RECITATION_AUDIO_MEDIA_TYPES, '.mp3'].join(',')}
+                            labels={{
+                              file:
+                                segment.assetId === null
+                                  ? t('recitation.upload')
+                                  : t('recitation.replace'),
+                              help: t('recitation.uploadHelp', {
+                                size: formatBytes(RECITATION_UPLOAD_MAX_BYTES, locale),
+                              }),
+                              submit:
+                                segment.assetId === null
+                                  ? t('recitation.uploadSubmit')
+                                  : t('recitation.replaceSubmit'),
+                              pending: t('recitation.uploading'),
+                              progress: t('recitation.progress'),
+                              success: t('recitation.uploaded'),
+                              failures: copy.messages,
+                            }}
+                          />
+                        ) : null}
                         <ActionForm
                           action={removeRecitationSegment}
                           submitLabel={t('recitation.removeSegment')}
@@ -379,7 +459,11 @@ export async function RecitationEditor({ params, searchParams }: EditorParams) {
         )}
 
         {administer ? (
-          surahs.length === 0 ? (
+          record.stream !== null ? (
+            <p className="text-sm text-foreground-muted">
+              {t('recitation.streamedSegments')}
+            </p>
+          ) : surahs.length === 0 ? (
             <EmptyState>{t('texts.noCorpus')}</EmptyState>
           ) : (
             <Panel>
@@ -405,6 +489,7 @@ function RecitationForm({
   record,
   sources,
   people,
+  languages,
   copy,
 }: {
   readonly locale: Locale;
@@ -412,6 +497,7 @@ function RecitationForm({
   readonly record: RecitationDetail | null;
   readonly sources: readonly QuranSourceRecord[];
   readonly people: readonly PersonChoice[];
+  readonly languages: ReadonlyMap<string, LanguageView>;
   readonly copy: Copy;
 }) {
   const { t } = copy;
@@ -491,6 +577,12 @@ function RecitationForm({
           )}
         </Field>
       </div>
+      <LanguageSelect
+        id={`${prefix}-language`}
+        languages={languages}
+        selected={record?.languageCode ?? null}
+        copy={copy}
+      />
       <SourceSelect
         id={`${prefix}-source`}
         sources={sources}

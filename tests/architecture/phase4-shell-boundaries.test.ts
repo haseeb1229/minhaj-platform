@@ -206,6 +206,9 @@ const CONTENT_ROUTE_FILES = [
   // each is proven below to reach no session, no identity service, no logger
   // and no authentication library. `/listen/recitations` is the Listen
   // projection of the same Quran-owned catalogue.
+  // Quran Part 5: the Quran section's layout, which mounts the recitation
+  // player once over every Quran page from the PUBLIC recitation catalogue.
+  'apps/web/src/app/[locale]/(public)/quran/layout.tsx',
   'apps/web/src/app/[locale]/(public)/quran/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/read/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/surah/page.tsx',
@@ -1123,19 +1126,21 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     }
   });
 
-  it('lets the recitation player play ONLY its own first-party byte route, never on its own', async () => {
-    const source = code(
-      await readFile(
-        path.join(repoRoot, 'apps/web/src/components/quran/recitation-player.tsx'),
-        'utf8',
-      ),
-    );
+  it('lets the recitation player play ONLY its derived first-party route or allowlisted stream, never on its own', async () => {
+    const read = async (file: string) =>
+      code(await readFile(path.join(repoRoot, file), 'utf8'));
+    const source = await read('apps/web/src/components/quran/recitation-player.tsx');
+    const plan = await read('apps/web/src/components/quran/recitation-plan.ts');
 
-    // Exactly one media source, derived from the first-party recitation route.
+    // Exactly one media source, DERIVED (Quran Part 5): the first-party
+    // recitation byte route from its three identifiers, or the contract's
+    // allowlisted stream address for a Surah — the only two the derivation has.
     expect(source.match(/src=/g) ?? []).toHaveLength(1);
-    expect(source).toContain(
-      'src={recitationAssetPath({ recitationId, segmentId, assetId })}',
+    expect(source).toContain('src={audioSource(audio)}');
+    expect(plan).toMatch(
+      /return audio\.kind === 'asset'\s*\? recitationAssetPath\(audio\)\s*: recitationStreamUrl\(audio\.stream, audio\.surah\);/,
     );
+    expect(plan).not.toMatch(/https?:\/\//);
     // Nothing is fetched until the listener presses play, nothing plays on its
     // own, and nothing offers a copy to keep.
     expect(source).toContain('preload="none"');
@@ -1152,6 +1157,37 @@ describe('the public shell is server-rendered, with narrow client islands', () =
       'dangerouslySetInnerHTML',
     ]) {
       expect(source, forbidden).not.toContain(forbidden);
+    }
+  });
+
+  it('gives the Quran recitation player ONE audio element, made by a press, with no download and no autoplay', async () => {
+    const read = async (file: string) =>
+      code(await readFile(path.join(repoRoot, file), 'utf8'));
+    const store = await read('apps/web/src/components/quran/recitation-store.ts');
+    const dock = await read('apps/web/src/components/quran/recitation-dock.tsx');
+    const listen = await read('apps/web/src/components/quran/recitation-listen.tsx');
+
+    // One element, never in the document, created by the first command (Quran
+    // Part 5): no page carries a second `<audio>` beside its native fallback.
+    expect(store.match(/new Audio\(\)/g) ?? []).toHaveLength(1);
+    // Its only source is the derivation pinned above.
+    expect(store.match(/\.src = /g) ?? []).toEqual(['.src = ']);
+    expect(store).toContain('const source = audioSource(segment.audio);');
+    // The islands drive commands; only the store's own command paths call play.
+    for (const island of [dock, listen]) expect(island).not.toContain('.play(');
+    for (const module of [store, dock, listen]) {
+      for (const forbidden of [
+        'autoplay',
+        'autoPlay',
+        '<audio',
+        // A link the dock lets through untouched may carry `download`; none
+        // of these offers one.
+        'download=',
+        'document.cookie',
+        'sessionStorage',
+        'dangerouslySetInnerHTML',
+      ])
+        expect(module, forbidden).not.toContain(forbidden);
     }
   });
 
@@ -1638,7 +1674,18 @@ describe('the base security headers', () => {
       "...inEveryLocale('/donate/return'),",
     ])
       expect(config, route).toContain(route);
-    expect(config.match(/inEveryLocale\('/g) ?? []).toHaveLength(6);
+    // Quran Part 5 adds the Quran section, where the recitation player lives:
+    // its `media-src` names the recitation stream allowlist, and `autoplay` is
+    // delegated to the page itself — no frame, no other origin.
+    expect(config).toContain("...inEveryLocale('/quran'),");
+    expect(config).toContain("...inEveryLocale('/quran/:path*'),");
+    expect(config).toContain(
+      'const QURAN_PERMISSIONS_POLICY = `${DECLINED_CAPABILITIES}, autoplay=(self)`;',
+    );
+    expect(config).toMatch(
+      /\.\.\.QURAN_ROUTES\.map\(\(source\) => \(\{\s*source,\s*headers: \[\s*\{ key: 'Content-Security-Policy', value: QURAN_CONTENT_SECURITY_POLICY \},\s*\{ key: 'Permissions-Policy', value: QURAN_PERMISSIONS_POLICY \},\s*\],/,
+    );
+    expect(config.match(/inEveryLocale\('/g) ?? []).toHaveLength(8);
     expect(config.match(/:locale\(/g) ?? []).toHaveLength(1);
     // `autoplay` stays refused on every page; only the player routes delegate
     // it (R2, audit F08), to themselves and exactly the two embed origins from

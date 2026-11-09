@@ -840,7 +840,9 @@ privacy-enhanced address plus `autoplay=1`, rather than asking for a second pres
 provider's frame. The browser honours it only because the two player routes (the public Video page
 and its administrative editor) delegate `autoplay` to themselves and exactly the two embed
 origins, from the same contract as `frame-src`; every other page still refuses `autoplay`
-(SECURITY_BASELINE.md §16.2). Structured data keeps the plain embed address, the CSP is unchanged,
+*(as at R2 — since Quran Part 5 the Quran routes also delegate `autoplay` to the page itself, no
+frame or other origin, and admit the recitation stream origins as `media-src` only;
+SECURITY_BASELINE.md §5.1, §16.2)* (SECURITY_BASELINE.md §16.2). Structured data keeps the plain embed address, the CSP is unchanged,
 and the one-line disclosure of which provider plays the video sits beside the stage — never a
 panel over the poster, never a modal. Nothing about the press is stored. Stage and frame share one
 16:9 box, so nothing moves when the frame replaces the poster.
@@ -1696,6 +1698,32 @@ source's evidence records, and saves each Surah's English display name and meani
 `tname`/`ename`, verbatim) through Quran's administrative service in a runtime child under
 `quran.read` and `quran.administer`, keeping any name an operator recorded (DOMAIN_MODEL.md §8.4).
 The corpus is irreversible on its database: only a staging reset removes it.
+
+**Quran recitations (Quran Part 5; owner decisions 2026-11-09, OPEN_DECISIONS.md §1.2).** Two more
+`quran-reference.sh` modes, each run in the **`ingest`** service (the one operator container with an
+outbound network), each refusing unless the active corpus is the Tanzil reference corpus and the
+content language it names (`ar`, `ur`) is recorded. The owner side
+(`packages/database/src/lifecycle/quran-recitations.ts`) registers the import's provenance source
+(authority `reference`, no ayat, its licence or attestation in the evidence; a source registered with
+different evidence is refused, never edited), then starts the runtime child
+`scripts/quran/recitations-runtime.ts` (a new entry on the tool runner's allowlist,
+`QURAN_RECITATIONS_TOOL_ENTRY`), composed by `composition/quran-reference-runner.ts` — which now also
+supplies Quran's segment upload into Storage and People's administrative service, gated by the
+operator's `people.administer` read live. `recitations-mp3quran --operator <id>` imports mp3quran.net's
+twelve curated Ayah-timed Hafs reads (pinned by moshaf id and CDN folder) as STREAMED recitations —
+the audio stays on the CDN — through the safe fetch boundary bound to `www.mp3quran.net` alone, one
+request at a time at least a second apart, three attempts for a transient failure: each reciter a
+People Person (mp3quran's Arabic and English names verbatim), one timed whole-Surah segment per Surah,
+a Surah whose timing does not cover the corpus's ayat skipped and reported; about half an hour, and
+a re-run adds only what is missing. `recitations-irfan-urdu --operator <id>` downloads the
+owner-attested Irfan-ul-Quran Urdu narration archive once into `/srv/minhaj/imports/quran-recitations/`
+(created by the script for uid 1000, mounted read-write into `ingest` only) through the new safe
+download boundary (`createSafeDownloader`: exact host `minhaj.net`, the fetcher's scope, pin and
+redirect checks, streamed to a `.part` file under a byte cap and renamed only on a complete `200`),
+refuses any size but 687,598,353 bytes, records its SHA-256 in the provenance, reads the archive with
+`node:zlib` (no dependency; `scripts/quran/zip-archive.ts`, each member's size and CRC-32 checked
+before Storage sees it) and stores each Surah's MP3 unaltered through Storage (ClamAV) as a
+first-party, untimed recitation narrated by Tasleem Ahmed Sabri. Both print counts only.
 
 **Demonstration data (Rebaseline R2; OPEN_DECISIONS.md §4.2).** `bin/demo.sh seed|status|reset`
 runs `staging-demo` in the operations image after the staging host proof and a check that the

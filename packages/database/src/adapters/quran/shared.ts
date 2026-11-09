@@ -43,7 +43,7 @@ export class QuranDataError extends Error {
  * ========================================================================= */
 
 /**
- * The migration's own refusals (`THROW 51180`–`51199`), by number, as the
+ * The migration's own refusals (`THROW 51180`–`51199`, and Quran Part 5's `51400`–`51402`), by number, as the
  * context's vocabulary. Read from the STRUCTURED fields the driver populates —
  * never from message text, which a stored value could otherwise imitate.
  */
@@ -70,6 +70,12 @@ const THROW_REASONS: ReadonlyMap<number, string> = new Map([
   [51197, 'invalid'],
   [51198, 'fixture-over-approved'],
   [51199, 'unchanged'],
+  // Quran Part 5: a stream changed after creation, beside a non-reference
+  // source, or a streamed segment that is not one whole Surah without a file;
+  // a timing that is partial, out of its range, overlapping or edited.
+  [51400, 'invalid'],
+  [51401, 'invalid'],
+  [51402, 'invalid'],
 ]);
 
 /**

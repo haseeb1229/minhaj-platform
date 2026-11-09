@@ -954,6 +954,9 @@ grants nothing — with a style and attribution only where a source supplies the
 a recitation, a range fixed once created, one Asset per segment, a never-cascading key). A
 published recitation always has audio. Media holds no recitation column, table or code;
 `/listen/recitations` is a Layer-4 projection of Quran's public reader. Nothing is downloadable.
+*(As at Phase 18. Since Quran Part 5 a recitation also records the language heard, may be STREAMED
+from an allowlisted provider instead of holding Storage assets, and a segment may carry per-Ayah
+timing — §8.5.)*
 
 **Typed topic assignment.** `QuranTopic` targets the **Ayah** — the canonical citation unit —
 with real foreign keys to the Ayah and the Topic. Surah-level assignment would be a separate typed
@@ -1087,6 +1090,53 @@ Search's server-side restriction, built from the reader's own counts and Juz ran
 only one corpus is ever accepted: a staging database that holds the reference corpus keeps it until
 the staging database is reset, and a later approved corpus needs a fresh database or a recorded
 correction of every Ayah. Production never runs the import and never sets the admission.
+
+### 8.5 Recitations — heard, followed and streamed (Quran Part 5)
+
+**Owner decisions of 2026-11-09 for staging, not religious approval** (OPEN_DECISIONS.md §1.2,
+item 1). Migration `20261109120000_r2_quran_recitation_timing` gives a Recitation three facts, each
+the smallest shape that holds it, all Quran's (§8.1):
+
+| Fact | Shape | Rule |
+|---|---|---|
+| The language heard | `QuranRecitation.languageCode` → Taxonomy `Language` | `ar` for a recitation of the Arabic, a translation's language for a narration; required by the input schema, NULL only on a row recorded before Part 5 (nothing backfilled or inferred) |
+| Where a STREAMED recitation's audio lives | `streamProvider` + `streamPath` — never a URL | `QuranRecitation_stream_ck`: both NULL, or provider `mp3quran` with a path of `[-a-z0-9/]` beginning `audio/`, no `//`, no trailing `/`; fixed at creation (trigger 51400, and the runtime principal is denied UPDATE on both columns); a streamed recitation names a `reference` source only (51401), so it can never stand beside an approved corpus; its segments hold no Storage asset and each is one whole Surah (51401), because the provider serves one file per Surah |
+| When each Ayah is heard | `QuranRecitationTiming (segmentId, ayahNumber, startMs, endMs)`, a typed key to its segment | `[startMs, endMs)` in the segment's audio, non-empty, within a 12-hour structural ceiling (`QuranRecitationTiming_ck`, `RECITATION_TIMING_MAX_MS`); a segment is timed for EVERY Ayah of its range or for none, monotonically — gaps (the opening isti'adha and basmala, a pause) allowed, overlaps refused — inserted in one statement with its segment, never edited, deleted only with it (trigger 51402); runtime SELECT, INSERT and DELETE only |
+
+The contract is one pure rule (`timingProblem`: coverage, empty span, overlap), applied by the input
+schema and again by the database. The allowlist is `RECITATION_STREAM_PROVIDERS`
+(`@minhaj/contracts/quran`): one provider, one exact https origin (`https://cdn.mp3quran.net`) and
+one path shape; `recitationStreamUrl` DERIVES the one address of Surah N
+(`{origin}/{path}/{NNN}.mp3`), and `recitationStreamOf` reads a stored stream fail-closed (an
+unknown provider or path is no audio). "A published recitation has audio" keeps its meaning: its two
+51188 triggers are redefined so a streamed recitation's segment counts as audio and a first-party
+one still needs its asset; the service and the adapter apply the same rule. The file's own duration
+is not knowable without fetching it, so the player — not the database — checks the timing against
+the loaded audio's length: a timing that runs past the file (beyond a 1.5-second tolerance) is set
+aside and that segment plays untimed.
+
+**Who writes what.** An administrator creates first-party recitations exactly as before (now with
+a language); a STREAM is set only by `createStreamedRecitation` (`quran.administer`), which no
+administrative form calls — only the operator's import — and Quran's segment upload refuses a
+streamed recitation before a byte is stored. The public reader adds, per recitation, its language,
+stream, `surahCount`, `firstSurah` (where a catalogue's Play begins) and `timed` (one grouped read for a whole list) and `recitationTimings(id,
+surah)` (one bounded read); segment audio is a file OR the recitation's stream (`WITH_AUDIO`), and
+the public-work predicate is unchanged.
+
+**What staging holds once the operator runs the imports** (ARCHITECTURE.md staging operations):
+mp3quran.net's twelve curated, Ayah-timed Hafs ʿan ʿĀṣim murattal reads, each pinned by moshaf id
+and CDN folder, streamed — never copied — with each reciter a People Person (mp3quran's own Arabic
+and English names, verbatim; no biography or portrait) and one timed segment per Surah, only
+`start_time`/`end_time` read (never the mushaf-page polygons), a Surah whose timing does not cover
+the corpus's ayat exactly once skipped and reported, never adjusted; and Minhaj-ul-Quran's
+Irfan-ul-Quran Urdu narration (Tasleem Ahmed Sabri, a People Person with an English name only),
+114 first-party MP3s stored unaltered through Storage (sniffed, ClamAV-scanned), one untimed segment
+per Surah. Each import's provenance is a `reference` source with no ayat (`mp3quran-recitations`,
+`irfan-ul-quran-ur-narration`, the latter recording the archive's SHA-256).
+
+**Untimed is said, never faked.** A recitation without per-Ayah timing plays whole Surahs, and every
+surface that offers it says that verse highlighting is unavailable; no Ayah button pretends to start
+at an Ayah it cannot find.
 
 ---
 

@@ -406,7 +406,10 @@ export async function capturePhase18Fixture(
   return rows;
 }
 
-/** The Phase-18 tables whose constraints and triggers must return intact. */
+/**
+ * The Quran tables whose constraints and triggers must return intact: Phase
+ * 18's, and Quran Part 5's per-Ayah recitation timing.
+ */
 const PHASE18_TABLES = [
   'QuranSource',
   'QuranSourceSurah',
@@ -431,6 +434,7 @@ const PHASE18_TABLES = [
   'QuranTajweedRule',
   'QuranTajweedRuleText',
   'QuranTopic',
+  'QuranRecitationTiming',
 ] as const;
 
 const PROCEDURES = [
@@ -614,13 +618,16 @@ export async function verifyRestoredPhase18(
           WHERE r.[key]=N'platform-administrator'
             AND rp.[permissionKey] IN (N'quran.read', N'quran.administer', N'quran.editCanonical')) AS [bundled];`,
   );
-  // 40 CHECKs (39 from Phase 18, and Quran Part 2's non-empty SurahName.meaning),
-  // 41 foreign keys and 25 triggers, exactly as the migrations create them: a restore that silently lost one would otherwise read as
-  // "none untrusted".
+  // 42 CHECKs (39 from Phase 18, Quran Part 2's non-empty SurahName.meaning,
+  // and Quran Part 5's stream and timing rules), 43 foreign keys (Part 5: the
+  // language heard and the timing's segment) and 28 triggers (Part 5: the
+  // stream rules, the streamed segment and the timing's shape), exactly as the
+  // migrations create them: a restore that silently lost one would otherwise
+  // read as "none untrusted".
   if (
-    Number(counts?.checks ?? 0) !== 40 ||
-    Number(counts?.keys ?? 0) !== 41 ||
-    Number(counts?.triggers ?? 0) !== 25 ||
+    Number(counts?.checks ?? 0) !== 42 ||
+    Number(counts?.keys ?? 0) !== 43 ||
+    Number(counts?.triggers ?? 0) !== 28 ||
     Number(counts?.procedures ?? 0) !== PROCEDURES.length ||
     Number(counts?.bundled ?? 0) !== 3
   ) {

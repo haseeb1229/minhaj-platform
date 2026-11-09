@@ -1417,6 +1417,8 @@ PRODUCTION ACTIVATION        BLOCKED until those close
 - **Not delivered, and not owed by this phase:** a real corpus or layered work (external gates);
   source adapters and live import (Phase 30); downloads (§2.4); reading progress, bookmarks and
   notes (Phase 21); Surah-level topic assignment; tafsir search; time-offset recitation segments.
+  *(At Phase-18 exit. Per-Ayah recitation timing has since been delivered by Quran Part 5 — the
+  Rebaseline R2 record below; DOMAIN_MODEL.md §8.5.)*
 
 ---
 
@@ -3025,6 +3027,64 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > card, the filters without script, Urdu and Arabic, 320 px and axe. **Staging:** deploy, then
 > rebuild the index from `/admin/system/search` ("Rebuild", `search.operate`); the web service's
 > sweep works it through. *CI and staging evidence are recorded when they exist.*
+
+> **Quran Part 5 — recitations (owner decisions 2026-11-09, OPEN_DECISIONS.md §1.2 item 1; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (DOMAIN_MODEL.md §8.5; ROUTE_MAP.md
+> §3.3, §7; SECURITY_BASELINE.md §5.1, §16.2; ARCHITECTURE.md staging operations):
+>
+> - **Data.** Migration `20261109120000_r2_quran_recitation_timing` (**35 migrations**, with its
+>   rollback): `QuranRecitation.languageCode` (→ `Language`), `streamProvider` + `streamPath` (an
+>   allowlisted provider and CDN folder, never a URL; `QuranRecitation_stream_ck`), and
+>   `QuranRecitationTiming` (`[startMs, endMs)` per Ayah of a segment, `QuranRecitationTiming_ck`).
+>   Refusals 51400 (a stream is fixed at creation), 51401 (a stream names a `reference` source only;
+>   a streamed segment is one whole Surah with no file) and 51402 (timing for every Ayah or none, in
+>   range, monotonic, never edited); the two 51188 "published recitation has audio" triggers count a
+>   streamed segment as audio. Grants: the runtime may SELECT, INSERT and DELETE timings only, and
+>   may not UPDATE a stream. `RECITATION_UPLOAD_MAX_BYTES` stays 64 MiB (the narration's largest file,
+>   Al-Baqarah, is 49,161,152 bytes; ClamAV's stream limit is 100 MiB).
+> - **The player.** One persistent dock, mounted by the new Quran layout, that keeps playing across
+>   client navigations within `/quran/**`: play and pause, the recitation choice (remembered), Play
+>   from any Ayah, continuous play across ayat, segments and into the next Surah (the page follows
+>   from that Surah's own page), follow-along highlight and scrolling (reduced motion and the
+>   visitor's own scrolling respected; a toggle), repeat each Ayah 1–10 times, a repeated range N
+>   times or until stopped, speed 0.75–1.5×, a seek bar with a tick at each Ayah, Space/K/J/L only
+>   inside the dock, the Media Session (Surah, Ayah, reciter; lock-screen controls), loading,
+>   buffering and failure in words, Urdu and Arabic right to left, 320 px. Its one audio element is
+>   made by the press and never in the document; nothing plays or loads before. An untimed
+>   recitation plays whole Surahs and says highlighting is unavailable. Pure rules in
+>   `components/quran/recitation-plan.ts`; data from `GET /api/quran/recitations/{slug}/{surah}`.
+> - **Pages.** Surah, Juz and Ayah pages gain a Listen section with an honest no-JavaScript fallback
+>   (links to `?reciter=`, whose segments are native `<audio controls>`); `/quran/recitations` cards
+>   (language, style, timed or whole-Surah, Surah count, Play) with a GET filter by style and
+>   language; the reciter page lists Surahs with Play and "Read and listen".
+> - **Administration.** `/admin/quran/recitations` records the language, shows the audio source
+>   (uploaded or streamed, the folder read-only) and each segment's timing coverage; no URL field
+>   exists, and a streamed recitation offers no upload.
+> - **Security.** The Quran routes alone add `media-src 'self' https://cdn.mp3quran.net` and
+>   `autoplay=(self)`; no third-party script; the referrer policy is unchanged (origin only).
+> - **Imports (staging operator commands, in the `ingest` container).** `quran-reference.sh
+>   recitations-mp3quran --operator <id>` (`quran.read`, `quran.administer`, `people.administer`):
+>   the twelve curated Ayah-timed Hafs reads streamed, each reciter a People Person, a Surah whose
+>   timing does not fit skipped and reported. `quran-reference.sh recitations-irfan-urdu --operator
+>   <id>`: the narration archive downloaded once (exact 687,598,353 bytes, SHA-256 recorded in its
+>   provenance), each of its 114 `NNN. Name.mp3` members verified and stored through Storage, one
+>   untimed segment per Surah. Both are resumable and idempotent and print counts only. Run them
+>   after `import` and `translations`; deploy first (the migration is in the release).
+>
+> **Proof:** `tests/quran/recitation-rules.test.ts` (timing rule, stream allowlist and address),
+> `tests/quran/recitation-plan.test.ts` (the player's state machine and response reading),
+> `tests/quran/mp3quran.test.ts` (read planning, timing reading, the polite fetch),
+> `tests/quran/zip-archive.test.ts`, the safe-download block of
+> `tests/migration/tooling/safe-fetch.test.ts`; on SQL Server
+> `tests/quran/persistence.integration.test.ts` (timing, streams, language) and
+> `tests/quran/recitations-import.integration.test.ts` (both imports end to end with stubbed fetch,
+> a stand-in scanner where ClamAV is not running); the migration rehearsal (`db:migrate:test`,
+> trigger and grant proofs, rollback), `db:test:permissions` and the populated restore proof; the
+> browser journey (`tests/browser/quran.spec.ts`) gains a timed first-party fixture and an untimed
+> one: nothing before the press, Play from an Ayah, the highlight moving, playing across a client
+> navigation, close, repeat, range, speed and the dock's keys remembered, the untimed note, Urdu and
+> Arabic, 320 px, axe, the catalogue filter and the reciter page, and the no-JavaScript fallback.
+> *CI and staging evidence are recorded when they exist.*
 
 ---
 

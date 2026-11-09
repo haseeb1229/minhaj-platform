@@ -311,6 +311,14 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // empty one. Asserted with the column widths and CHECK constraints, and its
   // rollback by `assertSurahMeaningRemoved`.
   '20261109000000_r2_quran_surah_meaning': [],
+  // QURAN PART 5 CREATES ONE TABLE: the per-Ayah timing of a recitation
+  // segment, typed to the segment (NO ACTION), written once and never edited.
+  // It also gives a recitation its language heard (a Language key) and its
+  // allowlisted stream (provider and path, a CHECK), with three triggers, and
+  // redefines Phase 18's two "a published recitation has audio" triggers.
+  // Asserted by `assertQuranFoundation`, proved as behaviour inside
+  // `assertQuranCanonicalRules`, its rollback by `assertRecitationTimingRemoved`.
+  '20261109120000_r2_quran_recitation_timing': ['QuranRecitationTiming'],
   // THE DONATIONS CONTEXT: a campaign with its words per locale and its
   // per-currency policy, the owner's fail-closed provider activation (one
   // immutable row the runtime can only read), the donation — one payment
@@ -1245,7 +1253,13 @@ const EXPECTED_COLUMN_SIZES: readonly {
     'QuranTransliteration',
     'QuranTafsir',
     'QuranTajweedRuleText',
+    // Quran Part 5: the language a recitation is heard in.
+    'QuranRecitation',
   ].map((table) => ({ table, column: 'languageCode', characters: 16 })),
+  // Quran Part 5: a streamed recitation's provider key and CDN folder — never
+  // a URL (RECITATION_STREAM_PATH_MAX is the same 200).
+  { table: 'QuranRecitation', column: 'streamProvider', characters: 16 },
+  { table: 'QuranRecitation', column: 'streamPath', characters: 200 },
   { table: 'QuranSource', column: 'code', characters: 64 },
   // R2: a reference source keeps its licence notice verbatim as evidence.
   { table: 'QuranSource', column: 'reference', characters: 2000 },
@@ -1896,6 +1910,21 @@ const HADITH_PROCEDURE_NUMBERS: Readonly<Record<string, string>> = {
 const QURAN_TABLES = MIGRATION_EXPECTATIONS['20261002000000_phase18_quran'] ?? [];
 
 /**
+ * Quran Part 5's three triggers (51400–51402, a new range: Phase 18's is full):
+ * 51400 a stream changed after creation and 51401 a stream beside a source
+ * that is not `reference`; 51401 a streamed segment holding a file or not one
+ * whole Surah; 51402 a timing that is edited, outside its segment, partial or
+ * overlapping. Phase 18's two "a published recitation has audio" triggers are
+ * redefined in place and still raise exactly 51188.
+ */
+const QURAN_PART5_TABLES = ['QuranRecitationTiming'] as const;
+const QURAN_PART5_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, string]>> = {
+  QuranRecitationStreamRules: ['QuranRecitation', '51400+51401'],
+  QuranRecitationSegmentStreamed: ['QuranRecitationSegment', '51401'],
+  QuranRecitationTimingShape: ['QuranRecitationTiming', '51402'],
+};
+
+/**
  * Each Quran trigger, the table it guards and the refusal numbers its body
  * raises: 51180 an immutable registered source, 51181 immutable canonical
  * structure, 51182 a canonical change that is a recorded, one-step correction,
@@ -2036,6 +2065,8 @@ const EXPECTED_TRIGGERS = [
   // Phase 18: every Quran invariant no constraint can express — each listed,
   // with the refusal it raises, in `QURAN_TRIGGER_NUMBERS`.
   ...Object.keys(QURAN_TRIGGER_NUMBERS),
+  // Quran Part 5: the stream and timing rules.
+  ...Object.keys(QURAN_PART5_TRIGGER_NUMBERS),
   // Phase 19: every Hadith invariant no constraint can express — each listed,
   // with the refusal it raises, in `HADITH_TRIGGER_NUMBERS`.
   ...Object.keys(HADITH_TRIGGER_NUMBERS),
@@ -2310,6 +2341,11 @@ const EXPECTED_CHECK_CONSTRAINTS = [
   })),
   { table: 'SurahName', constraint: 'SurahName_ck' },
   { table: 'SurahName', constraint: 'SurahName_meaning_ck' },
+  // Quran Part 5: a stream is both columns or neither, an admitted provider
+  // and a folder of the provider's own shape; a timing is a non-empty span
+  // within the twelve-hour ceiling.
+  { table: 'QuranRecitation', constraint: 'QuranRecitation_stream_ck' },
+  { table: 'QuranRecitationTiming', constraint: 'QuranRecitationTiming_ck' },
   ...[
     'QuranTranslation',
     'QuranTransliteration',
@@ -4776,20 +4812,27 @@ async function assertQuranFoundation(
   session: SqlSession,
   stage: 'reference' | 'before-reference' = 'reference',
 ): Promise<void> {
-  const tables = QURAN_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',');
-  const names = QURAN_TABLES.map((table) => `N'${table}'`).join(',');
+  // With every migration applied, Quran Part 5's timing table is a Quran table
+  // too; after the R2 rollback (which follows Part 5's) the Phase-18 set is back.
+  const all: readonly string[] =
+    stage === 'reference' ? [...QURAN_TABLES, ...QURAN_PART5_TABLES] : QURAN_TABLES;
+  const tables = all.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',');
+  const names = all.map((table) => `N'${table}'`).join(',');
 
   // ---- 1. an EMPTY corpus ---------------------------------------------------
   const counts = await session.query<{ name: string; total: number }>(
-    QURAN_TABLES.map(
-      (table) =>
-        `SELECT N'${table}' AS [name], COUNT_BIG(*) AS [total] FROM [dbo].[${table}]`,
-    ).join(' UNION ALL ') + ';',
+    all
+      .map(
+        (table) =>
+          `SELECT N'${table}' AS [name], COUNT_BIG(*) AS [total] FROM [dbo].[${table}]`,
+      )
+      .join(' UNION ALL ') + ';',
   );
   const seeded = counts.filter((row) => Number(row.total) !== 0);
-  if (QURAN_TABLES.length !== 23 || counts.length !== 23 || seeded.length > 0)
+  const tableCount = stage === 'reference' ? 24 : 23;
+  if (QURAN_TABLES.length !== 23 || counts.length !== tableCount || seeded.length > 0)
     fail(
-      `The Quran migration must create twenty-three empty tables and seed no content; ` +
+      `The Quran migrations must create ${String(tableCount)} empty tables and seed no content; ` +
         `found ${String(counts.length)} tables, seeded: ${JSON.stringify(seeded)}.`,
     );
 
@@ -4866,9 +4909,14 @@ async function assertQuranFoundation(
     WHERE fk.[parent_object_id] IN (${tables}) AND fk.[referenced_object_id] NOT IN (${tables});
   `);
   const edges = external.map((row) => row.edge).sort();
-  if (edges.join(',') !== QURAN_EXTERNAL_KEYS.join(','))
+  // Quran Part 5: a recitation names the Language it is heard in.
+  const externalKeys =
+    stage === 'reference'
+      ? [...QURAN_EXTERNAL_KEYS, 'QuranRecitation_languageCode_fkey>Language'].sort()
+      : QURAN_EXTERNAL_KEYS;
+  if (edges.join(',') !== externalKeys.join(','))
     fail(
-      `Quran's references into other owners must be exactly ${QURAN_EXTERNAL_KEYS.join(', ')}; ` +
+      `Quran's references into other owners must be exactly ${externalKeys.join(', ')}; ` +
         `found ${edges.join(', ')}.`,
     );
 
@@ -4951,9 +4999,14 @@ async function assertQuranFoundation(
     .sort()
     .join(',');
   // R2 widens the canonical-change trigger with the authority-mixing refusal.
+  // Quran Part 5 adds its three, and leaves 51188 the published-audio rule's.
   const triggerNumbers: Readonly<Record<string, readonly [string, string]>> =
     stage === 'reference'
-      ? { ...QURAN_TRIGGER_NUMBERS, AyahCanonicalChange: ['Ayah', '51181+51182+51198'] }
+      ? {
+          ...QURAN_TRIGGER_NUMBERS,
+          AyahCanonicalChange: ['Ayah', '51181+51182+51198'],
+          ...QURAN_PART5_TRIGGER_NUMBERS,
+        }
       : QURAN_TRIGGER_NUMBERS;
   const expectedTriggers = Object.entries(triggerNumbers)
     .map(([name, [table, numbers]]) => `${name}@${table}:${numbers}`)
@@ -5026,8 +5079,9 @@ async function assertQuranFoundation(
 
   report(
     'quran foundation',
-    'twenty-three empty tables, citation identity, eight Ayah keys, nine ' +
-      'non-cascading external keys, 25 triggers and 4 procedures by number, three bundled keys',
+    `${String(tableCount)} empty tables, citation identity, eight Ayah keys, ` +
+      `${String(externalKeys.length)} non-cascading external keys, ${String(triggers.length)} triggers ` +
+      'and 4 procedures by number, three bundled keys',
   );
 }
 
@@ -6080,6 +6134,253 @@ async function assertQuranCanonicalRules(session: SqlSession): Promise<void> {
      INSERT INTO [dbo].[QuranTajweedRuleText] ([ruleId],[languageCode],[title],[body]) VALUES (N'${rule}',N'en',N'NON_QURAN_FIXTURE rule',N'NON_QURAN_FIXTURE rule body');
      ${publish('QuranTajweedRule', rule)}
      INSERT INTO [dbo].[QuranTopic] ([surahNumber],[ayahNumber],[topicId]) VALUES (1,1,N'${topic.id}');`,
+  );
+
+  // ---- Quran Part 5: a segment's timing ----------------------------------------
+  //
+  // A segment is timed for EVERY Ayah of its range or for none, each span is
+  // non-empty and starts no earlier than the one before ends, and a timing is
+  // written once: never edited, removed only whole. `firstSegment` is Surah 1,
+  // ayat 1–2, of the published first-party recitation above.
+  const timing = (
+    segmentId: string,
+    rows: readonly (readonly [number, number, number])[],
+  ) =>
+    `INSERT INTO [dbo].[QuranRecitationTiming] ([segmentId],[ayahNumber],[startMs],[endMs]) VALUES ${rows
+      .map(
+        ([ayah, start, end]) =>
+          `(N'${segmentId}',${String(ayah)},${String(start)},${String(end)})`,
+      )
+      .join(',')};`;
+  const timedAyat = (segmentId: string) =>
+    count(
+      `SELECT COUNT_BIG(*) AS [total] FROM [dbo].[QuranRecitationTiming] WHERE [segmentId]=N'${segmentId}';`,
+    );
+  const EVERY_OR_NONE = 'A segment is timed for every Ayah or for none.';
+  for (const [label, statement, numbers, ruleName] of [
+    [
+      'A segment is never timed for only some of its ayat',
+      timing(firstSegment, [[1, 0, 1000]]),
+      [51402],
+      EVERY_OR_NONE,
+    ],
+    [
+      'A timing never names an Ayah outside its segment',
+      timing(firstSegment, [
+        [1, 0, 1000],
+        [2, 1000, 2000],
+        [3, 2000, 3000],
+      ]),
+      [51402],
+      'A timing lies outside its segment.',
+    ],
+    [
+      'An Ayah never starts before the one before it ends',
+      timing(firstSegment, [
+        [1, 0, 1500],
+        [2, 1000, 2000],
+      ]),
+      [51402],
+      'timing overlaps the one before it.',
+    ],
+    [
+      'An Ayah is heard for some time',
+      timing(firstSegment, [
+        [1, 1000, 1000],
+        [2, 1000, 2000],
+      ]),
+      [547],
+      'QuranRecitationTiming_ck',
+    ],
+    [
+      'A timing lies within the twelve-hour ceiling',
+      timing(firstSegment, [
+        [1, 0, 1000],
+        [2, 1000, 43200001],
+      ]),
+      [547],
+      'QuranRecitationTiming_ck',
+    ],
+    [
+      'A timing names a real segment',
+      timing(randomUUID(), [[1, 0, 1000]]),
+      [547],
+      'QuranRecitationTiming_segmentId_fkey',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, ruleName);
+  if ((await timedAyat(firstSegment)) !== 0) fail('A refused timing left rows behind.');
+  await expectAccepted(
+    session,
+    'A whole, monotonic timing — a pause between ayat allowed',
+    timing(firstSegment, [
+      [1, 0, 1000],
+      [2, 1200, 2500],
+    ]),
+  );
+  for (const [label, statement, numbers, ruleName] of [
+    [
+      'A timing is never edited',
+      `UPDATE [dbo].[QuranRecitationTiming] SET [endMs]=1100 WHERE [segmentId]=N'${firstSegment}' AND [ayahNumber]=1;`,
+      [51402],
+      'written once, never edited.',
+    ],
+    [
+      'A timing is never removed in part',
+      `DELETE FROM [dbo].[QuranRecitationTiming] WHERE [segmentId]=N'${firstSegment}' AND [ayahNumber]=2;`,
+      [51402],
+      EVERY_OR_NONE,
+    ],
+    [
+      'A timed segment is never removed from under its timing',
+      `DELETE FROM [dbo].[QuranRecitationSegment] WHERE [id]=N'${firstSegment}';`,
+      [547],
+      'QuranRecitationTiming_segmentId_fkey',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, ruleName);
+  if ((await timedAyat(firstSegment)) !== 2) fail('A refused change altered a timing.');
+  await expectAccepted(
+    session,
+    "A segment's whole timing is removed in one statement",
+    `DELETE FROM [dbo].[QuranRecitationTiming] WHERE [segmentId]=N'${firstSegment}';`,
+  );
+  if ((await timedAyat(firstSegment)) !== 0) fail('A removed timing left rows behind.');
+
+  // ---- Quran Part 5: a streamed recitation --------------------------------------
+  //
+  // Its provider and folder are fixed when it is created, it names only a
+  // `reference` source, its segments are whole Surahs holding no file — and the
+  // stream IS its audio, so a streamed recitation with a segment publishes while
+  // a first-party one without a file does not (51188, above).
+  const streamed = randomUUID();
+  const streamedSegment = randomUUID();
+  const strayAsset = randomUUID();
+  const streamedRecitation = (id: string, provider: string, path: string): string =>
+    `INSERT INTO [dbo].[QuranRecitation] ([id],[slug],[personId],[name],[languageCode],[streamProvider],[streamPath],[state],[version],[updatedAt]) VALUES (N'${id}',N'proof-quran-streamed-${id.slice(0, 8)}-${run}',N'${reciter}',N'NON_QURAN_FIXTURE streamed recitation',N'en',${provider},${path},N'draft',1,SYSUTCDATETIME());`;
+  const streamedSegmentRow = (
+    id: string,
+    start: number,
+    end: number,
+    asset: string | null,
+  ): string =>
+    `INSERT INTO [dbo].[QuranRecitationSegment] ([id],[recitationId],[surahNumber],[startAyah],[endAyah],[assetId]) VALUES (N'${id}',N'${streamed}',1,${String(start)},${String(end)},${asset === null ? 'NULL' : `N'${asset}'`});`;
+  const publishStreamed = (source: string): string =>
+    `UPDATE [dbo].[QuranRecitation] SET [state]=N'published',[sourceId]=N'${source}',[publishedAt]=SYSUTCDATETIME(),[version]=[version]+1,[updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${streamed}';`;
+  const STREAM_RULE = 'QuranRecitation_stream_ck';
+  for (const [label, statement, ruleName] of [
+    [
+      'A stream names an admitted provider',
+      streamedRecitation(randomUUID(), "N'example'", "N'audio/proof-fixture-reciter/r1'"),
+      STREAM_RULE,
+    ],
+    [
+      'A stream is never a URL',
+      streamedRecitation(randomUUID(), "N'mp3quran'", "N'https://example.invalid/a.mp3'"),
+      STREAM_RULE,
+    ],
+    [
+      'A stream is a provider AND a folder',
+      streamedRecitation(randomUUID(), "N'mp3quran'", 'NULL'),
+      STREAM_RULE,
+    ],
+    [
+      'A stream folder is lower-case letters, digits and hyphens',
+      streamedRecitation(randomUUID(), "N'mp3quran'", "N'audio/Proof.Reciter/r1'"),
+      STREAM_RULE,
+    ],
+    [
+      'A stream folder does not end open',
+      streamedRecitation(randomUUID(), "N'mp3quran'", "N'audio/proof-fixture-reciter/'"),
+      STREAM_RULE,
+    ],
+    [
+      'A recitation is heard in a real Language',
+      `INSERT INTO [dbo].[QuranRecitation] ([id],[slug],[personId],[name],[languageCode],[state],[version],[updatedAt]) VALUES (N'${randomUUID()}',N'proof-quran-language-${run}',N'${reciter}',N'NON_QURAN_FIXTURE',N'zz-proof',N'draft',1,SYSUTCDATETIME());`,
+      'QuranRecitation_languageCode_fkey',
+    ],
+  ] as const)
+    await refuse(label, statement, [547], ruleName);
+  await expectAccepted(
+    session,
+    'A streamed recitation, a stray file to try to attach',
+    `${streamedRecitation(streamed, "N'mp3quran'", "N'audio/proof-fixture-reciter/r1'")}
+     INSERT INTO [dbo].[Asset] ([id],[storageKey],[state],[updatedAt]) VALUES (N'${strayAsset}',N'proof/quran/${run}/stray',N'uploading',SYSUTCDATETIME());`,
+  );
+  const FIXED = 'stream is fixed when it is created.';
+  const WHOLE = 'is one whole Surah, with no stored file.';
+  for (const [label, statement, numbers, ruleName] of [
+    [
+      "A stream's folder never changes",
+      `UPDATE [dbo].[QuranRecitation] SET [streamPath]=N'audio/proof-other-reciter/r1' WHERE [id]=N'${streamed}';`,
+      [51400],
+      FIXED,
+    ],
+    [
+      'A stream is never removed',
+      `UPDATE [dbo].[QuranRecitation] SET [streamProvider]=NULL,[streamPath]=NULL WHERE [id]=N'${streamed}';`,
+      [51400],
+      FIXED,
+    ],
+    [
+      'A first-party recitation is never turned into a stream',
+      `UPDATE [dbo].[QuranRecitation] SET [streamProvider]=N'mp3quran',[streamPath]=N'audio/proof-fixture-reciter/r1' WHERE [id]=N'${recitation}';`,
+      [51400],
+      FIXED,
+    ],
+    [
+      'A streamed recitation names no fixture source',
+      `UPDATE [dbo].[QuranRecitation] SET [sourceId]=N'${fixture}' WHERE [id]=N'${streamed}';`,
+      [51401],
+      'names a reference source only.',
+    ],
+    [
+      'A streamed segment holds no file',
+      streamedSegmentRow(randomUUID(), 1, 3, strayAsset),
+      [51401],
+      WHOLE,
+    ],
+    [
+      'A streamed segment is one whole Surah',
+      streamedSegmentRow(randomUUID(), 1, 2, null),
+      [51401],
+      WHOLE,
+    ],
+    [
+      'A streamed recitation with no segment is never published',
+      publishStreamed(referenceSource),
+      [51188],
+      NEEDS_AUDIO,
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, ruleName);
+  await expectAccepted(
+    session,
+    'A whole-Surah streamed segment, timed, and published beside its reference source — the stream its audio',
+    `${streamedSegmentRow(streamedSegment, 1, 3, null)}
+     ${timing(streamedSegment, [
+       [1, 6420, 11120],
+       [2, 11120, 17640],
+       [3, 17640, 21280],
+     ])}
+     ${publishStreamed(referenceSource)}`,
+  );
+  await refuse(
+    'A streamed segment never takes a file later',
+    `UPDATE [dbo].[QuranRecitationSegment] SET [assetId]=N'${strayAsset}' WHERE [id]=N'${streamedSegment}';`,
+    [51401],
+    WHOLE,
+  );
+  await expectAccepted(
+    session,
+    "A published streamed segment's timing removed whole",
+    `DELETE FROM [dbo].[QuranRecitationTiming] WHERE [segmentId]=N'${streamedSegment}';`,
+  );
+  await refuse(
+    "A published streamed recitation's last segment is never removed",
+    `DELETE FROM [dbo].[QuranRecitationSegment] WHERE [id]=N'${streamedSegment}';`,
+    [51188],
+    NEEDS_AUDIO,
   );
 
   // ---- a published work keeps its text against a MOVE as well as a delete -------
@@ -18308,6 +18609,68 @@ async function assertSurahMeaningRemoved(session: SqlSession): Promise<void> {
   report('surah meaning rollback', 'the meaning column and its CHECK removed');
 }
 
+/** Quran Part 5: recitations heard, followed and streamed. */
+const RECITATION_TIMING_MIGRATION = '20261109120000_r2_quran_recitation_timing';
+
+/**
+ * After the Quran Part 5 rollback: no timing table, no stream or language
+ * column, CHECK, key or trigger — QuranRecitation and its segment exactly as
+ * Phase 18 made them — and Phase 18's two "a published recitation has audio"
+ * triggers back to their own text: audio is a segment's FILE again, with no
+ * mention of a stream.
+ */
+async function assertRecitationTimingRemoved(session: SqlSession): Promise<void> {
+  const [row] = await session.query<{
+    timing: number;
+    recitationColumns: string | null;
+    segmentColumns: string | null;
+    added: number;
+    triggers: string | null;
+    published: string | null;
+    keeps: string | null;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables WHERE [name] = N'QuranRecitationTiming') AS [timing],
+      (SELECT STRING_AGG([name], N',') WITHIN GROUP (ORDER BY [column_id]) FROM sys.columns
+        WHERE [object_id] = OBJECT_ID(N'[dbo].[QuranRecitation]')) AS [recitationColumns],
+      (SELECT STRING_AGG([name], N',') WITHIN GROUP (ORDER BY [column_id]) FROM sys.columns
+        WHERE [object_id] = OBJECT_ID(N'[dbo].[QuranRecitationSegment]')) AS [segmentColumns],
+      (SELECT COUNT(*) FROM sys.objects WHERE [name] IN (N'QuranRecitation_stream_ck',
+        N'QuranRecitation_languageCode_fkey', N'QuranRecitationTiming_ck',
+        N'QuranRecitationTiming_segmentId_fkey', N'QuranRecitationStreamRules',
+        N'QuranRecitationSegmentStreamed', N'QuranRecitationTimingShape')) AS [added],
+      (SELECT STRING_AGG([name], N',') WITHIN GROUP (ORDER BY [name]) FROM sys.triggers
+        WHERE [parent_id] IN (OBJECT_ID(N'[dbo].[QuranRecitation]'), OBJECT_ID(N'[dbo].[QuranRecitationSegment]'))) AS [triggers],
+      OBJECT_DEFINITION(OBJECT_ID(N'[dbo].[QuranRecitationPublishedAudio]')) AS [published],
+      OBJECT_DEFINITION(OBJECT_ID(N'[dbo].[QuranRecitationSegmentKeepsAudio]')) AS [keeps];
+  `);
+  const phase18Audio = (definition: string | null) =>
+    definition !== null &&
+    definition.startsWith('CREATE TRIGGER') &&
+    !definition.includes('streamProvider') &&
+    definition.includes('s.assetId IS NOT NULL)) THROW 51188');
+  if (
+    Number(row?.timing) !== 0 ||
+    row?.recitationColumns !==
+      'id,slug,personId,name,style,attribution,sourceId,state,version,createdAt,updatedAt,publishedAt' ||
+    row.segmentColumns !==
+      'id,recitationId,surahNumber,startAyah,endAyah,assetId,createdAt' ||
+    Number(row.added) !== 0 ||
+    row.triggers !==
+      'QuranRecitationPublishedAudio,QuranRecitationSegmentKeepsAudio,QuranRecitationSegmentNoOverlap' ||
+    !phase18Audio(row.published) ||
+    !phase18Audio(row.keeps)
+  )
+    fail(
+      `The Quran Part 5 rollback must leave the recitation tables and triggers exactly as Phase 18 made them; ` +
+        `found ${JSON.stringify(row ?? null)}.`,
+    );
+  report(
+    'recitation timing rollback',
+    'timing table, stream, language and three triggers removed; audio triggers restored',
+  );
+}
+
 /** The one table Phase 30-RD creates. */
 const PERSONAL_DATA_FINDING_TABLE = 'MigrationPersonalDataFinding';
 
@@ -24401,6 +24764,9 @@ try {
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
     }
+    if (migration.id === RECITATION_TIMING_MIGRATION)
+      // Quran Part 5 is gone without a trace on the recitation tables.
+      await assertRecitationTimingRemoved(session);
     if (migration.id === SURAH_MEANING_MIGRATION)
       // Quran Part 2 added one presentation column and nothing else.
       await assertSurahMeaningRemoved(session);

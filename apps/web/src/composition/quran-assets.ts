@@ -62,7 +62,9 @@ const SERVABLE_QUESTION = 100;
  */
 /**
  * The segments among these whose audio can be played now, in their order —
- * what a public page offers a player for (see `servableSegments`).
+ * what a public page offers a player for (see `servableSegments`). A STREAMED
+ * recitation's segment names no asset: its audio is the allowlisted stream
+ * (Quran Part 5), which Storage has no say over, so it is offered as it is.
  */
 export async function playableSegments<
   S extends Pick<PublicRecitationSegment, 'id' | 'assetId'>,
@@ -74,8 +76,15 @@ export async function playableSegments<
 export async function servableSegments(
   segments: readonly Pick<PublicRecitationSegment, 'id' | 'assetId'>[],
 ): Promise<ReadonlySet<string>> {
-  const assets = [...new Set(segments.map((segment) => segment.assetId))];
-  if (assets.length === 0) return new Set();
+  const streamed = segments.flatMap((segment) =>
+    segment.assetId === null ? [segment.id] : [],
+  );
+  const assets = [
+    ...new Set(
+      segments.flatMap((segment) => (segment.assetId === null ? [] : [segment.assetId])),
+    ),
+  ];
+  if (assets.length === 0) return new Set(streamed);
   const storage = await storageRuntime();
   const servable = new Set<string>();
   for (let start = 0; start < assets.length; start += SERVABLE_QUESTION) {
@@ -85,6 +94,8 @@ export async function servableSegments(
       servable.add(id);
   }
   return new Set(
-    segments.flatMap((segment) => (servable.has(segment.assetId) ? [segment.id] : [])),
+    segments.flatMap((segment) =>
+      segment.assetId === null || servable.has(segment.assetId) ? [segment.id] : [],
+    ),
   );
 }

@@ -457,6 +457,8 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'QuranTajweedRule',
         'QuranTajweedRuleText',
         'QuranTopic',
+        // Quran Part 5 — a recitation segment's per-Ayah timing.
+        'QuranRecitationTiming',
         // Phase 19 — Hadith: registered source systems, editions and
         // activations; the canonical structure and source-qualified records with
         // immutable history, gradings, verification, citation mapping and

@@ -11,6 +11,7 @@ import {
 import { Dialog, Sheet } from '@/components/ui/dialog';
 import { Icon } from '@/components/ui/icon';
 import { ayahCopyText, citationLine } from './citation';
+import { PLAY_REQUEST } from './recitation-plan';
 import {
   usePosition,
   useFragmentLanding,
@@ -93,6 +94,8 @@ export interface ReaderControlLabels {
   readonly copy: string;
   readonly share: string;
   readonly save: string;
+  /** Play the chosen recitation from this Ayah (Quran Part 5). */
+  readonly play: string;
   readonly copied: string;
   readonly linkCopied: string;
   readonly copyFailed: string;
@@ -558,6 +561,12 @@ export function QuranReaderControls({
             labels={labels}
             onCopy={() => void copy(ayahSheet)}
             onShare={() => void share(ayahSheet)}
+            onPlay={() => {
+              const ref = ayahSheet.ref;
+              setAyahSheet(null);
+              // The Quran layout's player answers; this island never imports it.
+              window.dispatchEvent(new CustomEvent(PLAY_REQUEST, { detail: ref }));
+            }}
             onSave={
               personal === null
                 ? null
@@ -608,12 +617,14 @@ function AyahSheet({
   labels,
   onCopy,
   onShare,
+  onPlay,
   onSave,
 }: {
   readonly view: AyahView;
   readonly labels: ReaderControlLabels;
   readonly onCopy: () => void;
   readonly onShare: () => void;
+  readonly onPlay: () => void;
   readonly onSave: (() => void) | null;
 }) {
   return (
@@ -640,6 +651,10 @@ function AyahSheet({
         ))
       )}
       <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+        <button type="button" onClick={onPlay} className={`quran-ayah-play ${CONTROL}`}>
+          <Icon name="play" size={20} />
+          {labels.play}
+        </button>
         <button type="button" onClick={onCopy} className={CONTROL}>
           <Icon name="copy" size={20} />
           {labels.copy}

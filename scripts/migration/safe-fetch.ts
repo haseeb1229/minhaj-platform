@@ -4,8 +4,13 @@ import {
   type RequestOptions,
 } from 'node:http';
 import { request as httpsRequest } from 'node:https';
+import { createHash } from 'node:crypto';
 import { lookup as dnsLookup } from 'node:dns/promises';
+import { createWriteStream } from 'node:fs';
+import { rename, rm } from 'node:fs/promises';
 import { isIP, type LookupFunction } from 'node:net';
+import { Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 import {
   authorisedScopeIsReal,
@@ -155,11 +160,14 @@ export const nodeConnector: Connector = (connection) =>
 
 type Refusal = Extract<FetchOutcome, { kind: 'refused' }>['classification'];
 
+/** Every outcome but a response: what a refused or failed exchange answers. */
+type Unanswered = Exclude<FetchOutcome, { kind: 'response' }>;
+
 function refused(
   requestedUrl: string,
   classification: Refusal,
   detail: string,
-): FetchOutcome {
+): Extract<FetchOutcome, { kind: 'refused' }> {
   return { kind: 'refused', classification, requestedUrl, detail };
 }
 
@@ -167,7 +175,7 @@ function failure(
   requestedUrl: string,
   classification: 'network' | 'timeout',
   detail: string,
-): FetchOutcome {
+): Extract<FetchOutcome, { kind: 'failure' }> {
   return { kind: 'failure', classification, requestedUrl, detail };
 }
 
@@ -269,6 +277,124 @@ function readCapped(
   });
 }
 
+/** What one guarded exchange is bound by: the scope and the transport. */
+interface ExchangeGuard {
+  readonly hosts: readonly string[];
+  readonly resolver: Resolver;
+  readonly addressPolicy: AddressPolicy;
+  readonly connector: Connector;
+  readonly userAgent: string;
+  readonly maxRedirects: number;
+  readonly accept: string;
+}
+
+/** Resolves, validates EVERY address, and pins the first. */
+async function pinAddress(
+  guard: ExchangeGuard,
+  host: string,
+  requestedUrl: string,
+  signal: AbortSignal,
+): Promise<{ readonly address: string } | Unanswered> {
+  let addresses: readonly unknown[];
+  try {
+    addresses = await untilAborted(
+      Promise.resolve().then(() => guard.resolver(host)),
+      signal,
+    );
+  } catch {
+    return signal.aborted
+      ? failure(requestedUrl, 'timeout', 'deadline-exceeded')
+      : failure(requestedUrl, 'network', 'resolution-failed');
+  }
+  if (!Array.isArray(addresses) || addresses.length === 0)
+    return failure(requestedUrl, 'network', 'resolution-empty');
+  for (const address of addresses) {
+    if (typeof address !== 'string' || !guard.addressPolicy(address)) {
+      const kind = typeof address === 'string' ? classifyAddress(address) : 'invalid';
+      return refused(requestedUrl, 'address-refused', `address-${kind}`);
+    }
+  }
+  return { address: addresses[0] as string };
+}
+
+/**
+ * Steps 1–4 of the boundary for one request: scope, resolution, the pinned
+ * connection, and every redirect re-checked before the next hop. Answers the
+ * final, non-redirect response HEAD — its body unread — or an outcome.
+ */
+async function openExchange(
+  guard: ExchangeGuard,
+  raw: string,
+  requestedUrl: string,
+  signal: AbortSignal,
+): Promise<
+  | { readonly kind: 'open'; readonly response: IncomingMessage; readonly url: URL }
+  | Unanswered
+> {
+  const first = checkSourceUrl(raw, guard.hosts);
+  if (!first.ok) return refused(requestedUrl, 'scope-refused', `url-${first.refusal}`);
+  let url = first.url;
+  let host = first.host;
+
+  for (let hop = 0; ; hop += 1) {
+    const pinned = await pinAddress(guard, host, requestedUrl, signal);
+    if (!('address' in pinned)) return pinned;
+
+    let response: IncomingMessage;
+    try {
+      response = await untilAborted(
+        guard.connector({
+          url,
+          host,
+          address: pinned.address,
+          port: url.protocol === 'https:' ? 443 : 80,
+          headers: {
+            host: url.host,
+            'user-agent': guard.userAgent,
+            accept: guard.accept,
+            'accept-encoding': 'identity',
+            connection: 'close',
+          },
+          signal,
+        }),
+        signal,
+      );
+    } catch {
+      return signal.aborted
+        ? failure(requestedUrl, 'timeout', 'deadline-exceeded')
+        : failure(requestedUrl, 'network', 'connection-failed');
+    }
+
+    const status = response.statusCode ?? 0;
+    if (!REDIRECT_STATUSES.has(status)) return { kind: 'open', response, url };
+    const location = response.headers.location;
+    response.destroy();
+    if (typeof location !== 'string' || location.length === 0)
+      return refused(requestedUrl, 'redirect-refused', 'redirect-without-location');
+    if (hop >= guard.maxRedirects)
+      return refused(requestedUrl, 'redirect-refused', 'redirect-limit');
+    let next: URL;
+    try {
+      next = new URL(location, url);
+    } catch {
+      return refused(requestedUrl, 'redirect-refused', 'redirect-malformed');
+    }
+    if (next.protocol !== 'http:' && next.protocol !== 'https:')
+      return refused(requestedUrl, 'redirect-refused', 'redirect-scheme');
+    const verdict = checkSourceUrl(next.toString(), guard.hosts);
+    if (!verdict.ok)
+      return refused(requestedUrl, 'scope-refused', `redirect-${verdict.refusal}`);
+    url = verdict.url;
+    host = verdict.host;
+  }
+}
+
+function checkedUserAgent(userAgent: string): string {
+  if (!/^[\x20-\x7e]{1,200}$/.test(userAgent))
+    throw new Error('safe fetch: invalid User-Agent');
+  return userAgent;
+}
+
 /**
  * Creates the fetch boundary for one source scope.
  *
@@ -277,129 +403,49 @@ function readCapped(
  */
 export function createSafeFetcher(options: SafeFetcherOptions): MigrationFetchPort {
   const policy = sourcePolicySchema.parse(options.policy);
-  const hosts = Object.freeze([...options.hosts]);
-  const resolver = options.resolver;
-  const addressPolicy = options.addressPolicy ?? isPublicAddress;
-  const connector = options.connector ?? nodeConnector;
-  const userAgent = options.userAgent ?? MIGRATION_USER_AGENT;
-  if (!/^[\x20-\x7e]{1,200}$/.test(userAgent))
-    throw new Error('safe fetch: invalid User-Agent');
-
-  /** Resolves, validates EVERY address, and pins the first. */
-  async function pin(
-    host: string,
-    requestedUrl: string,
-    signal: AbortSignal,
-  ): Promise<{ readonly address: string } | FetchOutcome> {
-    let addresses: readonly unknown[];
-    try {
-      addresses = await untilAborted(
-        Promise.resolve().then(() => resolver(host)),
-        signal,
-      );
-    } catch {
-      return signal.aborted
-        ? failure(requestedUrl, 'timeout', 'deadline-exceeded')
-        : failure(requestedUrl, 'network', 'resolution-failed');
-    }
-    if (!Array.isArray(addresses) || addresses.length === 0)
-      return failure(requestedUrl, 'network', 'resolution-empty');
-    for (const address of addresses) {
-      if (typeof address !== 'string' || !addressPolicy(address)) {
-        const kind = typeof address === 'string' ? classifyAddress(address) : 'invalid';
-        return refused(requestedUrl, 'address-refused', `address-${kind}`);
-      }
-    }
-    return { address: addresses[0] as string };
-  }
+  const guard: ExchangeGuard = {
+    hosts: Object.freeze([...options.hosts]),
+    resolver: options.resolver,
+    addressPolicy: options.addressPolicy ?? isPublicAddress,
+    connector: options.connector ?? nodeConnector,
+    userAgent: checkedUserAgent(options.userAgent ?? MIGRATION_USER_AGENT),
+    maxRedirects: policy.maxRedirects,
+    accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.1',
+  };
 
   async function exchange(
     raw: string,
     requestedUrl: string,
     signal: AbortSignal,
   ): Promise<FetchOutcome> {
-    const first = checkSourceUrl(raw, hosts);
-    if (!first.ok) return refused(requestedUrl, 'scope-refused', `url-${first.refusal}`);
-    let url = first.url;
-    let host = first.host;
+    const opened = await openExchange(guard, raw, requestedUrl, signal);
+    if (opened.kind !== 'open') return opened;
+    const { response, url } = opened;
+    const status = response.statusCode ?? 0;
 
-    for (let hop = 0; ; hop += 1) {
-      const pinned = await pin(host, requestedUrl, signal);
-      if (!('address' in pinned)) return pinned;
-
-      let response: IncomingMessage;
-      try {
-        response = await untilAborted(
-          connector({
-            url,
-            host,
-            address: pinned.address,
-            port: url.protocol === 'https:' ? 443 : 80,
-            headers: {
-              host: url.host,
-              'user-agent': userAgent,
-              accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.1',
-              'accept-encoding': 'identity',
-              connection: 'close',
-            },
-            signal,
-          }),
-          signal,
-        );
-      } catch {
-        return signal.aborted
-          ? failure(requestedUrl, 'timeout', 'deadline-exceeded')
-          : failure(requestedUrl, 'network', 'connection-failed');
-      }
-
-      const status = response.statusCode ?? 0;
-      if (REDIRECT_STATUSES.has(status)) {
-        const location = response.headers.location;
-        response.destroy();
-        if (typeof location !== 'string' || location.length === 0)
-          return refused(requestedUrl, 'redirect-refused', 'redirect-without-location');
-        if (hop >= policy.maxRedirects)
-          return refused(requestedUrl, 'redirect-refused', 'redirect-limit');
-        let next: URL;
-        try {
-          next = new URL(location, url);
-        } catch {
-          return refused(requestedUrl, 'redirect-refused', 'redirect-malformed');
-        }
-        if (next.protocol !== 'http:' && next.protocol !== 'https:')
-          return refused(requestedUrl, 'redirect-refused', 'redirect-scheme');
-        const verdict = checkSourceUrl(next.toString(), hosts);
-        if (!verdict.ok)
-          return refused(requestedUrl, 'scope-refused', `redirect-${verdict.refusal}`);
-        url = verdict.url;
-        host = verdict.host;
-        continue;
-      }
-
-      const declared = Number(singleHeader(response, 'content-length') ?? Number.NaN);
-      if (Number.isFinite(declared) && declared > policy.maxBodyBytes) {
-        response.destroy();
-        return refused(requestedUrl, 'too-large', 'declared-length-exceeds-cap');
-      }
-      const body = await readCapped(response, policy.maxBodyBytes, signal);
-      if (!body.ok) {
-        if (body.reason === 'too-large')
-          return refused(requestedUrl, 'too-large', 'body-exceeds-cap');
-        return body.reason === 'timeout'
-          ? failure(requestedUrl, 'timeout', 'deadline-exceeded')
-          : failure(requestedUrl, 'network', 'body-interrupted');
-      }
-      return {
-        kind: 'response',
-        status,
-        requestedUrl,
-        finalUrl: url.toString(),
-        contentType: singleHeader(response, 'content-type'),
-        headers: allowlistedHeaders(response),
-        body: body.body,
-        retryAfter: singleHeader(response, 'retry-after'),
-      };
+    const declared = Number(singleHeader(response, 'content-length') ?? Number.NaN);
+    if (Number.isFinite(declared) && declared > policy.maxBodyBytes) {
+      response.destroy();
+      return refused(requestedUrl, 'too-large', 'declared-length-exceeds-cap');
     }
+    const body = await readCapped(response, policy.maxBodyBytes, signal);
+    if (!body.ok) {
+      if (body.reason === 'too-large')
+        return refused(requestedUrl, 'too-large', 'body-exceeds-cap');
+      return body.reason === 'timeout'
+        ? failure(requestedUrl, 'timeout', 'deadline-exceeded')
+        : failure(requestedUrl, 'network', 'body-interrupted');
+    }
+    return {
+      kind: 'response',
+      status,
+      requestedUrl,
+      finalUrl: url.toString(),
+      contentType: singleHeader(response, 'content-type'),
+      headers: allowlistedHeaders(response),
+      body: body.body,
+      retryAfter: singleHeader(response, 'retry-after'),
+    };
   }
 
   return {
@@ -411,6 +457,139 @@ export function createSafeFetcher(options: SafeFetcherOptions): MigrationFetchPo
       const timer = setTimeout(() => controller.abort(), policy.timeoutMs);
       try {
         return await exchange(raw, requestedUrl, controller.signal);
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+  };
+}
+
+/* ===========================================================================
+ * Downloading one large file (Quran Part 5)
+ * ========================================================================= */
+
+/** The bounds of ONE download: its exact hosts, a deadline and a size ceiling. */
+export interface SafeDownloaderOptions {
+  readonly hosts: readonly string[];
+  readonly resolver: Resolver;
+  readonly addressPolicy?: AddressPolicy;
+  readonly connector?: Connector;
+  readonly userAgent?: string;
+  /** The whole exchange's deadline — at most two hours. */
+  readonly timeoutMs: number;
+  readonly maxRedirects: number;
+  /** The file is refused, and nothing kept, the moment it would exceed this. */
+  readonly maxBytes: number;
+}
+
+export type DownloadOutcome =
+  | {
+      readonly kind: 'downloaded';
+      readonly bytes: number;
+      /** SHA-256 of exactly the bytes written, lowercase hex. */
+      readonly sha256: string;
+    }
+  | { readonly kind: 'status'; readonly status: number }
+  | Unanswered;
+
+/** Hard ceilings a downloader cannot be built beyond. */
+const DOWNLOAD_TIMEOUT_MAX_MS = 2 * 60 * 60 * 1000;
+const DOWNLOAD_BYTES_MAX = 2 * 1024 * 1024 * 1024;
+
+/**
+ * THE SAME BOUNDARY, FOR ONE FILE TOO LARGE TO HOLD IN MEMORY — an operator's
+ * one-off download of an owner-attested archive (Quran Part 5's Irfan-ul-Quran
+ * narration). Scope, resolution, the pinned connection and every redirect are
+ * exactly the fetcher's (`openExchange`); the body is STREAMED to
+ * `{file}.part`, hashed and counted as it arrives, destroyed the moment it
+ * would exceed `maxBytes`, and renamed to `file` only once it is complete
+ * and the response was `200`. A failure leaves no partial file behind.
+ */
+export function createSafeDownloader(options: SafeDownloaderOptions) {
+  if (
+    !Number.isInteger(options.timeoutMs) ||
+    options.timeoutMs < 1000 ||
+    options.timeoutMs > DOWNLOAD_TIMEOUT_MAX_MS ||
+    !Number.isInteger(options.maxBytes) ||
+    options.maxBytes < 1 ||
+    options.maxBytes > DOWNLOAD_BYTES_MAX ||
+    !Number.isInteger(options.maxRedirects) ||
+    options.maxRedirects < 0 ||
+    options.maxRedirects > 5
+  )
+    throw new Error('safe download: bounds out of range');
+  const guard: ExchangeGuard = {
+    hosts: Object.freeze([...options.hosts]),
+    resolver: options.resolver,
+    addressPolicy: options.addressPolicy ?? isPublicAddress,
+    connector: options.connector ?? nodeConnector,
+    userAgent: checkedUserAgent(options.userAgent ?? MIGRATION_USER_AGENT),
+    maxRedirects: options.maxRedirects,
+    accept: '*/*',
+  };
+
+  async function into(
+    raw: string,
+    file: string,
+    requestedUrl: string,
+    signal: AbortSignal,
+  ): Promise<DownloadOutcome> {
+    const opened = await openExchange(guard, raw, requestedUrl, signal);
+    if (opened.kind !== 'open') return opened;
+    const { response } = opened;
+    const status = response.statusCode ?? 0;
+    if (status !== 200) {
+      response.destroy();
+      return { kind: 'status', status };
+    }
+    const declared = Number(singleHeader(response, 'content-length') ?? Number.NaN);
+    if (Number.isFinite(declared) && declared > options.maxBytes) {
+      response.destroy();
+      return refused(requestedUrl, 'too-large', 'declared-length-exceeds-cap');
+    }
+
+    const partial = `${file}.part`;
+    const hash = createHash('sha256');
+    let bytes = 0;
+    let tooLarge = false;
+    const meter = new Transform({
+      transform(chunk: Buffer, _encoding, done) {
+        bytes += chunk.length;
+        if (bytes > options.maxBytes) {
+          tooLarge = true;
+          done(new Error('too-large'));
+          return;
+        }
+        hash.update(chunk);
+        done(null, chunk);
+      },
+    });
+    try {
+      await pipeline(response, meter, createWriteStream(partial, { flags: 'w' }), {
+        signal,
+      });
+    } catch {
+      await rm(partial, { force: true });
+      if (tooLarge) return refused(requestedUrl, 'too-large', 'body-exceeds-cap');
+      return signal.aborted
+        ? failure(requestedUrl, 'timeout', 'deadline-exceeded')
+        : failure(requestedUrl, 'network', 'body-interrupted');
+    }
+    if (!response.complete) {
+      await rm(partial, { force: true });
+      return failure(requestedUrl, 'network', 'body-interrupted');
+    }
+    await rename(partial, file);
+    return { kind: 'downloaded', bytes, sha256: hash.digest('hex') };
+  }
+
+  return {
+    async download(raw: string, file: string): Promise<DownloadOutcome> {
+      const requestedUrl = recordableUrl(raw);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), options.timeoutMs);
+      try {
+        return await into(raw, file, requestedUrl, controller.signal);
       } finally {
         clearTimeout(timer);
       }

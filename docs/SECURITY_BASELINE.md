@@ -340,6 +340,35 @@ weakens rules 1–5:
   that holds the reference corpus keeps it until the database is reset, and production never
   receives reference rows.
 
+**Quran Part 5 — recitations streamed and timed (owner decisions 2026-11-09; OPEN_DECISIONS.md
+§1.2; DOMAIN_MODEL.md §8.5).** Rule 5 holds — Quran alone authors a recitation — and nothing here
+weakens rules 1–4:
+
+- **No URL is ever typed or stored.** A streamed recitation records an allowlisted provider key and a
+  CDN folder (`RECITATION_STREAM_PROVIDERS`: `mp3quran`, `https://cdn.mp3quran.net`, `audio/{folder}/r{n}`);
+  the one address of each Surah's file is derived by the contract, and the database's own CHECK
+  refuses any other shape. The stream is fixed at creation (51400; the runtime is denied UPDATE on
+  both columns), set only by the operator's import through `createStreamedRecitation`
+  (`quran.administer`) — no administrative form builds it — and names a `reference` source only
+  (51401), so a stream is public only beside a reference corpus the deployment admits and can never
+  stand beside an approved one. The public data route and the player carry asset identifiers or the
+  stream descriptor, never an address, and the player derives the address again from the same rule.
+- **Imported bytes take the ordinary path.** The Irfan-ul-Quran narration is downloaded once through
+  the safe download boundary (exact host `minhaj.net`, public addresses only, pinned connection,
+  redirects re-checked, streamed under a byte cap, refused unless exactly the attested size) and each
+  Surah's file is stored through Quran's own segment upload into Storage — sniffed, size-bounded
+  (`RECITATION_UPLOAD_MAX_BYTES`, unchanged), ClamAV-scanned and recorded only when clean — after
+  the archive member's size and CRC-32 are verified. mp3quran's API is read through the safe fetch
+  boundary bound to `www.mp3quran.net` alone, one request at a time, a second apart. Every write
+  re-reads the operator's `quran.read`, `quran.administer` and `people.administer` live.
+- **Media only, on the Quran routes only.** `next.config.ts` gives every `/quran` and `/quran/**`
+  address (every locale) the base policy plus `media-src 'self' https://cdn.mp3quran.net` — origins
+  taken from `RECITATION_STREAM_ORIGINS` — and nothing else: no script, frame, image or fetch from
+  that origin, and every other page keeps `default-src 'self'` for media. The base
+  `Referrer-Policy: strict-origin-when-cross-origin` is unchanged, so the CDN learns only the site's
+  origin, never the page. The audio is played by the browser, nothing is downloadable, and no
+  third-party script is loaded.
+
 ### 5.2 Hadith
 
 1. **Text, reference numbers, narrator chains and gradings are sourced data — never inferred,
@@ -1640,7 +1669,22 @@ editor — the policy delegates `autoplay` to the page itself and exactly the tw
 embed origins, taken from the same contract as `frame-src`. The provider frame is created only by
 the visitor's press of Play and asks for `autoplay=1` (`providerPlaybackUrl`), so that one press both
 loads and starts the video; no page renders autoplaying media, and structured data keeps the plain
-embed address (ARCHITECTURE.md §4.7.1). The CSP is unchanged.
+embed address (ARCHITECTURE.md §4.7.1). The CSP is unchanged. *(As at R2: since Quran Part 5 there is
+a second scoped exception, below.)*
+
+**The Quran recitation player (Quran Part 5).** On the Quran routes `autoplay` is delegated to the
+page ITSELF (`autoplay=(self)`) and to no frame or other origin. The player's one audio element does
+not exist until the visitor presses Play — it is never in the document, and no Quran page plays or
+fetches audio on load (the browser suite proves both) — but it then carries on by itself into the
+next segment or Surah and answers lock-screen controls, none of which is a fresh press inside the
+page. Its controls are native buttons, selects and a range input with accessible names; its
+shortcuts (Space or K play and pause, J and L the previous and next Ayah) act only while focus is
+inside the player, never taking a key from a screen reader or the page; the Ayah being recited is
+marked by a background only (the text never moves), followed by scrolling that is instant under
+`prefers-reduced-motion` and suspended while the visitor scrolls; status — loading, buffering,
+failure, an untimed recitation — is said in words; it works in Urdu and Arabic, right to left, and
+at 320 px. Without JavaScript each recitation remains the browser's own `<audio controls>`. Nothing
+is offered as a download.
 
 **Confirmation dialogs are presentation, never control (Rebaseline R2).** Irreversible or
 destructive administrative forms ask first in a modal dialog, with an optional reason field

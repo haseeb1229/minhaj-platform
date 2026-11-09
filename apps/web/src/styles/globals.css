@@ -66,8 +66,10 @@
   /* Reading measure. A line wider than this is measurably harder to read. */
   --measure-prose: 68ch;
 
-  /* Layering: a header and a drawer that must cover it. Two values only. */
+  /* Layering: a header and a drawer that must cover it; between them the Quran
+     recitation dock (Part 5), which a dialog or drawer still covers. */
   --layer-header: 30;
+  --layer-dock: 35;
   --layer-overlay: 40;
 
   /* Motion. Short and unobtrusive; suppressed under reduced motion. */
@@ -603,6 +605,55 @@ p {
 /* The mode switch keeps its place without script, but shows only with it. */
 .quran-reader:not([data-script]) .quran-mode-switch {
   visibility: hidden;
+}
+
+/*
+ * QURAN PART 5 — THE RECITATION PLAYER. The Quran layout's boot script marks a
+ * document that can play audio (`data-quran-audio`), and the player marks the
+ * recitation chosen (`data-quran-player`: `timed` or `untimed`). A page's
+ * plain no-script audio gives way to the player; Play-from-this-Ayah shows only
+ * for a timed recitation; a Play control only where the player is.
+ *
+ * THE AYAH BEING RECITED is marked by a background, never by a change of size,
+ * padding or position — the text never moves under the reader — and nothing
+ * here animates.
+ */
+html[data-quran-audio] .quran-audio-fallback {
+  display: none;
+}
+html:not([data-quran-player='timed']) .quran-ayah-play,
+html:not([data-quran-player]) .quran-play-control {
+  display: none;
+}
+body:has([data-quran-dock]) {
+  padding-block-end: 9rem;
+}
+.quran-reader[data-mode='translation'] li[data-recited] > .quran-ayah-body {
+  border-radius: var(--radius-control);
+  background-color: var(--color-accent-surface);
+  box-shadow:
+    -0.75rem 0 0 0 var(--color-accent-surface),
+    0.75rem 0 0 0 var(--color-accent-surface);
+}
+.quran-reader:is([data-mode='reading'], [data-mode='mushaf'])
+  li[data-recited]
+  .quran-ayah-text {
+  border-radius: 0.25rem;
+  background-color: var(--color-accent-surface);
+  box-decoration-break: clone;
+}
+.quran-dock-tick {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: calc(0.5rem + var(--at, 0) * (100% - 1rem));
+  width: 1px;
+  height: 0.75rem;
+  translate: 0 -50%;
+  background-color: var(--color-border-strong);
+}
+.quran-dock-range {
+  height: 1.5rem;
+  cursor: pointer;
 }
 
 /* Copy, Share, Save-in-place and the reading-mode Ayah button need script. */

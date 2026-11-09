@@ -15,6 +15,7 @@ import type {
   LayerTextChange,
   PublicAyah,
   PublicAyahPlace,
+  PublicAyahTiming,
   PublicJuz,
   PublicLayerWork,
   PublicRecitation,
@@ -31,6 +32,7 @@ import type {
   RecitationDetail,
   RecitationSegmentAsset,
   RecitationSegmentValue,
+  RecitationStream,
   RecitationValue,
   SurahNamesValue,
   SurahRecord,
@@ -170,6 +172,14 @@ export interface QuranPublicReaderPort {
     recitationId: string,
     surah: number | null,
   ): Promise<readonly PublicRecitationSegment[]>;
+  /**
+   * The per-Ayah timing of a public Recitation's segments in ONE Surah, in
+   * canonical order — ONE read, bounded by the Surah's ayat (Quran Part 5).
+   */
+  recitationTimings(
+    recitationId: string,
+    surah: number,
+  ): Promise<readonly PublicAyahTiming[]>;
 
   tajweedRules(): Promise<readonly PublicTajweedRule[]>;
   tajweedRule(slug: string): Promise<PublicTajweedRule | null>;
@@ -315,8 +325,16 @@ export interface QuranPersistencePort {
 
   recitations(offset: number): Promise<RecitationPage>;
   recitation(id: string): Promise<RecitationDetail | null>;
+  /**
+   * Creates a draft Recitation. `stream` is a STREAMED recitation's allowlisted
+   * location (Quran Part 5) — fixed at creation, never changed — or `null` for
+   * first-party audio uploaded segment by segment.
+   */
   createRecitation(
-    input: Attributed & { readonly value: RecitationValue },
+    input: Attributed & {
+      readonly value: RecitationValue;
+      readonly stream: RecitationStream | null;
+    },
   ): Promise<RecitationDetail>;
   updateRecitation(
     input: Versioned & { readonly value: RecitationValue },

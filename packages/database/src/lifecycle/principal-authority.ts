@@ -503,6 +503,8 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[qurantajweedruletext]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[quranrecitationsegment]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[qurantopic]': ['SELECT', 'INSERT', 'DELETE'],
+  // Quran Part 5: a segment's per-Ayah timing, inserted and removed whole.
+  '[dbo].[quranrecitationtiming]': ['SELECT', 'INSERT', 'DELETE'],
   // Phase 19: Hadith, in the same four postures. SOURCE (source systems,
   // editions, activation) and CANONICAL (records, history, gradings,
   // verifications, citations, conflict evidence) are SELECT only, written by

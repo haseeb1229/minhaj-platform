@@ -670,6 +670,8 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
   let fixtureTranslation: { id: string; slug: string };
   let approvedTranslation: { id: string; slug: string };
   let recitationId: string;
+  /** Quran Part 5: a published recitation streamed beside a `reference` source. */
+  let streamedId: string;
   let audioAsset: string;
 
   const translationValue = (
@@ -981,7 +983,7 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
       ).toBe('published');
     });
 
-    it('administers a Recitation: overlap, audio, the version lock and a never-cascading asset', async () => {
+    it('administers a Recitation: overlap, audio, timing, the version lock and a never-cascading asset', async () => {
       const created = await persistence.createRecitation({
         actorId,
         value: {
@@ -991,14 +993,78 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
           style: null,
           attribution: null,
           sourceId: primary.id,
+          languageCode: 'en',
         },
+        stream: null,
       });
+      // Quran Part 5: the language heard round-trips; no stream is first-party.
+      expect(created).toMatchObject({ languageCode: 'en', stream: null });
+      // A timing that does not cover the range is refused BY THE DATABASE
+      // (51402) — the adapter is handed it unvalidated here — and the segment
+      // it came with is not written either.
+      expect(
+        await reasonOf(
+          persistence.addRecitationSegment({
+            actorId,
+            id: created.id,
+            expectedVersion: 1,
+            value: {
+              surah: 1,
+              startAyah: 1,
+              endAyah: 2,
+              timings: [{ ayah: 1, startMs: 0, endMs: 1000 }],
+            },
+          }),
+        ),
+      ).toBe('invalid');
+      expect(
+        await reasonOf(
+          persistence.addRecitationSegment({
+            actorId,
+            id: created.id,
+            expectedVersion: 1,
+            value: {
+              surah: 1,
+              startAyah: 1,
+              endAyah: 2,
+              timings: [
+                { ayah: 1, startMs: 0, endMs: 1500 },
+                { ayah: 2, startMs: 1000, endMs: 2400 },
+              ],
+            },
+          }),
+        ),
+      ).toBe('invalid');
+      expect(
+        await count(
+          db.admin,
+          'QuranRecitationSegment',
+          `[recitationId] = ${n(created.id)}`,
+        ),
+      ).toBe(0);
+      expect((await persistence.recitation(created.id))?.version).toBe(1);
       const withSegment = await persistence.addRecitationSegment({
         actorId,
         id: created.id,
         expectedVersion: 1,
-        value: { surah: 1, startAyah: 1, endAyah: 2 },
+        value: {
+          surah: 1,
+          startAyah: 1,
+          endAyah: 2,
+          timings: [
+            { ayah: 1, startMs: 0, endMs: 1000 },
+            { ayah: 2, startMs: 1200, endMs: 2400 },
+          ],
+        },
       });
+      expect(withSegment.segments[0]?.timedAyat).toBe(2);
+      expect(
+        await count(
+          db.admin,
+          'QuranRecitationTiming',
+          `[segmentId] = ${n(withSegment.segments[0]!.id)}`,
+        ),
+      ).toBe(2);
       expect(
         await reasonOf(
           persistence.addRecitationSegment({
@@ -1101,6 +1167,140 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
       });
       expect(await count(db.admin, 'Asset', `[id] = ${n(audioAsset)}`)).toBe(1);
       recitationId = created.id;
+    });
+
+    it('administers a STREAMED recitation: fixed stream, reference source only, whole timed Surahs, no file (Quran Part 5)', async () => {
+      // A provenance source of `reference` authority, registered by the owner.
+      const reference = randomUUID();
+      await db.admin.query(`
+        INSERT INTO [dbo].[QuranSource] ([id],[code],[authority],[title],[version],[encoding],[reference])
+        VALUES (${n(reference)}, ${n(`non-quran-fixture-stream-${reference.slice(0, 8)}`)}, N'reference',
+                N'NON_QURAN_FIXTURE streamed recitation source', N'fixture-1', N'utf-8',
+                N'NON_QURAN_FIXTURE evidence reference');
+      `);
+      const stream = { provider: 'mp3quran', path: 'audio/fixture-reciter/r1' } as const;
+      const value = (sourceId: string) => ({
+        slug: `non-quran-fixture-streamed-${randomUUID().slice(0, 8)}`,
+        name: 'NON_QURAN_FIXTURE streamed recitation',
+        reciterId: reciter,
+        style: 'NON_QURAN_FIXTURE style',
+        attribution: 'NON_QURAN_FIXTURE attribution',
+        sourceId,
+        languageCode: 'en',
+      });
+
+      // A stream never stands beside a fixture (or approved) source (51401).
+      expect(
+        await reasonOf(
+          persistence.createRecitation({ actorId, value: value(primary.id), stream }),
+        ),
+      ).toBe('invalid');
+
+      const created = await persistence.createRecitation({
+        actorId,
+        value: value(reference),
+        stream,
+      });
+      expect(created).toMatchObject({
+        languageCode: 'en',
+        stream,
+        sourceAuthority: 'reference',
+        version: 1,
+      });
+      streamedId = created.id;
+
+      // One file per Surah: a part of a Surah is no streamed segment (51401).
+      expect(
+        await reasonOf(
+          persistence.addRecitationSegment({
+            actorId,
+            id: created.id,
+            expectedVersion: 1,
+            value: { surah: 1, startAyah: 1, endAyah: 2 },
+          }),
+        ),
+      ).toBe('invalid');
+      const timed = (ayat: number) =>
+        Array.from({ length: ayat }, (_, index) => ({
+          ayah: index + 1,
+          startMs: index * 1000 + 500,
+          endMs: (index + 1) * 1000 + 500,
+        }));
+      const withSurah = await persistence.addRecitationSegment({
+        actorId,
+        id: created.id,
+        expectedVersion: 1,
+        value: { surah: 1, startAyah: 1, endAyah: 3, timings: timed(3) },
+      });
+      const surahOne = withSurah.segments[0]!;
+      expect(surahOne).toMatchObject({ assetId: null, timedAyat: 3 });
+
+      // Its audio is the stream: no file is ever attached to it (51401).
+      const stray = await asset(db.admin);
+      expect(
+        await reasonOf(
+          persistence.attachSegmentAsset({
+            actorId,
+            id: created.id,
+            expectedVersion: 2,
+            segmentId: surahOne.id,
+            assetId: stray,
+          }),
+        ),
+      ).toBe('invalid');
+      expect((await persistence.recitation(created.id))?.segments[0]?.assetId).toBeNull();
+
+      // Removing a segment removes its timing with it.
+      const withTwo = await persistence.addRecitationSegment({
+        actorId,
+        id: created.id,
+        expectedVersion: 2,
+        value: { surah: 2, startAyah: 1, endAyah: 4, timings: timed(4) },
+      });
+      const surahTwo = withTwo.segments.find((segment) => segment.surah === 2)!;
+      expect(
+        await count(db.admin, 'QuranRecitationTiming', `[segmentId] = ${n(surahTwo.id)}`),
+      ).toBe(4);
+      await persistence.removeRecitationSegment({
+        actorId,
+        id: created.id,
+        expectedVersion: 3,
+        segmentId: surahTwo.id,
+      });
+      expect(
+        await count(db.admin, 'QuranRecitationTiming', `[segmentId] = ${n(surahTwo.id)}`),
+      ).toBe(0);
+
+      // The stream counts as audio: a whole-Surah segment and no file publishes.
+      const published = await persistence.setRecitationState({
+        actorId,
+        id: created.id,
+        expectedVersion: 4,
+        state: 'published',
+      });
+      expect(published.state).toBe('published');
+      // Its last segment is its audio; a refused removal keeps the timing too.
+      expect(
+        await reasonOf(
+          persistence.removeRecitationSegment({
+            actorId,
+            id: created.id,
+            expectedVersion: 5,
+            segmentId: surahOne.id,
+          }),
+        ),
+      ).toBe('audio-required');
+      expect(
+        await count(db.admin, 'QuranRecitationTiming', `[segmentId] = ${n(surahOne.id)}`),
+      ).toBe(3);
+      // The runtime principal can never re-point a stream, even directly.
+      expect(
+        await sqlNumber(
+          app.query(
+            `UPDATE [dbo].[QuranRecitation] SET [streamPath]=N'audio/other-reciter/r1' WHERE [id]=${n(created.id)}`,
+          ),
+        ),
+      ).toBe(230);
     });
 
     it('administers Tajweed guidance, replacing a published rule’s texts without a gap', async () => {
@@ -1321,8 +1521,31 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
       ]);
       const segments = await reader.recitationSegments(recitationId, 1);
       expect(segments).toEqual([
-        expect.objectContaining({ startAyah: 1, endAyah: 2, assetId: audioAsset }),
+        expect.objectContaining({
+          startAyah: 1,
+          endAyah: 2,
+          assetId: audioAsset,
+          timed: true,
+        }),
       ]);
+      // Quran Part 5: what the catalogue says of it, and its timing, in order.
+      expect(
+        await reader.recitation((await reader.recitations())[0]!.slug),
+      ).toMatchObject({
+        languageCode: 'en',
+        stream: null,
+        surahCount: 1,
+        timed: true,
+      });
+      expect(await reader.recitationTimings(recitationId, 1)).toEqual([
+        { segmentId: segments[0]!.id, ayah: 1, startMs: 0, endMs: 1000 },
+        { segmentId: segments[0]!.id, ayah: 2, startMs: 1200, endMs: 2400 },
+      ]);
+      expect(await reader.recitationTimings(recitationId, 2)).toEqual([]);
+      // A streamed recitation names a reference source, which no fixture corpus
+      // admits: nothing of it is public here.
+      expect(await reader.recitationSegments(streamedId, 1)).toEqual([]);
+      expect(await reader.recitationTimings(streamedId, 1)).toEqual([]);
       expect(await reader.segmentAsset(recitationId, segments[0]!.id)).toEqual({
         recitationState: 'published',
         publiclyVisible: true,
@@ -1437,6 +1660,8 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
       expect(await reader.translationTexts(fixtureTranslation.id, 1, 1, 3)).toEqual([]);
       expect(await reader.transliterations()).toEqual([]);
       expect(await reader.recitations()).toEqual([]);
+      expect(await reader.recitationTimings(recitationId, 1)).toEqual([]);
+      expect(await reader.recitationTimings(streamedId, 1)).toEqual([]);
       const segment = (await persistence.recitation(recitationId))!.segments[0]!;
       expect((await reader.segmentAsset(recitationId, segment.id))?.publiclyVisible).toBe(
         false,

@@ -3705,11 +3705,12 @@ try {
      INSERT INTO [dbo].[QuranTafsirContributor] ([tafsirId],[personId],[role],[position]) VALUES (N'${quranTafsir}',N'${quranPerson}',N'author',0);
      INSERT INTO [dbo].[Asset] ([id],[storageKey],[state],[updatedAt]) VALUES (N'${quranAsset}',N'ab/cd/${quranRun}',N'uploading',SYSUTCDATETIME());
      INSERT INTO [dbo].[QuranRecitationSegment] ([id],[recitationId],[surahNumber],[startAyah],[endAyah]) VALUES (N'${quranSegment}',N'${quranRecitation}',1,1,3);
+     INSERT INTO [dbo].[QuranRecitationTiming] ([segmentId],[ayahNumber],[startMs],[endMs]) VALUES (N'${quranSegment}',1,0,1000),(N'${quranSegment}',2,1000,2000),(N'${quranSegment}',3,2000,3000);
      INSERT INTO [dbo].[QuranTajweedRuleText] ([ruleId],[languageCode],[title],[body]) VALUES (N'${quranRule}',N'en',N'NON_QURAN_FIXTURE rule',N'NON_QURAN_FIXTURE rule body');
      INSERT INTO [dbo].[SurahName] ([surahNumber],[locale],[name]) VALUES (1,N'en',N'NON_QURAN_FIXTURE name'),(1,N'ur',N'NON_QURAN_FIXTURE name ur');
      INSERT INTO [dbo].[QuranTopic] ([surahNumber],[ayahNumber],[topicId]) VALUES (1,1,N'${editorialTopic.id}');
      INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'quran-ayah',N'1:1');`,
-    'texts, entries, contributors, a segment, display names, a topic and Ayah search intent',
+    'texts, entries, contributors, a timed segment, display names, a topic and Ayah search intent',
   );
   await expectAllowed(
     app,
@@ -3733,6 +3734,7 @@ try {
      DELETE FROM [dbo].[QuranTafsirContributor] WHERE [tafsirId]=N'${quranTafsir}';
      DELETE FROM [dbo].[QuranTafsirText] WHERE [id]=N'${quranEntry}';
      DELETE FROM [dbo].[QuranTajweedRuleText] WHERE [ruleId]=N'${quranRule}';
+     DELETE FROM [dbo].[QuranRecitationTiming] WHERE [segmentId]=N'${quranSegment}';
      DELETE FROM [dbo].[QuranRecitationSegment] WHERE [id]=N'${quranSegment}';
      DELETE FROM [dbo].[SurahName] WHERE [surahNumber]=1 AND [locale]=N'ur';
      DELETE FROM [dbo].[QuranTopic] WHERE [surahNumber]=1 AND [ayahNumber]=1;`,
@@ -3770,6 +3772,20 @@ try {
       'UPDATE [dbo].[QuranRecitationSegment] SET [recitationId]=[recitationId];',
     ],
     ['QuranTopic UPDATE denied', 'UPDATE [dbo].[QuranTopic] SET [topicId]=[topicId];'],
+    // Quran Part 5: a stream is written once, when its recitation is created,
+    // and a segment's timing is never edited — only inserted and removed whole.
+    [
+      'QuranRecitation stream provider UPDATE denied',
+      'UPDATE [dbo].[QuranRecitation] SET [streamProvider]=[streamProvider];',
+    ],
+    [
+      'QuranRecitation stream path UPDATE denied',
+      'UPDATE [dbo].[QuranRecitation] SET [streamPath]=[streamPath];',
+    ],
+    [
+      'QuranRecitationTiming UPDATE denied',
+      'UPDATE [dbo].[QuranRecitationTiming] SET [endMs]=[endMs];',
+    ],
     // A text is never re-parented: moving a published work's last text to
     // another work would empty it as surely as deleting it.
     [
@@ -3814,6 +3830,7 @@ try {
     'QuranTafsirText',
     'QuranRecitation',
     'QuranRecitationSegment',
+    'QuranRecitationTiming',
     'QuranTajweedRule',
     'QuranTajweedRuleText',
     'QuranTopic',
@@ -3843,7 +3860,8 @@ try {
     QuranTranslation: ['INSERT,SELECT', 'all but slug'],
     QuranTransliteration: ['INSERT,SELECT', 'all but slug'],
     QuranTafsir: ['INSERT,SELECT', 'all but slug'],
-    QuranRecitation: ['INSERT,SELECT', 'all but slug'],
+    // Quran Part 5: neither the slug nor the stream is ever re-written.
+    QuranRecitation: ['INSERT,SELECT', 'all but slug and stream'],
     QuranTajweedRule: ['INSERT,SELECT', 'all but slug'],
     SurahName: ['DELETE,INSERT,SELECT', 'all'],
     // A text's identity — its work, and its Ayah or language — is fixed; only
@@ -3855,6 +3873,7 @@ try {
     QuranTranslationContributor: ['DELETE,INSERT,SELECT', ''],
     QuranTafsirContributor: ['DELETE,INSERT,SELECT', ''],
     QuranRecitationSegment: ['DELETE,INSERT,SELECT', 'assetId'],
+    QuranRecitationTiming: ['DELETE,INSERT,SELECT', ''],
     QuranTopic: ['DELETE,INSERT,SELECT', ''],
   };
   const posture = await app.query<{
@@ -3885,7 +3904,13 @@ try {
         ? columns.join(',')
         : scope === 'all but slug'
           ? columns.filter((column) => column !== 'slug').join(',')
-          : scope;
+          : scope === 'all but slug and stream'
+            ? columns
+                .filter(
+                  (column) => !['slug', 'streamProvider', 'streamPath'].includes(column),
+                )
+                .join(',')
+            : scope;
     return (row.held ?? '') === verbs && (row.updatable ?? '') === expectedColumns
       ? []
       : [`${row.name}: ${row.held ?? '(none)'} / UPDATE ${row.updatable ?? '(none)'}`];

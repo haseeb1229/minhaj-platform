@@ -510,15 +510,25 @@ export async function SegmentPlayer({
   segment,
 }: {
   readonly locale: Locale;
-  readonly recitation: Pick<PublicRecitation, 'id' | 'name'>;
+  readonly recitation: Pick<PublicRecitation, 'id' | 'name' | 'stream'>;
   readonly segment: PublicRecitationSegment;
 }) {
   const t = await getTranslations({ locale, namespace: 'quran' });
+  const audio =
+    recitation.stream !== null
+      ? { kind: 'stream' as const, stream: recitation.stream, surah: segment.surah }
+      : segment.assetId === null
+        ? null
+        : {
+            kind: 'asset' as const,
+            recitationId: recitation.id,
+            segmentId: segment.id,
+            assetId: segment.assetId,
+          };
+  if (audio === null) return null;
   return (
     <RecitationPlayer
-      recitationId={recitation.id}
-      segmentId={segment.id}
-      assetId={segment.assetId}
+      audio={audio}
       labels={{
         player: t('player.name', {
           name: recitation.name,

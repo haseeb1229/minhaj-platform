@@ -127,6 +127,10 @@ export function createQuranReadService(
       idOk(recitationId) && (surah === null || surahOk(surah))
         ? reader.recitationSegments(recitationId, surah)
         : none(),
+    recitationTimings: (recitationId, surah) =>
+      idOk(recitationId) && surahOk(surah)
+        ? reader.recitationTimings(recitationId, surah)
+        : none(),
 
     tajweedRules: () => reader.tajweedRules(),
     tajweedRule: (slug) => (slugOk(slug) ? reader.tajweedRule(slug) : absent()),

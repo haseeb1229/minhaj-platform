@@ -702,6 +702,12 @@ IF OBJECT_ID(N'[dbo].[QuranTajweedRuleText]',N'U') IS NOT NULL BEGIN GRANT SELEC
 -- and replacing a file never deletes the one it replaced.
 IF OBJECT_ID(N'[dbo].[QuranRecitationSegment]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranRecitationSegment] TO [$(app_login)]; GRANT UPDATE ON OBJECT::[dbo].[QuranRecitationSegment] ([assetId]) TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranRecitationSegment] ([id], [recitationId], [surahNumber], [startAyah], [endAyah], [createdAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[QuranRecitationSegment] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[QuranTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[QuranTopic] TO [$(app_login)]; END;
+-- Quran Part 5. A streamed recitation's provider and path are written once,
+-- when it is created, and never changed: the runtime may not UPDATE them. A
+-- segment's per-Ayah timing is inserted with it and removed only with it —
+-- never edited.
+IF COL_LENGTH(N'dbo.QuranRecitation', N'streamPath') IS NOT NULL DENY UPDATE ON OBJECT::[dbo].[QuranRecitation] ([streamProvider], [streamPath]) TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[QuranRecitationTiming]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranRecitationTiming] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[QuranRecitationTiming] TO [$(app_login)]; END;
 
 -- Phase 19: Hadith.
 --

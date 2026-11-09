@@ -496,6 +496,36 @@ proxy exactly as `/search`, and every corpus-state, attribution and fixture rule
   Nothing matched: suggestions (the Arabic spelling hint for an Arabic-script query, fewer words or
   a translation's words, and "Search without filters").
 
+**Quran Part 5 — recitations (owner decisions 2026-11-09; DELIVERY_PLAN.md, the Quran Part 5
+record; DOMAIN_MODEL.md §8.5).** No new page route; one new segment layout and one public data
+route. Every corpus-state, `noindex`, attribution and fixture rule above is unchanged.
+
+- **The Quran layout** (`app/[locale]/(public)/quran/layout.tsx`) mounts the recitation player once
+  over every `/quran/**` page from the PUBLIC recitation catalogue (the same document for every
+  visitor), so a client navigation between Quran pages keeps it playing; leaving the section ends
+  it. While a recitation is loaded, a link or a GET form to another Quran page in the same interface
+  language is followed by the client router; every other link behaves as it always has. Nothing
+  renders while no recitation is public, and nothing plays until the visitor presses Play.
+- **`GET /api/quran/recitations/{slug}/{surah}`** — what the player needs for one public
+  recitation's audio in one Surah: each playable segment's range, how its audio is addressed (the
+  first-party asset's three identifiers, or the allowlisted stream descriptor — never a URL), and
+  each Ayah's `[ayah, startMs, endMs]` where the recitation is timed. Imports no Identity; a
+  malformed slug or Surah, or a recitation not public now, is a 404; `private, max-age=300`,
+  `noindex`, no query read.
+- **Surah, Juz and Ayah pages** carry a **Listen** section: the recitation choice (remembered in this
+  browser; `?reciter=` preselects) and Play from the Surah's start, the Juz's first Ayah or the
+  cited Ayah; every Ayah row gains "Play from this Ayah" — shown only while the player is ready AND
+  the chosen recitation is timed. An untimed recitation is said to play whole Surahs without verse
+  highlighting. **Without JavaScript** the section offers each public recitation as a plain link to
+  the same page with `?reciter=`, where each segment is the browser's own `<audio controls>`; with
+  JavaScript those fallbacks are hidden (`data-quran-audio`), so a page never shows two players.
+- **`/quran/recitations`** — cards per recitation (name, reciter link, language, style, "Verse by
+  verse" or "Whole Surah", Surah count, attribution, Play, "Listen alongside the text"), filtered by
+  `?style=` and `?language=` from a GET form shown only when the public recitations differ in one of
+  them; a value no recitation carries matches none. **`/quran/recitations/{reciter}`** lists each
+  recitation's Surahs, each with Play and "Read and listen" (`/quran/surah/{n}?reciter=`), and keeps
+  the native players collapsed as the no-script fallback. Nothing is downloadable anywhere.
+
 ### 3.4 Hadith
 
 | Route | Purpose |
@@ -1044,7 +1074,7 @@ At `/admin` (English) and `/ur/admin` · `/ar/admin` (§1.1).
 |---|---|
 | Dashboard | `/admin` |
 | Editorial | `/admin/editorial/{articles\|pages\|news\|press-releases\|statements\|media-coverage\|events\|collections\|queue\|correspondence}` — **correspondence** covers private ContactInquiry and Feedback triage (DOMAIN_MODEL.md §7.5); `news`, `press-releases`, `statements` and `media-coverage` delivered in Phase 13, `events` in Phase 14, `collections` in Phase 15, and `queue` lists every workflow-governed aggregate |
-| Quran | `/admin/quran/{surahs\|ayat\|translations\|tafsir\|transliterations\|recitations\|tajweed}` — delivered in Phase 18; `tajweed` holds TajweedRule guidance. Canonical text is read-only; the correction flow on an Ayah appears only to `quran.editCanonical` holders after a `quran-canonical-edit` step-up. No corpus import surface exists |
+| Quran | `/admin/quran/{surahs\|ayat\|translations\|tafsir\|transliterations\|recitations\|tajweed}` — delivered in Phase 18; `tajweed` holds TajweedRule guidance. Canonical text is read-only; the correction flow on an Ayah appears only to `quran.editCanonical` holders after a `quran-canonical-edit` step-up. No corpus import surface exists. Quran Part 5: `recitations` names each recitation's language (a required choice on its form) and its audio source — "Uploaded files" or "Streamed from cdn.mp3quran.net", the stream's provider folder shown read-only, never a field — and each segment's timing ("Timed: n of m ayat" or "Not timed"); a streamed recitation offers no upload and no new segment (its whole-Surah segments come only from the operator's import) |
 | Hadith | `/admin/hadith/{collections\|books\|chapters\|records\|commentary\|sciences}` — delivered in Phase 19; `sciences` holds HadithScience study material. Registered source systems, editions and activation are shown read-only (operator-only). Records are read-only by default; structure and record creation, correction, verification and citation mapping appear only to `hadith.editCanonical` holders after a `hadith-canonical-edit` step-up. Conflict evidence is shown with no resolve action. No corpus import surface exists |
 | Fatwa | `/admin/fatwa/{questions\|assignment\|drafts\|review\|published\|categories}` — delivered in Phase 20. `questions` and `assignment` under `question.receive` (a question's private text only on its detail page, recorded as an audited access); `drafts/{questionId}` under `fatwa.answer` for the current assignee only; `review/{fatwaId}` and `published/{fatwaId}` under `fatwa.publish`, publication and withdrawal behind a `fatwa-publication` step-up and never offered to the revision's author; `categories` readable by any Fatwa key and maintained under `fatwa.publish`. No import, bulk or generation surface exists |
 | Library | `/admin/library/{works\|editions\|translations\|research\|publications\|magazines\|encyclopedias\|sale-points}` — research papers at `research/papers`, and a Magazine's issues beneath it at `magazines/{id}/issues/{issueId}` (Phase 9) |
@@ -1130,6 +1160,7 @@ owning phase's handlers and tests, not this table.
 | Messaging bytes | `/assets/messaging/attachments/{id}` · `/assets/messaging/support/{id}` · `/assets/messaging/evidence/{reportId}/{id}` | Phase 24: a participant's attachment, a support staff member's (audited) and a moderator's inside one report's evidence (audited). Images `inline`, PDFs `attachment`; `private, no-store`, `nosniff`, CORP same-origin; one 404 for every denial. No signed or public URL |
 | Media upload | `/api/admin/media/audio/{id}/asset` · `/api/admin/media/photos/{id}/asset` | Phase 11: one track's audio file; Phase 12: one Photo's image. `POST` only, a streamed raw body — Class A with explicit anti-CSRF (SECURITY_BASELINE.md §7.1) |
 | Quran upload | `/api/admin/quran/recitations/{id}/segments/{segmentId}/asset` | Phase 18: one recitation segment's audio file, by the same streamed Class-A pattern. Its bytes are served at `/assets/quran/recitations/…` and previewed at `/assets/quran/previews/recitations/…`; nothing is offered as a download |
+| Quran recitation data | `/api/quran/recitations/{slug}/{surah}` | Quran Part 5: PUBLIC, GET only — one public recitation's playable segments for one Surah, each addressed by its asset identifiers or the allowlisted stream descriptor (never a URL), with per-Ayah timing where timed (§3.3). No Identity, no query; malformed or not public now is a 404; `private, max-age=300`, `noindex` |
 | Webhooks | `/api/webhooks/{provider}` | **Signature-verified, idempotent, replay-resistant**. Delivered: `resend` (Phase 2) and `stripe` (Phase 27 — the sandbox engineering adapter's Class-B callback: POST only, 64 KiB raw-byte cap, signature verified before parsing, durable scoped event dedup, provider truth re-read before any state change) |
 | Health | `/api/health` · `/api/ready` | Unprefixed operational probes |
 

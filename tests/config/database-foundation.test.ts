@@ -288,6 +288,8 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'QuranTafsirText',
       'QuranRecitation',
       'QuranRecitationSegment',
+      // Quran Part 5 — a recitation segment's per-Ayah timing.
+      'QuranRecitationTiming',
       'QuranTajweedRule',
       'QuranTajweedRuleText',
       'QuranTopic',

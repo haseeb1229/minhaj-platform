@@ -7,6 +7,7 @@ import type { Prisma } from '@prisma/client';
 import {
   QURAN_LIMITS,
   QURAN_PAGE,
+  recitationStreamOf,
   type QuranPersistencePort,
   type RecitationDetail,
   type RecitationRecord,
@@ -44,10 +45,24 @@ import {
  * operators editing one Recitation cannot both win. A segment's range is fixed
  * once created — the column refuses UPDATE — and no two segments of one
  * Recitation cover the same Ayah (51187).
+ *
+ * QURAN PART 5. A STREAMED recitation's provider and path are written once, at
+ * creation, and never again (the runtime is denied UPDATE on both, and 51400);
+ * its segments hold no asset and each is one whole Surah (51401). A segment's
+ * per-Ayah timing is inserted in the SAME statement batch as the segment — one
+ * statement, so the database checks the whole timing at once (51402) — and is
+ * deleted with it, never edited.
  */
 
 const SEGMENTS = {
-  select: { id: true, surahNumber: true, startAyah: true, endAyah: true, assetId: true },
+  select: {
+    id: true,
+    surahNumber: true,
+    startAyah: true,
+    endAyah: true,
+    assetId: true,
+    _count: { select: { timings: true } },
+  },
   orderBy: [{ surahNumber: 'asc' }, { startAyah: 'asc' }, { id: 'asc' }],
   take: QURAN_LIMITS.segmentsPerRecitation,
 } satisfies Prisma.QuranRecitation$segmentsArgs;
@@ -60,6 +75,9 @@ const RECITATION_SELECT = {
   style: true,
   attribution: true,
   sourceId: true,
+  languageCode: true,
+  streamProvider: true,
+  streamPath: true,
   state: true,
   version: true,
   createdAt: true,
@@ -82,6 +100,9 @@ interface RecitationRow {
   readonly style: string | null;
   readonly attribution: string | null;
   readonly sourceId: string | null;
+  readonly languageCode: string | null;
+  readonly streamProvider: string | null;
+  readonly streamPath: string | null;
   readonly state: string;
   readonly version: number;
   readonly createdAt: Date;
@@ -97,6 +118,7 @@ interface SegmentRow {
   readonly startAyah: number;
   readonly endAyah: number;
   readonly assetId: string | null;
+  readonly _count: { readonly timings: number };
 }
 
 function toRecitation(row: RecitationRow): RecitationRecord {
@@ -109,6 +131,8 @@ function toRecitation(row: RecitationRow): RecitationRecord {
     attribution: row.attribution,
     sourceId: row.sourceId,
     sourceAuthority: authorityOf(row.source),
+    languageCode: row.languageCode,
+    stream: recitationStreamOf(row.streamProvider, row.streamPath),
     state: stateOf(row.state),
     version: row.version,
     segmentCount: row._count.segments,
@@ -129,6 +153,7 @@ function toDetail(
       startAyah: segment.startAyah,
       endAyah: segment.endAyah,
       assetId: segment.assetId,
+      timedAyat: segment._count.timings,
     })),
   };
 }
@@ -140,6 +165,7 @@ function recitationColumns(value: RecitationValue) {
     style: value.style,
     attribution: value.attribution,
     sourceId: value.sourceId,
+    languageCode: value.languageCode,
   };
 }
 
@@ -207,7 +233,7 @@ export function recitationPersistence(): RecitationPersistence {
       return row === null ? null : toDetail(row);
     },
 
-    async createRecitation({ actorId, value }) {
+    async createRecitation({ actorId, value, stream }) {
       try {
         return await db.$transaction(async (tx) => {
           const id = randomUUID();
@@ -216,6 +242,8 @@ export function recitationPersistence(): RecitationPersistence {
               id,
               slug: value.slug,
               ...recitationColumns(value),
+              streamProvider: stream?.provider ?? null,
+              streamPath: stream?.path ?? null,
               state: 'draft',
               version: 1,
               updatedAt: new Date(),
@@ -231,6 +259,8 @@ export function recitationPersistence(): RecitationPersistence {
               state: 'draft',
               reciter: value.reciterId,
               source: value.sourceId ?? 'none',
+              language: value.languageCode,
+              stream: stream === null ? 'none' : `${stream.provider}:${stream.path}`,
             },
           });
           return detailOf(tx, id);
@@ -255,6 +285,7 @@ export function recitationPersistence(): RecitationPersistence {
               personId: true,
               style: true,
               attribution: true,
+              languageCode: true,
             },
           });
           guardEdit(previous, expectedVersion, value);
@@ -282,7 +313,7 @@ export function recitationPersistence(): RecitationPersistence {
       }
     },
 
-    /** A published Recitation always has something to hear (51188). */
+    /** A published Recitation always has something to hear (51188): a file, or its stream. */
     async setRecitationState({ actorId, id, expectedVersion, state }) {
       try {
         return await db.$transaction(async (tx) => {
@@ -292,7 +323,15 @@ export function recitationPersistence(): RecitationPersistence {
               state,
               () =>
                 tx.quranRecitationSegment.count({
-                  where: { recitationId: id, assetId: { not: null } },
+                  // Audio is a segment's file, or — for a STREAMED recitation —
+                  // the stream itself (Quran Part 5; the 51188 triggers agree).
+                  where: {
+                    recitationId: id,
+                    OR: [
+                      { assetId: { not: null } },
+                      { recitation: { streamProvider: { not: null } } },
+                    ],
+                  },
                 }),
               'audio-required',
             ),
@@ -331,11 +370,20 @@ export function recitationPersistence(): RecitationPersistence {
               endAyah: value.endAyah,
             },
           });
+          const timings = value.timings ?? [];
+          if (timings.length > 0)
+            // ONE statement, so the database judges the whole timing at once:
+            // every Ayah of the range, monotonic, or nothing (51402).
+            await tx.$executeRaw`INSERT INTO [dbo].[QuranRecitationTiming] ([segmentId],[ayahNumber],[startMs],[endMs])
+              SELECT ${segmentId}, [ayah], [startMs], [endMs]
+              FROM OPENJSON(${JSON.stringify(timings)})
+              WITH ([ayah] INT '$.ayah', [startMs] INT '$.startMs', [endMs] INT '$.endMs');`;
           await segmentAudit(tx, { actorId, id }, previous.version, 'segment-added', {
             segment: segmentId,
             surah: String(value.surah),
             startAyah: String(value.startAyah),
             endAyah: String(value.endAyah),
+            timedAyat: String(timings.length),
           });
           return detailOf(tx, id);
         });
@@ -344,11 +392,17 @@ export function recitationPersistence(): RecitationPersistence {
       }
     },
 
-    /** The segment's asset, if any, is left untouched in Storage. */
+    /**
+     * The segment's asset, if any, is left untouched in Storage; its timing,
+     * which describes only that segment's audio, goes with it.
+     */
     async removeRecitationSegment({ actorId, id, expectedVersion, segmentId }) {
       try {
         return await db.$transaction(async (tx) => {
           const previous = await claim(tx, 'recitation', id, expectedVersion);
+          await tx.quranRecitationTiming.deleteMany({
+            where: { segment: { id: segmentId, recitationId: id } },
+          });
           const removed = await tx.quranRecitationSegment.deleteMany({
             where: { id: segmentId, recitationId: id },
           });
@@ -369,7 +423,8 @@ export function recitationPersistence(): RecitationPersistence {
      * replacements exactly one lands. Only the segment's `assetId` column is
      * written, and the previous asset is not touched — it simply stops being
      * the one this segment serves, so a failed replacement never costs the last
-     * good file.
+     * good file. A STREAMED recitation's audio is its stream: none of its
+     * segments takes a file (51401).
      */
     async attachSegmentAsset({ actorId, id, expectedVersion, segmentId, assetId }) {
       try {
@@ -377,9 +432,11 @@ export function recitationPersistence(): RecitationPersistence {
           const previous = await claim(tx, 'recitation', id, expectedVersion);
           const segment = await tx.quranRecitationSegment.findFirst({
             where: { id: segmentId, recitationId: id },
-            select: { assetId: true },
+            select: { assetId: true, recitation: { select: { streamProvider: true } } },
           });
           if (segment === null) throw new QuranDataError('not-found');
+          if (segment.recitation.streamProvider !== null)
+            throw new QuranDataError('invalid');
           const changed = await tx.quranRecitationSegment.updateMany({
             where: { id: segmentId, recitationId: id },
             data: { assetId },

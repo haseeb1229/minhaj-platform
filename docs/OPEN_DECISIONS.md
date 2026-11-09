@@ -166,6 +166,29 @@ its own later part of the Quran programme, not by Part 1 (the reading experience
    streamed on staging; and Minhaj-ul-Quran's own **Urdu narration of Irfan-ul-Quran** (Tasleem
    Ahmed Sabri, from minhaj.net) on staging. *Staging only; production gates of §1.1/§1.2/§2.4
    unchanged.*
+
+   **Implementation (Quran Part 5, 2026-11-10; DELIVERY_PLAN.md, the Quran Part 5 record;
+   DOMAIN_MODEL.md §8.5).** The engineering is built; staging holds the recitations once the
+   operator runs `quran-reference.sh recitations-mp3quran` and `recitations-irfan-urdu`, recorded
+   under the identifier `OWNER-DECISION-2026-11-09-QURAN-STAGING-RECITATIONS` (the narration also
+   under `OWNER-ATTESTATION-2026-11-06-R2-COMPREHENSIVE-PRESENTATION-CORPUS`). They then hold: twelve
+   curated, Ayah-timed Hafs ʿan ʿĀṣim murattal reads from mp3quran.net (Mishary Alafasi, Abdulbasit
+   Abdulsamad, Mahmoud Khalil Al-Hussary, Mohammed Siddiq Al-Minshawi, Saad Al-Ghamdi, Abdulrahman
+   Alsudaes, Saud Al-Shuraim, Abu Bakr Al Shatri, Ahmad Al-Ajmy, Yasser Al-Dosari, Ali Alhuthaifi,
+   Fares Abbad — names as mp3quran gives them; Maher Al-Muaiqly is not among the timed reads),
+   STREAMED from `cdn.mp3quran.net`, never copied, using only the timing's start and end (never its
+   mushaf-page images); and the Irfan-ul-Quran Urdu narration, 114 first-party MP3s stored unaltered
+   and untimed. Each is labelled with its source, public only beside the admitted reference preview
+   (a stream names a `reference` source, which the database enforces), and never indexable.
+   **Production gates of §1.1/§1.2/§2.4 are unchanged; this is not Minhaj's approval of any
+   reciter.** Open owner questions before production: (a) **confirm mp3quran.net's grant** (its
+   privacy page's "Copyrights" statement; the reciters' or labels' rights behind it are not shown),
+   or prefer self-hosted audio under an explicit licence; (b) **the narration's Arabic** — the
+   archive's durations (≈64.5 s for Al-Fatihah, ≈66 s for An-Nas, ≈3.4 h for Al-Baqarah at 32 kbps)
+   are strong evidence, not confirmed by listening, that each file interleaves an Arabic recitation
+   with the Urdu narration; who recites the Arabic, and its rights, must be established — and
+   whether separate tracks or per-Ayah timing can be supplied; (c) whether a full **MQI murattal
+   recitation** exists to prefer over external qaris.
 2. **Tafsir.** A **Minhaj-ul-Quran hub**: Shaykh-ul-Islam's tafsir books and Minhaj TV lectures
    linked per Ayah, with per-Ayah text slots for tafsir text Minhaj-ul-Quran supplies — **no external
    tafsir**. *Staging only; production gates of §1.1/§1.2/§2.4 unchanged.*

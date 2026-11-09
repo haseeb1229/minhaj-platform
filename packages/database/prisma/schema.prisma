@@ -1042,6 +1042,7 @@ model Language {
   quranTransliterations QuranTransliteration[]
   quranTafsirs QuranTafsir[]
   quranTajweedTexts QuranTajweedRuleText[]
+  quranRecitations QuranRecitation[]
   courses Course[]
 
   code String @id @db.NVarChar(16)
@@ -4213,6 +4214,12 @@ model QuranRecitation {
   style       String?   @db.NVarChar(100)
   attribution String?   @db.NVarChar(400)
   sourceId    String?   @db.NVarChar(36)
+  /// The language heard: ar (recitation) or a translation's language (narration). Quran Part 5.
+  languageCode   String?   @db.NVarChar(16)
+  /// A STREAMED recitation's allowlisted provider and CDN folder - never a URL;
+  /// fixed at creation, beside a reference source only (Quran Part 5).
+  streamProvider String?   @db.NVarChar(16)
+  streamPath     String?   @db.NVarChar(200)
   state       String    @db.NVarChar(16)
   version     Int
   createdAt   DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
@@ -4221,6 +4228,7 @@ model QuranRecitation {
 
   person   Person                   @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   source   QuranSource?             @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  language Language?                @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
   segments QuranRecitationSegment[]
 
   @@index([state, slug])
@@ -4243,9 +4251,25 @@ model QuranRecitationSegment {
   start      Ayah            @relation("QuranRecitationSegmentStart", fields: [surahNumber, startAyah], references: [surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction)
   end        Ayah            @relation("QuranRecitationSegmentEnd", fields: [surahNumber, endAyah], references: [surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction)
   asset      Asset?          @relation("QuranRecitationSegmentAsset", fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  timings    QuranRecitationTiming[]
 
   @@unique([recitationId, surahNumber, startAyah], map: "QuranRecitationSegment_start_key")
   @@map("QuranRecitationSegment")
+}
+
+/// When one Ayah is heard in a segment's audio, [startMs, endMs). A segment is
+/// timed for every Ayah of its range or for none, monotonic, written once with
+/// it and never edited (Quran Part 5).
+model QuranRecitationTiming {
+  segmentId  String @db.NVarChar(36)
+  ayahNumber Int
+  startMs    Int
+  endMs      Int
+
+  segment QuranRecitationSegment @relation(fields: [segmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([segmentId, ayahNumber])
+  @@map("QuranRecitationTiming")
 }
 
 model QuranTajweedRule {

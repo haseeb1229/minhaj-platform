@@ -9,6 +9,7 @@ import {
   QURAN_MODE_POSTURE,
   QURAN_PAGE,
   QURAN_SEARCH_RECORDS_MAX,
+  recitationStreamOf,
   type AyahSearchRecord,
   type PublicAyah,
   type PublicContributor,
@@ -117,8 +118,20 @@ const PUBLIC_RECITATION = {
   personId: true,
   style: true,
   attribution: true,
+  languageCode: true,
+  streamProvider: true,
+  streamPath: true,
   publishedAt: true,
 } satisfies Prisma.QuranRecitationSelect;
+
+/**
+ * A segment HAS AUDIO when it holds its file, or when its recitation is
+ * streamed — the stream is the audio (Quran Part 5). The one predicate every
+ * public segment read uses.
+ */
+const WITH_AUDIO = {
+  OR: [{ assetId: { not: null } }, { recitation: { streamProvider: { not: null } } }],
+} satisfies Prisma.QuranRecitationSegmentWhereInput;
 
 const PUBLIC_TAJWEED = {
   slug: true,
@@ -224,15 +237,30 @@ function toWork(
   };
 }
 
-function toRecitation(row: {
-  readonly id: string;
-  readonly slug: string;
-  readonly name: string;
-  readonly personId: string;
-  readonly style: string | null;
-  readonly attribution: string | null;
-  readonly publishedAt: Date | null;
-}): PublicRecitation {
+/** What a recitation's audio covers: its Surahs, and whether all of it is timed. */
+interface RecitationCoverage {
+  readonly surahCount: number;
+  readonly firstSurah: number | null;
+  readonly timed: boolean;
+}
+
+const NO_COVERAGE: RecitationCoverage = { surahCount: 0, firstSurah: null, timed: false };
+
+function toRecitation(
+  row: {
+    readonly id: string;
+    readonly slug: string;
+    readonly name: string;
+    readonly personId: string;
+    readonly style: string | null;
+    readonly attribution: string | null;
+    readonly languageCode: string | null;
+    readonly streamProvider: string | null;
+    readonly streamPath: string | null;
+    readonly publishedAt: Date | null;
+  },
+  coverage: RecitationCoverage,
+): PublicRecitation {
   return {
     id: row.id,
     slug: row.slug,
@@ -240,6 +268,11 @@ function toRecitation(row: {
     reciterId: row.personId,
     style: row.style,
     attribution: row.attribution,
+    languageCode: row.languageCode,
+    stream: recitationStreamOf(row.streamProvider, row.streamPath),
+    surahCount: coverage.surahCount,
+    firstSurah: coverage.firstSurah,
+    timed: coverage.timed,
     publishedAt: publishedOn(row),
   };
 }
@@ -276,6 +309,48 @@ export function createQuranPublicReader(
   admission: QuranAdmission,
 ): QuranPublicReaderPort {
   const db = getDatabaseClient();
+
+  /**
+   * What each recitation's audio covers — its Surahs, and whether every
+   * segment with audio is timed — for a whole list in ONE grouped read. The
+   * caller has already decided the recitations are public; this reads only
+   * their segments.
+   */
+  async function coverageOf(
+    ids: readonly string[],
+  ): Promise<ReadonlyMap<string, RecitationCoverage>> {
+    if (ids.length === 0) return new Map();
+    const rows = await db.$queryRaw<
+      {
+        recitationId: string;
+        surahs: number;
+        first: number;
+        segments: number;
+        timed: number;
+      }[]
+    >`SELECT s.[recitationId] AS [recitationId],
+             COUNT(DISTINCT s.[surahNumber]) AS [surahs],
+             MIN(s.[surahNumber]) AS [first],
+             COUNT(*) AS [segments],
+             COUNT(t.[segmentId]) AS [timed]
+      FROM [dbo].[QuranRecitationSegment] s
+      JOIN [dbo].[QuranRecitation] r ON r.[id] = s.[recitationId]
+      OUTER APPLY (SELECT TOP (1) x.[segmentId] FROM [dbo].[QuranRecitationTiming] x
+                   WHERE x.[segmentId] = s.[id]) t
+      WHERE s.[recitationId] IN (${Prisma.join([...ids])})
+        AND (s.[assetId] IS NOT NULL OR r.[streamProvider] IS NOT NULL)
+      GROUP BY s.[recitationId]`;
+    return new Map(
+      rows.map((row) => [
+        row.recitationId,
+        {
+          surahCount: Number(row.surahs),
+          firstSurah: Number(row.first),
+          timed: Number(row.segments) > 0 && Number(row.timed) === Number(row.segments),
+        },
+      ]),
+    );
+  }
 
   /** May the active corpus be listed in a sitemap? Only where its mode permits. */
   async function sitemapMode(): Promise<boolean> {
@@ -771,7 +846,8 @@ export function createQuranPublicReader(
         orderBy: [...BY_SLUG],
         take: WORK_LIST,
       });
-      return rows.map(toRecitation);
+      const coverage = await coverageOf(rows.map((row) => row.id));
+      return rows.map((row) => toRecitation(row, coverage.get(row.id) ?? NO_COVERAGE));
     },
 
     async recitation(slug) {
@@ -781,7 +857,9 @@ export function createQuranPublicReader(
         where: { slug, ...publicWork(mode) },
         select: PUBLIC_RECITATION,
       });
-      return row === null ? null : toRecitation(row);
+      if (row === null) return null;
+      const coverage = await coverageOf([row.id]);
+      return toRecitation(row, coverage.get(row.id) ?? NO_COVERAGE);
     },
 
     async recitationsByReciter(personId) {
@@ -793,7 +871,8 @@ export function createQuranPublicReader(
         orderBy: [...BY_SLUG],
         take: WORK_LIST,
       });
-      return rows.map(toRecitation);
+      const coverage = await coverageOf(rows.map((row) => row.id));
+      return rows.map((row) => toRecitation(row, coverage.get(row.id) ?? NO_COVERAGE));
     },
 
     async recitationSegments(recitationId, surah) {
@@ -802,7 +881,7 @@ export function createQuranPublicReader(
       const rows = await db.quranRecitationSegment.findMany({
         where: {
           recitationId,
-          assetId: { not: null },
+          ...WITH_AUDIO,
           ...(surah === null ? {} : { surahNumber: surah }),
           recitation: publicWork(mode),
         },
@@ -812,23 +891,44 @@ export function createQuranPublicReader(
           startAyah: true,
           endAyah: true,
           assetId: true,
+          _count: { select: { timings: true } },
         },
         orderBy: [{ surahNumber: 'asc' }, { startAyah: 'asc' }, { id: 'asc' }],
         take: QURAN_LIMITS.segmentsPerRecitation,
       });
-      return rows.flatMap((row) =>
-        row.assetId === null
-          ? []
-          : [
-              {
-                id: row.id,
-                surah: row.surahNumber,
-                startAyah: row.startAyah,
-                endAyah: row.endAyah,
-                assetId: row.assetId,
-              },
-            ],
-      );
+      return rows.map((row) => ({
+        id: row.id,
+        surah: row.surahNumber,
+        startAyah: row.startAyah,
+        endAyah: row.endAyah,
+        assetId: row.assetId,
+        // Timed for every Ayah or for none (51402): any timing is all of it.
+        timed: row._count.timings > 0,
+      }));
+    },
+
+    async recitationTimings(recitationId, surah) {
+      const mode = await activeMode(db, admission);
+      if (mode === null) return [];
+      const rows = await db.quranRecitationTiming.findMany({
+        where: {
+          segment: {
+            recitationId,
+            surahNumber: surah,
+            ...WITH_AUDIO,
+            recitation: publicWork(mode),
+          },
+        },
+        select: { segmentId: true, ayahNumber: true, startMs: true, endMs: true },
+        orderBy: [{ ayahNumber: 'asc' }, { segmentId: 'asc' }],
+        take: QURAN_AYAH_NUMBER_MAX,
+      });
+      return rows.map((row) => ({
+        segmentId: row.segmentId,
+        ayah: row.ayahNumber,
+        startMs: row.startMs,
+        endMs: row.endMs,
+      }));
     },
 
     /* ---- Tajweed ----------------------------------------------------------- */

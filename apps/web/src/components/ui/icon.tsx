@@ -30,6 +30,9 @@ export type IconName =
   | 'external'
   | 'play'
   | 'pause'
+  | 'skip-previous'
+  | 'skip-next'
+  | 'repeat'
   | 'bookmark'
   | 'share'
   | 'copy'
@@ -85,6 +88,13 @@ const GLYPHS: Readonly<Record<IconName, ReactNode>> = {
   external: p('M14 4h6v6m0-6-9 9m7 1v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'),
   play: p('M8 5.5v13l10.5-6.5z'),
   pause: p('M8.5 5.5v13m7-13v13'),
+  // Media transport glyphs are NOT mirrored in RTL: they show the recording's
+  // own direction, as every player draws them.
+  'skip-previous': p('M6.5 6v12m11.5-12-8.5 6 8.5 6z'),
+  'skip-next': p('M17.5 6v12M6 6l8.5 6L6 18z'),
+  repeat: p(
+    'M17 2.5 20.5 6 17 9.5M3.5 11.5V10a4 4 0 0 1 4-4h13M7 21.5 3.5 18 7 14.5m13.5-2V14a4 4 0 0 1-4 4h-13',
+  ),
   bookmark: p('M6.5 4.5h11v15l-5.5-4-5.5 4z'),
   share: (
     <>

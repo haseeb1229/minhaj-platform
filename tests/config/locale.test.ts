@@ -470,6 +470,13 @@ describe('the render and routing tree stays statically renderable', () => {
     // Quran Part 4: the search page's pure filter, restriction, layer and
     // snippet rules.
     'apps/web/src/components/quran/search-view.ts',
+    // Quran Part 5: the recitation player — its pure rules, its store and
+    // audio element, the layout's dock and host, and a page's listen controls.
+    'apps/web/src/components/quran/recitation-plan.ts',
+    'apps/web/src/components/quran/recitation-store.ts',
+    'apps/web/src/components/quran/recitation-dock.tsx',
+    'apps/web/src/components/quran/recitation-host.tsx',
+    'apps/web/src/components/quran/recitation-listen.tsx',
     'apps/web/src/components/my/dashboard.ts',
     'apps/web/src/components/my/frame.tsx',
     'apps/web/src/components/my/metadata.ts',

@@ -1,3 +1,10 @@
+import { createHash } from 'node:crypto';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { FetchOutcome } from '@minhaj/contracts/migration';
@@ -14,6 +21,7 @@ import {
   MIGRATION_USER_AGENT,
   RESPONSE_HEADER_ALLOWLIST,
   createFixtureFetcher,
+  createSafeDownloader,
   createSafeFetcher,
   fixtureAddressPolicy,
   fixtureConnector,
@@ -526,5 +534,187 @@ describe('a fixture fetcher cannot be pointed at a real host', () => {
     expect(() => fixtureAddressPolicy({ address: '10.0.0.1', port: 80 })).toThrow(
       /loopback/,
     );
+  });
+});
+
+/* ===========================================================================
+ * Quran Part 5 — one large file, streamed to disk through the same boundary
+ * ========================================================================= */
+
+describe('the safe downloader: the fetcher’s boundary, streamed to a file', () => {
+  const HOST = 'downloads.example.org';
+  /** A public address the resolver answers with; the connector carries it to loopback. */
+  const PUBLIC = '93.184.216.34';
+  const BODY = Buffer.from('NON_QURAN_FIXTURE archive bytes '.repeat(4096));
+  let downloads: Server;
+  let port = 0;
+  let work: string;
+
+  beforeAll(async () => {
+    work = mkdtempSync(path.join(tmpdir(), 'minhaj-safe-download-'));
+    downloads = createServer((request, response) => {
+      switch (request.url) {
+        case '/ok':
+          response.writeHead(200, { 'content-length': String(BODY.length) });
+          response.end(BODY);
+          return;
+        case '/chunked':
+          // No declared length: only the streamed count can refuse it.
+          response.writeHead(200, { 'transfer-encoding': 'chunked' });
+          response.write(BODY);
+          response.end(BODY);
+          return;
+        case '/declared':
+          response.writeHead(200, { 'content-length': String(BODY.length * 10) });
+          response.end(BODY);
+          return;
+        case '/redirect-out':
+          response.writeHead(302, { location: 'http://elsewhere.example.org/ok' });
+          response.end();
+          return;
+        case '/redirect-in':
+          response.writeHead(302, { location: '/ok' });
+          response.end();
+          return;
+        default:
+          response.writeHead(404, { 'content-length': '0' });
+          response.end();
+      }
+    });
+    await new Promise<void>((resolve) => downloads.listen(0, '127.0.0.1', resolve));
+    port = (downloads.address() as AddressInfo).port;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => downloads.close(() => resolve()));
+    rmSync(work, { recursive: true, force: true });
+  });
+
+  /** Carries a pinned connection to the local download server, recording the pin. */
+  function toLocal() {
+    const pins: PinnedConnection[] = [];
+    const connector = vi.fn<Connector>((connection) => {
+      pins.push(connection);
+      return nodeConnector({ ...connection, address: '127.0.0.1', port });
+    });
+    return { connector, pins };
+  }
+
+  const downloader = (
+    connector: Connector,
+    overrides: Partial<Parameters<typeof createSafeDownloader>[0]> = {},
+  ) =>
+    createSafeDownloader({
+      hosts: [HOST],
+      resolver: () => Promise.resolve([PUBLIC]),
+      connector,
+      timeoutMs: 10_000,
+      maxRedirects: 1,
+      maxBytes: BODY.length,
+      ...overrides,
+    });
+
+  const target = (name: string) => path.join(work, name);
+  const leftovers = () => readdirSync(work).filter((name) => name.endsWith('.part'));
+
+  it.each([
+    ['a zero deadline', { timeoutMs: 0 }],
+    ['a deadline over two hours', { timeoutMs: 2 * 60 * 60 * 1000 + 1 }],
+    ['no size ceiling', { maxBytes: 0 }],
+    ['a size over 2 GiB', { maxBytes: 2 * 1024 * 1024 * 1024 + 1 }],
+    ['an unbounded redirect chain', { maxRedirects: 6 }],
+    ['a fractional bound', { maxBytes: 1.5 }],
+  ])('cannot be built with %s', (_label, overrides) => {
+    expect(() => downloader(forbiddenConnector(), overrides)).toThrow(/bounds/);
+  });
+
+  it('refuses an address outside its scope before any connection', async () => {
+    const connector = forbiddenConnector();
+    const outcome = await downloader(connector).download(
+      'http://other.example.org/ok',
+      target('scope.zip'),
+    );
+    expectRefused(outcome as FetchOutcome, 'scope-refused', 'url-out-of-scope');
+    expect(connector).not.toHaveBeenCalled();
+    expect(existsSync(target('scope.zip'))).toBe(false);
+  });
+
+  it('refuses a host that resolves to a private address', async () => {
+    const connector = forbiddenConnector();
+    const outcome = await downloader(connector, {
+      resolver: () => Promise.resolve(['10.0.0.7']),
+    }).download(`http://${HOST}/ok`, target('private.zip'));
+    expectRefused(outcome as FetchOutcome, 'address-refused');
+    expect(connector).not.toHaveBeenCalled();
+  });
+
+  it('re-checks a redirect, refusing one out of scope without requesting it', async () => {
+    const { connector, pins } = toLocal();
+    const outcome = await downloader(connector).download(
+      `http://${HOST}/redirect-out`,
+      target('redirect.zip'),
+    );
+    expectRefused(outcome as FetchOutcome, 'scope-refused', 'redirect-out-of-scope');
+    expect(pins.map((pin) => pin.url.pathname)).toEqual(['/redirect-out']);
+    // An in-scope redirect is followed, and pinned again.
+    const followed = await downloader(toLocal().connector).download(
+      `http://${HOST}/redirect-in`,
+      target('followed.zip'),
+    );
+    expect(followed.kind).toBe('downloaded');
+  });
+
+  it('answers a status that is not 200 with that status, writing nothing', async () => {
+    const outcome = await downloader(toLocal().connector).download(
+      `http://${HOST}/missing`,
+      target('missing.zip'),
+    );
+    expect(outcome).toEqual({ kind: 'status', status: 404 });
+    expect(existsSync(target('missing.zip'))).toBe(false);
+  });
+
+  it('refuses a declared length over the ceiling before reading the body', async () => {
+    const outcome = await downloader(toLocal().connector).download(
+      `http://${HOST}/declared`,
+      target('declared.zip'),
+    );
+    expectRefused(outcome as FetchOutcome, 'too-large', 'declared-length-exceeds-cap');
+    expect(existsSync(target('declared.zip'))).toBe(false);
+    expect(leftovers()).toEqual([]);
+  });
+
+  it('refuses a streamed body over the ceiling, leaving no partial file', async () => {
+    const outcome = await downloader(toLocal().connector).download(
+      `http://${HOST}/chunked`,
+      target('chunked.zip'),
+    );
+    expectRefused(outcome as FetchOutcome, 'too-large', 'body-exceeds-cap');
+    expect(existsSync(target('chunked.zip'))).toBe(false);
+    expect(leftovers()).toEqual([]);
+  });
+
+  it('writes exactly the bytes it was sent, and their SHA-256', async () => {
+    const { connector, pins } = toLocal();
+    const file = target('ok.zip');
+    const outcome = await downloader(connector, {
+      userAgent: 'NON_QURAN_FIXTURE-downloader/1.0',
+    }).download(`http://${HOST}/ok`, file);
+    expect(outcome).toEqual({
+      kind: 'downloaded',
+      bytes: BODY.length,
+      sha256: createHash('sha256').update(BODY).digest('hex'),
+    });
+    expect(readFileSync(file).equals(BODY)).toBe(true);
+    expect(leftovers()).toEqual([]);
+    // Pinned to the validated address, honest about itself, sending no cookie.
+    expect(pins[0]?.address).toBe(PUBLIC);
+    expect(pins[0]?.headers['user-agent']).toBe('NON_QURAN_FIXTURE-downloader/1.0');
+    expect(Object.keys(pins[0]?.headers ?? {}).sort()).toEqual([
+      'accept',
+      'accept-encoding',
+      'connection',
+      'host',
+      'user-agent',
+    ]);
   });
 });

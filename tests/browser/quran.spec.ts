@@ -161,6 +161,11 @@ const ids = {
   segment: randomUUID(),
   asset: randomUUID(),
   reciter: randomUUID(),
+  // Quran Part 5: a second, UNTIMED recitation by a second fictional reciter.
+  narration: randomUUID(),
+  narrationSegment: randomUUID(),
+  narrationAsset: randomUUID(),
+  narrator: randomUUID(),
   topic: randomUUID(),
 };
 
@@ -172,6 +177,8 @@ const slug = {
   rule: `fixture-tajweed-${run}`,
   recitation: `fixture-recitation-${run}`,
   reciter: `fixture-reciter-${run}`,
+  narration: `fixture-narration-${run}`,
+  narrator: `fixture-reciter-two-${run}`,
   // Neither the slug nor the name contains the word the taxonomy spec uses to
   // find the canonical `quran` topic's row, so the two specs never collide.
   topic: `fixture-topic-${run}`,
@@ -186,12 +193,29 @@ const NAME = {
   rule: `NON_QURAN_FIXTURE tajweed rule ${run}`,
   recitation: `NON_QURAN_FIXTURE recitation ${run}`,
   reciter: `Fixture Reciter One ${run}`,
+  narration: `NON_QURAN_FIXTURE narration ${run}`,
+  narrator: `Fixture Reciter Two ${run}`,
   topic: `Non-scriptural fixture topic ${run}`,
   adminTranslation: `NON_QURAN_FIXTURE admin translation ${run}`,
   adminTranslationRenamed: `NON_QURAN_FIXTURE admin translation renamed ${run}`,
 };
 
-const AUDIO = syntheticSilentMp3(120);
+/**
+ * Synthetic silence, 400 frames — about ten seconds, long enough for the
+ * player's follow-along proofs to see each fictional Ayah begin (Quran Part 5).
+ */
+const AUDIO = syntheticSilentMp3(400);
+
+/**
+ * The fixture recitation's per-Ayah timing in that silence: [ayah, startMs,
+ * endMs]. Made up, like the structure — the opening before 1:1 stands for a
+ * reciter's isti'adha, which the player lets be heard.
+ */
+const TIMING: readonly (readonly [number, number, number])[] = [
+  [1, 500, 3500],
+  [2, 3500, 6500],
+  [3, 6500, 9500],
+];
 
 const MESSAGES = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -271,6 +295,18 @@ async function visitFixture(
   await expect(page.locator('link[rel="alternate"][hreflang]')).toHaveCount(0);
   await expectNoLearningLinks(page, target);
   return response as Response;
+}
+
+/** The recitation dock, once a press has made it appear (Quran Part 5). */
+function dock(page: Page): Locator {
+  return page.getByRole('region', { name: 'Recitation player' });
+}
+
+/** Waits until the dock reports this Ayah as the one being heard. */
+async function hearing(page: Page, ayah: number): Promise<void> {
+  await expect(dock(page)).toHaveAttribute('data-playing-ayah', String(ayah), {
+    timeout: 30_000,
+  });
 }
 
 /** Waits until the reader's island has mounted, so its controls answer. */
@@ -383,6 +419,7 @@ async function seedCorpus(): Promise<void> {
  */
 async function seedWorks(): Promise<void> {
   await seedAsset(ids.asset);
+  await seedAsset(ids.narrationAsset);
   const translationRows = STRUCTURE.map(
     ([surah, ayah]) =>
       `(N'${ids.translation}', ${String(surah)}, ${String(ayah)}, ${n(translationText(surah, ayah))})`,
@@ -424,11 +461,22 @@ async function seedWorks(): Promise<void> {
       (N'${ids.rule}', N'en', ${n(NAME.rule)}, N'NON_QURAN_FIXTURE rule body.');
     UPDATE [dbo].[QuranTajweedRule] SET [state]=N'published', [sourceId]=N'${ids.source}', [publishedAt]=SYSUTCDATETIME(), [version]=2, [updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${ids.rule}';
 
-    INSERT INTO [dbo].[QuranRecitation] ([id],[slug],[personId],[name],[style],[state],[version],[createdAt],[updatedAt]) VALUES
-      (N'${ids.recitation}', N'${slug.recitation}', N'${ids.reciter}', ${n(NAME.recitation)}, N'NON_QURAN_FIXTURE style', N'draft', 1, SYSUTCDATETIME(), SYSUTCDATETIME());
+    INSERT INTO [dbo].[QuranRecitation] ([id],[slug],[personId],[name],[style],[languageCode],[state],[version],[createdAt],[updatedAt]) VALUES
+      (N'${ids.recitation}', N'${slug.recitation}', N'${ids.reciter}', ${n(NAME.recitation)}, N'NON_QURAN_FIXTURE style', N'ar', N'draft', 1, SYSUTCDATETIME(), SYSUTCDATETIME());
     INSERT INTO [dbo].[QuranRecitationSegment] ([id],[recitationId],[surahNumber],[startAyah],[endAyah],[assetId],[createdAt]) VALUES
       (N'${ids.segment}', N'${ids.recitation}', 1, 1, 3, N'${ids.asset}', SYSUTCDATETIME());
+    -- Quran Part 5: the segment is timed for every Ayah, in ONE statement.
+    INSERT INTO [dbo].[QuranRecitationTiming] ([segmentId],[ayahNumber],[startMs],[endMs]) VALUES
+      ${TIMING.map(([ayah, start, end]) => `(N'${ids.segment}', ${String(ayah)}, ${String(start)}, ${String(end)})`).join(', ')};
     UPDATE [dbo].[QuranRecitation] SET [state]=N'published', [sourceId]=N'${ids.source}', [publishedAt]=SYSUTCDATETIME(), [version]=2, [updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${ids.recitation}';
+
+    INSERT INTO [dbo].[Person] ([id],[slug],[primaryLocale],[status]) VALUES (N'${ids.narrator}', N'${slug.narrator}', N'en', N'published');
+    INSERT INTO [dbo].[PersonTranslation] ([personId],[locale],[name],[biography]) VALUES (N'${ids.narrator}', N'en', ${n(NAME.narrator)}, NULL);
+    INSERT INTO [dbo].[QuranRecitation] ([id],[slug],[personId],[name],[style],[languageCode],[state],[version],[createdAt],[updatedAt]) VALUES
+      (N'${ids.narration}', N'${slug.narration}', N'${ids.narrator}', ${n(NAME.narration)}, NULL, N'ur', N'draft', 1, SYSUTCDATETIME(), SYSUTCDATETIME());
+    INSERT INTO [dbo].[QuranRecitationSegment] ([id],[recitationId],[surahNumber],[startAyah],[endAyah],[assetId],[createdAt]) VALUES
+      (N'${ids.narrationSegment}', N'${ids.narration}', 2, 1, 4, N'${ids.narrationAsset}', SYSUTCDATETIME());
+    UPDATE [dbo].[QuranRecitation] SET [state]=N'published', [sourceId]=N'${ids.source}', [publishedAt]=SYSUTCDATETIME(), [version]=2, [updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${ids.narration}';
 
     INSERT INTO [dbo].[Topic] ([id],[slug],[parentId],[position],[status],[system]) VALUES
       (N'${ids.topic}', N'${slug.topic}', NULL, 951, N'active', 0);
@@ -1675,9 +1723,13 @@ test.describe('a fixture corpus', () => {
       page.getByRole('link', { name: 'All recitations in the Quran section' }),
     ).toHaveAttribute('href', '/quran/recitations');
     const rows = page.getByRole('list', { name: 'Recitations' }).getByRole('listitem');
-    await expect(rows).toHaveCount(1);
-    await expect(rows.first().getByRole('heading')).toHaveText(NAME.recitation);
-    await expect(rows.first().getByRole('link', { name: NAME.reciter })).toHaveAttribute(
+    // Quran Part 5 adds an untimed narration by a second fictional reciter.
+    await expect(rows).toHaveCount(2);
+    const row = rows.filter({
+      has: page.getByRole('heading', { name: NAME.recitation }),
+    });
+    await expect(row).toHaveCount(1);
+    await expect(row.getByRole('link', { name: NAME.reciter })).toHaveAttribute(
       'href',
       `/quran/recitations/${slug.reciter}`,
     );
@@ -1689,6 +1741,338 @@ test.describe('a fixture corpus', () => {
     // The Quran section's own catalogue lists the same recitation.
     await visitFixture(page, '/quran/recitations');
     await expect(page.getByRole('main')).toContainText(NAME.recitation);
+  });
+
+  /* -------------------------------------------------------------------------
+   * Quran Part 5 — the recitation player
+   * ----------------------------------------------------------------------- */
+
+  test('Part 5: nothing plays or loads until asked; Play on an Ayah starts there and the text follows it', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const audio: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/assets/quran/recitations/')) audio.push(request.url());
+    });
+    const response = await visitFixture(page, '/quran/surah/1');
+    // The Quran routes alone admit the recitation stream allowlist as media,
+    // and delegate autoplay to the page itself — nothing else.
+    expect(response.headers()['content-security-policy']).toContain(
+      "media-src 'self' https://cdn.mp3quran.net",
+    );
+    expect(response.headers()['permissions-policy']).toContain('autoplay=(self)');
+    const elsewhere = await page.request.get('/listen');
+    expect(elsewhere.headers()['content-security-policy']).not.toContain('media-src');
+    expect(elsewhere.headers()['permissions-policy']).toContain('autoplay=()');
+
+    await readerReady(page);
+    // The player is ready and the chosen recitation is timed: each row offers Play.
+    await expect(page.locator('html')).toHaveAttribute('data-quran-player', 'timed');
+    const play = page
+      .getByRole('article', { name: 'Surah 1, Ayah 2' })
+      .getByRole('button', { name: 'Play from this Ayah' });
+    await expect(play).toBeVisible();
+    // Silent, and nothing fetched, until the press: no dock, no audio element.
+    await expect(dock(page)).toHaveCount(0);
+    await expect(page.locator('audio')).toHaveCount(0);
+    expect(audio).toEqual([]);
+
+    await play.click();
+    await expect(dock(page)).toBeVisible();
+    await expect(dock(page)).toHaveAttribute('data-status', 'playing', {
+      timeout: 30_000,
+    });
+    await hearing(page, 2);
+    await expect(page.locator('#ayah-1-2')).toHaveAttribute('data-recited', '');
+    await expect(dock(page)).toContainText('Ayah 2');
+    // The highlight moves on as the recitation does.
+    await hearing(page, 3);
+    await expect(page.locator('#ayah-1-3')).toHaveAttribute('data-recited', '');
+    await expect(page.locator('#ayah-1-2')).not.toHaveAttribute('data-recited', '');
+    // First-party bytes, of exactly this segment.
+    expect(audio.length).toBeGreaterThan(0);
+    for (const url of audio)
+      expect(url).toContain(
+        `/assets/quran/recitations/${ids.recitation}/${ids.segment}/${ids.asset}`,
+      );
+    // The lock screen names the Ayah and the reciter.
+    expect(
+      await page.evaluate(() => navigator.mediaSession.metadata?.title ?? ''),
+    ).toContain('Ayah');
+    expect(await page.evaluate(() => navigator.mediaSession.metadata?.artist ?? '')).toBe(
+      NAME.reciter,
+    );
+  });
+
+  test('Part 5: the recitation keeps playing while the reader moves between Quran pages, and stops when closed', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    await visitFixture(page, '/quran/surah/1');
+    await readerReady(page);
+    await page
+      .getByRole('article', { name: 'Surah 1, Ayah 1' })
+      .getByRole('button', { name: 'Play from this Ayah' })
+      .click();
+    await expect(dock(page)).toHaveAttribute('data-status', 'playing', {
+      timeout: 30_000,
+    });
+    await page.evaluate(() => {
+      (window as unknown as { quranSameDocument?: boolean }).quranSameDocument = true;
+    });
+
+    // A link to another Quran page is followed in place: the same document,
+    // the same dock, still playing.
+    await page.locator('main a[href="/quran/surah/2"]').first().click();
+    await expect(page).toHaveURL(/\/quran\/surah\/2$/);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Surah Two');
+    expect(
+      await page.evaluate(
+        () =>
+          (window as unknown as { quranSameDocument?: boolean }).quranSameDocument ===
+          true,
+      ),
+    ).toBe(true);
+    await expect(dock(page)).toBeVisible();
+    const before = Number(await dock(page).getAttribute('data-position'));
+    await expect
+      .poll(async () => Number(await dock(page).getAttribute('data-position')), {
+        timeout: 20_000,
+      })
+      .toBeGreaterThan(before);
+
+    // Closing stops it and takes the dock away.
+    await dock(page).getByRole('button', { name: 'Close the player' }).click();
+    await expect(dock(page)).toHaveCount(0);
+  });
+
+  test('Part 5: repeat each Ayah, a repeated range, speed and the dock’s own keys — remembered in this browser', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await visitFixture(page, '/quran/surah/1');
+    await readerReady(page);
+    await page
+      .getByRole('article', { name: 'Surah 1, Ayah 3' })
+      .getByRole('button', { name: 'Play from this Ayah' })
+      .click();
+    await expect(dock(page)).toHaveAttribute('data-status', 'playing', {
+      timeout: 30_000,
+    });
+    await hearing(page, 3);
+
+    // Speed and a repeat, from the dock's settings.
+    await dock(page).getByRole('button', { name: 'Player settings' }).click();
+    await dock(page).getByLabel('Speed').selectOption('1.5');
+    await dock(page).getByLabel('Hear each Ayah').selectOption('2');
+    // Heard to its end, Ayah 3 begins again — then the plan is complete.
+    await expect
+      .poll(async () => Number(await dock(page).getAttribute('data-position')), {
+        timeout: 30_000,
+        intervals: [100],
+      })
+      .toBeGreaterThanOrEqual(8000);
+    await expect
+      .poll(async () => Number(await dock(page).getAttribute('data-position')), {
+        timeout: 30_000,
+        intervals: [100],
+      })
+      .toBeLessThan(7500);
+    await expect(dock(page)).toHaveAttribute('data-playing-ayah', '3');
+    await expect(dock(page)).toHaveAttribute('data-status', /ended|paused/, {
+      timeout: 30_000,
+    });
+    await dock(page).getByLabel('Hear each Ayah').selectOption('1');
+
+    // A range: ayat 1–2, twice, then stop.
+    await dock(page).getByLabel('From Ayah').fill('1');
+    await dock(page).getByLabel('To Ayah').fill('2');
+    await dock(page).getByLabel('Times').selectOption('2');
+    await dock(page).getByRole('button', { name: 'Play the range' }).click();
+    await expect(dock(page)).toContainText('Repeating ayat 1–2');
+    await hearing(page, 2);
+    await hearing(page, 1);
+    await hearing(page, 2);
+    await expect(dock(page)).toHaveAttribute('data-status', 'ended', { timeout: 30_000 });
+    await expect(dock(page)).not.toHaveAttribute('data-playing-ayah', '3');
+
+    // The dock's own keys, only while focus is inside it: K plays and pauses.
+    const next = dock(page).getByRole('button', { name: 'Next Ayah' });
+    await next.focus();
+    await page.keyboard.press('k');
+    await expect(dock(page)).toHaveAttribute('data-status', 'playing', {
+      timeout: 30_000,
+    });
+    await page.keyboard.press('k');
+    await expect(dock(page)).toHaveAttribute('data-status', 'paused');
+    // Outside the dock the same key is the page's, not the player's.
+    await page.locator('#quran-text').focus();
+    await page.keyboard.press('k');
+    await expect(dock(page)).toHaveAttribute('data-status', 'paused');
+
+    // Kept in this browser: the next visit has the same speed.
+    await page.reload();
+    await readerReady(page);
+    await page
+      .getByRole('article', { name: 'Surah 1, Ayah 1' })
+      .getByRole('button', { name: 'Play from this Ayah' })
+      .click();
+    await dock(page).getByRole('button', { name: 'Player settings' }).click();
+    await expect(dock(page).getByLabel('Speed')).toHaveValue('1.5');
+  });
+
+  test('Part 5: an untimed recitation plays whole Surahs and says that verse highlighting is unavailable', async ({
+    page,
+  }) => {
+    test.setTimeout(150_000);
+    await visitFixture(page, '/quran/surah/2');
+    await readerReady(page);
+    const listen = page.getByRole('region', { name: 'Listen' });
+    await listen.getByLabel('Recitation').selectOption(slug.narration);
+    await expect(page.locator('html')).toHaveAttribute('data-quran-player', 'untimed');
+    // No Ayah can be started at: the per-Ayah buttons give way, and it is said.
+    await expect(
+      page
+        .getByRole('article', { name: 'Surah 2, Ayah 2' })
+        .getByRole('button', { name: 'Play from this Ayah' }),
+    ).toBeHidden();
+    await expect(listen).toContainText(
+      'This recitation plays whole Surahs; verse highlighting is not available for it.',
+    );
+    await listen.getByRole('button', { name: 'Play the Surah' }).click();
+    await expect(dock(page)).toHaveAttribute('data-status', 'playing', {
+      timeout: 30_000,
+    });
+    await expect(dock(page)).toContainText('verse highlighting is not available');
+    await expect(page.locator('[data-recited]')).toHaveCount(0);
+    await expect(dock(page).getByRole('button', { name: 'Next Ayah' })).toBeDisabled();
+  });
+
+  test('Part 5: the player reads right to left in Urdu and Arabic, fits 320px, and has no serious accessibility finding', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(300_000);
+    const PLAY = { ur: 'اس آیت سے چلائیں', ar: 'التشغيل من هذه الآية' } as const;
+    const REGION = { ur: 'تلاوت پلیئر', ar: 'مشغّل التلاوة' } as const;
+    const SETTINGS = { ur: 'پلیئر کی ترتیبات', ar: 'إعدادات المشغّل' } as const;
+    for (const locale of ['ur', 'ar'] as const) {
+      for (const width of [320, 390]) {
+        await page.setViewportSize({ width, height: 800 });
+        await visitFixture(page, `/${locale}/quran/surah/1`, locale);
+        await readerReady(page);
+        await page
+          .locator('#ayah-1-1')
+          .getByRole('button', { name: PLAY[locale] })
+          .click();
+        const region = page.getByRole('region', { name: REGION[locale] });
+        await expect(region).toHaveAttribute('data-status', 'playing', {
+          timeout: 30_000,
+        });
+        expect(
+          await region.evaluate((element) => getComputedStyle(element).direction),
+        ).toBe('rtl');
+        await region.getByRole('button', { name: SETTINGS[locale] }).click();
+        const { overflow, offenders } = await overflowOf(page);
+        expect(
+          overflow,
+          `${locale} ${String(width)}px — beyond the viewport: ${offenders.join(', ')}`,
+        ).toBeLessThanOrEqual(0);
+      }
+    }
+    for (const target of ['/quran/surah/1', '/ur/quran/surah/1', '/quran/recitations']) {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.goto(target);
+      const start = page
+        .locator('main [data-quran-play], #ayah-1-1 .quran-ayah-play')
+        .first();
+      await expect(start).toBeVisible();
+      await start.click();
+      await expect(page.locator('[data-quran-dock]')).toHaveAttribute(
+        'data-status',
+        'playing',
+        {
+          timeout: 30_000,
+        },
+      );
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      const blocking = results.violations.filter(
+        (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+      );
+      for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+        testInfo.annotations.push({
+          type: 'axe',
+          description: `${target}: ${finding.id} (${String(finding.impact)})`,
+        });
+      expect(
+        blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+        target,
+      ).toEqual([]);
+    }
+  });
+
+  test('Part 5: the catalogue filters by language and says what each recitation offers; a reciter’s Surahs each play', async ({
+    page,
+  }) => {
+    test.setTimeout(150_000);
+    await visitFixture(page, '/quran/recitations');
+    const cards = page.getByRole('list', { name: 'Recitations' }).getByRole('listitem');
+    await expect(cards).toHaveCount(2);
+    const timed = cards.filter({
+      has: page.getByRole('heading', { name: NAME.recitation }),
+    });
+    await expect(timed).toContainText('Verse by verse');
+    await expect(timed).toContainText('1 Surah');
+    const narration = cards.filter({
+      has: page.getByRole('heading', { name: NAME.narration }),
+    });
+    await expect(narration).toContainText('Whole Surah');
+
+    // A GET filter by the language heard: an address, with or without script.
+    const filter = page.getByRole('form', { name: 'Filter the recitations' });
+    await filter.getByLabel('Language').selectOption('ur');
+    await filter.getByRole('button', { name: 'Show' }).click();
+    await expect(page).toHaveURL(/[?&]language=ur/);
+    await expect(cards).toHaveCount(1);
+    await expect(cards.first()).toContainText(NAME.narration);
+    await expect(
+      page.getByRole('status').filter({ hasText: '1 recitation' }),
+    ).toBeVisible();
+
+    // The reciter's page lists the Surahs it holds, each with Play.
+    await visitFixture(page, `/quran/recitations/${slug.reciter}`);
+    const surahs = page.getByRole('region', { name: 'Surahs' }).getByRole('listitem');
+    await expect(surahs).toHaveCount(1);
+    await surahs
+      .first()
+      .getByRole('button', { name: /^Play / })
+      .click();
+    await expect(dock(page)).toHaveAttribute('data-status', 'playing', {
+      timeout: 30_000,
+    });
+    await expect(dock(page)).toContainText(NAME.reciter);
+  });
+
+  test('Part 5: without JavaScript a Surah offers its recitations as plain links to the browser’s own player', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false });
+    contexts.push(context);
+    const page = await context.newPage();
+    await visitFixture(page, '/quran/surah/1');
+    // No player is there to ask, so no control pretends there is one.
+    const buttons = page.locator('.quran-ayah-play');
+    await expect(buttons).toHaveCount(3);
+    for (const button of await buttons.all()) await expect(button).toBeHidden();
+    const listen = page.getByRole('region', { name: 'Listen' });
+    const links = listen.getByRole('link');
+    await expect(links).toHaveCount(2);
+    await listen.getByRole('link', { name: NAME.reciter }).click();
+    await expect(page).toHaveURL(new RegExp(`reciter=${slug.recitation}`));
+    await expect(page.locator('audio[controls]')).toBeVisible();
+    await expect(page.locator('audio[autoplay]')).toHaveCount(0);
   });
 
   test('search finds the citation — on a page that is never indexed', async ({

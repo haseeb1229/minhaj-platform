@@ -193,6 +193,8 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'QuranTajweedRule',
       'QuranTajweedRuleText',
       'QuranTopic',
+      // Quran Part 5 — a recitation segment's per-Ayah timing.
+      'QuranRecitationTiming',
       // Phase 19 — Hadith's source systems, editions and activations, canonical
       // structure, records and evidence, layered works and typed topic
       // assignment.

@@ -3,11 +3,13 @@ import { getTranslations } from 'next-intl/server';
 
 import { QuranUnavailable } from '@/components/quran/parts';
 import { quranAvailability, quranMetadata } from '@/components/quran/read';
-import { RecitationsPage } from '@/components/quran/recitations';
+import { RecitationsPage, recitationFilter } from '@/components/quran/recitations';
 import { requireLocale } from '@/config/route-locale';
 
 /**
- * `/{locale}/quran/recitations` — every public Recitation, owned by Quran.
+ * `/{locale}/quran/recitations` — every public Recitation, owned by Quran,
+ * filtered by style and language from a GET form (`?style=`, `?language=`;
+ * Quran Part 5).
  *
  * Signed out and `force-dynamic`: the corpus and its works are mutable data.
  * The honest unavailable state while no corpus is active; the fixture banner
@@ -17,6 +19,7 @@ export const dynamic = 'force-dynamic';
 
 interface SectionParams {
   readonly params: Promise<{ readonly locale: string }>;
+  readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export async function generateMetadata({ params }: SectionParams): Promise<Metadata> {
@@ -31,12 +34,18 @@ export async function generateMetadata({ params }: SectionParams): Promise<Metad
   });
 }
 
-export default async function RecitationsRoute({ params }: SectionParams) {
+export default async function RecitationsRoute({ params, searchParams }: SectionParams) {
   const locale = await requireLocale(params);
   const availability = await quranAvailability();
   if (!availability.active) {
     const t = await getTranslations({ locale, namespace: 'quran' });
     return <QuranUnavailable locale={locale} section={t('sections.recitations')} />;
   }
-  return <RecitationsPage locale={locale} availability={availability} />;
+  return (
+    <RecitationsPage
+      locale={locale}
+      availability={availability}
+      filter={recitationFilter(await searchParams)}
+    />
+  );
 }

@@ -3,6 +3,7 @@ import createNextIntlPlugin from 'next-intl/plugin';
 
 import { parsePrerenderEnv } from '@minhaj/contracts/env/prerender-build';
 import { PROVIDER_EMBED_ORIGINS, VIDEO_PROVIDERS } from '@minhaj/contracts/media';
+import { RECITATION_STREAM_ORIGINS } from '@minhaj/contracts/quran';
 
 /**
  * Next.js configuration.
@@ -85,10 +86,20 @@ const buildPrerenderEnv = parsePrerenderEnv(process.env);
  * `/my/donations`, alone receive a policy whose `form-action` also names the
  * provider's exact checkout origin. Nothing is framed, scripted or fetched
  * from it, and every other page keeps `form-action 'self'`.
+ *
+ * THE QURAN PART 5 RECITATION EXCEPTION IS ONE DIRECTIVE ON THE QURAN ROUTES.
+ * A streamed recitation plays from its allowlisted provider's CDN, so the
+ * Quran section's pages — where the recitation player lives — alone receive a
+ * policy whose `media-src` also names those exact origins, taken from the same
+ * contract the player derives every stream address from
+ * (`RECITATION_STREAM_ORIGINS`, `@minhaj/contracts/quran`). Audio only: no
+ * script, frame, image or fetch is allowed from them, and every other page
+ * keeps `default-src 'self'` for media.
  */
 function contentSecurityPolicy(
   frameSources: readonly string[],
   formTargets: readonly string[] = [],
+  mediaSources: readonly string[] = [],
 ): string {
   return [
     "default-src 'self'",
@@ -111,6 +122,7 @@ function contentSecurityPolicy(
     "font-src 'self'",
     "connect-src 'self'",
     "manifest-src 'self'",
+    ...(mediaSources.length === 0 ? [] : [`media-src 'self' ${mediaSources.join(' ')}`]),
   ].join('; ');
 }
 
@@ -157,6 +169,24 @@ const DONATION_CONTENT_SECURITY_POLICY = contentSecurityPolicy(
   [DONATION_CHECKOUT_ORIGIN],
 );
 
+const QURAN_CONTENT_SECURITY_POLICY = contentSecurityPolicy(
+  [],
+  [],
+  RECITATION_STREAM_ORIGINS,
+);
+
+/**
+ * `autoplay` on the Quran routes is delegated to the page ITSELF and nothing
+ * else (Quran Part 5). The listener's own press of Play starts a recitation —
+ * the player's one audio element does not exist until then, and no Quran page
+ * plays anything on load (the browser suite proves both) — but the player then
+ * carries on by itself: the next Surah's file, a segment after a segment, and a
+ * lock screen's play and next controls, none of which is a fresh press inside
+ * the page. Without `self`, a browser enforcing the base `autoplay=()` may
+ * refuse them. No frame, and no other origin, is granted anything.
+ */
+const QURAN_PERMISSIONS_POLICY = `${DECLINED_CAPABILITIES}, autoplay=(self)`;
+
 /**
  * A route-scoped header source in every interface locale: the unprefixed
  * English address and its `/ur` and `/ar` forms (ROUTE_MAP.md §1.1, R1) —
@@ -186,6 +216,12 @@ const DONATION_FORM_ROUTES: readonly string[] = [
 const DONATION_PRIVATE_ROUTES: readonly string[] = [
   ...inEveryLocale('/donate/status/:token*'),
   ...inEveryLocale('/donate/return'),
+];
+
+/** Every Quran page: where the recitation player lives (Quran Part 5). */
+const QURAN_ROUTES: readonly string[] = [
+  ...inEveryLocale('/quran'),
+  ...inEveryLocale('/quran/:path*'),
 ];
 
 /**
@@ -285,6 +321,13 @@ const nextConfig: NextConfig = {
         source,
         headers: [
           { key: 'Content-Security-Policy', value: DONATION_CONTENT_SECURITY_POLICY },
+        ],
+      })),
+      ...QURAN_ROUTES.map((source) => ({
+        source,
+        headers: [
+          { key: 'Content-Security-Policy', value: QURAN_CONTENT_SECURITY_POLICY },
+          { key: 'Permissions-Policy', value: QURAN_PERMISSIONS_POLICY },
         ],
       })),
       ...DONATION_PRIVATE_ROUTES.map((source) => ({

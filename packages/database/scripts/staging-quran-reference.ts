@@ -8,6 +8,10 @@ import {
   importSurahNames,
   liveCanonicalSession,
 } from '../src/lifecycle/quran-reference.ts';
+import {
+  importIrfanNarrationRecitation,
+  importMp3QuranRecitations,
+} from '../src/lifecycle/quran-recitations.ts';
 import { STAGING_DATABASE } from '../src/lifecycle/staging-target.ts';
 import {
   readTanzilCorpus,
@@ -58,6 +62,22 @@ import {
  *     service under the operator's `quran.read` and `quran.administer`. A name
  *     an operator recorded is kept; a re-run changes nothing.
  *
+ *   recitations-mp3quran    --operator <accountId>
+ *     (Quran Part 5) Registers mp3quran's provenance source as the OWNER, then,
+ *     as the RUNTIME principal, imports the curated Ayah-timed Hafs reads: each
+ *     reciter a People Person (people.administer), each read a STREAMED
+ *     recitation of its allowlisted CDN folder with one timed segment per
+ *     Surah (quran.read + quran.administer). Fetched through the safe fetch
+ *     boundary — run it in the `ingest` container, the one with an outbound
+ *     network. Resumable; a re-run adds only what is missing.
+ *
+ *   recitations-irfan-urdu  --operator <accountId> --dir <directory>
+ *     (Quran Part 5) Downloads the owner-attested Irfan-ul-Quran Urdu narration
+ *     archive into `--dir` once (exact size; digest reported), registers its
+ *     provenance with that digest as the OWNER, then stores each Surah's MP3
+ *     into Storage — scanned, unaltered — as a first-party, untimed recitation
+ *     (quran.read + quran.administer + people.administer). Resumable.
+ *
  * THE WHOLE STAGING GUARD FIRST — declared environment and instance, internal
  * host and port, `MinhajStaging`, distinct principals, TLS posture, the SQL
  * container's machine name and the database's fingerprint — then the
@@ -73,7 +93,9 @@ const OWNER_BATCH_TIMEOUT_MS = 300_000;
 const USAGE =
   'staging-quran-reference import --text <file> --meta <file> --sha256 <hex> --operator <accountId> [--session <sessionId>] | ' +
   'translations --operator <accountId> | ' +
-  'names --meta <file> --sha256 <metadata hex> --operator <accountId>';
+  'names --meta <file> --sha256 <metadata hex> --operator <accountId> | ' +
+  'recitations-mp3quran --operator <accountId> | ' +
+  'recitations-irfan-urdu --operator <accountId> --dir <directory>';
 
 function required(flag: string): string {
   const value = argumentValue(flag);
@@ -91,7 +113,13 @@ function account(flag: string): string {
 
 await runStagingCommand('staging:quran:reference', async () => {
   const [mode] = process.argv.slice(2);
-  if (mode !== 'import' && mode !== 'translations' && mode !== 'names')
+  if (
+    mode !== 'import' &&
+    mode !== 'translations' &&
+    mode !== 'names' &&
+    mode !== 'recitations-mp3quran' &&
+    mode !== 'recitations-irfan-urdu'
+  )
     throw new Error(`usage: ${USAGE}`);
   const operator = account('--operator');
 
@@ -138,6 +166,16 @@ await runStagingCommand('staging:quran:reference', async () => {
       });
     else if (names !== null)
       result = await importSurahNames({ owner, runtime, names, operator, environment });
+    else if (mode === 'recitations-mp3quran')
+      result = await importMp3QuranRecitations({ owner, runtime, operator, environment });
+    else if (mode === 'recitations-irfan-urdu')
+      result = await importIrfanNarrationRecitation({
+        owner,
+        runtime,
+        operator,
+        directory: required('--dir'),
+        environment,
+      });
     else
       result = await importIrfanTranslations({ owner, runtime, operator, environment });
     return {
