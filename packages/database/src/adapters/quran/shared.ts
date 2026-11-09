@@ -535,6 +535,16 @@ export function namesOf(
   return names;
 }
 
+/** The meanings recorded beside a Surah's names, by locale; an absent one is omitted. */
+export function meaningsOf(
+  rows: readonly { readonly locale: string; readonly meaning: string | null }[],
+): Partial<Record<Locale, string>> {
+  const meanings: Partial<Record<Locale, string>> = {};
+  for (const row of rows)
+    if (row.meaning !== null) meanings[row.locale as Locale] = row.meaning;
+  return meanings;
+}
+
 /**
  * Which of a record's facts changed — NAMES ONLY, never values, so an audit
  * entry carries no name, description or text (SECURITY_BASELINE.md §13.4).

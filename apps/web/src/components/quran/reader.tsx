@@ -66,6 +66,7 @@ import {
   previousAyah,
   quranPath,
   segmentCovering,
+  surahMeaning,
   surahName,
   surahPath,
   tafsirPlacement,
@@ -76,6 +77,8 @@ import {
 } from './presentation';
 import { QUICK_JUMP_MAX_LENGTH, type JumpSurah } from './quick-jump';
 import { ArabicText, TranslationText } from './scripture';
+import { juzSpans, type SurahIndexQuery, type SurahIndexRow } from './surah-index';
+import { SurahIndex, type SurahIndexLabels } from './surah-index-island';
 import {
   corpusNotice,
   quranIndexable,
@@ -190,6 +193,27 @@ function ArabicName({
   );
 }
 
+/** What the shown name means ("The Opening"), in its own language, where recorded. */
+function SurahMeaningLine({
+  surah,
+  locale,
+}: {
+  readonly surah: PublicSurah;
+  readonly locale: Locale;
+}) {
+  const meaning = surahMeaning(surah, surahName(surah, locale));
+  if (meaning === null) return null;
+  return (
+    <p
+      lang={meaning.locale}
+      dir={directionOf(meaning.locale)}
+      className="max-w-full text-lg wrap-anywhere text-foreground-muted"
+    >
+      {meaning.text}
+    </p>
+  );
+}
+
 /** The facts a source recorded for a Surah — count and, if known, revelation. */
 function surahFacts(surah: PublicSurah, t: QuranTranslator): string {
   const count = t('ayahCount', { count: surah.ayahCount });
@@ -213,55 +237,108 @@ function citationLabel(surah: PublicSurah, locale: Locale): string | null {
  * ========================================================================= */
 
 /**
- * Every Surah as one row of a grid: its number, its title (the link, named
- * "Surah {n} · {name}"), its facts, and its Arabic name in the Quran face at
- * the inline end. The whole row is the link's target; only the title names it.
+ * Every Surah as the index shows it (Quran Part 2): its display name and the
+ * name's meaning in the language each is in, its Arabic name, its facts — ayat,
+ * revelation place and the Juz it spans, derived from the reader's own Juz
+ * ranges — and every recorded name and meaning, in every language, for the
+ * filter to match. Nothing is written here that the reader did not return.
  */
-export function SurahIndexList({
+function surahIndexRows(
+  locale: Locale,
+  surahs: readonly PublicSurah[],
+  juzList: readonly PublicJuz[],
+  t: QuranTranslator,
+): SurahIndexRow[] {
+  const spans = juzSpans(juzList);
+  return surahs.map((surah) => {
+    const name = surahName(surah, locale);
+    const span = spans.get(surah.number);
+    const juz =
+      span === undefined
+        ? []
+        : [
+            span.first === span.last
+              ? t('juzName', { number: span.first })
+              : t('index.juzSpan', { first: span.first, last: span.last }),
+          ];
+    return {
+      number: surah.number,
+      href: surahPath(locale, surah.number),
+      name,
+      meaning: surahMeaning(surah, name),
+      nameArabic: surah.nameArabic,
+      ayahCount: surah.ayahCount,
+      revelation: surah.revelation,
+      facts: [surahFacts(surah, t), ...juz].join(' · '),
+      terms: [
+        ...Object.values(surah.names),
+        ...Object.values(surah.meanings),
+        ...(surah.nameArabic === null ? [] : [surah.nameArabic]),
+      ].filter((term): term is string => term !== undefined && term !== ''),
+    };
+  });
+}
+
+/** The Surah index's words, from the public catalogue. */
+async function surahIndexLabels(locale: Locale): Promise<SurahIndexLabels> {
+  const t = await getTranslations({ locale, namespace: 'quran' });
+  return {
+    list: t('sections.surah'),
+    filter: t('index.filter'),
+    filterHelp: t('index.filterHelp'),
+    order: t('index.order'),
+    sorts: {
+      number: t('index.sort.number'),
+      revelation: t('index.sort.revelation'),
+      longest: t('index.sort.longest'),
+      shortest: t('index.sort.shortest'),
+    },
+    apply: t('index.apply'),
+    count: t.raw('index.count') as string,
+    none: t.raw('index.none') as string,
+    clear: t('index.clear'),
+    surah: t.raw('surahName') as string,
+    groups: {
+      meccan: t('revelation.meccan'),
+      medinan: t('revelation.medinan'),
+      unrecorded: t('index.unrecorded'),
+    },
+  };
+}
+
+/**
+ * The Surah index — the landing's Surah tab and `/quran/surah` alike: a GET
+ * filter and order that work without JavaScript, the same answered on every
+ * keystroke with it, and every Surah as a row whose whole area is its link.
+ */
+export async function SurahIndexSection({
   locale,
   surahs,
-  label,
-  t,
-  headingLevel = 'h2',
+  juzList,
+  initial,
+  idPrefix,
+  headingLevel,
+  syncAddress,
 }: {
   readonly locale: Locale;
   readonly surahs: readonly PublicSurah[];
-  readonly label: string;
-  readonly t: QuranTranslator;
-  readonly headingLevel?: 'h2' | 'h3';
+  readonly juzList: readonly PublicJuz[];
+  readonly initial: SurahIndexQuery;
+  readonly idPrefix: string;
+  readonly headingLevel: 'h2' | 'h3';
+  readonly syncAddress: boolean;
 }) {
-  const Heading = headingLevel;
+  const t = await getTranslations({ locale, namespace: 'quran' });
   return (
-    <ol
-      aria-label={label}
-      className="grid list-none grid-cols-1 gap-x-8 p-0 sm:grid-cols-2 lg:grid-cols-3"
-    >
-      {surahs.map((surah) => (
-        <li
-          key={surah.number}
-          className="relative flex min-w-0 items-center gap-4 border-b border-border py-4 transition-colors duration-[var(--duration-fast)] hover:bg-surface-raised"
-        >
-          <span
-            aria-hidden="true"
-            className="w-9 shrink-0 text-center text-sm font-semibold text-accent tabular-nums"
-          >
-            {surah.number}
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <Heading className="text-base font-semibold break-words">
-              <a
-                href={surahPath(locale, surah.number)}
-                className="text-foreground no-underline after:absolute after:inset-0 hover:text-action"
-              >
-                <SurahTitle surah={surah} locale={locale} t={t} />
-              </a>
-            </Heading>
-            <p className="text-caption text-foreground-muted">{surahFacts(surah, t)}</p>
-          </div>
-          <ArabicName surah={surah} className="shrink-0 text-2xl leading-loose" />
-        </li>
-      ))}
-    </ol>
+    <SurahIndex
+      rows={surahIndexRows(locale, surahs, juzList, t)}
+      initial={initial}
+      action={quranPath(locale, 'surah')}
+      idPrefix={idPrefix}
+      headingLevel={headingLevel}
+      syncAddress={syncAddress}
+      labels={await surahIndexLabels(locale)}
+    />
   );
 }
 
@@ -352,16 +429,26 @@ async function IndexTabs({
  * /quran/surah
  * ========================================================================= */
 
+/**
+ * `/quran/surah` (Quran Part 2): the reader's own "Continue where you stopped"
+ * card where there is a place to return to, then the whole index, filtered and
+ * ordered by the address's `?q=` and `?sort=`.
+ */
 export async function SurahIndexPage({
   locale,
   availability,
+  query,
 }: {
   readonly locale: Locale;
   readonly availability: QuranAvailability;
+  readonly query: SurahIndexQuery;
 }) {
   const t = await getTranslations({ locale, namespace: 'quran' });
   const parts = await quranTrail(locale);
-  const surahs = await readSurahs();
+  const [surahs, juzList] = await Promise.all([
+    readSurahs(),
+    quranReadRuntime().reader.juzList(),
+  ]);
   const title = t('sections.surah');
 
   return (
@@ -378,7 +465,18 @@ export async function SurahIndexPage({
       {surahs.length === 0 ? (
         <EmptyState>{t('empty')}</EmptyState>
       ) : (
-        <SurahIndexList locale={locale} surahs={surahs} label={title} t={t} />
+        <>
+          <ContinueReading {...await continueProps(locale, surahs)} card />
+          <SurahIndexSection
+            locale={locale}
+            surahs={surahs}
+            juzList={juzList}
+            initial={query}
+            idPrefix="surah-index"
+            headingLevel="h2"
+            syncAddress
+          />
+        </>
       )}
       <AboutThisText
         locale={locale}
@@ -1240,6 +1338,7 @@ export async function SurahPage({
             <SurahTitle surah={surah} locale={locale} t={t} />
           </h1>
           <ArabicName surah={surah} className="order-first text-5xl leading-loose" />
+          <SurahMeaningLine surah={surah} locale={locale} />
           <p className="text-sm text-foreground-muted">
             {surahFacts(surah, t)}
             {spans === '' ? null : ` · ${spans}`}
@@ -2258,15 +2357,20 @@ export async function JuzPage({
  * /quran/read — where to begin
  * ========================================================================= */
 
-/** What the quick jump needs to know of the corpus: numbers, counts and names. */
+/**
+ * What the quick jump needs to know of the corpus: numbers, counts, and every
+ * recorded name and meaning in every language with the source's Arabic name —
+ * so "Kahf", "Al-Kahf", "The Cave" and "الكهف" all open the same Surah.
+ */
 export function jumpIndex(surahs: readonly PublicSurah[]): readonly JumpSurah[] {
   return surahs.map((surah) => ({
     number: surah.number,
     ayahCount: surah.ayahCount,
     names: [
-      ...Object.values(surah.names).filter((name): name is string => name !== undefined),
+      ...Object.values(surah.names),
+      ...Object.values(surah.meanings),
       ...(surah.nameArabic === null ? [] : [surah.nameArabic]),
-    ],
+    ].filter((name): name is string => name !== undefined && name !== ''),
   }));
 }
 

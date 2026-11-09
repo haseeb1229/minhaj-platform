@@ -5,10 +5,14 @@ import { readFile } from 'node:fs/promises';
 import {
   importIrfanTranslations,
   importQuranReference,
+  importSurahNames,
   liveCanonicalSession,
 } from '../src/lifecycle/quran-reference.ts';
 import { STAGING_DATABASE } from '../src/lifecycle/staging-target.ts';
-import { readTanzilCorpus } from '../src/lifecycle/tanzil-corpus.ts';
+import {
+  readTanzilCorpus,
+  readTanzilSurahNames,
+} from '../src/lifecycle/tanzil-corpus.ts';
 import { ACCOUNT_ID } from './operator-arguments.ts';
 import {
   argumentValue,
@@ -44,6 +48,16 @@ import {
  *     A Surah without a current, valid, complete revision is skipped and
  *     reported, never repaired.
  *
+ *   names         --meta <quran-data.xml> --sha256 <metadata hex> --operator <accountId>
+ *     (`npm run quran:reference:names`; Quran Part 2) Reads the Surahs' names
+ *     from the Tanzil metadata — the exact digest, 114 well-formed entries —
+ *     refuses unless the registered reference source's evidence records that
+ *     same digest and the canonical corpus is that source's, then saves each
+ *     Surah's English display name (`tname`) and its meaning (`ename`),
+ *     verbatim, as the RUNTIME principal through Quran's administrative
+ *     service under the operator's `quran.read` and `quran.administer`. A name
+ *     an operator recorded is kept; a re-run changes nothing.
+ *
  * THE WHOLE STAGING GUARD FIRST — declared environment and instance, internal
  * host and port, `MinhajStaging`, distinct principals, TLS posture, the SQL
  * container's machine name and the database's fingerprint — then the
@@ -58,7 +72,8 @@ const OWNER_BATCH_TIMEOUT_MS = 300_000;
 
 const USAGE =
   'staging-quran-reference import --text <file> --meta <file> --sha256 <hex> --operator <accountId> [--session <sessionId>] | ' +
-  'translations --operator <accountId>';
+  'translations --operator <accountId> | ' +
+  'names --meta <file> --sha256 <metadata hex> --operator <accountId>';
 
 function required(flag: string): string {
   const value = argumentValue(flag);
@@ -76,7 +91,8 @@ function account(flag: string): string {
 
 await runStagingCommand('staging:quran:reference', async () => {
   const [mode] = process.argv.slice(2);
-  if (mode !== 'import' && mode !== 'translations') throw new Error(`usage: ${USAGE}`);
+  if (mode !== 'import' && mode !== 'translations' && mode !== 'names')
+    throw new Error(`usage: ${USAGE}`);
   const operator = account('--operator');
 
   // Read and verify the files BEFORE touching the database: a wrong file is
@@ -85,6 +101,13 @@ await runStagingCommand('staging:quran:reference', async () => {
     mode === 'import'
       ? readTanzilCorpus({
           text: await readFile(required('--text')),
+          metadata: await readFile(required('--meta')),
+          expectedSha256: required('--sha256'),
+        })
+      : null;
+  const names =
+    mode === 'names'
+      ? readTanzilSurahNames({
           metadata: await readFile(required('--meta')),
           expectedSha256: required('--sha256'),
         })
@@ -99,25 +122,24 @@ await runStagingCommand('staging:quran:reference', async () => {
   });
   try {
     const runtime = runtimeConnection(command, STAGING_DATABASE, 'live');
-    const result =
-      corpus === null
-        ? await importIrfanTranslations({
-            owner,
-            runtime,
-            operator,
-            environment: command.values,
-          })
-        : await importQuranReference({
-            owner,
-            runtime,
-            corpus,
-            operator,
-            session:
-              argumentValue('--session') === undefined
-                ? await liveCanonicalSession(owner, operator)
-                : account('--session'),
-            environment: command.values,
-          });
+    const environment = command.values;
+    let result: unknown;
+    if (corpus !== null)
+      result = await importQuranReference({
+        owner,
+        runtime,
+        corpus,
+        operator,
+        session:
+          argumentValue('--session') === undefined
+            ? await liveCanonicalSession(owner, operator)
+            : account('--session'),
+        environment,
+      });
+    else if (names !== null)
+      result = await importSurahNames({ owner, runtime, names, operator, environment });
+    else
+      result = await importIrfanTranslations({ owner, runtime, operator, environment });
     return {
       environmentId: command.environmentId,
       database: STAGING_DATABASE,

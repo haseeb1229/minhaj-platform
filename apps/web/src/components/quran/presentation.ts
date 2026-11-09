@@ -348,22 +348,51 @@ export function tafsirPlacement(
 /** Locales tried, in order, for a Surah's display name after the reader's own. */
 const NAME_ORDER: readonly Locale[] = ['en', 'ur', 'ar'];
 
+/** A text shown with the language it is actually in. */
+export interface LocalisedText {
+  readonly text: string;
+  readonly locale: Locale;
+}
+
 /**
  * A Surah's display name for an interface locale: the reader's own when the
- * operator recorded one, otherwise the first that exists — returned WITH the
- * locale it is actually in, so the element is marked with that language rather
- * than passed off as a translation. `null` when no name was recorded at all;
- * the page then says "Surah {number}" and nothing more.
+ * operator recorded one; for an Urdu or Arabic reader, otherwise the Arabic
+ * name the SOURCE recorded — the name such a reader knows a Surah by — never an
+ * English transliteration in its place (Quran Part 2); otherwise the first
+ * recorded name that exists. Each is returned WITH the locale it is actually
+ * in, so the element is marked with that language rather than passed off as a
+ * translation. `null` when nothing was recorded at all; the page then says
+ * "Surah {number}" and nothing more.
  */
 export function surahName(
-  surah: Pick<PublicSurah, 'names'>,
+  surah: Pick<PublicSurah, 'names' | 'nameArabic'>,
   locale: Locale,
-): { readonly text: string; readonly locale: Locale } | null {
-  for (const candidate of [locale, ...NAME_ORDER]) {
+): LocalisedText | null {
+  const own = surah.names[locale];
+  if (own !== undefined && own !== '') return { text: own, locale };
+  if (locale !== 'en' && surah.nameArabic !== null && surah.nameArabic !== '')
+    return { text: surah.nameArabic, locale: 'ar' };
+  for (const candidate of NAME_ORDER) {
     const text = surah.names[candidate];
     if (text !== undefined && text !== '') return { text, locale: candidate };
   }
   return null;
+}
+
+/**
+ * What the shown name means, in the shown name's own language, when the
+ * operator recorded a meaning beside it ("The Opening" beside "Al-Faatiha") —
+ * and `null` when none was, or when it only repeats the name.
+ */
+export function surahMeaning(
+  surah: Pick<PublicSurah, 'meanings'>,
+  name: LocalisedText | null,
+): LocalisedText | null {
+  if (name === null) return null;
+  const text = surah.meanings[name.locale];
+  return text === undefined || text === '' || text === name.text
+    ? null
+    : { text, locale: name.locale };
 }
 
 /* ===========================================================================

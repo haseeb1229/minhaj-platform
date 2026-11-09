@@ -18,6 +18,16 @@ const NEUTRAL = 'نص اختبار غير قرآني';
 const RUB_EL_HIZB = '۞';
 const SAJDAH_MARK = '۩';
 
+/**
+ * The fixture's transliterated name and meaning of a Surah — sentinels, never a
+ * real name. Surah 6's carries an apostrophe and a doubled vowel, as Tanzil's
+ * own transliterations do, so "verbatim" is proved on the characters that
+ * would tempt a respelling.
+ */
+export const fixtureTransliteration = (surah: number) =>
+  surah === 6 ? "NON_QURAN_FIXTURE_Aa'-6" : `NON_QURAN_FIXTURE_TNAME_${surah}`;
+export const fixtureMeaning = (surah: number) => `NON_QURAN_FIXTURE meaning ${surah}`;
+
 export interface TanzilFixture {
   readonly text: string;
   readonly metadata: string;
@@ -87,7 +97,7 @@ export function tanzilFixture(): TanzilFixture {
   SURAH_AYAH_COUNTS.forEach((count, index) => {
     const surah = index + 1;
     metadata.push(
-      `\t\t<sura index="${surah}" ayas="${count}" start="${start}" name="NON_QURAN_FIXTURE_SURAH_${surah}" tname="Fixture" ename="Fixture" type="${surah % 3 === 0 ? 'Medinan' : 'Meccan'}" order="${surah}" rukus="1" />`,
+      `\t\t<sura index="${surah}" ayas="${count}" start="${start}" name="NON_QURAN_FIXTURE_SURAH_${surah}" tname="${fixtureTransliteration(surah)}" ename="${fixtureMeaning(surah)}" type="${surah % 3 === 0 ? 'Medinan' : 'Meccan'}" order="${surah}" rukus="1" />`,
     );
     start += count;
   });

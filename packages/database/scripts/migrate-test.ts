@@ -306,6 +306,11 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // Asset holding one of its WebP widths (320, 640, 960, 1440 — a CHECK), NO
   // ACTION both ways, written once by the runtime and never re-pointed.
   '20261107000000_r2_storage_derivatives': ['AssetDerivative'],
+  // QURAN PART 2 CREATES NO TABLE. It adds one nullable presentation column to
+  // SurahName — the meaning beside a display name — with a CHECK refusing an
+  // empty one. Asserted with the column widths and CHECK constraints, and its
+  // rollback by `assertSurahMeaningRemoved`.
+  '20261109000000_r2_quran_surah_meaning': [],
   // THE DONATIONS CONTEXT: a campaign with its words per locale and its
   // per-currency policy, the owner's fail-closed provider activation (one
   // immutable row the runtime can only read), the donation — one payment
@@ -1245,6 +1250,8 @@ const EXPECTED_COLUMN_SIZES: readonly {
   // R2: a reference source keeps its licence notice verbatim as evidence.
   { table: 'QuranSource', column: 'reference', characters: 2000 },
   { table: 'SurahName', column: 'locale', characters: 8 },
+  // Quran Part 2: the meaning beside a display name, as wide as the name.
+  { table: 'SurahName', column: 'meaning', characters: 100 },
   ...['QuranSourceAyah', 'Ayah', 'QuranAyahRevision'].map((table) => ({
     table,
     column: 'text',
@@ -2302,6 +2309,7 @@ const EXPECTED_CHECK_CONSTRAINTS = [
     constraint: 'QuranVerificationRun_' + rule + '_ck',
   })),
   { table: 'SurahName', constraint: 'SurahName_ck' },
+  { table: 'SurahName', constraint: 'SurahName_meaning_ck' },
   ...[
     'QuranTranslation',
     'QuranTransliteration',
@@ -18265,6 +18273,40 @@ const MIGRATION_PUBLISH_PERMISSION = 'migration.publish';
  */
 const OWNER_DECISIONS_MIGRATION = '20261031000000_phase30rd_owner_decisions';
 const QURAN_REFERENCE_MIGRATION = '20261106000001_r2_quran_reference_preview';
+/** Quran Part 2: the meaning beside a Surah's display name. */
+const SURAH_MEANING_MIGRATION = '20261109000000_r2_quran_surah_meaning';
+
+/**
+ * After the Quran Part 2 rollback: SurahName has no `meaning` column and no
+ * `SurahName_meaning_ck`, and keeps its own key, CHECK and foreign key — the
+ * table exactly as Phase 18 made it.
+ */
+async function assertSurahMeaningRemoved(session: SqlSession): Promise<void> {
+  const [row] = await session.query<{
+    meaning: number | null;
+    meaningCheck: number;
+    columns: string | null;
+    kept: number;
+  }>(`
+    SELECT
+      COL_LENGTH(N'dbo.SurahName', N'meaning') AS [meaning],
+      (SELECT COUNT(*) FROM sys.check_constraints WHERE [name] = N'SurahName_meaning_ck') AS [meaningCheck],
+      (SELECT STRING_AGG([name], N',') WITHIN GROUP (ORDER BY [column_id]) FROM sys.columns
+        WHERE [object_id] = OBJECT_ID(N'[dbo].[SurahName]')) AS [columns],
+      (SELECT COUNT(*) FROM sys.objects WHERE [name] IN (N'SurahName_pkey', N'SurahName_ck', N'SurahName_surahNumber_fkey')
+        AND [parent_object_id] = OBJECT_ID(N'[dbo].[SurahName]')) AS [kept];
+  `);
+  if (
+    row?.meaning !== null ||
+    Number(row.meaningCheck) !== 0 ||
+    row.columns !== 'surahNumber,locale,name' ||
+    Number(row.kept) !== 3
+  )
+    fail(
+      `The Quran Part 2 rollback must leave SurahName exactly as Phase 18 made it; found ${JSON.stringify(row ?? null)}.`,
+    );
+  report('surah meaning rollback', 'the meaning column and its CHECK removed');
+}
 
 /** The one table Phase 30-RD creates. */
 const PERSONAL_DATA_FINDING_TABLE = 'MigrationPersonalDataFinding';
@@ -24359,6 +24401,9 @@ try {
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
     }
+    if (migration.id === SURAH_MEANING_MIGRATION)
+      // Quran Part 2 added one presentation column and nothing else.
+      await assertSurahMeaningRemoved(session);
     if (migration.id === QURAN_REFERENCE_MIGRATION)
       // R2 created nothing and widened no vocabulary: its rollback leaves the
       // Quran schema exactly as Phase 18 made it.

@@ -168,7 +168,10 @@ function layerWork(form: FormData) {
  * Surahs and Ayat — presentation and topics, never canonical text
  * ========================================================================= */
 
-/** Replaces one Surah's localised display names. An empty field gives no name. */
+/**
+ * Replaces one Surah's localised display names and their meanings. An empty
+ * name gives no name; a meaning without a name in its locale is refused.
+ */
 export async function saveSurahNames(
   _state: FormActionState,
   form: FormData,
@@ -178,14 +181,21 @@ export async function saveSurahNames(
     if (actor === null) return DENIED;
 
     const expectedVersion = quranVersionSchema.safeParse(whole(form, 'version'));
+    const orphanMeaning = localeSchema.options.some(
+      (language) =>
+        value(form, `name-${language}`) === null &&
+        value(form, `meaning-${language}`) !== null,
+    );
     const parsed = surahNamesInputSchema.safeParse({
       surah: whole(form, 'surah'),
       names: localeSchema.options.flatMap((language) => {
         const name = value(form, `name-${language}`);
-        return name === null ? [] : [{ locale: language, name }];
+        return name === null
+          ? []
+          : [{ locale: language, name, meaning: value(form, `meaning-${language}`) }];
       }),
     });
-    if (!expectedVersion.success || !parsed.success) return INVALID;
+    if (!expectedVersion.success || !parsed.success || orphanMeaning) return INVALID;
 
     await quranRuntime().quran.saveSurahNames(actor, {
       expectedVersion: expectedVersion.data,

@@ -1023,6 +1023,27 @@ record) and saved surah by surah through Quran's administrative service (`quran.
 the staged, review-only migration revisions exactly as staged; a surah whose staged revision fails
 validation is skipped and reported, never repaired (MIGRATION_STRATEGY.md §19).
 
+**Surah display names (Quran Part 2, 2026-11-09).** `SurahName` gains one nullable column,
+`meaning` (`NVARCHAR(100)`, an empty one refused by `SurahName_meaning_ck`; migration
+`20261109000000_r2_quran_surah_meaning`): what a locale's display name means, in that locale, beside
+the name it explains — presentation, never identity, carried by the same row, version, service
+(`saveSurahNames`, whose admin form now edits it) and `quran.administer` authority as the name; no
+grant changes. On staging the **English** names and meanings come from the same Tanzil Quran
+Metadata 1.0 file the corpus was registered with (CC BY 3.0): `tname` as the name and `ename` as its
+meaning, **verbatim** — "Al-Faatiha" is never respelled. `quran-reference.sh names` refuses unless
+the file's SHA-256 is the operator's recorded digest **and** the digest the registered source's
+evidence names, and every Arabic name in it equals the accepted corpus's; it then saves each Surah
+through Quran's administrative service in the runtime child, exactly as `/admin/quran/surahs` does
+(audited), keeps any English name an operator recorded and every other locale's name, and changes
+nothing on a re-run. **No Urdu or Arabic display name is written**: Irfan-ul-Quran's staged revisions
+record the translation work's own label and no Surah title, so there is no lawful Urdu name in the
+data; an Urdu or Arabic interface shows a name recorded in its locale, otherwise the source's own
+Arabic name marked as Arabic. **Revelation order** (`order` in the metadata) and rukus are not
+stored: the Surah structure is copied from the immutable registered source by the canonical
+procedure, and adding them would change canonical structure for a presentation choice; the index
+offers no revelation-order sort. The "About this text" panel names the metadata wherever an English
+name is recorded.
+
 **Irreversible on its database.** Canonical Quran is a singleton store that is never deleted, and
 only one corpus is ever accepted: a staging database that holds the reference corpus keeps it until
 the staging database is reset, and a later approved corpus needs a fresh database or a recorded

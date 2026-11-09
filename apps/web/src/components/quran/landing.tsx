@@ -29,7 +29,7 @@ import { quranPath } from './presentation';
 import { readLastPage, readQuranTopic, readSurahs } from './read';
 import {
   JuzIndexList,
-  SurahIndexList,
+  SurahIndexSection,
   continueProps,
   jumpIndex,
   quickJumpLabels,
@@ -45,8 +45,10 @@ import { RELATED_KINDS } from './related';
  * without JavaScript), continue where the reader stopped (their own signed-in
  * position, else this browser's last place — Quran Part 1), or start at the
  * beginning — and then lays the whole text out as an index:
- * every Surah (number, title, ayat, revelation and its Arabic name in the
- * Quran face) and, in the second tab, every Juz. Below it a quiet directory
+ * every Surah — the same index as `/quran/surah` (Quran Part 2): number, name
+ * and its meaning, ayat, revelation, Juz span and its Arabic name in the Quran
+ * face, filtered as the reader types — and, in the second tab, every Juz.
+ * Below it a quiet directory
  * of the rest of the section — reading, the published works beside the text,
  * what the platform classifies under the Quran, and courses — each listed ONLY
  * when there is something public behind it. On the reference preview it ends
@@ -223,12 +225,14 @@ export async function QuranLandingPage({
                     id: 'surahs',
                     label: t('sections.surah'),
                     panel: (
-                      <SurahIndexList
+                      <SurahIndexSection
                         locale={locale}
                         surahs={surahs}
-                        label={t('sections.surah')}
-                        t={t}
+                        juzList={juzList}
+                        initial={{ q: '', sort: 'number' }}
+                        idPrefix="landing-surahs"
                         headingLevel="h3"
+                        syncAddress={false}
                       />
                     ),
                   },

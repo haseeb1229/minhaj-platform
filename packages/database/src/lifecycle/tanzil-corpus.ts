@@ -338,6 +338,82 @@ function parseMetadata(source: string): ParsedMetadata {
 }
 
 /* ===========================================================================
+ * The Surah names (Quran Part 2)
+ * ========================================================================= */
+
+/** One Surah's names exactly as the metadata gives them. */
+export interface TanzilSurahNames {
+  readonly number: number;
+  /** The Arabic name — the corpus's own `nameArabic`, compared before anything is saved. */
+  readonly nameArabic: string;
+  /** `tname`, verbatim ("Al-Faatiha"): Tanzil's transliteration, never respelled. */
+  readonly transliteration: string;
+  /** `ename`, verbatim ("The Opening"): the name's English meaning. */
+  readonly meaning: string;
+}
+
+export interface TanzilNames {
+  /** SHA-256 of the metadata file, lowercase hex — the digest the operator recorded. */
+  readonly metadataSha256: string;
+  readonly surahs: readonly TanzilSurahNames[];
+}
+
+/** The longest display name or meaning the store holds (SurahName, NVARCHAR(100)). */
+const SURAH_NAME_MAX = 100;
+
+/**
+ * Reads the 114 Surahs' names from the Tanzil metadata file — `name`, `tname`
+ * and `ename`, each EXACTLY as written — or refuses. The file's SHA-256 must be
+ * the digest the operator recorded; every `sura` element must have the strict
+ * shape the corpus import already accepts, numbered 1–114 in order; and no
+ * value may be empty, need decoding, or exceed what the store holds. Nothing
+ * is trimmed, respelled or translated.
+ */
+export function readTanzilSurahNames(input: {
+  readonly metadata: Uint8Array;
+  readonly expectedSha256: string;
+}): TanzilNames {
+  const expected = input.expectedSha256.trim().toLowerCase();
+  if (!SHA256.test(expected)) refuse('The expected digest is not a SHA-256 in hex.');
+  const metadataSha256 = sha256Hex(input.metadata);
+  if (metadataSha256 !== expected)
+    refuse(
+      'The metadata file is not the one recorded: its SHA-256 differs from the expected digest.',
+    );
+  const source = decode(input.metadata, 'metadata');
+  if (!/<quran type="metadata" version="1\.0" [^>]*license="cc-by">/u.test(source))
+    refuse(
+      'The metadata file is not Tanzil Quran Metadata 1.0 under its stated licence.',
+    );
+
+  const surahs = elements(
+    source,
+    'sura',
+    new RegExp(
+      `<sura index="(\\d+)" ayas="\\d+" start="\\d+" name="(${PLAIN})" tname="(${PLAIN})" ` +
+        `ename="(${PLAIN})" type="(?:Meccan|Medinan)" order="\\d+" rukus="\\d+" />`,
+      'gu',
+    ),
+    TANZIL_EDITION.surahs,
+    (match): TanzilSurahNames => ({
+      number: Number(match[1]),
+      nameArabic: match[2] ?? '',
+      transliteration: match[3] ?? '',
+      meaning: match[4] ?? '',
+    }),
+  );
+  for (const surah of surahs) {
+    for (const value of [surah.nameArabic, surah.transliteration, surah.meaning]) {
+      if (value === '' || value.trim() !== value)
+        refuse(`Surah ${surah.number} has an empty or padded name in the metadata.`);
+      if (value.length > SURAH_NAME_MAX)
+        refuse(`Surah ${surah.number} has a name longer than the store holds.`);
+    }
+  }
+  return { metadataSha256, surahs };
+}
+
+/* ===========================================================================
  * The corpus
  * ========================================================================= */
 

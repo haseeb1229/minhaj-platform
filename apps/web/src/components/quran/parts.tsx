@@ -24,7 +24,7 @@ import {
   Select,
   TextLink,
 } from '@/components/ui';
-import { corpusNotice, type ReadingContext } from './read';
+import { corpusNotice, readSurahs, type ReadingContext } from './read';
 import { REFERENCE_LINKS } from './reference-sources';
 import {
   READING_LAYERS,
@@ -138,7 +138,9 @@ export async function CorpusNotice({
 /**
  * "ABOUT THIS TEXT" — the reference preview's full attribution: the Tanzil
  * Project's Uthmani text with its version and licence (its terms require the
- * source to be named and linked), the Irfan-ul-Quran translation with its
+ * source to be named and linked), the Tanzil metadata the English Surah names
+ * and their meanings came from wherever any is recorded (Quran Part 2), the
+ * Irfan-ul-Quran translation with its
  * rights holder and official site, and the plain statement that none of it has
  * been reviewed for this platform. Rendered only in reference mode; the
  * translation line only where a translation is shown.
@@ -155,6 +157,9 @@ export async function AboutThisText({
 }) {
   if (corpusNotice(availability) !== 'reference') return null;
   const t = await getTranslations({ locale, namespace: 'quran' });
+  // The English Surah names and their meanings came from the Tanzil metadata
+  // (Quran Part 2), under the same licence: named wherever any is recorded.
+  const names = (await readSurahs()).some((surah) => surah.names.en !== undefined);
   const link = (href: string) => (chunks: ReactNode) => (
     <TextLink href={href}>{chunks}</TextLink>
   );
@@ -175,6 +180,14 @@ export async function AboutThisText({
               licence: link(REFERENCE_LINKS.licence),
             })}
           </p>
+          {names ? (
+            <p>
+              {t.rich('reference.names', {
+                tanzil: link(REFERENCE_LINKS.tanzil),
+                licence: link(REFERENCE_LINKS.licence),
+              })}
+            </p>
+          ) : null}
           {translation ? (
             <p>
               {t.rich('reference.translation', {

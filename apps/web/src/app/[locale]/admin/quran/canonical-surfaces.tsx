@@ -349,6 +349,9 @@ export async function SurahsScreen({ params, searchParams }: ListParams) {
                         ) : (
                           <span lang={language} dir={directionOf(language)}>
                             {surah.names[language]}
+                            {surah.meanings[language] === undefined
+                              ? null
+                              : ` (${surah.meanings[language]})`}
                           </span>
                         )}
                       </li>
@@ -393,22 +396,38 @@ export async function SurahsScreen({ params, searchParams }: ListParams) {
               <input type="hidden" name="surah" value={String(selected.number)} />
               <input type="hidden" name="version" value={String(selected.namesVersion)} />
               {localeSchema.options.map((language) => (
-                <Field
-                  key={language}
-                  id={`surah-name-${language}`}
-                  label={t('nameIn', { language: t(`language.${language}`) })}
-                >
-                  {(props) => (
-                    <TextInput
-                      {...props}
-                      name={`name-${language}`}
-                      defaultValue={selected.names[language] ?? ''}
-                      maxLength={QURAN_LIMITS.surahName}
-                      lang={language}
-                      dir={directionOf(language)}
-                    />
-                  )}
-                </Field>
+                <div key={language} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field
+                    id={`surah-name-${language}`}
+                    label={t('nameIn', { language: t(`language.${language}`) })}
+                  >
+                    {(props) => (
+                      <TextInput
+                        {...props}
+                        name={`name-${language}`}
+                        defaultValue={selected.names[language] ?? ''}
+                        maxLength={QURAN_LIMITS.surahName}
+                        lang={language}
+                        dir={directionOf(language)}
+                      />
+                    )}
+                  </Field>
+                  <Field
+                    id={`surah-meaning-${language}`}
+                    label={t('meaningIn', { language: t(`language.${language}`) })}
+                  >
+                    {(props) => (
+                      <TextInput
+                        {...props}
+                        name={`meaning-${language}`}
+                        defaultValue={selected.meanings[language] ?? ''}
+                        maxLength={QURAN_LIMITS.surahName}
+                        lang={language}
+                        dir={directionOf(language)}
+                      />
+                    )}
+                  </Field>
+                </div>
               ))}
             </ActionForm>
           </section>

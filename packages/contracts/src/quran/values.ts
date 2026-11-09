@@ -407,6 +407,11 @@ export const recitationSegmentInputSchema = z
   });
 export type RecitationSegmentValue = z.output<typeof recitationSegmentInputSchema>;
 
+/**
+ * A Surah's display names, one per interface locale, each with the meaning of
+ * the name in that locale where one is recorded ("The Opening") — presentation,
+ * never identity (DOMAIN_MODEL.md §8.3). An absent meaning is `null`.
+ */
 export const surahNamesInputSchema = z.strictObject({
   surah: surahNumberSchema,
   names: z
@@ -414,6 +419,7 @@ export const surahNamesInputSchema = z.strictObject({
       z.strictObject({
         locale: z.enum(['en', 'ur', 'ar']),
         name: labelText(QURAN_LIMITS.surahName),
+        meaning: labelText(QURAN_LIMITS.surahName).nullable().optional(),
       }),
     )
     .max(3)
@@ -554,6 +560,8 @@ export interface SurahRecord {
   readonly revelation: QuranRevelation | null;
   readonly nameArabic: string | null;
   readonly names: Readonly<Partial<Record<Locale, string>>>;
+  /** The meaning recorded beside a locale's name, keyed by that locale. */
+  readonly meanings: Readonly<Partial<Record<Locale, string>>>;
   readonly sourceId: string;
   /** The display names' version — the only Surah fact the administration changes. */
   readonly namesVersion: number;
@@ -774,6 +782,8 @@ export interface PublicSurah {
   readonly revelation: QuranRevelation | null;
   readonly nameArabic: string | null;
   readonly names: Readonly<Partial<Record<Locale, string>>>;
+  /** The meaning recorded beside a locale's name, keyed by that locale. */
+  readonly meanings: Readonly<Partial<Record<Locale, string>>>;
 }
 
 export interface PublicAyah {

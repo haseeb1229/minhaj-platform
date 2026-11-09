@@ -4048,8 +4048,10 @@ model QuranAyahRevision {
 /// A Surah's display name in one interface locale: presentation, not identity.
 model SurahName {
   surahNumber Int
-  locale      String @db.NVarChar(8)
-  name        String @db.NVarChar(100)
+  locale      String  @db.NVarChar(8)
+  name        String  @db.NVarChar(100)
+  /// What the name means in that locale ("The Opening"), where one is recorded (R2, Quran Part 2).
+  meaning     String? @db.NVarChar(100)
 
   surah Surah @relation(fields: [surahNumber], references: [number], onDelete: NoAction, onUpdate: NoAction)
 

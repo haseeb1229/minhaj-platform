@@ -1,8 +1,16 @@
 import { readFile } from 'node:fs/promises';
 
+import { z } from 'zod';
+
+import { localeSchema } from '@minhaj/contracts';
 import type { ResolvedSession } from '@minhaj/contracts/identity';
 import { parseStagedPayload, type StagedDetail } from '@minhaj/contracts/migration';
-import type { CandidateAyah, TranslationRecord } from '@minhaj/contracts/quran';
+import {
+  QURAN_LIMITS,
+  QURAN_SURAH_MAX,
+  type CandidateAyah,
+  type TranslationRecord,
+} from '@minhaj/contracts/quran';
 
 import {
   composeQuranReferenceRunner,
@@ -36,12 +44,23 @@ import { approvedTarget, CommandError, required, runCommand } from '../migration
  *     the two Irfan-ul-Quran sources is used, and only when it covers every
  *     Ayah of its Surah. Anything else is SKIPPED AND REPORTED, never repaired.
  *
+ *   names         --operator <accountId> --names <json file>
+ *     (Quran Part 2) Saves each Surah's English display name and its meaning —
+ *     the Tanzil metadata's `tname` and `ename`, verbatim, already verified by
+ *     the owner side against the digest the corpus was registered with —
+ *     through Quran's administrative service (`quran.read` +
+ *     `quran.administer`, exactly as `/admin/quran/surahs`). Every Arabic name
+ *     must be the accepted corpus's own before any name is saved; a name an
+ *     operator recorded is KEPT, never replaced; the other locales' names are
+ *     carried over untouched. A re-run reports every Surah unchanged.
+ *
  * The final stdout line is one JSON object of identifiers and counts: no text.
  */
 
 const USAGE =
   'reference-runtime accept --operator <id> --session <id> --source <id> --candidate <file> | ' +
-  'translations --operator <id> --source-ur <id> --source-en <id>';
+  'translations --operator <id> --source-ur <id> --source-en <id> | ' +
+  'names --operator <id> --names <file>';
 
 /** A source this tooling registered: a generated UUID. */
 const SOURCE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -340,11 +359,108 @@ async function translations(
   return { mode: 'translations', ur: reports.ur, en: reports.en };
 }
 
+/* ===========================================================================
+ * names (Quran Part 2)
+ * ========================================================================= */
+
+/**
+ * The owner side's file: the metadata's own values, already verified against
+ * the digest the corpus was registered with. Parsed again here, strictly — a
+ * child trusts no file it is handed.
+ */
+const namesFileSchema = z
+  .array(
+    z.strictObject({
+      number: z.number().int().min(1).max(QURAN_SURAH_MAX),
+      nameArabic: z.string().min(1).max(QURAN_LIMITS.surahName),
+      transliteration: z.string().min(1).max(QURAN_LIMITS.surahName),
+      meaning: z.string().min(1).max(QURAN_LIMITS.surahName),
+    }),
+  )
+  .length(QURAN_SURAH_MAX);
+
+/** Why a Surah's English name was not written — a category, never content. */
+type NameSkip = 'operator-name' | 'refused';
+
+async function names(runner: QuranReferenceRunner): Promise<Record<string, unknown>> {
+  const operator = identifier('--operator', ACCOUNT_ID);
+  const parsed = namesFileSchema.safeParse(
+    JSON.parse(await readFile(required('--names', USAGE), 'utf8')),
+  );
+  if (!parsed.success)
+    throw new CommandError('the names file is not 114 Surahs of names');
+  const actor = { accountId: operator };
+
+  // EVERY Arabic name must be the corpus's own before ANY name is saved: a
+  // metadata file that disagrees with the accepted corpus changes nothing.
+  const surahs = await quran(runner.quran.surahs(actor));
+  const wanted = new Map(parsed.data.map((entry) => [entry.number, entry]));
+  if (
+    surahs.length !== wanted.size ||
+    surahs.some((surah) => wanted.get(surah.number)?.nameArabic !== surah.nameArabic)
+  )
+    throw new CommandError(
+      'the metadata does not name the accepted corpus’s Surahs; nothing was changed',
+    );
+
+  const report = {
+    saved: 0,
+    unchanged: 0,
+    kept: [] as { surah: number; reason: NameSkip }[],
+  };
+  for (const surah of surahs) {
+    const entry = wanted.get(surah.number);
+    if (entry === undefined) continue;
+    const name = surah.names.en;
+    const meaning = surah.meanings.en;
+    if (name === entry.transliteration && meaning === entry.meaning) {
+      report.unchanged += 1;
+      continue;
+    }
+    // A name an operator recorded is theirs: it is never replaced from a file.
+    if (name !== undefined) {
+      report.kept.push({ surah: surah.number, reason: 'operator-name' });
+      continue;
+    }
+    const others = localeSchema.options
+      .filter((locale) => locale !== 'en')
+      .flatMap((locale) => {
+        const other = surah.names[locale];
+        return other === undefined
+          ? []
+          : [{ locale, name: other, meaning: surah.meanings[locale] ?? null }];
+      });
+    try {
+      await runner.quran.saveSurahNames(actor, {
+        expectedVersion: surah.namesVersion,
+        value: {
+          surah: surah.number,
+          names: [
+            { locale: 'en', name: entry.transliteration, meaning: entry.meaning },
+            ...others,
+          ],
+        },
+      });
+      report.saved += 1;
+    } catch (error) {
+      const refusal = error as { name?: unknown; reason?: unknown } | null;
+      if (refusal?.name !== 'QuranRefusal') throw error;
+      // Without the authority nothing can be saved: stop, rather than report
+      // 114 refusals. Any other refusal (a concurrent edit) is this Surah's.
+      if (refusal.reason === 'denied')
+        throw new CommandError('the operator does not hold quran.administer');
+      report.kept.push({ surah: surah.number, reason: 'refused' });
+    }
+  }
+  return { mode: 'names', ...report };
+}
+
 await runCommand('quran:reference-runtime', async () => {
   const [mode] = process.argv.slice(2);
   approvedTarget(process.env['DATABASE_URL']);
   const runner = composeQuranReferenceRunner();
   if (mode === 'accept') return accept(runner);
   if (mode === 'translations') return translations(runner);
+  if (mode === 'names') return names(runner);
   throw new CommandError(`usage: ${USAGE}`);
 });

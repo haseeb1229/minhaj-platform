@@ -6,10 +6,16 @@ import {
 } from '../../packages/database/src/lifecycle/quran-reference.ts';
 import {
   readTanzilCorpus,
+  readTanzilSurahNames,
   sha256Hex,
   TanzilCorpusError,
 } from '../../packages/database/src/lifecycle/tanzil-corpus.ts';
-import { tanzilFixture, utf8 } from './tanzil-fixture.ts';
+import {
+  fixtureMeaning,
+  fixtureTransliteration,
+  tanzilFixture,
+  utf8,
+} from './tanzil-fixture.ts';
 
 /**
  * Rebaseline R2 — the Tanzil reader the reference import trusts, over a
@@ -203,6 +209,13 @@ describe('the Tanzil reader', () => {
     );
   });
 
+  it('records the metadata digest in the evidence as the names import looks for it', () => {
+    const corpus = read(base.text);
+    expect(referenceEvidence(corpus)).toContain(
+      `cc-by, SHA-256 ${corpus.metadataSha256}; hizb derived`,
+    );
+  });
+
   it('refuses a metadata file that is not the edition under its licence', () => {
     refused(
       () => read(base.text, base.metadata.replace('license="cc-by"', 'license="other"')),
@@ -214,6 +227,103 @@ describe('the Tanzil reader', () => {
           base.text.replace('License: Creative Commons Attribution 3.0', 'License: none'),
         ),
       /not Tanzil Uthmani 1.1/,
+    );
+  });
+});
+
+/* ===========================================================================
+ * Quran Part 2 — the Surah names
+ * ========================================================================= */
+
+function names(metadata = base.metadata, expected?: string) {
+  const bytes = utf8(metadata);
+  return readTanzilSurahNames({
+    metadata: bytes,
+    expectedSha256: expected ?? sha256Hex(bytes),
+  });
+}
+
+describe('the Tanzil Surah names', () => {
+  it('reads the 114 names exactly as written — Arabic, transliteration and meaning', () => {
+    const read = names();
+    expect(read.metadataSha256).toBe(sha256Hex(utf8(base.metadata)));
+    expect(read.surahs).toHaveLength(114);
+    read.surahs.forEach((surah, index) => {
+      expect(surah).toEqual({
+        number: index + 1,
+        nameArabic: `NON_QURAN_FIXTURE_SURAH_${index + 1}`,
+        transliteration: fixtureTransliteration(index + 1),
+        meaning: fixtureMeaning(index + 1),
+      });
+    });
+    // Verbatim: the apostrophe and the doubled vowel survive untouched.
+    expect(read.surahs[5]?.transliteration).toBe("NON_QURAN_FIXTURE_Aa'-6");
+  });
+
+  it('names the same Surahs, in the same words, as the corpus read from the same file', () => {
+    const corpus = read(base.text);
+    const read2 = names();
+    expect(read2.metadataSha256).toBe(corpus.metadataSha256);
+    expect(read2.surahs.map((surah) => surah.nameArabic)).toEqual(
+      corpus.surahs.map((surah) => surah.nameArabic),
+    );
+  });
+
+  it('refuses a metadata file that is not the one recorded', () => {
+    refused(() => names(base.metadata, '0'.repeat(64)), /SHA-256 differs/);
+    refused(() => names(base.metadata, 'not-a-digest'), /not a SHA-256/);
+    refused(
+      () => names(`${String.fromCharCode(0xfeff)}${base.metadata}`),
+      /byte-order mark/,
+    );
+  });
+
+  it('refuses a name it would have to decode, an empty or padded one, and a missing Surah', () => {
+    refused(
+      () =>
+        names(
+          base.metadata.replace(
+            'tname="NON_QURAN_FIXTURE_TNAME_2"',
+            'tname="NON_QURAN_FIXTURE &amp; 2"',
+          ),
+        ),
+      /sura entries/,
+    );
+    refused(
+      () =>
+        names(base.metadata.replace('ename="NON_QURAN_FIXTURE meaning 3"', 'ename=""')),
+      /empty or padded name/,
+    );
+    refused(
+      () =>
+        names(
+          base.metadata.replace(
+            'ename="NON_QURAN_FIXTURE meaning 4"',
+            'ename=" NON_QURAN_FIXTURE meaning 4"',
+          ),
+        ),
+      /empty or padded name/,
+    );
+    refused(
+      () => names(base.metadata.replace(/\t\t<sura index="114"[^\n]*\n/u, '')),
+      /sura entries/,
+    );
+    refused(
+      () =>
+        names(
+          base.metadata.replace(
+            'tname="NON_QURAN_FIXTURE_TNAME_7"',
+            `tname="${'x'.repeat(101)}"`,
+          ),
+        ),
+      /longer than the store holds/,
+    );
+  });
+
+  it('refuses a metadata file that is not the edition under its licence', () => {
+    refused(
+      () => names(base.metadata.replace('license="cc-by"', 'license="other"')),
+      /not Tanzil Quran Metadata 1.0/,
     );
   });
 });

@@ -119,6 +119,13 @@ in the footer and on every Quran page), beside Minhaj-ul-Quran's own Irfan-ul-Qu
   `quran.editCanonical` grant and `quran-canonical-edit` step-up, and activates it as the owner.
   Proven against the real files in a disposable local database; its staging run is recorded at R2
   closure (DELIVERY_PLAN.md, Rebaseline R2 record).
+- **Surah display names (Quran Part 2, 2026-11-09).** The English Surah names and their meanings
+  shown on the preview are the same Tanzil metadata file's `tname` and `ename`, **verbatim** (CC BY
+  3.0, named in "About this text"), saved by `quran-reference.sh names` through Quran's
+  administrative service only when the file is the one the corpus was registered with. No Urdu or
+  Arabic display name is written — there is no lawful source for one in the data — so those
+  interfaces show the source's Arabic name. *Staging only, presentation only; the production gates
+  are unchanged, and production's Surah names remain an operator's to record.*
 - **Irreversible by design.** Canonical Quran is a singleton store that is never deleted and only one
   corpus is ever accepted: a staging database that holds the reference corpus keeps it until the
   database is reset, and a later approved corpus needs a fresh database or a recorded correction of

@@ -283,7 +283,7 @@ it reserves is unpublished. No route changes.
 |---|---|
 | `/quran` | Landing |
 | `/quran/read` | Reader entry — resumes progress when signed in *(uncached island)* |
-| `/quran/surah` · `/quran/surah/{surahNumber}` | Surah index and view — `?translation, tafsir, reciter, transliteration`; `?from` names the reading window (Quran Part 1) |
+| `/quran/surah` · `/quran/surah/{surahNumber}` | Surah index (`?q` filter, `?sort` order — Quran Part 2) and view — `?translation, tafsir, reciter, transliteration`; `?from` names the reading window (Quran Part 1) |
 | `/quran/surah/{surahNumber}/{ayahNumber}` | **Canonical ayah citation URL** |
 | `/quran/page/{pageNumber}` | One mushaf page, as text (Quran Part 1) — 404 for a page no public Ayah carries |
 | `/quran/juz` · `/quran/juz/{juzNumber}` | Juz index and view |
@@ -387,6 +387,34 @@ and fixture rule above is unchanged.
   page's "Go to an Ayah") opens that Ayah in its Surah's window rather than its citation page. Every
   address it produces is built from numbers the reader confirmed. The page is the same document for
   every visitor.
+
+**Quran Part 2 — the Surah index and the Surah display names (owner direction 2026-11-09;
+DELIVERY_PLAN.md, the Quran Part 2 record).** No new route; every corpus-state, `noindex`, attribution
+and fixture rule above is unchanged.
+
+- **`/quran/surah?q=&sort=`** — each Surah is a row whose whole area is its link: number, display name
+  and the name's meaning in the language each is in, ayat, revelation place where the source recorded
+  one, the Juz it spans (derived from the reader's own Juz ranges) and the source's Arabic name in the
+  Quran face (at most two fifths of the row, wrapping rather than squeezing the title). `?q` (at most 60
+  characters; longer is cut) keeps the Surahs whose number begins with it ("1", "18", "۱۸", "Surah 18")
+  or one of whose recorded names or meanings, in any language or script, contains it, compared folded
+  (case, marks, letter variants, punctuation, a doubled Latin letter, a leading article) and never
+  shown folded. `?sort` is `number` (default), `revelation` (grouped Meccan, Medinan, then not
+  recorded, each in number order), `longest` or `shortest` (ties by number); an unknown value is the
+  default. It is a GET form answered on the server, so it works without JavaScript; with it, a client
+  island answers each keystroke with the same pure functions, keeps the address in step and announces
+  the number shown in a `role="status"` line. The canonical URL is always the bare `/quran/surah`.
+  Above the index, the "Continue where you stopped" card of Part 1 where there is a place to return
+  to. The landing's Surah tab is the same component (its form opens `/quran/surah`). **Revelation
+  order is not offered**: the Surah structure records no revelation order (it is copied from the
+  registered source by the canonical procedure, and the registered source is immutable), so no order
+  is invented for it.
+- **Display names in every interface.** English shows the recorded English display name and its
+  meaning (on staging, the Tanzil metadata's transliteration and English meaning, verbatim —
+  DOMAIN_MODEL.md §8.4). Urdu and Arabic show a name recorded in that locale, otherwise the source's
+  own Arabic name marked `lang="ar"`, never an English transliteration in its place; no English
+  meaning is shown there. The quick jump (`/quran/read?q=`) also resolves a recorded meaning
+  ("The Cave") and a transliteration typed with single vowels ("Fatiha" for "Al-Faatiha").
 
 ### 3.4 Hadith
 

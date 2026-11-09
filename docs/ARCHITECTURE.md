@@ -1669,8 +1669,12 @@ registers the source and activates the corpus as the owner, and has the corpus a
 canonical service in a runtime child under the operator's live `quran-canonical-edit` step-up
 (earned on `/admin/quran/surahs`); it resumes an interrupted import and refuses once a corpus is
 active. `translations --operator <id>` imports Irfan-ul-Quran from the staged migration revisions
-through Quran's administrative service. The corpus is irreversible on its database: only a staging
-reset removes it.
+through Quran's administrative service. `names --sha256 <metadata hex> --operator <id>` (Quran
+Part 2) reads the same mounted `quran-data.xml`, refuses unless its digest is the one the registered
+source's evidence records, and saves each Surah's English display name and meaning (Tanzil's
+`tname`/`ename`, verbatim) through Quran's administrative service in a runtime child under
+`quran.read` and `quran.administer`, keeping any name an operator recorded (DOMAIN_MODEL.md §8.4).
+The corpus is irreversible on its database: only a staging reset removes it.
 
 **Demonstration data (Rebaseline R2; OPEN_DECISIONS.md §4.2).** `bin/demo.sh seed|status|reset`
 runs `staging-demo` in the operations image after the staging host proof and a check that the

@@ -20,7 +20,7 @@ import { QURAN_JUZ_MAX } from '@minhaj/contracts/quran';
 export interface JumpSurah {
   readonly number: number;
   readonly ayahCount: number;
-  /** Every name the corpus recorded for the Surah, in any script. */
+  /** Every name the corpus recorded for the Surah, in any script, and their meanings. */
   readonly names: readonly string[];
 }
 
@@ -37,7 +37,7 @@ export const QUICK_JUMP_MAX_LENGTH = 60;
 const UNKNOWN: QuickJump = Object.freeze({ kind: 'unknown' });
 
 /** Arabic-Indic (U+0660…) and Extended Arabic-Indic (U+06F0…) digits as ASCII. */
-function asciiDigits(value: string): string {
+export function asciiDigits(value: string): string {
   return value.replace(/[٠-٩۰-۹]/g, (digit) => {
     const code = digit.charCodeAt(0);
     return String(code >= 0x06f0 ? code - 0x06f0 : code - 0x0660);
@@ -63,18 +63,28 @@ const VARIANTS: Readonly<Record<string, string>> = Object.freeze({
 const NAME_PREFIXES = Object.freeze(['surah', 'surat', 'sura', 'سوره', 'سورت']);
 
 /**
- * A name, or what a visitor typed, folded for comparison: lower case, marks
- * and tatweel removed, letter variants unified, everything that is not a
- * letter or digit dropped, and a leading article ("al", "ال") set aside.
+ * A text folded for comparison only: lower case, marks and tatweel removed,
+ * letter variants unified, everything that is not a letter or digit dropped,
+ * and a doubled Latin letter written once — so "Fatiha" meets the recorded
+ * transliteration "Al-Faatiha" (Quran Part 2). Nothing folded is ever shown.
  */
-export function foldName(value: string): string {
-  let folded = value
+export function foldText(value: string): string {
+  return value
     .normalize('NFKD')
     .toLowerCase()
     .replace(/\p{M}/gu, '')
     .replace(/ـ/g, '')
     .replace(/./gu, (letter) => VARIANTS[letter] ?? letter)
-    .replace(/[^\p{L}\p{N}]/gu, '');
+    .replace(/[^\p{L}\p{N}]/gu, '')
+    .replace(/([a-z])\1+/g, '$1');
+}
+
+/**
+ * A name, or what a visitor typed, folded for comparison (`foldText`), with a
+ * leading "Surah" and a leading article ("al", "ال") set aside.
+ */
+export function foldName(value: string): string {
+  let folded = foldText(value);
   for (const prefix of NAME_PREFIXES) {
     if (folded.startsWith(prefix) && folded.length > prefix.length) {
       folded = folded.slice(prefix.length);

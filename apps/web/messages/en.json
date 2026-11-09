@@ -3069,6 +3069,7 @@
       "aboutHeading": "About this text",
       "arabic": "Arabic text: <tanzil>Tanzil Project</tanzil>, Uthmani text version 1.1, licensed under <licence>Creative Commons Attribution 3.0</licence> and reproduced without any change.",
       "translation": "Translation: Irfan-ul-Quran by Shaykh-ul-Islam Dr Muhammad Tahir-ul-Qadri, © Minhaj-ul-Quran International (<official>irfan-ul-quran.com</official>).",
+      "names": "Surah names in English and their meanings: <tanzil>Tanzil Project</tanzil> Quran Metadata 1.0, licensed under <licence>Creative Commons Attribution 3.0</licence> and reproduced as published.",
       "status": "Shown here for preview; not yet reviewed by Minhaj-ul-Quran’s religious authority for this platform.",
       "body": "A licensed preview of the Quran text with the Irfan-ul-Quran translation, not yet reviewed for this platform."
     },
@@ -3290,7 +3291,22 @@
     "index": {
       "heading": "Surahs and Juz",
       "intro": "Every Surah in order, or the Quran by its thirty parts.",
-      "tabs": "Index of the Quran"
+      "tabs": "Index of the Quran",
+      "filter": "Find a Surah",
+      "filterHelp": "By its name in any script, its meaning or its number — the list narrows as you type.",
+      "order": "Order",
+      "sort": {
+        "number": "By number",
+        "revelation": "By place of revelation",
+        "longest": "Longest first",
+        "shortest": "Shortest first"
+      },
+      "apply": "Apply",
+      "count": "Showing {shown} of {total} Surahs",
+      "none": "No Surah matches “{query}”.",
+      "clear": "Show every Surah",
+      "unrecorded": "Place of revelation not recorded",
+      "juzSpan": "Juz {first}–{last}"
     },
     "jump": {
       "label": "Go to a Surah, Ayah, Juz or page",
@@ -3495,6 +3511,7 @@
     "state": "State",
     "name": "Name",
     "nameIn": "Name in {language}",
+    "meaningIn": "Meaning in {language} (optional)",
     "slug": "Slug",
     "slugHelp": "Lowercase letters, digits and hyphens. It forms the public address and cannot be changed once the work is created.",
     "slugFixed": "Fixed when the work was created; it never changes.",
@@ -3576,7 +3593,7 @@
       "actions": "Actions",
       "editNames": "Edit display names",
       "namesTitle": "Display names — {name}",
-      "namesHelp": "The name shown to readers in each interface language. Leave a language empty to give no display name in it."
+      "namesHelp": "The name shown to readers in each interface language and, where you have it, what the name means. Leave a language’s name empty to give no display name in it; a meaning needs a name beside it."
     },
     "ayah": {
       "canonical": "Canonical text",

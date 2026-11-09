@@ -1159,16 +1159,30 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
       expect(await intents(db.admin, '2:1')).toBe(3);
     });
 
-    it('saves Surah display names under their own version', async () => {
+    it('saves Surah display names, with their meanings, under their own version', async () => {
       const saved = await persistence.saveSurahNames({
         actorId,
         expectedVersion: 1,
-        value: { surah: 1, names: [{ locale: 'en', name: 'Fixture Surah One' }] },
+        value: {
+          surah: 1,
+          names: [
+            { locale: 'en', name: 'Fixture Surah One', meaning: 'Fixture meaning one' },
+            { locale: 'ur', name: 'فکسچر سورت', meaning: null },
+          ],
+        },
       });
       expect(saved).toMatchObject({
         namesVersion: 2,
-        names: { en: 'Fixture Surah One' },
+        names: { en: 'Fixture Surah One', ur: 'فکسچر سورت' },
+        meanings: { en: 'Fixture meaning one' },
       });
+      expect(saved.meanings).not.toHaveProperty('ur');
+      // The database refuses an empty meaning, whatever a caller sends.
+      await expect(
+        db.admin.query(
+          `UPDATE [dbo].[SurahName] SET [meaning] = N'' WHERE [surahNumber] = 1 AND [locale] = N'en';`,
+        ),
+      ).rejects.toThrow();
       expect(
         await reasonOf(
           persistence.saveSurahNames({
@@ -1236,7 +1250,8 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
         [1, 3],
         [2, 4],
       ]);
-      expect(surahs[0]?.names).toEqual({ en: 'Fixture Surah One' });
+      expect(surahs[0]?.names).toEqual({ en: 'Fixture Surah One', ur: 'فکسچر سورت' });
+      expect(surahs[0]?.meanings).toEqual({ en: 'Fixture meaning one' });
       expect((await reader.ayat(1, 1, 999)).map((a) => a.ayah)).toEqual([1, 2, 3]);
       expect((await reader.ayah({ surah: 1, ayah: 1 }))?.text).toBe(
         primary.ayat[0]!.text,

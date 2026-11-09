@@ -155,7 +155,10 @@ describe('the quick jump', () => {
   it('folds names for comparison only', () => {
     expect(foldName('Al-Kahf')).toBe('kahf');
     expect(foldName('الكَهْف')).toBe('كهف');
-    expect(foldName('An-Nas')).toBe('annas');
+    // A doubled Latin letter is written once (Quran Part 2), so a reader's
+    // "Fatiha" meets a recorded "Al-Faatiha" — on both sides of the comparison.
+    expect(foldName('An-Nas')).toBe('anas');
+    expect(foldName('Al-Faatiha')).toBe(foldName('Fatiha'));
   });
 });
 

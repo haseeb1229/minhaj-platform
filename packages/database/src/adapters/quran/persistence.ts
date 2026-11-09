@@ -27,6 +27,7 @@ import {
   firstDifference,
   HISTORY,
   refuse,
+  meaningsOf,
   namesOf,
   QuranDataError,
   type Client,
@@ -54,7 +55,7 @@ import {
  * ========================================================================= */
 
 const NAMES = {
-  select: { locale: true, name: true },
+  select: { locale: true, name: true, meaning: true },
   orderBy: { locale: 'asc' },
 } satisfies Prisma.Surah$namesArgs;
 
@@ -125,7 +126,11 @@ interface SurahRow {
   readonly nameArabic: string | null;
   readonly sourceId: string;
   readonly namesVersion: number;
-  readonly names: readonly { readonly locale: string; readonly name: string }[];
+  readonly names: readonly {
+    readonly locale: string;
+    readonly name: string;
+    readonly meaning: string | null;
+  }[];
 }
 
 interface AyahRow {
@@ -175,6 +180,7 @@ function toSurah(row: SurahRow): SurahRecord {
     revelation: row.revelation as QuranRevelation | null,
     nameArabic: row.nameArabic,
     names: namesOf(row.names),
+    meanings: meaningsOf(row.names),
     sourceId: row.sourceId,
     namesVersion: row.namesVersion,
   };
@@ -456,6 +462,7 @@ export function createQuranPersistence(): QuranPersistencePort {
                 surahNumber: value.surah,
                 locale: entry.locale,
                 name: entry.name,
+                meaning: entry.meaning ?? null,
               })),
             });
           // Which locales carry a name — never the names.

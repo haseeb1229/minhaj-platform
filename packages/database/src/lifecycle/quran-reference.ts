@@ -12,7 +12,7 @@ import {
 } from './migration-proof-operator.ts';
 import type { SqlServerConnection, SqlSession } from './sql-connection.ts';
 import { liveStepUpSessionIds } from './staging-step-up.ts';
-import type { TanzilCorpus } from './tanzil-corpus.ts';
+import type { TanzilCorpus, TanzilNames } from './tanzil-corpus.ts';
 
 /**
  * THE OWNER SIDE of Rebaseline R2's Quran reference preview (owner decision
@@ -72,6 +72,13 @@ export type IrfanLanguage = keyof typeof IRFAN_PROVENANCE;
 /** The evidence column's width (R2 migration). */
 const EVIDENCE_MAX = 2000;
 
+/**
+ * The evidence clause naming the metadata file the corpus was registered with
+ * — so the Surah names (Quran Part 2) can be proved to come from THAT file,
+ * not merely from a file of the right shape.
+ */
+const metadataClause = (sha256: string) => `cc-by, SHA-256 ${sha256};`;
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** An internal account or session identifier (the operator commands' `ACCOUNT_ID` shape). */
 const ACCOUNT = /^[A-Za-z0-9_-]{8,36}$/;
@@ -100,7 +107,7 @@ async function assertConnectedDatabase(
 export function referenceEvidence(corpus: TanzilCorpus): string {
   const evidence = [
     `${corpus.title} - https://tanzil.net/ - Creative Commons Attribution 3.0, reproduced verbatim.`,
-    `Text file SHA-256 ${corpus.textSha256}. Metadata: Tanzil Quran Metadata 1.0, (C) 2008-2009 Tanzil.info, cc-by, SHA-256 ${corpus.metadataSha256}; hizb derived from its 240 quarters.`,
+    `Text file SHA-256 ${corpus.textSha256}. Metadata: Tanzil Quran Metadata 1.0, (C) 2008-2009 Tanzil.info, ${metadataClause(corpus.metadataSha256)} hizb derived from its 240 quarters.`,
     `${QURAN_REFERENCE_DECISION}: staging reference preview only; not reviewed by Minhaj-ul-Quran's religious authority for this platform.`,
     '---',
     corpus.notice,
@@ -378,6 +385,79 @@ export async function importQuranReference(input: {
     corpus: before.canonicalAyat === 0 ? 'accepted' : 'kept',
     activated: true,
   };
+}
+
+/* ===========================================================================
+ * Surah display names (Quran Part 2)
+ * ========================================================================= */
+
+/**
+ * Imports the Surahs' English display names and their meanings from the
+ * Tanzil metadata (`tname`, `ename`, verbatim) through Quran's administrative
+ * service in the runtime child — the same `saveSurahNames` and the same
+ * `quran.read` + `quran.administer` authority as `/admin/quran/surahs`.
+ *
+ * REFUSED, WITH NOTHING CHANGED, unless the canonical corpus is the registered
+ * Tanzil reference source's, whole, and that source's evidence records THIS
+ * metadata file's digest. The child then compares every Surah's Arabic name
+ * with the corpus's own before saving any, keeps every name an operator
+ * recorded (in any locale), and reports per Surah saved, unchanged or kept —
+ * so a re-run changes nothing and an interrupted run resumes.
+ */
+export async function importSurahNames(input: {
+  readonly owner: SqlSession;
+  readonly runtime: SqlServerConnection;
+  readonly names: TanzilNames;
+  readonly operator: string;
+  readonly environment: Record<string, string | undefined>;
+}): Promise<Record<string, unknown>> {
+  if (!ACCOUNT.test(input.operator))
+    throw new Error('The operator must be an account identifier.');
+  await assertConnectedDatabase(input.owner);
+  const [row] = await input.owner.query<{
+    sourceId: string | null;
+    reference: string | null;
+    surahs: number | string;
+    fromSource: number | string;
+  }>(`
+    DECLARE @id NVARCHAR(36) = (SELECT [id] FROM [dbo].[QuranSource]
+      WHERE [code] = ${n(QURAN_REFERENCE_SOURCE_CODE)} AND [authority] = N'reference');
+    SELECT
+      @id AS [sourceId],
+      (SELECT [reference] FROM [dbo].[QuranSource] WHERE [id] = @id) AS [reference],
+      (SELECT COUNT_BIG(*) FROM [dbo].[Surah]) AS [surahs],
+      (SELECT COUNT_BIG(*) FROM [dbo].[Surah] WHERE [sourceId] = @id) AS [fromSource];
+  `);
+  if (row === undefined || row.sourceId === null || row.reference === null)
+    throw new Error(
+      `No '${QURAN_REFERENCE_SOURCE_CODE}' reference source is registered; import the corpus first.`,
+    );
+  if (
+    Number(row.surahs) !== input.names.surahs.length ||
+    Number(row.fromSource) !== input.names.surahs.length
+  )
+    throw new Error(
+      'The canonical corpus is not the whole Tanzil reference corpus; nothing was changed.',
+    );
+  if (!row.reference.includes(metadataClause(input.names.metadataSha256)))
+    throw new Error(
+      'This metadata file is not the one the reference corpus was registered with; nothing was changed.',
+    );
+
+  const work = await mkdtemp(path.join(os.tmpdir(), 'minhaj-quran-names-'));
+  try {
+    const file = path.join(work, 'names.json');
+    await writeFile(file, JSON.stringify(input.names.surahs), 'utf8');
+    return await runMigrationTool({
+      runtime: input.runtime,
+      entry: QURAN_REFERENCE_TOOL_ENTRY,
+      args: ['names', '--operator', input.operator, '--names', file],
+      environment: input.environment,
+      label: 'Quran Surah names import',
+    });
+  } finally {
+    await rm(work, { recursive: true, force: true });
+  }
 }
 
 /* ===========================================================================

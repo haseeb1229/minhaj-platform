@@ -337,9 +337,9 @@ async function seedCorpus(): Promise<void> {
       (N'${ids.source}', N'NON_QURAN_FIXTURE_BROWSER_${run}', N'fixture', N'NON_QURAN_FIXTURE browser source', N'fixture-1', N'utf-8', N'NON_QURAN_FIXTURE'),
       (N'${ids.correctionSource}', N'NON_QURAN_FIXTURE_BROWSER_CORRECTION_${run}', N'fixture', N'NON_QURAN_FIXTURE browser correction source', N'fixture-2', N'utf-8', NULL);
     INSERT INTO [dbo].[QuranSourceSurah] ([sourceId],[number],[ayahCount],[revelation],[nameArabic]) VALUES
-      (N'${ids.source}', 1, 3, NULL, N'NON_QURAN_FIXTURE_SURAH_1'),
+      (N'${ids.source}', 1, 3, N'meccan', N'NON_QURAN_FIXTURE_SURAH_1'),
       (N'${ids.source}', 2, 4, NULL, N'NON_QURAN_FIXTURE_SURAH_2'),
-      (N'${ids.source}', 3, 45, NULL, N'NON_QURAN_FIXTURE_SURAH_3'),
+      (N'${ids.source}', 3, 45, N'medinan', N'NON_QURAN_FIXTURE_SURAH_3'),
       (N'${ids.correctionSource}', 1, 1, NULL, NULL);
     INSERT INTO [dbo].[QuranSourceAyah] ([sourceId],[surahNumber],[ayahNumber],[juzNumber],[hizb],[page],[text]) VALUES
       ${ayat},
@@ -350,19 +350,19 @@ async function seedCorpus(): Promise<void> {
     INSERT INTO [dbo].[Juz] ([number],[sourceId],[createdAt]) VALUES
       (1, N'${ids.source}', SYSUTCDATETIME()), (2, N'${ids.source}', SYSUTCDATETIME());
     INSERT INTO [dbo].[Surah] ([number],[ayahCount],[revelation],[nameArabic],[sourceId],[createdAt],[updatedAt]) VALUES
-      (1, 3, NULL, N'NON_QURAN_FIXTURE_SURAH_1', N'${ids.source}', SYSUTCDATETIME(), SYSUTCDATETIME()),
+      (1, 3, N'meccan', N'NON_QURAN_FIXTURE_SURAH_1', N'${ids.source}', SYSUTCDATETIME(), SYSUTCDATETIME()),
       (2, 4, NULL, N'NON_QURAN_FIXTURE_SURAH_2', N'${ids.source}', SYSUTCDATETIME(), SYSUTCDATETIME()),
-      (3, 45, NULL, N'NON_QURAN_FIXTURE_SURAH_3', N'${ids.source}', SYSUTCDATETIME(), SYSUTCDATETIME());
+      (3, 45, N'medinan', N'NON_QURAN_FIXTURE_SURAH_3', N'${ids.source}', SYSUTCDATETIME(), SYSUTCDATETIME());
     INSERT INTO [dbo].[Ayah] ([surahNumber],[ayahNumber],[juzNumber],[hizb],[page],[text],[sourceId],[version],[createdAt],[updatedAt])
       SELECT [surahNumber],[ayahNumber],[juzNumber],[hizb],[page],[text],[sourceId],1,SYSUTCDATETIME(),SYSUTCDATETIME()
       FROM [dbo].[QuranSourceAyah] WHERE [sourceId]=N'${ids.source}';
     INSERT INTO [dbo].[QuranAyahRevision] ([surahNumber],[ayahNumber],[version],[text],[sourceId],[verificationRunId],[actorId],[stepUpGrantId],[reason],[createdAt])
       SELECT [surahNumber],[ayahNumber],1,[text],[sourceId],N'${ids.acceptance}',NULL,NULL,NULL,SYSUTCDATETIME()
       FROM [dbo].[QuranSourceAyah] WHERE [sourceId]=N'${ids.source}';
-    INSERT INTO [dbo].[SurahName] ([surahNumber],[locale],[name]) VALUES
-      (1, N'en', N'NON_QURAN_FIXTURE Surah One'),
-      (2, N'en', N'NON_QURAN_FIXTURE Surah Two'),
-      (3, N'en', N'NON_QURAN_FIXTURE Surah Three');
+    INSERT INTO [dbo].[SurahName] ([surahNumber],[locale],[name],[meaning]) VALUES
+      (1, N'en', N'NON_QURAN_FIXTURE Surah One', N'NON_QURAN_FIXTURE meaning one'),
+      (2, N'en', N'NON_QURAN_FIXTURE Surah Two', N'NON_QURAN_FIXTURE meaning two'),
+      (3, N'en', N'NON_QURAN_FIXTURE Surah Three', NULL);
   `);
 }
 
@@ -625,6 +625,158 @@ test.describe('a fixture corpus', () => {
     await tabTo(page, next);
     await page.keyboard.press('Enter');
     await page.waitForURL(/\/quran\/surah\/1\/3$/);
+  });
+
+  test('Part 2: the Surah index — names and meanings, a filter as you type and without script, orders, RTL and 320px', async ({
+    page,
+    browser,
+    request,
+  }, testInfo) => {
+    test.setTimeout(240_000);
+    await visitFixture(page, '/quran/surah');
+    const list = page.getByRole('list', { name: 'Surahs' });
+    const rows = list.getByRole('listitem');
+    await expect(rows).toHaveCount(3);
+    // Each row: the recorded name (the link), its meaning, its facts — ayat,
+    // revelation where the source recorded it, the Juz it spans — and the
+    // source's Arabic name, marked Arabic.
+    await expect(
+      rows.first().getByRole('link', { name: 'Surah 1 · NON_QURAN_FIXTURE Surah One' }),
+    ).toHaveAttribute('href', '/quran/surah/1');
+    await expect(rows.first()).toContainText('NON_QURAN_FIXTURE meaning one');
+    await expect(rows.first()).toContainText('3 ayat · Meccan · Juz 1');
+    await expect(rows.nth(1)).toContainText('4 ayat · Juz 1–2');
+    await expect(rows.nth(2)).toContainText('45 ayat · Medinan · Juz 2');
+    await expect(rows.first().locator('[lang="ar"]')).toHaveText(
+      'NON_QURAN_FIXTURE_SURAH_1',
+    );
+    const status = page.getByRole('status').filter({ hasText: 'Showing' });
+    await expect(status).toHaveText('Showing 3 of 3 Surahs');
+
+    // Typing narrows the list at once — by meaning, by number, by name — and
+    // keeps the address in step so the filtered list can be shared.
+    const filter = page.getByRole('searchbox', { name: 'Find a Surah' });
+    await filter.fill('meaning two');
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText('NON_QURAN_FIXTURE Surah Two');
+    await expect(status).toHaveText('Showing 1 of 3 Surahs');
+    await expect(page).toHaveURL(/\/quran\/surah\?q=meaning\+two$/);
+    await filter.fill('3');
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText('NON_QURAN_FIXTURE Surah Three');
+    await filter.fill('zzzz');
+    await expect(list).toHaveCount(0);
+    await expect(page.getByText('No Surah matches “zzzz”.')).toBeVisible();
+    await page.getByRole('link', { name: 'Show every Surah' }).click();
+    await expect(rows).toHaveCount(3);
+    await expect(filter).toHaveValue('');
+
+    // Orders: longest first, and grouped by place of revelation.
+    const order = page.getByRole('combobox', { name: 'Order', exact: true });
+    await order.selectOption({ label: 'Longest first' });
+    await expect(rows.first()).toContainText('NON_QURAN_FIXTURE Surah Three');
+    await expect(page).toHaveURL(/\/quran\/surah\?sort=longest$/);
+    await order.selectOption({ label: 'By place of revelation' });
+    for (const [heading, surah] of [
+      ['Meccan', 'One'],
+      ['Medinan', 'Three'],
+      ['Place of revelation not recorded', 'Two'],
+    ] as const) {
+      const group = page.getByRole('list', { name: new RegExp(`^${heading}`) });
+      await expect(group.getByRole('listitem'), heading).toHaveCount(1);
+      await expect(group, heading).toContainText(`NON_QURAN_FIXTURE Surah ${surah}`);
+    }
+
+    // The same list without JavaScript: the address is answered on the server,
+    // and the form is a plain GET.
+    const noScript = await browser.newContext({
+      baseURL: baseUrl(),
+      javaScriptEnabled: false,
+    });
+    contexts.push(noScript);
+    const plain = await noScript.newPage();
+    const answered = await plain.goto('/quran/surah?q=two&sort=longest');
+    expect(answered?.status()).toBe(200);
+    await expect(
+      plain.getByRole('list', { name: 'Surahs' }).getByRole('listitem'),
+    ).toHaveCount(1);
+    await expect(plain.getByRole('combobox', { name: 'Order', exact: true })).toHaveValue(
+      'longest',
+    );
+    await plain.getByRole('searchbox', { name: 'Find a Surah' }).fill('surah three');
+    await plain.getByRole('button', { name: 'Apply' }).click();
+    await plain.waitForURL(/\/quran\/surah\?q=surah\+three&sort=longest$/);
+    await expect(plain.getByRole('list', { name: 'Surahs' })).toContainText(
+      'NON_QURAN_FIXTURE Surah Three',
+    );
+    await expect(
+      plain.getByRole('list', { name: 'Surahs' }).getByRole('listitem'),
+    ).toHaveCount(1);
+    const nothing = await plain.goto('/quran/surah?q=zzzz&sort=nonsense');
+    expect(nothing?.status()).toBe(200);
+    await expect(plain.getByText('No Surah matches “zzzz”.')).toBeVisible();
+
+    // The quick jump now resolves a recorded meaning, too, without script.
+    const jump = await request.get(`/quran/read?q=${encodeURIComponent('meaning two')}`, {
+      maxRedirects: 0,
+    });
+    expect(new URL(jump.headers()['location'] ?? '', baseUrl()).pathname).toBe(
+      '/quran/surah/2',
+    );
+
+    // Urdu and Arabic: the title is the source's Arabic name, marked Arabic;
+    // no English meaning is passed off in their place; English names still
+    // filter.
+    for (const locale of ['ur', 'ar'] as const) {
+      await visitFixture(page, localizedPath(locale, '/quran/surah'), locale);
+      const own = page
+        .getByRole('main')
+        .getByRole('list')
+        .filter({
+          has: page.locator('a[href$="/quran/surah/1"]'),
+        });
+      const title = own.locator('a[href$="/quran/surah/1"] [lang]').first();
+      await expect(title, locale).toHaveAttribute('lang', 'ar');
+      await expect(title, locale).toHaveText('NON_QURAN_FIXTURE_SURAH_1');
+      await expect(own, locale).not.toContainText('NON_QURAN_FIXTURE meaning one');
+      await expect(page.locator('html'), locale).toHaveAttribute('dir', 'rtl');
+    }
+
+    // No sideways scroll at 320px — long source names wrap rather than
+    // squeezing a row — and no serious accessibility finding.
+    await page.setViewportSize({ width: 320, height: 800 });
+    for (const target of [
+      '/quran/surah',
+      '/ur/quran/surah',
+      '/ar/quran/surah?sort=revelation',
+      '/quran',
+    ]) {
+      await page.goto(target);
+      const { overflow, offenders } = await overflowOf(page);
+      expect(
+        overflow,
+        `320px ${target} — beyond the viewport: ${offenders.join(', ')}`,
+      ).toBeLessThanOrEqual(0);
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+    for (const target of ['/quran/surah', '/ur/quran/surah?sort=revelation']) {
+      await page.goto(target);
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      const blocking = results.violations.filter(
+        (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+      );
+      for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+        testInfo.annotations.push({
+          type: 'axe',
+          description: `${target}: ${finding.id} (${String(finding.impact)})`,
+        });
+      expect(
+        blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+        target,
+      ).toEqual([]);
+    }
   });
 
   test('marks the Arabic as Arabic, right-to-left, in every interface locale', async ({

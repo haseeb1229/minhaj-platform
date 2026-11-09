@@ -15,6 +15,7 @@ import {
 import {
   importIrfanTranslations,
   importQuranReference,
+  importSurahNames,
   inspectReference,
   liveCanonicalSession,
   QURAN_REFERENCE_SOURCE_CODE,
@@ -28,6 +29,7 @@ import {
 } from '../../packages/database/src/lifecycle/sql-connection.ts';
 import {
   readTanzilCorpus,
+  readTanzilSurahNames,
   sha256Hex,
   type TanzilCorpus,
 } from '../../packages/database/src/lifecycle/tanzil-corpus.ts';
@@ -37,7 +39,12 @@ import {
   type DisposableDatabase,
 } from '../identity/harness.ts';
 import { accountWith, count, grantFor, n, sessionFor } from './fixture-sql.ts';
-import { tanzilFixture, utf8 } from './tanzil-fixture.ts';
+import {
+  fixtureMeaning,
+  fixtureTransliteration,
+  tanzilFixture,
+  utf8,
+} from './tanzil-fixture.ts';
 
 /**
  * Rebaseline R2 — the Quran REFERENCE authority over a REAL SQL Server, end to
@@ -60,7 +67,12 @@ import { tanzilFixture, utf8 } from './tanzil-fixture.ts';
  *     correction never enters an active reference corpus;
  *   - the translation import registers Irfan-ul-Quran's provenance and, with no
  *     staged revision to read, saves and publishes nothing — it reports every
- *     Surah skipped instead.
+ *     Surah skipped instead;
+ *   - the Surah names import (Quran Part 2) refuses metadata the corpus was not
+ *     registered with and an operator without `quran.administer`, saves each
+ *     English name and meaning verbatim through the admin service with its
+ *     audit record, keeps a name an operator recorded and every other locale's
+ *     name, and changes nothing on a second run.
  */
 
 const live = databaseConfigured ? describe : describe.skip;
@@ -345,4 +357,95 @@ live('R2 Quran reference preview against real SQL Server', () => {
     }
     expect(await admitted.translations()).toEqual([]);
   }, 300_000);
+
+  it('imports the Surah names verbatim through the admin service, keeps an operator’s, and resumes', async () => {
+    const metadata = utf8(tanzilFixture().metadata);
+    const names = readTanzilSurahNames({
+      metadata,
+      expectedSha256: sha256Hex(metadata),
+    });
+
+    // A metadata file the corpus was NOT registered with changes nothing,
+    // however well formed it is.
+    const other = utf8(
+      tanzilFixture().metadata.replace(
+        'ename="NON_QURAN_FIXTURE meaning 9"',
+        'ename="NON_QURAN_FIXTURE other meaning 9"',
+      ),
+    );
+    await expect(
+      importSurahNames({
+        owner,
+        runtime,
+        names: readTanzilSurahNames({
+          metadata: other,
+          expectedSha256: sha256Hex(other),
+        }),
+        operator,
+        environment: process.env,
+      }),
+    ).rejects.toThrow(/not the one the reference corpus was registered with/);
+    expect(await count(db.admin, 'SurahName')).toBe(0);
+
+    // An account without quran.administer saves nothing.
+    const reader = await accountWith(db.admin, ['quran.read']);
+    await expect(
+      importSurahNames({
+        owner,
+        runtime,
+        names,
+        operator: reader,
+        environment: process.env,
+      }),
+    ).rejects.toThrow(/Quran Surah names import failed/);
+    expect(await count(db.admin, 'SurahName')).toBe(0);
+
+    // An operator's own English name for Surah 2 is kept; an Urdu name for
+    // Surah 3 is carried over beside the imported English one.
+    await db.admin.query(`
+      INSERT INTO [dbo].[SurahName] ([surahNumber],[locale],[name]) VALUES
+        (2, N'en', N'NON_QURAN_FIXTURE operator name'),
+        (3, N'ur', N'NON_QURAN_FIXTURE اردو نام');
+    `);
+
+    const first = (await importSurahNames({
+      owner,
+      runtime,
+      names,
+      operator,
+      environment: process.env,
+    })) as { saved: number; unchanged: number; kept: unknown[] };
+    expect(first).toMatchObject({ saved: 113, unchanged: 0 });
+    expect(first.kept).toEqual([{ surah: 2, reason: 'operator-name' }]);
+
+    const surahs = await admitted.surahs();
+    const byNumber = new Map(surahs.map((surah) => [surah.number, surah]));
+    expect(byNumber.get(1)).toMatchObject({
+      names: { en: fixtureTransliteration(1) },
+      meanings: { en: fixtureMeaning(1) },
+    });
+    expect(byNumber.get(6)?.names.en).toBe("NON_QURAN_FIXTURE_Aa'-6");
+    expect(byNumber.get(2)?.names).toEqual({ en: 'NON_QURAN_FIXTURE operator name' });
+    expect(byNumber.get(2)?.meanings).toEqual({});
+    expect(byNumber.get(3)?.names).toEqual({
+      en: fixtureTransliteration(3),
+      ur: 'NON_QURAN_FIXTURE اردو نام',
+    });
+    const [audit] = await db.admin.query<{ saved: number; actors: number }>(`
+      SELECT COUNT_BIG(*) AS [saved], COUNT(DISTINCT [actorId]) AS [actors]
+      FROM [dbo].[AuditLog] WHERE [action] = N'quran.surah.names-saved';
+    `);
+    expect([Number(audit?.saved), Number(audit?.actors)]).toEqual([113, 1]);
+
+    // A second run changes nothing.
+    const second = (await importSurahNames({
+      owner,
+      runtime,
+      names,
+      operator,
+      environment: process.env,
+    })) as { saved: number; unchanged: number; kept: unknown[] };
+    expect(second).toMatchObject({ saved: 0, unchanged: 113 });
+    expect(second.kept).toEqual([{ surah: 2, reason: 'operator-name' }]);
+  }, 600_000);
 });

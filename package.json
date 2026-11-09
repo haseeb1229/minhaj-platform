@@ -56,6 +56,7 @@
     "staging:storage:derivatives": "node --conditions=react-server packages/database/scripts/staging-storage-derivatives.ts",
     "storage:derivatives:backfill": "node --conditions=react-server scripts/storage/derivatives-backfill.ts",
     "quran:reference:translations": "node --conditions=react-server packages/database/scripts/staging-quran-reference.ts translations",
+    "quran:reference:names": "node --conditions=react-server packages/database/scripts/staging-quran-reference.ts names",
     "typecheck": "npm run typecheck --workspaces --if-present && tsc -p tsconfig.tooling.json",
     "lint": "eslint .",
     "check:architecture": "node scripts/check-architecture.mjs",

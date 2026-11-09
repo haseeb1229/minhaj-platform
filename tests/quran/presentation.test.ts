@@ -270,15 +270,20 @@ describe('layers are placed against the ayat they cover', () => {
 
 describe('labels name what they are in the language they are in', () => {
   it('prefers the reader’s own Surah name, then falls back WITH its locale', () => {
-    expect(surahName({ names: { en: 'Fixture name', ur: 'فکسچر' } }, 'ur')).toEqual({
+    expect(
+      surahName({ names: { en: 'Fixture name', ur: 'فکسچر' }, nameArabic: null }, 'ur'),
+    ).toEqual({
       text: 'فکسچر',
       locale: 'ur',
     });
-    expect(surahName({ names: { en: 'Fixture name' } }, 'ar')).toEqual({
+    // With no Arabic name recorded either, an Arabic reader gets what exists.
+    expect(surahName({ names: { en: 'Fixture name' }, nameArabic: null }, 'ar')).toEqual({
       text: 'Fixture name',
       locale: 'en',
     });
-    expect(surahName({ names: {} }, 'en')).toBeNull();
+    expect(surahName({ names: {}, nameArabic: null }, 'en')).toBeNull();
+    // An English reader is never handed the Arabic name as a display name.
+    expect(surahName({ names: {}, nameArabic: 'فكسچر' }, 'en')).toBeNull();
   });
 
   it('shows a Tajweed rule in the reader’s language, or says it is falling back', () => {

@@ -2922,6 +2922,34 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > placeholder control), the translations comparison page, tafsir, tajweed and the related views;
 > more than four translations side by side (more are chosen one at a time through `?translation=`).
 
+> **Quran Part 2 — the Surah index and the Surah display names (owner direction 2026-11-09; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (ROUTE_MAP.md §3.3; DOMAIN_MODEL.md
+> §8.4; OPEN_DECISIONS.md §1.1):
+>
+> - **Names.** Migration `20261109000000_r2_quran_surah_meaning` (**34 migrations**) adds
+>   `SurahName.meaning` — one nullable presentation column edited with the name on
+>   `/admin/quran/surahs`. `quran-reference.sh names --sha256 <metadata hex> --operator <id>`
+>   (`npm run quran:reference:names`) saves the Tanzil metadata's `tname` and `ename` verbatim as each
+>   Surah's English name and meaning through Quran's administrative service, only when the file is
+>   the one the reference corpus was registered with and its Arabic names are the corpus's; it keeps
+>   an operator's name and is a no-op on a re-run. No Urdu or Arabic name is written (no lawful source
+>   in the data); those interfaces show the source's Arabic name. Revelation order is not stored and
+>   not offered.
+> - **The index.** `/quran/surah` and the landing's Surah tab: one row per Surah (number, name and
+>   meaning, ayat, revelation, Juz span, Arabic name in the Quran face that wraps instead of squeezing
+>   the row), a filter by name in any script, meaning or number and four orders (number, grouped by
+>   revelation place, longest, shortest) — a GET form without JavaScript, answered per keystroke with
+>   it, the count announced in a status line — and Part 1's continue card above it. The quick jump
+>   also resolves meanings and single-vowel spellings; the Surah header shows the meaning.
+>
+> **Proof:** `tests/quran/surah-index.test.ts` (filter, orders, address, Juz spans, display names);
+> `tests/quran/tanzil-corpus.test.ts` (the names reader and its refusals); the SQL Server proofs
+> `tests/quran/reference.integration.test.ts` (the names import end to end) and
+> `tests/quran/persistence.integration.test.ts` (the meaning saved and refused empty); the migration
+> rehearsal (`db:migrate:test`, column, CHECK and rollback); the browser journey
+> (`tests/browser/quran.spec.ts`) gains the index's filter with and without script, its orders,
+> Urdu and Arabic, 320 px and an axe scan. *CI and staging evidence are recorded when they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

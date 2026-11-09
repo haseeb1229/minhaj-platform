@@ -38,6 +38,7 @@ import {
   citationsAfter,
   citationsBetween,
   isPublicWork,
+  meaningsOf,
   namesOf,
   publicWork,
   stampOf,
@@ -88,7 +89,10 @@ const PUBLIC_SURAH = {
   ayahCount: true,
   revelation: true,
   nameArabic: true,
-  names: { select: { locale: true, name: true }, orderBy: { locale: 'asc' } },
+  names: {
+    select: { locale: true, name: true, meaning: true },
+    orderBy: { locale: 'asc' },
+  },
 } satisfies Prisma.SurahSelect;
 
 const CONTRIBUTORS = {
@@ -168,7 +172,11 @@ function toSurah(row: {
   readonly ayahCount: number;
   readonly revelation: string | null;
   readonly nameArabic: string | null;
-  readonly names: readonly { readonly locale: string; readonly name: string }[];
+  readonly names: readonly {
+    readonly locale: string;
+    readonly name: string;
+    readonly meaning: string | null;
+  }[];
 }): PublicSurah {
   return {
     number: row.number,
@@ -176,6 +184,7 @@ function toSurah(row: {
     revelation: row.revelation as QuranRevelation | null,
     nameArabic: row.nameArabic,
     names: namesOf(row.names),
+    meanings: meaningsOf(row.names),
   };
 }
 
