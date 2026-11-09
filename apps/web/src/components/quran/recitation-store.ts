@@ -222,7 +222,10 @@ function load(recitation: string, surah: number): Promise<SurahAudio | null> {
   if (pending === undefined) {
     pending = fetch(
       `/api/quran/recitations/${encodeURIComponent(recitation)}/${String(surah)}`,
-      { credentials: 'omit', headers: { accept: 'application/json' } },
+      // Same-origin, not `omit`: a deployment behind an HTTP authentication
+      // gate (staging's edge) refuses a request that withholds the browser's
+      // credentials. The route reads no session, so nothing personal changes.
+      { credentials: 'same-origin', headers: { accept: 'application/json' } },
     )
       .then(async (response) => {
         if (response.status === 404) return null;
