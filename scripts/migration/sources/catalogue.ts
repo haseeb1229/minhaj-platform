@@ -7,6 +7,14 @@ import type {
 import type { SourceSelection as AdapterSelection } from '../adapters/source-support.ts';
 import { createIrfanUlQuranTranslationAdapter } from '../adapters/irfan-ul-quran.ts';
 import {
+  QURANENC_BASE_URL,
+  QURANENC_HOST,
+  QURANENC_TRANSLATIONS,
+  createQuranEncTranslationAdapter,
+  quranEncSourceKey,
+  type QuranEncTranslation,
+} from '../adapters/quranenc.ts';
+import {
   createMinhajInfoIssueAdapter,
   createMinhajInfoMagazineAdapter,
 } from '../adapters/minhaj-info.ts';
@@ -827,6 +835,39 @@ export const MINHAJ_BOOKS_AUTHORS: readonly string[] = Object.freeze([
 ]);
 const IRFAN = 'https://www.irfan-ul-quran.com/';
 
+/**
+ * QuranEnc's external reference translations (owner decision 2026-11-10,
+ * OPEN_DECISIONS.md §1.2): one registration per pinned translation, its key
+ * `quranenc-<QuranEnc key with dashes>`, reading only QuranEnc's public API on
+ * its one host under its published re-publication terms. Review-only, like
+ * Irfan-ul-Quran: migration never publishes Quran material.
+ */
+const quranEncSource = (
+  translation: QuranEncTranslation,
+): AuthorisedSourceDefinition => ({
+  key: quranEncSourceKey(translation),
+  name: `QuranEnc — ${translation.publisher} (${translation.language === 'ur' ? 'Urdu' : 'English'}; external reference, review only)`,
+  contentKind: 'quran.translation',
+  baseUrl: QURANENC_BASE_URL,
+  hosts: [QURANENC_HOST],
+  assetHosts: [],
+  assetHostEvidence: null,
+  defaultLanguageCode: translation.language,
+  policy: AUTHORISED_POLICY,
+  policyNotes:
+    `QuranEnc's public translation API only (${translation.key}, at the edition its adapter ` +
+    `pins): each surah's translation and its footnotes, verbatim; no Arabic text, account ` +
+    `or download. Re-published under QuranEnc's terms (https://quranenc.com/en/home/api/). ` +
+    `Review-only: migration never publishes Quran material. An external reference ` +
+    `translation, not Minhaj-ul-Quran's.`,
+  adapter: (selection) =>
+    createQuranEncTranslationAdapter({
+      key: translation.key,
+      selection,
+      surahs: surahs(selection),
+    }),
+});
+
 export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.freeze([
   {
     key: 'minhaj-org-news-en',
@@ -1301,6 +1342,7 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
         surahs: surahs(selection),
       }),
   },
+  ...QURANENC_TRANSLATIONS.map(quranEncSource),
 ]);
 
 export function authorisedSource(key: string): AuthorisedSourceDefinition | null {

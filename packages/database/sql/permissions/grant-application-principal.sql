@@ -711,6 +711,12 @@ IF OBJECT_ID(N'[dbo].[QuranRecitationTiming]',N'U') IS NOT NULL BEGIN GRANT SELE
 -- Quran Part 6. A translation's translator's notes are inserted with its
 -- text's save and replaced whole — never edited in place.
 IF OBJECT_ID(N'[dbo].[QuranTranslationNote]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranTranslationNote] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[QuranTranslationNote] TO [$(app_login)]; END;
+-- Quran Part 7. A word-by-word work is administered like a Translation: its
+-- slug fixed, never deleted; its contributors replaced whole; its glosses
+-- edited in place, never re-parented or moved to another word.
+IF OBJECT_ID(N'[dbo].[QuranWordByWord]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[QuranWordByWord] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranWordByWord] ([slug]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[QuranWordByWord] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranWordByWordContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranWordByWordContributor] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[QuranWordByWordContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranWordByWordGloss]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[QuranWordByWordGloss] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranWordByWordGloss] ([wordByWordId], [surahNumber], [ayahNumber], [position]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[QuranWordByWordGloss] TO [$(app_login)]; END;
 
 -- Phase 19: Hadith.
 --

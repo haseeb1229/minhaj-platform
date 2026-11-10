@@ -3,8 +3,8 @@ import 'server-only';
 import { readFile } from 'node:fs/promises';
 
 import {
-  importIrfanTranslations,
   importQuranReference,
+  importReferenceTranslations,
   importSurahNames,
   liveCanonicalSession,
 } from '../src/lifecycle/quran-reference.ts';
@@ -45,12 +45,14 @@ import {
  *     interrupted import; refuses, changing nothing, once the corpus is active.
  *
  *   translations  --operator <accountId>
- *     (`npm run quran:reference:translations`) Registers Irfan-ul-Quran's two
- *     provenance sources as the OWNER, then imports the staged Urdu and English
- *     revisions as the RUNTIME principal under the operator's `migration.read`,
- *     `quran.read` and `quran.administer`, Surah by Surah, publishing each work.
- *     A Surah without a current, valid, complete revision is skipped and
- *     reported, never repaired.
+ *     (`npm run quran:reference:translations`) Registers every translation
+ *     work's provenance source as the OWNER — Irfan-ul-Quran's Urdu and
+ *     English, and QuranEnc's external reference translations (owner decision
+ *     2026-11-10) — then imports each work's staged revisions as the RUNTIME
+ *     principal under the operator's `migration.read`, `quran.read` and
+ *     `quran.administer`, Surah by Surah, publishing each work. A Surah without
+ *     a current, valid, complete revision is skipped and reported, never
+ *     repaired; a QuranEnc work's attribution names its staged edition's version.
  *
  *   names         --meta <quran-data.xml> --sha256 <metadata hex> --operator <accountId>
  *     (`npm run quran:reference:names`; Quran Part 2) Reads the Surahs' names
@@ -177,7 +179,12 @@ await runStagingCommand('staging:quran:reference', async () => {
         environment,
       });
     else
-      result = await importIrfanTranslations({ owner, runtime, operator, environment });
+      result = await importReferenceTranslations({
+        owner,
+        runtime,
+        operator,
+        environment,
+      });
     return {
       environmentId: command.environmentId,
       database: STAGING_DATABASE,

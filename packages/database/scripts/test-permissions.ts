@@ -3678,6 +3678,7 @@ try {
   // ---- the layered works, through the runtime login --------------------------
   const quranTranslation = randomUUID();
   const quranTransliteration = randomUUID();
+  const quranWordByWord = randomUUID();
   const quranTafsir = randomUUID();
   const quranRecitation = randomUUID();
   const quranRule = randomUUID();
@@ -3692,8 +3693,9 @@ try {
      INSERT INTO [dbo].[QuranTransliteration] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${quranTransliteration}',N'lp-quran-transliteration-${quranRun}',N'en',N'NON_QURAN_FIXTURE transliteration',N'draft',1,SYSUTCDATETIME());
      INSERT INTO [dbo].[QuranTafsir] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${quranTafsir}',N'lp-quran-tafsir-${quranRun}',N'en',N'NON_QURAN_FIXTURE tafsir',N'draft',1,SYSUTCDATETIME());
      INSERT INTO [dbo].[QuranRecitation] ([id],[slug],[personId],[name],[state],[version],[updatedAt]) VALUES (N'${quranRecitation}',N'lp-quran-recitation-${quranRun}',N'${quranPerson}',N'NON_QURAN_FIXTURE recitation',N'draft',1,SYSUTCDATETIME());
-     INSERT INTO [dbo].[QuranTajweedRule] ([id],[slug],[position],[state],[version],[updatedAt]) VALUES (N'${quranRule}',N'lp-quran-tajweed-${quranRun}',0,N'draft',1,SYSUTCDATETIME());`,
-    'five draft works with a registered language and a typed reciter',
+     INSERT INTO [dbo].[QuranTajweedRule] ([id],[slug],[position],[state],[version],[updatedAt]) VALUES (N'${quranRule}',N'lp-quran-tajweed-${quranRun}',0,N'draft',1,SYSUTCDATETIME());
+     INSERT INTO [dbo].[QuranWordByWord] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${quranWordByWord}',N'lp-quran-word-by-word-${quranRun}',N'en',N'NON_QURAN_FIXTURE word by word',N'draft',1,SYSUTCDATETIME());`,
+    'six draft works with a registered language and a typed reciter',
   );
   await expectAllowed(
     app,
@@ -3702,6 +3704,8 @@ try {
      INSERT INTO [dbo].[QuranTranslationNote] ([translationId],[surahNumber],[ayahNumber],[ordinal],[marker],[text]) VALUES (N'${quranTranslation}',1,1,1,N'*',N'NON_QURAN_FIXTURE note 1:1');
      INSERT INTO [dbo].[QuranTranslationContributor] ([translationId],[personId],[role],[position]) VALUES (N'${quranTranslation}',N'${quranPerson}',N'translator',0);
      INSERT INTO [dbo].[QuranTransliterationText] ([transliterationId],[surahNumber],[ayahNumber],[text]) VALUES (N'${quranTransliteration}',1,1,N'NON_QURAN_FIXTURE_TRANSLITERATION_1_1');
+     INSERT INTO [dbo].[QuranWordByWordGloss] ([wordByWordId],[surahNumber],[ayahNumber],[position],[text]) VALUES (N'${quranWordByWord}',1,1,1,N'NON_QURAN_FIXTURE gloss 1'),(N'${quranWordByWord}',1,1,2,N'NON_QURAN_FIXTURE gloss 2');
+     INSERT INTO [dbo].[QuranWordByWordContributor] ([wordByWordId],[personId],[role],[position]) VALUES (N'${quranWordByWord}',N'${quranPerson}',N'translator',0);
      INSERT INTO [dbo].[QuranTafsirText] ([id],[tafsirId],[surahNumber],[startAyah],[endAyah],[text]) VALUES (N'${quranEntry}',N'${quranTafsir}',1,1,2,N'${quranText('TAFSIR', 1, 1)}');
      INSERT INTO [dbo].[QuranTafsirContributor] ([tafsirId],[personId],[role],[position]) VALUES (N'${quranTafsir}',N'${quranPerson}',N'author',0);
      INSERT INTO [dbo].[Asset] ([id],[storageKey],[state],[updatedAt]) VALUES (N'${quranAsset}',N'ab/cd/${quranRun}',N'uploading',SYSUTCDATETIME());
@@ -3711,7 +3715,7 @@ try {
      INSERT INTO [dbo].[SurahName] ([surahNumber],[locale],[name]) VALUES (1,N'en',N'NON_QURAN_FIXTURE name'),(1,N'ur',N'NON_QURAN_FIXTURE name ur');
      INSERT INTO [dbo].[QuranTopic] ([surahNumber],[ayahNumber],[topicId]) VALUES (1,1,N'${editorialTopic.id}');
      INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'quran-ayah',N'1:1');`,
-    "texts, a translator's note, entries, contributors, a timed segment, display names, a topic and Ayah search intent",
+    "texts, a translator's note, glosses, entries, contributors, a timed segment, display names, a topic and Ayah search intent",
   );
   await expectAllowed(
     app,
@@ -3719,6 +3723,8 @@ try {
     `UPDATE [dbo].[QuranTranslation] SET [name]=N'NON_QURAN_FIXTURE translation renamed',[version]=[version]+1,[updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${quranTranslation}';
      UPDATE [dbo].[QuranTranslationText] SET [text]=N'${quranText('TRANSLATION_REVISED', 1, 1)}' WHERE [translationId]=N'${quranTranslation}' AND [ayahNumber]=1;
      UPDATE [dbo].[QuranTransliterationText] SET [text]=N'NON_QURAN_FIXTURE_TRANSLITERATION_REVISED_1_1' WHERE [transliterationId]=N'${quranTransliteration}';
+     UPDATE [dbo].[QuranWordByWordGloss] SET [text]=N'NON_QURAN_FIXTURE gloss revised' WHERE [wordByWordId]=N'${quranWordByWord}' AND [position]=1;
+     UPDATE [dbo].[QuranWordByWord] SET [state]=N'published',[sourceId]=N'${quranSource}',[publishedAt]=SYSUTCDATETIME(),[version]=[version]+1 WHERE [id]=N'${quranWordByWord}';
      UPDATE [dbo].[QuranTafsirText] SET [text]=N'${quranText('TAFSIR_REVISED', 1, 1)}' WHERE [id]=N'${quranEntry}';
      UPDATE [dbo].[QuranTajweedRuleText] SET [body]=N'NON_QURAN_FIXTURE rule body revised' WHERE [ruleId]=N'${quranRule}';
      UPDATE [dbo].[QuranRecitationSegment] SET [assetId]=N'${quranAsset}' WHERE [id]=N'${quranSegment}';
@@ -3733,6 +3739,8 @@ try {
      DELETE FROM [dbo].[QuranTranslationText] WHERE [translationId]=N'${quranTranslation}' AND [ayahNumber]=2;
      DELETE FROM [dbo].[QuranTranslationContributor] WHERE [translationId]=N'${quranTranslation}';
      DELETE FROM [dbo].[QuranTransliterationText] WHERE [transliterationId]=N'${quranTransliteration}';
+     DELETE FROM [dbo].[QuranWordByWordGloss] WHERE [wordByWordId]=N'${quranWordByWord}' AND [position]=2;
+     DELETE FROM [dbo].[QuranWordByWordContributor] WHERE [wordByWordId]=N'${quranWordByWord}';
      DELETE FROM [dbo].[QuranTafsirContributor] WHERE [tafsirId]=N'${quranTafsir}';
      DELETE FROM [dbo].[QuranTafsirText] WHERE [id]=N'${quranEntry}';
      DELETE FROM [dbo].[QuranTajweedRuleText] WHERE [ruleId]=N'${quranRule}';
@@ -3748,6 +3756,7 @@ try {
     'QuranTafsir',
     'QuranRecitation',
     'QuranTajweedRule',
+    'QuranWordByWord',
   ]) {
     await expectDenied(
       app,
@@ -3807,6 +3816,24 @@ try {
       'QuranTransliterationText work UPDATE denied',
       `UPDATE [dbo].[QuranTransliterationText] SET [transliterationId]=N'${quranTransliteration}';`,
     ],
+    // Quran Part 7: a gloss is edited in place, but never moved to another
+    // work, Ayah or word; a contributor is replaced whole.
+    [
+      'QuranWordByWordContributor UPDATE denied',
+      'UPDATE [dbo].[QuranWordByWordContributor] SET [position]=[position];',
+    ],
+    [
+      'QuranWordByWordGloss work UPDATE denied',
+      `UPDATE [dbo].[QuranWordByWordGloss] SET [wordByWordId]=N'${quranWordByWord}';`,
+    ],
+    [
+      'QuranWordByWordGloss Ayah UPDATE denied',
+      'UPDATE [dbo].[QuranWordByWordGloss] SET [ayahNumber]=[ayahNumber];',
+    ],
+    [
+      'QuranWordByWordGloss position UPDATE denied',
+      'UPDATE [dbo].[QuranWordByWordGloss] SET [position]=[position];',
+    ],
     [
       'QuranTafsirText work UPDATE denied',
       `UPDATE [dbo].[QuranTafsirText] SET [tafsirId]=N'${quranTafsir}';`,
@@ -3842,6 +3869,9 @@ try {
     'QuranTajweedRule',
     'QuranTajweedRuleText',
     'QuranTopic',
+    'QuranWordByWord',
+    'QuranWordByWordContributor',
+    'QuranWordByWordGloss',
   ]) {
     await assertObjectVisible(app, table);
     await expectDenied(
@@ -3884,6 +3914,10 @@ try {
     QuranRecitationTiming: ['DELETE,INSERT,SELECT', ''],
     QuranTranslationNote: ['DELETE,INSERT,SELECT', ''],
     QuranTopic: ['DELETE,INSERT,SELECT', ''],
+    // Quran Part 7: a gloss's identity — its work, Ayah and word — is fixed.
+    QuranWordByWord: ['INSERT,SELECT', 'all but slug'],
+    QuranWordByWordContributor: ['DELETE,INSERT,SELECT', ''],
+    QuranWordByWordGloss: ['DELETE,INSERT,SELECT', 'text'],
   };
   const posture = await app.query<{
     name: string;

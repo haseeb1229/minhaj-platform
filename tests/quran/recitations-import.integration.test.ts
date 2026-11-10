@@ -30,7 +30,7 @@ import {
   type SqlServerConnection,
   type SqlSession,
 } from '../../packages/database/src/lifecycle/sql-connection.ts';
-import { HAFS, MP3QURAN_ENDPOINTS } from '../../scripts/quran/mp3quran.ts';
+import { CURATED_READS, HAFS, MP3QURAN_ENDPOINTS } from '../../scripts/quran/mp3quran.ts';
 import type { QuranReferenceRunner } from '../../apps/web/src/composition/quran-reference-runner.ts';
 import type * as Runtime from '../../scripts/quran/recitations-runtime.ts';
 import {
@@ -396,7 +396,11 @@ live('Quran Part 5 recitation imports against real SQL Server', () => {
         published: boolean;
       }[];
     };
-    expect(summary).toMatchObject({ reads: 12, published: 1, segmentsAdded: 113 });
+    expect(summary).toMatchObject({
+      reads: CURATED_READS.length,
+      published: 1,
+      segmentsAdded: 113,
+    });
     const byRead = new Map(summary.reports.map((report) => [report.read, report]));
     expect(byRead.get(MISHARY.read)).toEqual({
       read: MISHARY.read,

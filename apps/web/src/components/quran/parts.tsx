@@ -25,8 +25,9 @@ import {
   Select,
   TextLink,
 } from '@/components/ui';
+import { quranReadRuntime } from '@/composition/quran-read';
 import { corpusNotice, readSurahs, type ReadingContext } from './read';
-import { REFERENCE_LINKS } from './reference-sources';
+import { FIRST_PARTY_TRANSLATIONS, REFERENCE_LINKS } from './reference-sources';
 import {
   READING_LAYERS,
   TEXT_SIZES,
@@ -160,9 +161,12 @@ export async function CorpusNotice({
  * source to be named and linked), the Tanzil metadata the English Surah names
  * and their meanings came from wherever any is recorded (Quran Part 2), the
  * Irfan-ul-Quran translation with its
- * rights holder and official site, and the plain statement that none of it has
- * been reviewed for this platform. Rendered only in reference mode; the
- * translation line only where a translation is shown.
+ * rights holder and official site, every OTHER public translation — QuranEnc's
+ * external reference translations (owner decision 2026-11-10) — with the
+ * credit its publisher requires and the plain statement that it is not
+ * Minhaj-ul-Quran's, and the plain statement that none of it has been
+ * reviewed for this platform. Rendered only in reference mode; the
+ * translation lines only where a translation is shown.
  */
 export async function AboutThisText({
   locale,
@@ -179,6 +183,12 @@ export async function AboutThisText({
   // The English Surah names and their meanings came from the Tanzil metadata
   // (Quran Part 2), under the same licence: named wherever any is recorded.
   const names = (await readSurahs()).some((surah) => surah.names.en !== undefined);
+  const external = translation
+    ? (await quranReadRuntime().reader.translations()).filter(
+        (work) =>
+          !FIRST_PARTY_TRANSLATIONS.includes(work.slug) && work.attribution !== null,
+      )
+    : [];
   const link = (href: string) => (chunks: ReactNode) => (
     <TextLink href={href}>{chunks}</TextLink>
   );
@@ -214,6 +224,18 @@ export async function AboutThisText({
               })}
             </p>
           ) : null}
+          {external.length === 0 ? null : (
+            <div className="flex flex-col gap-1">
+              <p>{t('reference.externalTranslations')}</p>
+              <ul className="flex list-disc flex-col gap-1 ps-5">
+                {external.map((work) => (
+                  <li key={work.id} dir="auto">
+                    {work.attribution}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <p className="text-foreground-muted">{t('reference.status')}</p>
         </div>
       </div>
@@ -297,43 +319,6 @@ export const LAYER_SIZE: Readonly<Record<TextSize, string>> = {
   larger: 'text-xl',
 };
 
-/**
- * One layer's text in its own LABELLED group, marked with its own language and
- * direction, so a translation is never read out as though it were the Arabic.
- */
-export function LayerBlock({
-  id,
-  label,
-  text,
-  language,
-  size,
-  muted = false,
-}: {
-  readonly id: string;
-  readonly label: string;
-  readonly text: string;
-  readonly language: { readonly code: string; readonly direction: 'ltr' | 'rtl' };
-  readonly size: TextSize;
-  readonly muted?: boolean;
-}) {
-  return (
-    <div role="group" aria-labelledby={id} className="flex min-w-0 flex-col gap-1">
-      <p id={id} className="text-xs text-foreground-muted">
-        {label}
-      </p>
-      <p
-        lang={language.code}
-        dir={language.direction}
-        className={`${LAYER_SIZE[size]} break-words ${
-          muted ? 'text-foreground-muted' : ''
-        }`}
-      >
-        {text}
-      </p>
-    </div>
-  );
-}
-
 /** A content language's name and direction, or the code itself when unknown. */
 export function languageOf(
   languages: ReadonlyMap<string, ContentLanguage>,
@@ -386,7 +371,9 @@ export const READING_OPTIONS_ID = 'reading-options';
  *
  * R2: folded into a disclosure at the end of the reader. The everyday choices
  * (which translations, how large) live in the reader's settings sheet; this
- * form chooses particular works, a transliteration, a tafsir and a recitation.
+ * form chooses particular works, a transliteration, a word-by-word work, a
+ * tafsir and a recitation. A layer with no public work is not offered (Quran
+ * Part 7): the form never names a feature the platform has not published.
  */
 export async function ReadingForm({
   locale,
@@ -438,7 +425,7 @@ export async function ReadingForm({
         {Object.entries(keep).map(([name, value]) => (
           <input key={name} type="hidden" name={name} value={value} />
         ))}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field id="reading-translation" label={t('reading.translation')}>
             {(props) => (
               <Select
@@ -451,18 +438,30 @@ export async function ReadingForm({
               </Select>
             )}
           </Field>
-          <Field id="reading-transliteration" label={t('reading.transliteration')}>
-            {(props) => (
-              <Select
-                {...props}
-                name="transliteration"
-                defaultValue={choice.transliteration ?? ''}
-              >
-                <option value="">{t('reading.none')}</option>
-                {options.transliterations.map(workOption)}
-              </Select>
-            )}
-          </Field>
+          {options.transliterations.length === 0 ? null : (
+            <Field id="reading-transliteration" label={t('reading.transliteration')}>
+              {(props) => (
+                <Select
+                  {...props}
+                  name="transliteration"
+                  defaultValue={choice.transliteration ?? ''}
+                >
+                  <option value="">{t('reading.none')}</option>
+                  {options.transliterations.map(workOption)}
+                </Select>
+              )}
+            </Field>
+          )}
+          {options.wordByWords.length === 0 ? null : (
+            <Field id="reading-words" label={t('reading.words')}>
+              {(props) => (
+                <Select {...props} name="words" defaultValue={choice.words ?? ''}>
+                  <option value="">{t('reading.none')}</option>
+                  {options.wordByWords.map(workOption)}
+                </Select>
+              )}
+            </Field>
+          )}
           <Field id="reading-tafsir" label={t('reading.tafsir')}>
             {(props) => (
               <Select {...props} name="tafsir" defaultValue={choice.tafsir ?? ''}>

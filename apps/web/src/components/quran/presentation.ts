@@ -130,10 +130,14 @@ export function readSlugSegment(value: string): string | null {
  * Reading preferences — query parameters, never path segments
  * ========================================================================= */
 
-/** The four layers a reader may choose, in the order the form lists them. */
+/**
+ * The layers a reader may choose, in the order the form lists them. `words`
+ * is a word-by-word work (Quran Part 7), chosen as `?words=`.
+ */
 export const READING_LAYERS = Object.freeze([
   'translation',
   'transliteration',
+  'words',
   'tafsir',
   'reciter',
 ] as const);
@@ -160,6 +164,7 @@ export const DEFAULT_TEXT_SIZE: TextSize = 'medium';
 export interface ReadingRequest {
   readonly translation: LayerRequest;
   readonly transliteration: LayerRequest;
+  readonly words: LayerRequest;
   readonly tafsir: LayerRequest;
   readonly reciter: LayerRequest;
   readonly size: TextSize;
@@ -185,6 +190,7 @@ export function readReadingRequest(query: Query): ReadingRequest {
   return {
     translation: layerRequest(query, 'translation'),
     transliteration: layerRequest(query, 'transliteration'),
+    words: layerRequest(query, 'words'),
     tafsir: layerRequest(query, 'tafsir'),
     reciter: layerRequest(query, 'reciter'),
     size:
@@ -198,6 +204,7 @@ export function readReadingRequest(query: Query): ReadingRequest {
 export interface ReadingChoice {
   readonly translation: string | null;
   readonly transliteration: string | null;
+  readonly words: string | null;
   readonly tafsir: string | null;
   readonly reciter: string | null;
   readonly size: TextSize;
@@ -206,6 +213,7 @@ export interface ReadingChoice {
 export const NO_READING_CHOICE: ReadingChoice = Object.freeze({
   translation: null,
   transliteration: null,
+  words: null,
   tafsir: null,
   reciter: null,
   size: DEFAULT_TEXT_SIZE,

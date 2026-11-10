@@ -342,6 +342,7 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
       'QuranTafsir',
       'QuranRecitation',
       'QuranTajweedRule',
+      'QuranWordByWord',
     ])('refuses UPDATE of a %s slug', async (table) => {
       expect(
         await sqlNumber(
@@ -670,6 +671,10 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
   let fixtureTranslation: { id: string; slug: string };
   let approvedTranslation: { id: string; slug: string };
   let recitationId: string;
+  /** Quran Part 7: a published fixture-sourced word-by-word work, and a draft one. */
+  let wordByWord: { id: string; slug: string };
+  let draftWordByWord: { id: string; slug: string };
+  let publicTransliteration: string;
   /** Quran Part 5: a published recitation streamed beside a `reference` source. */
   let streamedId: string;
   let audioAsset: string;
@@ -903,11 +908,201 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
         expectedVersion: 2,
         state: 'published',
       });
+      publicTransliteration = transliteration.id;
       expect(published).toMatchObject({
         state: 'published',
         textCount: 1,
         scheme: 'Fixture scheme',
       });
+    });
+
+    it('administers a word-by-word work: contributors, whole-Ayah glosses, publication and the version lock (Quran Part 7)', async () => {
+      const slug = `non-quran-fixture-word-by-word-${randomUUID().slice(0, 8)}`;
+      const value = {
+        slug,
+        name: 'NON_QURAN_FIXTURE word by word',
+        description: null,
+        attribution: 'NON_QURAN_FIXTURE attribution',
+        languageCode: 'en',
+        sourceId: primary.id,
+        contributors: [{ personId: translator, role: 'translator' as const }],
+      };
+      const created = await persistence.createWordByWord({ actorId, value });
+      expect(created).toMatchObject({
+        slug,
+        state: 'draft',
+        version: 1,
+        textCount: 0,
+        sourceAuthority: 'fixture',
+        contributors: [{ personId: translator, role: 'translator', position: 0 }],
+      });
+      expect(
+        await reasonOf(persistence.createWordByWord({ actorId, value: { ...value } })),
+      ).toBe('duplicate-slug');
+      // Nothing to show: never published, by the service's pre-check's twin here
+      // and by the trigger behind it.
+      expect(
+        await reasonOf(
+          persistence.setWordByWordState({
+            actorId,
+            id: created.id,
+            expectedVersion: 1,
+            state: 'published',
+          }),
+        ),
+      ).toBe('text-required');
+
+      const gloss = (position: number, text: string) => ({ position, text });
+      const saved = await persistence.saveWordByWordGlosses({
+        actorId,
+        id: created.id,
+        expectedVersion: 1,
+        surah: 1,
+        changes: [
+          {
+            ayah: 1,
+            glosses: [
+              gloss(2, 'NON_QURAN_FIXTURE gloss 1:1:2'),
+              gloss(1, 'NON_QURAN_FIXTURE gloss “1:1:1”'),
+            ],
+          },
+          { ayah: 2, glosses: [gloss(1, 'NON_QURAN_FIXTURE gloss 1:2:1')] },
+        ],
+      });
+      expect(saved).toMatchObject({ version: 2, textCount: 2 });
+      // Stored exactly as given, each Ayah's in position order.
+      expect(await persistence.wordByWordGlosses(created.id, 1)).toEqual([
+        {
+          ayah: 1,
+          glosses: [
+            gloss(1, 'NON_QURAN_FIXTURE gloss “1:1:1”'),
+            gloss(2, 'NON_QURAN_FIXTURE gloss 1:1:2'),
+          ],
+        },
+        { ayah: 2, glosses: [gloss(1, 'NON_QURAN_FIXTURE gloss 1:2:1')] },
+      ]);
+      // A stale version changes nothing.
+      expect(
+        await reasonOf(
+          persistence.saveWordByWordGlosses({
+            actorId,
+            id: created.id,
+            expectedVersion: 1,
+            surah: 1,
+            changes: [{ ayah: 1, glosses: [] }],
+          }),
+        ),
+      ).toBe('conflict');
+      // An Ayah's glosses are replaced WHOLE: one edited, one added, one gone;
+      // another Ayah removed; an Ayah the work never glossed left alone.
+      await persistence.saveWordByWordGlosses({
+        actorId,
+        id: created.id,
+        expectedVersion: 2,
+        surah: 1,
+        changes: [
+          {
+            ayah: 1,
+            glosses: [
+              gloss(1, 'NON_QURAN_FIXTURE gloss 1:1:1'),
+              gloss(3, 'NON_QURAN_FIXTURE gloss 1:1:3'),
+            ],
+          },
+          { ayah: 2, glosses: [] },
+        ],
+      });
+      expect(await persistence.wordByWordGlosses(created.id, 1)).toEqual([
+        {
+          ayah: 1,
+          glosses: [
+            gloss(1, 'NON_QURAN_FIXTURE gloss 1:1:1'),
+            gloss(3, 'NON_QURAN_FIXTURE gloss 1:1:3'),
+          ],
+        },
+      ]);
+      // A gloss names a real Ayah: the foreign key refuses one beyond the Surah.
+      expect(
+        await reasonOf(
+          persistence.saveWordByWordGlosses({
+            actorId,
+            id: created.id,
+            expectedVersion: 3,
+            surah: 1,
+            changes: [{ ayah: 9, glosses: [gloss(1, 'NON_QURAN_FIXTURE gloss 1:9:1')] }],
+          }),
+        ),
+      ).toBe('invalid');
+
+      const published = await persistence.setWordByWordState({
+        actorId,
+        id: created.id,
+        expectedVersion: 3,
+        state: 'published',
+      });
+      expect(published).toMatchObject({ state: 'published', version: 4, textCount: 1 });
+      expect(published.publishedAt).toBeInstanceOf(Date);
+      // A published work keeps a gloss: its last one is never removed.
+      expect(
+        await reasonOf(
+          persistence.saveWordByWordGlosses({
+            actorId,
+            id: created.id,
+            expectedVersion: 4,
+            surah: 1,
+            changes: [{ ayah: 1, glosses: [] }],
+          }),
+        ),
+      ).toBe('text-required');
+      // A metadata edit under the version: the slug never changes.
+      expect(
+        await reasonOf(
+          persistence.updateWordByWord({
+            actorId,
+            id: created.id,
+            expectedVersion: 4,
+            value: { ...value, slug: `${slug}-moved` },
+          }),
+        ),
+      ).toBe('invalid');
+      const renamed = await persistence.updateWordByWord({
+        actorId,
+        id: created.id,
+        expectedVersion: 4,
+        value: {
+          ...value,
+          name: 'NON_QURAN_FIXTURE word by word renamed',
+          contributors: [],
+        },
+      });
+      expect(renamed).toMatchObject({ version: 5, contributors: [] });
+      wordByWord = { id: created.id, slug };
+
+      const draftSlug = `non-quran-fixture-word-by-word-draft-${randomUUID().slice(0, 8)}`;
+      const draft = await persistence.createWordByWord({
+        actorId,
+        value: { ...value, slug: draftSlug, contributors: [] },
+      });
+      await persistence.saveWordByWordGlosses({
+        actorId,
+        id: draft.id,
+        expectedVersion: 1,
+        surah: 1,
+        changes: [{ ayah: 1, glosses: [gloss(1, 'NON_QURAN_FIXTURE draft gloss')] }],
+      });
+      draftWordByWord = { id: draft.id, slug: draftSlug };
+
+      const listed = await persistence.wordByWords(0);
+      expect(listed.items.map((item) => item.slug)).toEqual(
+        expect.arrayContaining([slug, draftSlug]),
+      );
+      expect(listed.items.find((item) => item.slug === slug)?.textCount).toBe(1);
+      expect(
+        await count(
+          db.admin,
+          'AuditLog',
+          `[action] LIKE N'quran.word-by-word.%' AND [targetId] = ${n(created.id)}`,
+        ),
+      ).toBe(5);
     });
 
     it('refuses overlapping Tafsir entries and a published Tafsir without text', async () => {
@@ -1416,6 +1611,11 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
       expect(await reader.translation(fixtureTranslation.slug)).toBeNull();
       expect(await reader.translationTexts(fixtureTranslation.id, 1, 1, 3)).toEqual([]);
       expect(await reader.transliterations()).toEqual([]);
+      expect(await reader.transliterationCoverage([publicTransliteration])).toEqual([]);
+      expect(await reader.wordByWords()).toEqual([]);
+      expect(await reader.wordByWord(wordByWord.slug)).toBeNull();
+      expect(await reader.wordByWordGlosses(wordByWord.id, 1, 1, 3)).toEqual([]);
+      expect(await reader.wordByWordCoverage([wordByWord.id])).toEqual([]);
       expect(await reader.tafsirs()).toEqual([]);
       expect(await reader.recitations()).toEqual([]);
       expect(await reader.recitationSegments(recitationId, null)).toEqual([]);
@@ -1461,7 +1661,8 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
         primary.ayat[0]!.text,
       );
       // Quran Part 3: the fixture records no hizb and no page, so neither is
-      // derived; the text a Juz opens with is its first Ayah's, as stored.
+      // derived; a Juz is known by its first Ayah's text, as stored — the first
+      // Juz by Al-Baqarah 2:1 (`juzOpeningAyah`), not by Al-Fatihah.
       const textOf = (surah: number, ayah: number) =>
         primary.ayat.find((entry) => entry.surah === surah && entry.ayah === ayah)!.text;
       expect(await reader.juzList()).toEqual([
@@ -1472,7 +1673,7 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
           ayahCount: 5,
           pages: null,
           hizbs: [],
-          startText: textOf(1, 1),
+          openingText: textOf(2, 1),
         },
         {
           number: 2,
@@ -1481,7 +1682,7 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
           ayahCount: 2,
           pages: null,
           hizbs: [],
-          startText: textOf(2, 3),
+          openingText: textOf(2, 3),
         },
       ]);
       expect(await reader.juz(2)).toMatchObject({ ayahCount: 2 });
@@ -1852,6 +2053,68 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
       ).toBe(229);
     });
 
+    it('shows a public word-by-word work and its glosses, counts its coverage, and never a draft (Quran Part 7)', async () => {
+      expect(await reader.availability()).toEqual({ active: true, mode: 'fixture' });
+      const works = await reader.wordByWords();
+      expect(works.map((work) => work.slug)).toEqual([wordByWord.slug]);
+      expect(works[0]).toMatchObject({
+        id: wordByWord.id,
+        name: 'NON_QURAN_FIXTURE word by word renamed',
+        languageCode: 'en',
+        attribution: 'NON_QURAN_FIXTURE attribution',
+        contributors: [],
+      });
+      expect(await reader.wordByWord(wordByWord.slug)).toMatchObject({
+        id: wordByWord.id,
+      });
+      expect(await reader.wordByWord(draftWordByWord.slug)).toBeNull();
+      expect(await reader.wordByWordGlosses(wordByWord.id, 1, 1, 3)).toEqual([
+        {
+          ayah: 1,
+          glosses: [
+            { position: 1, text: 'NON_QURAN_FIXTURE gloss 1:1:1' },
+            { position: 3, text: 'NON_QURAN_FIXTURE gloss 1:1:3' },
+          ],
+        },
+      ]);
+      // The range is honoured, and a draft work's glosses are never public.
+      expect(await reader.wordByWordGlosses(wordByWord.id, 1, 2, 3)).toEqual([]);
+      expect(await reader.wordByWordGlosses(draftWordByWord.id, 1, 1, 3)).toEqual([]);
+      expect(
+        await reader.wordByWordCoverage([wordByWord.id, draftWordByWord.id]),
+      ).toEqual([{ workId: wordByWord.id, surahs: [{ surah: 1, ayat: 1, words: 2 }] }]);
+      expect(await reader.transliterationCoverage([publicTransliteration])).toEqual([
+        { workId: publicTransliteration, surahs: [{ surah: 1, ayat: 1, words: 0 }] },
+      ]);
+      // Glosses are not indexed: no Ayah's search projection carries them.
+      expect(
+        (await reader.searchAyah({ surah: 1, ayah: 1 }))?.layers.some((layer) =>
+          layer.text.includes('gloss'),
+        ),
+      ).toBe(false);
+
+      // Archived, it is gone from every public read at once.
+      const current = (await persistence.wordByWord(wordByWord.id))!;
+      await persistence.setWordByWordState({
+        actorId,
+        id: wordByWord.id,
+        expectedVersion: current.version,
+        state: 'archived',
+      });
+      expect(await reader.wordByWords()).toEqual([]);
+      expect(await reader.wordByWordGlosses(wordByWord.id, 1, 1, 3)).toEqual([]);
+      expect(await reader.wordByWordCoverage([wordByWord.id])).toEqual([]);
+      await persistence.setWordByWordState({
+        actorId,
+        id: wordByWord.id,
+        expectedVersion: current.version + 1,
+        state: 'published',
+      });
+      expect((await reader.wordByWords()).map((work) => work.slug)).toEqual([
+        wordByWord.slug,
+      ]);
+    });
+
     it('beside an APPROVED corpus, shows only approved-source works and lists the sitemap', async () => {
       // Every Ayah onto the approved source, then the operator re-activates.
       for (const entry of approved.ayat) {
@@ -1878,6 +2141,9 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
       expect(await reader.translation(fixtureTranslation.slug)).toBeNull();
       expect(await reader.translationTexts(fixtureTranslation.id, 1, 1, 3)).toEqual([]);
       expect(await reader.transliterations()).toEqual([]);
+      // Quran Part 7: a fixture-sourced word-by-word work beside approved text.
+      expect(await reader.wordByWords()).toEqual([]);
+      expect(await reader.wordByWordGlosses(wordByWord.id, 1, 1, 3)).toEqual([]);
       expect(await reader.recitations()).toEqual([]);
       expect(await reader.recitationTimings(recitationId, 1)).toEqual([]);
       expect(await reader.recitationTimings(streamedId, 1)).toEqual([]);

@@ -13,13 +13,14 @@ import {
   localTargetPolicy,
 } from '../../packages/database/src/lifecycle/local-target.ts';
 import {
-  importIrfanTranslations,
   importQuranReference,
+  importReferenceTranslations,
   importSurahNames,
   inspectReference,
   liveCanonicalSession,
   QURAN_REFERENCE_SOURCE_CODE,
-  registerIrfanProvenance,
+  registerTranslationProvenance,
+  TRANSLATION_PROVENANCE,
 } from '../../packages/database/src/lifecycle/quran-reference.ts';
 import {
   openSession,
@@ -98,10 +99,18 @@ const fixtureWords = (language: 'ur' | 'en', ayah: number, mark = '') =>
     ? `NON_QURAN_FIXTURE ترجمہ ${String(ayah)}${mark}`
     : `NON_QURAN_FIXTURE rendering ${String(ayah)}${mark}`;
 
+/** A QuranEnc registration as the catalogue makes it: its key, host and Surah 1's address. */
+const SAHEEH = {
+  key: 'quranenc-english-saheeh',
+  host: 'quranenc.com',
+  url: 'https://quranenc.com/api/v1/translation/sura/english_saheeh/1',
+} as const;
+
 /**
- * Stages ONE review-only revision of Surah 1 for an Irfan-ul-Quran migration
- * source, through the same tables the pipeline writes: the source (once), a
- * run, the record (once), a raw snapshot and the staged revision.
+ * Stages ONE review-only revision of Surah 1 for a translation's migration
+ * source — Irfan-ul-Quran's of the language unless another is named — through
+ * the same tables the pipeline writes: the source (once), a run, the record
+ * (once), a raw snapshot and the staged revision.
  */
 async function stageSurahOne(
   admin: SqlSession,
@@ -112,10 +121,25 @@ async function stageSurahOne(
     readonly ayat: readonly string[];
     /** Omitted: a payload staged before notes were read. */
     readonly notes?: readonly StagedNote[];
+    /** Another migration source than Irfan-ul-Quran's (QuranEnc's). */
+    readonly source?: {
+      readonly key: string;
+      readonly host: string;
+      readonly url: string;
+    };
+    /** The source's edition, where it versions its text (QuranEnc). */
+    readonly edition?: {
+      readonly key: string;
+      readonly version: string;
+      readonly lastUpdate: number;
+    };
   },
 ): Promise<void> {
-  const key = `irfan-ul-quran-${input.language}`;
-  const url = `https://www.irfan-ul-quran.com/english/Surah-al-Fatihah-with-english-translation`;
+  const key = input.source?.key ?? `irfan-ul-quran-${input.language}`;
+  const host = input.source?.host ?? 'www.irfan-ul-quran.com';
+  const url =
+    input.source?.url ??
+    `https://www.irfan-ul-quran.com/english/Surah-al-Fatihah-with-english-translation`;
   const [held] = await admin.query<{ source: string | null; record: string | null }>(`
     SELECT (SELECT [id] FROM [dbo].[MigrationSource] WHERE [key] = ${n(key)}) AS [source],
            (SELECT r.[id] FROM [dbo].[MigrationRecord] r JOIN [dbo].[MigrationSource] s ON s.[id] = r.[sourceId]
@@ -132,6 +156,7 @@ async function stageSurahOne(
     surah: 1,
     ayat: input.ayat.map((text, index) => ({ ayah: index + 1, text })),
     ...(input.notes === undefined ? {} : { notes: input.notes }),
+    ...(input.edition === undefined ? {} : { edition: input.edition }),
     legacyIdentifier: `surah-1-${input.language}`,
   });
   const provenance = `N'irfan-ul-quran-translation', N'1', N'cheerio-irfan-ul-quran-translation', N'3', N'1', N'proof'`;
@@ -139,8 +164,8 @@ async function stageSurahOne(
     ${
       held?.source === null || held?.source === undefined
         ? `INSERT INTO [dbo].[MigrationSource] ([id],[key],[name],[authorityKind],[accessMethod],[contentKind],[baseUrl],[defaultLanguageCode],[minIntervalMs],[maxConcurrency],[maxAttempts],[timeoutMs],[maxBodyBytes],[maxRedirects],[state],[createdAt],[createdByUserId],[updatedAt],[updatedByUserId],[authorisationReference],[authorisedOn])
-             VALUES (${n(source)}, ${n(key)}, N'NON_QURAN_FIXTURE source', N'authorised', N'http', N'quran.translation', N'https://www.irfan-ul-quran.com/', ${n(input.language)}, 1000, 1, 3, 10000, 1048576, 2, N'active', SYSUTCDATETIME(), ${n(input.operator)}, SYSUTCDATETIME(), ${n(input.operator)}, N'NON-QURAN-FIXTURE-AUTHORISATION', '2026-11-06');
-           INSERT INTO [dbo].[MigrationSourceHost] ([sourceId],[host]) VALUES (${n(source)}, N'www.irfan-ul-quran.com');`
+             VALUES (${n(source)}, ${n(key)}, N'NON_QURAN_FIXTURE source', N'authorised', N'http', N'quran.translation', ${n(`https://${host}/`)}, ${n(input.language)}, 1000, 1, 3, 10000, 1048576, 2, N'active', SYSUTCDATETIME(), ${n(input.operator)}, SYSUTCDATETIME(), ${n(input.operator)}, N'NON-QURAN-FIXTURE-AUTHORISATION', '2026-11-06');
+           INSERT INTO [dbo].[MigrationSourceHost] ([sourceId],[host]) VALUES (${n(source)}, ${n(host)});`
         : ''
     }
     INSERT INTO [dbo].[MigrationRun] ([id],[sourceId],[operatorUserId],[state],[adapterKey],[adapterVersion],[parserKey],[parserVersion],[normalizerVersion],[codeRevision],[discoveryComplete],[startedAt])
@@ -416,49 +441,66 @@ live('R2 Quran reference preview against real SQL Server', () => {
     expect(await count(db.admin, 'QuranActivation')).toBe(1);
   }, 300_000);
 
-  it('registers Irfan-ul-Quran once and, with nothing staged, saves and publishes nothing', async () => {
-    const first = await registerIrfanProvenance(db.admin);
-    expect(await registerIrfanProvenance(db.admin)).toEqual(first);
+  it('registers every translation’s provenance once and, with nothing staged, creates and publishes nothing', async () => {
+    const first = await registerTranslationProvenance(db.admin);
+    expect(await registerTranslationProvenance(db.admin)).toEqual(first);
+    const ids = [...first.values()].map(n).join(', ');
     const [row] = await db.admin.query<{ references: number; ayat: number }>(`
       SELECT COUNT_BIG(*) AS [references],
-             (SELECT COUNT_BIG(*) FROM [dbo].[QuranSourceAyah] WHERE [sourceId] IN (${n(first.ur)}, ${n(first.en)})) AS [ayat]
-      FROM [dbo].[QuranSource] WHERE [id] IN (${n(first.ur)}, ${n(first.en)}) AND [authority] = N'reference';
+             (SELECT COUNT_BIG(*) FROM [dbo].[QuranSourceAyah] WHERE [sourceId] IN (${ids})) AS [ayat]
+      FROM [dbo].[QuranSource] WHERE [id] IN (${ids}) AND [authority] = N'reference';
     `);
-    expect([Number(row?.references), Number(row?.ayat)]).toEqual([2, 0]);
+    expect([Number(row?.references), Number(row?.ayat)]).toEqual([
+      TRANSLATION_PROVENANCE.length,
+      0,
+    ]);
+    expect([...first.keys()]).toEqual(TRANSLATION_PROVENANCE.map((entry) => entry.code));
 
-    const summary = (await importIrfanTranslations({
+    const summary = (await importReferenceTranslations({
       owner,
       runtime,
       operator,
       environment: process.env,
-    })) as Record<string, { saved: number; skipped: unknown[]; published: boolean }>;
-    for (const language of ['ur', 'en']) {
-      expect(summary[language]?.saved, language).toBe(0);
-      expect(summary[language]?.skipped, language).toHaveLength(114);
-      expect(summary[language]?.published, language).toBe(false);
+    })) as {
+      works: Record<
+        string,
+        { saved: number; skipped: unknown[]; published: boolean; workId: string | null }
+      >;
+    };
+    expect(Object.keys(summary.works)).toEqual([...first.keys()]);
+    for (const [code, report] of Object.entries(summary.works)) {
+      expect(report.saved, code).toBe(0);
+      expect(report.skipped, code).toHaveLength(114);
+      expect(report.published, code).toBe(false);
+      // No usable revision: no work is created.
+      expect(report.workId, code).toBeNull();
     }
+    expect(await count(db.admin, 'QuranTranslation')).toBe(0);
     expect(await admitted.translations()).toEqual([]);
   }, 300_000);
 
   it("imports a staged revision's texts with its translator's notes, exactly, and resumes", async () => {
-    type Summary = Record<
-      'ur' | 'en',
-      {
-        saved: number;
-        unchanged: number;
-        notes: number;
-        skipped: { surah: number; reason: string }[];
-        published: boolean;
-        workId: string;
-      }
-    >;
-    const translations = async () =>
-      (await importIrfanTranslations({
+    interface Report {
+      saved: number;
+      unchanged: number;
+      notes: number;
+      skipped: { surah: number; reason: string }[];
+      published: boolean;
+      workId: string;
+    }
+    type Summary = Record<'ur' | 'en', Report>;
+    const translations = async (): Promise<Summary> => {
+      const { works } = (await importReferenceTranslations({
         owner,
         runtime,
         operator,
         environment: process.env,
-      })) as Summary;
+      })) as { works: Record<string, Report> };
+      return {
+        ur: works['irfan-ul-quran-ur'] as Report,
+        en: works['irfan-ul-quran-en'] as Report,
+      };
+    };
     const notesHeld = async (workId: string) =>
       (await admitted.translationTexts(workId, 1, 1, 7)).flatMap((entry) =>
         entry.notes.map((note) => ({ ayah: entry.ayah, ...note })),
@@ -590,6 +632,88 @@ live('R2 Quran reference preview against real SQL Server', () => {
     expect(fifth.en).toMatchObject({ saved: 0, notes: 0 });
     expect(fifth.en.skipped).toContainEqual({ surah: 1, reason: 'notes-untied' });
     expect(await notesHeld(first.en.workId)).toEqual(ordinals(enNotes));
+  }, 600_000);
+
+  it('imports a QuranEnc translation with its footnotes, names its edition’s version, and follows a new edition', async () => {
+    interface Report {
+      saved: number;
+      unchanged: number;
+      notes: number;
+      version: string | null;
+      published: boolean;
+      workId: string | null;
+      skipped: { surah: number; reason: string }[];
+    }
+    const run = async () =>
+      (
+        (await importReferenceTranslations({
+          owner,
+          runtime,
+          operator,
+          environment: process.env,
+        })) as { works: Record<string, Report> }
+      ).works[SAHEEH.key];
+    const saheeh = async () =>
+      (await admitted.translations()).find((work) => work.slug === SAHEEH.key);
+    const edition = { key: 'english_saheeh', version: '1.1.2', lastUpdate: 1750772247 };
+    const ayat = [1, 2, 3, 4, 5, 6, 7].map((ayah) =>
+      fixtureWords('en', ayah, ayah === 2 ? '[1] and [all] of it[2]' : ''),
+    );
+    const notes: StagedNote[] = [
+      { ayah: 2, marker: '[1]', text: 'NON_QURAN_FIXTURE first footnote' },
+      { ayah: 2, marker: '[2]', text: 'NON_QURAN_FIXTURE second footnote' },
+    ];
+    const stage = (revision: number, staged: typeof edition) =>
+      stageSurahOne(db.admin, {
+        operator,
+        language: 'en',
+        revision,
+        ayat,
+        notes,
+        source: SAHEEH,
+        edition: staged,
+      });
+
+    // A revision of ANOTHER QuranEnc translation's edition is never this work's.
+    await stage(1, { ...edition, key: 'english_rwwad' });
+    const refused = await run();
+    expect(refused).toMatchObject({ saved: 0, workId: null, published: false });
+    expect(refused?.skipped).toContainEqual({ surah: 1, reason: 'other-edition' });
+    expect(await saheeh()).toBeUndefined();
+
+    await stage(2, edition);
+    const first = await run();
+    expect(first).toMatchObject({
+      saved: 1,
+      notes: 2,
+      version: '1.1.2',
+      published: true,
+    });
+    expect(await saheeh()).toMatchObject({
+      name: 'English Translation - Noor International Center',
+      description: 'Issued by Noor International Center.',
+      languageCode: 'en',
+      attribution:
+        'Translation: English — Noor International Center (Saheeh International), v1.1.2, via QuranEnc.com ' +
+        '(https://quranenc.com/en/browse/english_saheeh). An external reference translation — not ' +
+        "Minhaj-ul-Quran International's, and not reviewed by its religious authority.",
+    });
+    // The text exactly as staged — the bracketed interpolation "[all]" is
+    // text — and each footnote beside it, opening with its own mark.
+    const [held] = await admitted.translationTexts(first?.workId ?? '', 1, 2, 2);
+    expect(held?.text).toBe(ayat[1]);
+    expect(held?.notes.map(({ marker, text }) => ({ marker, text }))).toEqual(
+      notes.map(({ marker, text }) => ({ marker, text })),
+    );
+    // Minhaj-ul-Quran's own translation stays first: the public list orders by slug.
+    const slugs = (await admitted.translations()).map((work) => work.slug);
+    expect(slugs.indexOf('irfan-ul-quran-en')).toBeGreaterThanOrEqual(0);
+    expect(slugs.indexOf('irfan-ul-quran-en')).toBeLessThan(slugs.indexOf(SAHEEH.key));
+
+    // A new edition staged: the same words, and the attribution names it.
+    await stage(3, { ...edition, version: '1.1.3', lastUpdate: 1790000000 });
+    expect(await run()).toMatchObject({ saved: 0, unchanged: 1, version: '1.1.3' });
+    expect((await saheeh())?.attribution).toContain('v1.1.3, via QuranEnc.com');
   }, 600_000);
 
   it('imports the Surah names verbatim through the admin service, keeps an operator’s, and resumes', async () => {

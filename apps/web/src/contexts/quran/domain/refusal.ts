@@ -41,6 +41,8 @@ export const QURAN_REFUSAL_REASONS = Object.freeze([
   'fixture-over-approved',
   /** A translator's note answers no mark its translation carries (Quran Part 6). */
   'note-untied',
+  /** A gloss names a word its Ayah's stored text does not have (Quran Part 7). */
+  'word-outside-ayah',
 ] as const);
 
 export type QuranRefusalReason = (typeof QURAN_REFUSAL_REASONS)[number];

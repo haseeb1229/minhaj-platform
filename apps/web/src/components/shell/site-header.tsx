@@ -14,6 +14,7 @@ import {
 import { NavLink } from '@/components/shell/nav-link';
 import { SearchPalette } from '@/components/shell/search-palette';
 import { Container, Icon, MediaCard } from '@/components/ui';
+import { readPresence } from '@/composition/presence';
 import {
   domainMenus,
   headerUtility,
@@ -49,7 +50,9 @@ import { pathFor, requireRoute } from '@/shell/registry';
  *
  * UNCONDITIONAL. Every domain and link is shown whatever the platform has
  * published (`@/shell/menus`); a destination with nothing published answers
- * with its own honest state. Nothing here reads who is looking either
+ * with its own honest state. The one exception is the Quran's Transliteration
+ * and word by word, hidden until a work of each is published (owner decision
+ * 2026-11-09): the public presence snapshot, which reads no visitor, decides. Nothing here reads who is looking either
  * (ARCHITECTURE.md §8.1): the account entry is a private island that asks one
  * boolean after the page loads.
  */
@@ -73,12 +76,15 @@ type ShellTranslator = Awaited<ReturnType<typeof getTranslations<'shell'>>>;
 const labelOf = (t: ShellTranslator, key: string): string => t(key as 'nav.home');
 
 export async function SiteHeader({ locale }: { readonly locale: Locale }) {
-  const [t, features] = await Promise.all([
+  const [t, features, presence] = await Promise.all([
     getTranslations({ locale, namespace: 'shell' }),
     readNavigationFeatures(locale),
+    readPresence(),
   ]);
 
-  const menus = domainMenus();
+  // Every link, always — but a hidden-until-published study layer (Quran
+  // Part 7) only while a work of it is public (`@/shell/menus`).
+  const menus = domainMenus(presence);
   const utility = headerUtility();
   const searchAction = pathFor(locale, requireRoute('search'));
   const donateHref = pathFor(locale, requireRoute('donate'));

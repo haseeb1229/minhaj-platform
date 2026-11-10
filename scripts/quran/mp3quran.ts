@@ -42,11 +42,22 @@ export const MP3QURAN_ENDPOINTS = Object.freeze({
 export const HAFS = 'حفص عن عاصم';
 
 /**
- * THE CURATED READS: well-known murattal recitations of Hafs ʿan ʿĀṣim that
- * mp3quran TIMES Ayah by Ayah (`/ayat_timing/reads`, checked 2026-11-09), each
- * pinned to its moshaf id AND its CDN folder, so a changed API can neither
- * substitute another recording nor move one to another host. Maher Al-Muaiqly,
- * though well known, is not among the timed reads and is not listed.
+ * "The mujawwad mushaf", as the timed-reads list names the riwayah of its
+ * mujawwad editions — a style, which names no riwayah. Such a read is Hafs
+ * only where its own moshaf says so (`riwayahOf`).
+ */
+export const MUJAWWAD = 'المصحف المجود';
+
+/**
+ * THE CURATED READS: well-known recitations of Hafs ʿan ʿĀṣim — murattal, and
+ * the mujawwad editions of the great Egyptian qaris — that mp3quran TIMES Ayah
+ * by Ayah (`/ayat_timing/reads`), each pinned to its moshaf id AND its CDN
+ * folder, so a changed API can neither substitute another recording nor move
+ * one to another host. The first twelve were checked 2026-11-09, the rest
+ * 2026-11-10 (owner direction: Alafasy "and some other famous qaris too");
+ * every one is timed for all 114 Surahs. A reciter with two reads (Abdul
+ * Basit, Al-Husary) is one Person with two recitations, told apart by their
+ * moshaf names.
  */
 export const CURATED_READS: readonly {
   readonly read: number;
@@ -64,6 +75,23 @@ export const CURATED_READS: readonly {
   { read: 92, folder: 'audio/yasser-dosari/r1' },
   { read: 74, folder: 'audio/ali-hudhaifi/r1' },
   { read: 81, folder: 'audio/fares-abbad/r1' },
+  { read: 106, folder: 'audio/muhammad-tablawi/r1' },
+  { read: 86, folder: 'audio/nasser-qatami/r1' },
+  { read: 12, folder: 'audio/idrees-abkar/r1' },
+  { read: 60, folder: 'audio/abdullah-basfar/r1' },
+  { read: 20, folder: 'audio/khalid-jalil/r1' },
+  { read: 109, folder: 'audio/muhammad-ayyub/r1' },
+  { read: 76, folder: 'audio/ali-jaber/r1' },
+  { read: 217, folder: 'audio/bandar-baleela/r1' },
+  { read: 89, folder: 'audio/hani-rifai/r1' },
+  { read: 46, folder: 'audio/salah-bukhatir/r1' },
+  { read: 62, folder: 'audio/abdullah-juhani/r1' },
+  { read: 49, folder: 'audio/abdulbari-thubaiti/r1' },
+  { read: 133, folder: 'audio/maher-muaiqly/r3' },
+  { read: 51, folder: 'audio/abdulbasit-abdulsamad/r1' },
+  { read: 119, folder: 'audio/mahmoud-husary/r2' },
+  { read: 288, folder: 'audio/mustafa-ismail/r2' },
+  { read: 122, folder: 'audio/mahmoud-banna/r2' },
 ]);
 
 /** What Quran and People record for one curated read. */
@@ -173,6 +201,16 @@ export function readMoshafs(body: unknown): ReadonlyMap<number, Moshaf> {
   return moshafs;
 }
 
+/**
+ * The riwayah a moshaf's own name gives — the words before its " - " (the
+ * Arabic list writes "حفص عن عاصم - مرتل"), or the whole name when it has
+ * none.
+ */
+export function riwayahOf(moshaf: string): string {
+  const separator = moshaf.indexOf(' - ');
+  return separator > 0 ? moshaf.slice(0, separator) : moshaf;
+}
+
 /** The CDN folder of a full folder URL, or null when it is not the allowlisted CDN's. */
 export function streamOfFolderUrl(folderUrl: string): RecitationStream | null {
   const match = /^https:\/\/cdn\.mp3quran\.net\/(audio\/[a-z0-9-]+\/r[0-9]+)\/$/.exec(
@@ -195,7 +233,9 @@ export function planRead(
 ): PlannedRead | { readonly skip: ReadSkip } {
   const read = timed.get(curated.read);
   if (read === undefined) return { skip: 'not-timed' };
-  if (read.rewaya !== HAFS) return { skip: 'not-hafs' };
+  // Hafs twice over: the timed read's riwayah is Hafs (or the mujawwad
+  // edition's, which names none), AND its own Arabic moshaf says Hafs.
+  if (read.rewaya !== HAFS && read.rewaya !== MUJAWWAD) return { skip: 'not-hafs' };
   if (read.surahs !== QURAN_SURAH_MAX) return { skip: 'not-complete' };
   const stream = streamOfFolderUrl(read.folderUrl);
   if (stream === null || stream.path !== curated.folder)
@@ -203,6 +243,7 @@ export function planRead(
   const en = english.get(curated.read);
   const ar = arabic.get(curated.read);
   if (en === undefined || ar === undefined) return { skip: 'no-reciter' };
+  if (riwayahOf(ar.moshaf) !== HAFS) return { skip: 'not-hafs' };
   if (streamOfFolderUrl(en.server)?.path !== curated.folder)
     return { skip: 'folder-changed' };
   const [, folderName, moshaf] =

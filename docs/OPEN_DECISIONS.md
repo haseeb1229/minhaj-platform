@@ -155,7 +155,9 @@ reported, never corrected. Its provenance is recorded as two `reference` sources
 their own (`irfan-ul-quran-ur`, `irfan-ul-quran-en`). **This is not Minhaj's approval of any
 translation, tafsir or reciter**: no tafsir is shown and no recitation is added (the external
 recitation-timing reference considered for R2 was deferred), and the decisions in this entry stay
-open. *(As at R2; the owner's decisions of 2026-11-09 below direct what staging may add next.)*
+open. *(As at R2; the owner's decisions of 2026-11-09 and 2026-11-10 below direct what staging may
+add next — since 2026-11-10 staging may also show QuranEnc's external reference translations, item
+5.)*
 
 **Owner decisions 2026-11-09 — the Quran section's content on STAGING (recorded with the owner's
 direction to build the Quran section part by part; DELIVERY_PLAN.md, the Quran Part 1 record).**
@@ -190,15 +192,74 @@ its own later part of the Quran programme, not by Part 1 (the reading experience
    with the Urdu narration; who recites the Arabic, and its rights, must be established — and
    whether separate tracks or per-Ayah timing can be supplied; (c) whether a full **MQI murattal
    recitation** exists to prefer over external qaris.
+
+   **More qaris (owner direction 2026-11-10: "add recitation of Shaykh Mishary Rashid Al Afasy and
+   some other famous qari's too").** Under the same decision and the same import, the curated list
+   grows from twelve to **twenty-nine** reads, each checked against mp3quran's timed-reads list that
+   day (Hafs ʿan ʿĀṣim, all 114 Surahs timed, pinned by moshaf id and CDN folder): seventeen more —
+   twelve murattal (Mohammad Al-Tablaway, Nasser Alqatami, Idrees Abkr, Abdullah Basfer, Khalid
+   Al-Jileel, Mohammed Ayyub, Ali Jaber, Bandar Balilah, Hani Arrifai, Slaah Bukhatir, Abdullah
+   Al-Johany, Abdelbari Al-Toubayti) and five **mujawwad** editions (Maher Al Meaqli, Abdulbasit
+   Abdulsamad, Mahmoud Khalil Al-Hussary, Mustafa Ismail, Mahmoud Ali Albanna — mp3quran's timed
+   read of Maher Al-Muaiqly is his mujawwad edition). A mujawwad read is admitted only where its own
+   Arabic moshaf name says Hafs; a qari with two reads is one People Person with two recitations,
+   told apart by mp3quran's own moshaf names ("… - Murattal", "… - Almusshaf Al Mojawwad"). The
+   operator re-runs `quran-reference.sh recitations-mp3quran`, which keeps what is held. **Production
+   gates of §1.1/§1.2/§2.4 unchanged; question (a) above applies to every added read.**
 2. **Tafsir.** A **Minhaj-ul-Quran hub**: Shaykh-ul-Islam's tafsir books and Minhaj TV lectures
    linked per Ayah, with per-Ayah text slots for tafsir text Minhaj-ul-Quran supplies — **no external
    tafsir**. *Staging only; production gates of §1.1/§1.2/§2.4 unchanged.*
 3. **Transliteration and word-by-word.** Built, but **hidden until a lawful source** is recorded; no
    source is assumed. *Staging only; production gates of §1.1/§1.2/§2.4 unchanged.*
+   *Built in Quran Part 7 (DOMAIN_MODEL.md §8.7, ROUTE_MAP.md §3.3):* both layers are complete —
+   the word-by-word work and its per-word glosses (migration
+   `20261110120000_r2_quran_word_by_word`), the one word segmentation, administration under
+   `quran.administer`, the reader's transliteration line and word-by-word view, and the two
+   listings — and proved with fixture works only. **No transliteration or gloss is imported,
+   scraped or derived from the Arabic**, and the public sees neither: every route, menu link, landing
+   card, reader setting and reading-form choice for a layer stays absent until an authorised editor
+   publishes a work of it that names a registered source. **The source question stays open**: every
+   candidate the study-layer register surveyed is blocked (Tanzil's and irfan-ul-quran.com's Roman
+   text, the Quranic Arabic Corpus glosses, QUL, the Quran Foundation API declined); the owner's
+   options remain a written grant from a rights holder, Quran Foundation credentials, or an
+   MQI-authored work.
 4. **Tajweed.** The **CC BY 4.0 `cpfair/quran-tajweed`** colour overlay, realigned to the Tanzil
    Uthmani 1.1 text, on staging only — **any Ayah whose text does not match is skipped**, never
    adjusted — with a **qari's review before production**. *Staging only; production gates of
    §1.1/§1.2/§2.4 unchanged.*
+5. **External reference translations — `OWNER-DECISION-2026-11-10-EXTERNAL-REFERENCE-TRANSLATIONS`
+   (owner direction 2026-11-10: "add urdu translation of famous translators too. and also english
+   translation").** Staging may show, beside Irfan-ul-Quran, four famous translations of the meanings
+   published by **QuranEnc.com**: Urdu — Muhammad Ibrahim Junagarhi (revised under the Rowwad
+   Translation Center, `urdu_junagarhi`); English — Saheeh International (Noor International Center,
+   `english_saheeh`), the Rowwad Translation Center (`english_rwwad`), and Taqi-ud-Din al-Hilali and
+   Muhammad Muhsin Khan (`english_hilali_khan`). **The licence is QuranEnc's published
+   re-publication terms** (https://quranenc.com/en/home/api/, read 2026-11-10: "Contents of the
+   translations can be downloaded and re-published", on condition of no modification, addition or
+   deletion; clear reference to the publisher and to QuranEnc.com; the version number mentioned; the
+   transcript information kept; notes notified to QuranEnc; the latest version followed; no
+   inappropriate advertisements). This identifier is each source's `--authorisation-reference`
+   (authorised on 2026-11-10), and each source's recorded policy notes name those terms and their
+   address (§3.1.1). *Staging only; production gates of §1.1/§1.2/§2.4
+   unchanged.*
+
+   **Religious note.** These translations come from a different theological and editorial tradition
+   from Minhaj-ul-Quran's. They are shown as **external reference translations — not
+   Minhaj-ul-Quran's, and not reviewed by its religious authority** — in every attribution and in
+   "About this text"; Irfan-ul-Quran stays first wherever translations are listed. **Minhaj's
+   religious authority must accept any public use.** Other famous Urdu translations (Kanz-ul-Iman,
+   Fateh Muhammad Jalandhry, Abul A'la Maududi) have **no lawful digital source** recorded: Tanzil's
+   copies are non-commercial only with the rights held by their publishers, so they are not added.
+
+   **Implementation (2026-11-10; MIGRATION_STRATEGY.md §19, DOMAIN_MODEL.md §8.6).** Four review-only
+   migration sources (`quranenc-urdu-junagarhi`, `quranenc-english-saheeh`, `quranenc-english-rwwad`,
+   `quranenc-english-hilali-khan`) read QuranEnc's public API, each pinned to the edition checked
+   that day (v1.1.3, v1.1.2, v1.0.21, v1.1.3) — a run is refused once QuranEnc lists another, so a
+   new version is imported only after the pin is moved — and keep every translation and footnote
+   verbatim (the footnote's mark "[n]" as written: migration
+   `20261110130000_r2_quran_bracketed_note_marks`). `quran-reference.sh translations` then saves
+   them as Translation works whose attribution names the publisher, QuranEnc.com with a link, the
+   version of their staged text, and that they are external.
 
 ### 1.3 Authoritative Hadith sources and grading authority
 **Owner:** Minhaj · **Gates:** Phase 19 · **Priority:** Critical

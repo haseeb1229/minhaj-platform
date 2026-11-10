@@ -414,11 +414,13 @@ describe('Phase 2 — what the delivered code does NOT contain', () => {
       // key — so that one literal, in that one migration, is set aside before
       // the scan. Any `fatwa.*` permission key it seeded would still fail.
       // Phase 30-R restates the same content-kind CHECKs, so the same literal is
-      // set aside there too, and in Phase 30-RD's.
+      // set aside there too, and in Phase 30-RD's — and in R2's payload
+      // ceiling, which restates 30-RD's CHECK with only its payload bound raised.
       const sourceAdaptersOwner =
         file.includes('20261027000000_phase30_source_adapters') ||
         file.includes('20261030000000_phase30r_review_completeness') ||
-        file.includes('20261031000000_phase30rd_owner_decisions');
+        file.includes('20261031000000_phase30rd_owner_decisions') ||
+        file.includes('20261110140000_r2_migration_payload_ceiling');
       const scanned = sourceAdaptersOwner
         ? source.replaceAll("'fatwa.ruling'", '')
         : source;

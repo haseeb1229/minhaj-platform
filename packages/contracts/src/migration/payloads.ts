@@ -680,8 +680,28 @@ export interface StagedQuranTranslationNote {
   readonly text: string;
 }
 
-/** The opening marks a source sets on a note: none, a run of stars, or "n:-". */
-const STAGED_NOTE_MARKER = /^(?:|[٭*]{1,4}:?|[1-9][0-9]?:-)$/;
+/** The opening marks a source sets on a note: none, a run of stars, "n:-", or "[n]". */
+const STAGED_NOTE_MARKER = /^(?:|[٭*]{1,4}:?|[1-9][0-9]?:-|\[[1-9][0-9]{0,3}\])$/;
+
+/**
+ * The published edition a translation's text was taken from, where its source
+ * versions it (QuranEnc: owner decision 2026-11-10) — the source's own key,
+ * version and last-update time (Unix seconds), as its list states them, so a
+ * re-publication can name the version its terms require.
+ */
+export interface StagedTranslationEdition {
+  readonly key: string;
+  readonly version: string;
+  readonly lastUpdate: number;
+}
+
+export const stagedTranslationEditionSchema = z
+  .object({
+    key: z.string().regex(/^[a-z0-9_]{1,64}$/),
+    version: z.string().regex(/^[0-9]{1,4}(?:\.[0-9]{1,4}){1,3}$/),
+    lastUpdate: z.number().int().min(0).max(4_102_444_800),
+  })
+  .strict();
 
 export interface StagedQuranTranslationPayload {
   readonly kind: 'quran.translation';
@@ -697,6 +717,8 @@ export interface StagedQuranTranslationPayload {
    * and before), which says nothing about whether the source has any.
    */
   readonly notes: readonly StagedQuranTranslationNote[] | null;
+  /** The source's edition, where it versions its text; `null` where it does not. */
+  readonly edition: StagedTranslationEdition | null;
   readonly legacyIdentifier: string | null;
 }
 
@@ -730,6 +752,7 @@ export const stagedQuranTranslationPayloadSchema = z
       .max(2_000)
       .nullable()
       .default(null),
+    edition: stagedTranslationEditionSchema.nullable().default(null),
     legacyIdentifier: z.string().max(200).nullable(),
   })
   .strict()
@@ -980,6 +1003,8 @@ export interface ParsedQuranTranslation extends ParsedCommon {
         readonly text: string;
       }[]
     | null;
+  /** The source's edition, where the adapter's source versions its text. */
+  readonly edition?: StagedTranslationEdition;
 }
 
 export type ParsedRecord =

@@ -21,6 +21,7 @@ import { getDatabaseClient } from '../../client.ts';
 import { requestSearchIndexing } from '../../search-intent.ts';
 import { layerPersistence } from './layers.ts';
 import { recitationPersistence } from './recitation.ts';
+import { wordByWordPersistence } from './word-by-word.ts';
 import {
   audit,
   boundedOffset,
@@ -39,8 +40,9 @@ import {
  *
  * OWNED BY THE QURAN CONTEXT, hosted here (ARCHITECTURE.md §4.1). One factory
  * leaves this module, typed by Quran's own port, so no client, delegate or
- * transaction handle crosses the boundary. The layered works (`./layers.ts`)
- * and recitations (`./recitation.ts`) are spread into it, so Quran keeps one
+ * transaction handle crosses the boundary. The layered works (`./layers.ts`),
+ * recitations (`./recitation.ts`) and word-by-word works (`./word-by-word.ts`,
+ * Quran Part 7) are spread into it, so Quran keeps one
  * persistence port.
  *
  * NO METHOD HERE WRITES CANONICAL TEXT OR STRUCTURE. It READS the corpus, its
@@ -277,6 +279,7 @@ export function createQuranPersistence(): QuranPersistencePort {
   return {
     ...layerPersistence(),
     ...recitationPersistence(),
+    ...wordByWordPersistence(),
 
     /* ---- Canonical position — read only ---------------------------------- */
 

@@ -8,6 +8,18 @@
  * fetched, embedded or tracked; a browser leaves for one only when a visitor
  * follows the link in "About this text".
  */
+/**
+ * The translations that are Minhaj-ul-Quran's own — Irfan-ul-Quran in Urdu and
+ * English, as the staging reference import names them
+ * (`scripts/quran/translation-works.ts`, held equal by the tests). Every other
+ * public translation is an external reference translation, credited as such
+ * in "About this text".
+ */
+export const FIRST_PARTY_TRANSLATIONS: readonly string[] = Object.freeze([
+  'irfan-ul-quran-ur',
+  'irfan-ul-quran-en',
+]);
+
 export const REFERENCE_LINKS = Object.freeze({
   tanzil: 'https://tanzil.net/',
   licence: 'https://creativecommons.org/licenses/by/3.0/',

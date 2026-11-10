@@ -4,7 +4,11 @@ import { z } from 'zod';
 
 import { localeSchema } from '@minhaj/contracts';
 import type { ResolvedSession } from '@minhaj/contracts/identity';
-import { parseStagedPayload, type StagedDetail } from '@minhaj/contracts/migration';
+import {
+  parseStagedPayload,
+  type StagedDetail,
+  type StagedQuranTranslationPayload,
+} from '@minhaj/contracts/migration';
 import {
   QURAN_LIMITS,
   QURAN_SURAH_MAX,
@@ -19,6 +23,12 @@ import {
   type QuranReferenceRunner,
 } from '../../apps/web/src/composition/quran-reference-runner.ts';
 import { approvedTarget, CommandError, required, runCommand } from '../migration/cli.ts';
+import {
+  TRANSLATION_WORKS,
+  editionFits,
+  translationAttribution,
+  type TranslationWork,
+} from './translation-works.ts';
 
 /**
  * THE RUNTIME HALF of Rebaseline R2's Quran reference preview — run ONLY as a
@@ -37,14 +47,22 @@ import { approvedTarget, CommandError, required, runCommand } from '../migration
  *     point for code point against the registered source, and the procedure
  *     compares it byte for byte again and copies the REGISTERED text.
  *
- *   translations  --operator <accountId> --source-ur <sourceId> --source-en <sourceId>
- *     Reads the staged Irfan-ul-Quran revisions (`migration.read`) and saves
- *     each Surah's text, exactly as staged, into one Translation work per
- *     language (`quran.read` + `quran.administer`), then publishes the work.
- *     Only a CURRENT revision — the latest of its record, valid, not rejected
- *     or superseded, never one whose personal-data detector redacted it — of
- *     the two Irfan-ul-Quran sources is used, and only when it covers every
- *     Ayah of its Surah. Anything else is SKIPPED AND REPORTED, never repaired.
+ *   translations  --operator <accountId> --sources <key>=<sourceId>,…
+ *     Reads the staged revisions (`migration.read`) of each declared
+ *     translation work's own migration source (`./translation-works.ts`:
+ *     Irfan-ul-Quran in Urdu and English, and QuranEnc's external reference
+ *     translations) and saves each Surah's text, exactly as staged, into that
+ *     Translation work (`quran.read` + `quran.administer`), then publishes the
+ *     work. `--sources` names every declared work's provenance source, which
+ *     the owner side registered. A work is created only once a usable revision
+ *     exists. Only a CURRENT revision — the latest of its record, valid, not
+ *     rejected or superseded, never one whose personal-data detector redacted
+ *     it, of the work's language and (QuranEnc) of its own edition key — is
+ *     used, and only when it covers every Ayah of its Surah. Anything else is
+ *     SKIPPED AND REPORTED, never repaired. A QuranEnc work's attribution names
+ *     the version of the ONE edition its usable revisions carry — updated when
+ *     a re-run staged a new edition; revisions of two editions leave the work
+ *     exactly as it is (`version: "mixed"`) until the source is run again.
  *     Since Quran Part 6 a revision's translator's notes (parser version 3)
  *     are saved WITH its texts, each Ayah's notes exactly as staged and in
  *     order, through the same save — whose service ties every note to a mark
@@ -68,7 +86,7 @@ import { approvedTarget, CommandError, required, runCommand } from '../migration
 
 const USAGE =
   'reference-runtime accept --operator <id> --session <id> --source <id> --candidate <file> | ' +
-  'translations --operator <id> --source-ur <id> --source-en <id> | ' +
+  'translations --operator <id> --sources <key>=<id>,… | ' +
   'names --operator <id> --names <file>';
 
 /** A source this tooling registered: a generated UUID. */
@@ -149,24 +167,6 @@ async function accept(runner: QuranReferenceRunner): Promise<Record<string, unkn
  * translations
  * ========================================================================= */
 
-/** The two staged Irfan-ul-Quran sources and the work each becomes. */
-const LANGUAGES = Object.freeze({
-  ur: {
-    migrationSource: 'irfan-ul-quran-ur',
-    slug: 'irfan-ul-quran-ur',
-    name: 'عرفان القرآن',
-  },
-  en: {
-    migrationSource: 'irfan-ul-quran-en',
-    slug: 'irfan-ul-quran-en',
-    name: 'Irfan-ul-Quran',
-  },
-} as const);
-type Language = keyof typeof LANGUAGES;
-
-const ATTRIBUTION =
-  'Irfan-ul-Quran — translation by Shaykh-ul-Islam Dr Muhammad Tahir-ul-Qadri. © Minhaj-ul-Quran International. Source: irfan-ul-quran.com';
-
 /** Why a Surah was not saved — a category, never content. */
 type Skip =
   | 'no-current-revision'
@@ -175,6 +175,7 @@ type Skip =
   | 'personal-data-redacted'
   | 'unreadable-payload'
   | 'wrong-language'
+  | 'other-edition'
   | 'incomplete'
   | 'notes-untied'
   | 'refused';
@@ -185,16 +186,41 @@ interface Report {
   /** Translator's notes written with the saved Surahs (Quran Part 6) — a count. */
   notes: number;
   skipped: { surah: number; reason: Skip }[];
+  /**
+   * The version of the edition the usable revisions carry (QuranEnc), which
+   * the work's attribution names — or `mixed`, when they disagree and the
+   * work is left exactly as it is until its source is run again.
+   */
+  version: string | null;
   published: boolean;
   workId: string | null;
 }
 
-/** Every staged revision of the two sources, the CURRENT one of each record only. */
+/** `--sources <key>=<id>,…`: every declared work's provenance source, once. */
+function provenanceSources(): ReadonlyMap<string, string> {
+  const given = new Map<string, string>();
+  for (const pair of required('--sources', USAGE).split(',')) {
+    const [key = '', id = '', ...rest] = pair.split('=');
+    if (
+      rest.length > 0 ||
+      !TRANSLATION_WORKS.some((work) => work.source === key) ||
+      !SOURCE_ID.test(id) ||
+      given.has(key)
+    )
+      throw new CommandError('--sources names a work this import does not declare');
+    given.set(key, id);
+  }
+  if (given.size !== TRANSLATION_WORKS.length)
+    throw new CommandError('--sources must name every declared translation work');
+  return given;
+}
+
+/** Every staged revision of the named sources, the CURRENT one of each record only. */
 async function currentRevisions(
   runner: QuranReferenceRunner,
   actor: { readonly accountId: string },
-  sourceIds: ReadonlyMap<string, Language>,
-): Promise<Map<Language, Map<number, StagedDetail>>> {
+  sourceIds: ReadonlyMap<string, string>,
+): Promise<Map<string, Map<number, StagedDetail>>> {
   const latest = new Map<string, { id: string; revision: number }>();
   for (let offset = 0; ;) {
     const page = await runner.migration.read.staged(actor, { offset });
@@ -208,28 +234,27 @@ async function currentRevisions(
     if (page.rows.length === 0 || offset >= page.total) break;
   }
 
-  const bySurah = new Map<Language, Map<number, StagedDetail>>([
-    ['ur', new Map()],
-    ['en', new Map()],
-  ]);
+  const bySurah = new Map<string, Map<number, StagedDetail>>();
   for (const { id } of latest.values()) {
     const detail = await runner.migration.read.stagedDetail(actor, id);
     if (detail === null) continue;
-    const language = sourceIds.get(detail.sourceId);
-    if (language === undefined) continue;
+    const source = sourceIds.get(detail.sourceId);
+    if (source === undefined) continue;
     const payload = parseStagedPayload('quran.translation', detail.payload);
-    const surah = payload?.kind === 'quran.translation' ? payload.surah : null;
-    if (surah === null) {
-      // An unreadable payload names no Surah; it is counted against none.
-      continue;
-    }
-    bySurah.get(language)?.set(surah, detail);
+    // An unreadable payload names no Surah; it is counted against none.
+    if (payload?.kind !== 'quran.translation') continue;
+    const held = bySurah.get(source) ?? new Map<number, StagedDetail>();
+    held.set(payload.surah, detail);
+    bySurah.set(source, held);
   }
   return bySurah;
 }
 
-/** Why this current revision may not be used, or null when it may. */
-function unusable(detail: StagedDetail, language: Language): Skip | null {
+/** This current revision's payload, or why it may not be used. */
+function usable(
+  detail: StagedDetail,
+  work: TranslationWork,
+): StagedQuranTranslationPayload | Skip {
   if (detail.validation !== 'valid') return 'not-valid';
   if (detail.review !== 'pending' && detail.review !== 'approved')
     return 'not-reviewable';
@@ -238,24 +263,26 @@ function unusable(detail: StagedDetail, language: Language): Skip | null {
   if (detail.personalData === 'flagged') return 'personal-data-redacted';
   const payload = parseStagedPayload('quran.translation', detail.payload);
   if (payload?.kind !== 'quran.translation') return 'unreadable-payload';
-  if (payload.languageCode !== language) return 'wrong-language';
-  return null;
+  if (payload.languageCode !== work.language) return 'wrong-language';
+  if (!editionFits(work, payload.edition)) return 'other-edition';
+  return payload;
 }
 
+/** The declared work, by slug: kept when it names this source, created otherwise. */
 async function findOrCreateWork(
   runner: QuranReferenceRunner,
   actor: { readonly accountId: string },
-  language: Language,
+  work: TranslationWork,
   sourceId: string,
+  attribution: string,
 ): Promise<TranslationRecord> {
-  const { slug, name } = LANGUAGES[language];
   for (let offset = 0; ;) {
     const page = await quran(runner.quran.translations(actor, offset));
-    const found = page.items.find((work) => work.slug === slug);
+    const found = page.items.find((item) => item.slug === work.slug);
     if (found !== undefined) {
       if (found.sourceId !== sourceId)
         throw new CommandError(
-          `the work '${slug}' names another source; nothing was changed`,
+          `the work '${work.slug}' names another source; nothing was changed`,
         );
       return found;
     }
@@ -265,11 +292,11 @@ async function findOrCreateWork(
   return quran(
     runner.quran.createTranslation(actor, {
       value: {
-        slug,
-        name,
-        description: null,
-        attribution: ATTRIBUTION,
-        languageCode: language,
+        slug: work.slug,
+        name: work.name,
+        description: work.description,
+        attribution,
+        languageCode: work.language,
         sourceId,
         contributors: [],
       },
@@ -328,103 +355,159 @@ function translationChanges(
   });
 }
 
+/**
+ * One declared work: created only once a usable revision exists, its
+ * attribution kept true to the edition of its staged text, every usable
+ * Surah saved exactly as staged, and published once it has text.
+ */
+async function importWork(
+  runner: QuranReferenceRunner,
+  actor: { readonly accountId: string },
+  input: {
+    readonly work: TranslationWork;
+    readonly sourceId: string;
+    readonly surahs: readonly { readonly number: number; readonly ayahCount: number }[];
+    readonly staged: ReadonlyMap<number, StagedDetail>;
+  },
+): Promise<Report> {
+  const { work, sourceId, surahs, staged } = input;
+  const report: Report = {
+    saved: 0,
+    unchanged: 0,
+    notes: 0,
+    skipped: [],
+    version: null,
+    published: false,
+    workId: null,
+  };
+
+  const payloads = new Map<number, StagedQuranTranslationPayload>();
+  for (const surah of surahs) {
+    const detail = staged.get(surah.number);
+    const read = detail === undefined ? 'no-current-revision' : usable(detail, work);
+    if (typeof read === 'string')
+      report.skipped.push({ surah: surah.number, reason: read });
+    else payloads.set(surah.number, read);
+  }
+  // ONE edition across the usable revisions, which the attribution names; a
+  // work whose revisions disagree (a source part-way through a re-run) is left
+  // exactly as it is.
+  const editions = new Set(
+    [...payloads.values()].map((payload) => JSON.stringify(payload.edition)),
+  );
+  if (editions.size > 1) {
+    report.version = 'mixed';
+    return report;
+  }
+  const [first] = payloads.values();
+  if (first === undefined) return report;
+  report.version = first.edition?.version ?? null;
+  const attribution = translationAttribution(work, first.edition);
+
+  let record = await findOrCreateWork(runner, actor, work, sourceId, attribution);
+  report.workId = record.id;
+  // A new edition: the attribution names the version its text now is.
+  if (record.attribution !== attribution)
+    record = await quran(
+      runner.quran.updateTranslation(actor, {
+        id: record.id,
+        expectedVersion: record.version,
+        value: {
+          slug: record.slug,
+          name: record.name,
+          description: record.description,
+          attribution,
+          languageCode: record.languageCode,
+          sourceId: record.sourceId,
+          // A Translation's contributors hold its own roles only (the schema's).
+          contributors: record.contributors.flatMap(({ personId, role }) =>
+            role === 'translator' || role === 'editor' ? [{ personId, role }] : [],
+          ),
+        },
+      }),
+    );
+
+  for (const surah of surahs) {
+    const payload = payloads.get(surah.number);
+    if (payload === undefined) continue;
+    const ayat = [...payload.ayat].sort((a, b) => a.ayah - b.ayah);
+    if (
+      ayat.length !== surah.ayahCount ||
+      ayat.some((entry, index) => entry.ayah !== index + 1)
+    ) {
+      report.skipped.push({ surah: surah.number, reason: 'incomplete' });
+      continue;
+    }
+
+    const current = await quran(
+      runner.quran.translationTexts(actor, record.id, surah.number),
+    );
+    const changes = translationChanges(ayat, payload.notes, current);
+    if (changes.length === 0) {
+      report.unchanged += 1;
+      continue;
+    }
+    try {
+      record = await runner.quran.saveTranslationTexts(actor, {
+        id: record.id,
+        expectedVersion: record.version,
+        surah: surah.number,
+        changes,
+      });
+      report.saved += 1;
+      report.notes += changes.reduce(
+        (sum, change) => sum + (change.notes?.length ?? 0),
+        0,
+      );
+    } catch (error) {
+      const refusal = error as { name?: unknown; reason?: unknown } | null;
+      if (refusal?.name !== 'QuranRefusal') throw error;
+      report.skipped.push({
+        surah: surah.number,
+        reason: refusal.reason === 'note-untied' ? 'notes-untied' : 'refused',
+      });
+    }
+  }
+  report.skipped.sort((a, b) => a.surah - b.surah);
+
+  if (record.state !== 'published' && record.textCount > 0) {
+    record = await quran(
+      runner.quran.setTranslationState(actor, {
+        id: record.id,
+        expectedVersion: record.version,
+        state: 'published',
+      }),
+    );
+  }
+  report.published = record.state === 'published';
+  return report;
+}
+
 async function translations(
   runner: QuranReferenceRunner,
 ): Promise<Record<string, unknown>> {
   const operator = identifier('--operator', ACCOUNT_ID);
-  const sources: Record<Language, string> = {
-    ur: identifier('--source-ur', SOURCE_ID),
-    en: identifier('--source-en', SOURCE_ID),
-  };
+  const provenance = provenanceSources();
   const actor = { accountId: operator };
 
   // The staged revisions' OWN sources, by key — never inferred from a payload.
-  const migrationSources = new Map<string, Language>();
-  for (const language of Object.keys(LANGUAGES) as Language[]) {
-    const source = await runner.migration.sources.sourceByKey(
-      actor,
-      LANGUAGES[language].migrationSource,
-    );
-    if (source !== null) migrationSources.set(source.id, language);
+  const migrationSources = new Map<string, string>();
+  for (const work of TRANSLATION_WORKS) {
+    const source = await runner.migration.sources.sourceByKey(actor, work.source);
+    if (source !== null) migrationSources.set(source.id, work.source);
   }
 
   const surahs = await quran(runner.quran.surahs(actor));
   const revisions = await currentRevisions(runner, actor, migrationSources);
-  const reports: Record<Language, Report> = {
-    ur: { saved: 0, unchanged: 0, notes: 0, skipped: [], published: false, workId: null },
-    en: { saved: 0, unchanged: 0, notes: 0, skipped: [], published: false, workId: null },
-  };
-
-  for (const language of Object.keys(LANGUAGES) as Language[]) {
-    const report = reports[language];
-    let work = await findOrCreateWork(runner, actor, language, sources[language]);
-    report.workId = work.id;
-
-    for (const surah of surahs) {
-      const detail = revisions.get(language)?.get(surah.number);
-      if (detail === undefined) {
-        report.skipped.push({ surah: surah.number, reason: 'no-current-revision' });
-        continue;
-      }
-      const reason = unusable(detail, language);
-      if (reason !== null) {
-        report.skipped.push({ surah: surah.number, reason });
-        continue;
-      }
-      const payload = parseStagedPayload('quran.translation', detail.payload);
-      if (payload?.kind !== 'quran.translation') continue;
-      const ayat = [...payload.ayat].sort((a, b) => a.ayah - b.ayah);
-      if (
-        ayat.length !== surah.ayahCount ||
-        ayat.some((entry, index) => entry.ayah !== index + 1)
-      ) {
-        report.skipped.push({ surah: surah.number, reason: 'incomplete' });
-        continue;
-      }
-
-      const current = await quran(
-        runner.quran.translationTexts(actor, work.id, surah.number),
-      );
-      const changes = translationChanges(ayat, payload.notes, current);
-      if (changes.length === 0) {
-        report.unchanged += 1;
-        continue;
-      }
-      try {
-        work = await runner.quran.saveTranslationTexts(actor, {
-          id: work.id,
-          expectedVersion: work.version,
-          surah: surah.number,
-          changes,
-        });
-        report.saved += 1;
-        report.notes += changes.reduce(
-          (sum, change) => sum + (change.notes?.length ?? 0),
-          0,
-        );
-      } catch (error) {
-        const refusal = error as { name?: unknown; reason?: unknown } | null;
-        if (refusal?.name !== 'QuranRefusal') throw error;
-        report.skipped.push({
-          surah: surah.number,
-          reason: refusal.reason === 'note-untied' ? 'notes-untied' : 'refused',
-        });
-      }
-    }
-
-    if (work.state !== 'published' && work.textCount > 0) {
-      work = await quran(
-        runner.quran.setTranslationState(actor, {
-          id: work.id,
-          expectedVersion: work.version,
-          state: 'published',
-        }),
-      );
-    }
-    report.published = work.state === 'published';
-  }
-
-  return { mode: 'translations', ur: reports.ur, en: reports.en };
+  const works: Record<string, Report> = {};
+  for (const work of TRANSLATION_WORKS)
+    works[work.source] = await importWork(runner, actor, {
+      work,
+      sourceId: provenance.get(work.source) ?? '',
+      surahs,
+      staged: revisions.get(work.source) ?? new Map<number, StagedDetail>(),
+    });
+  return { mode: 'translations', works };
 }
 
 /* ===========================================================================

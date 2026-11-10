@@ -835,6 +835,7 @@ seconds. A fixture never becomes an authorised source, nor the reverse.
 | Minhaj.TV | `minhaj-tv-videos` (`media.video`) | YouTube identifiers and metadata from `/english/` pages only (`robots.txt`); audio is a SoundCloud embed, which the storage-backed audio model (§4.9) cannot hold — **source-limited** |
 | TheFatwa | `thefatwa-rulings` (`fatwa.ruling`, review-only) | Published rulings; the asker's name and place are never read |
 | Irfan-ul-Quran | `irfan-ul-quran-ur`, `irfan-ul-quran-en` (`quran.translation`, review-only) | Translation text per surah, exactly, and since parser version 3 (Quran Part 6) the translator's own notes beside it, verbatim; no Arabic text, tafsir or recitation (§19) |
+| QuranEnc.com (external reference translations, 2026-11-10) | `quranenc-urdu-junagarhi`, `quranenc-english-saheeh`, `quranenc-english-rwwad`, `quranenc-english-hilali-khan` (`quran.translation`, review-only) | QuranEnc's public translation API, under its published re-publication terms (OPEN_DECISIONS.md §1.2 item 5): each surah's translation and footnotes verbatim, pinned to one edition; never Minhaj-ul-Quran's translation (§19) |
 | eLearning (equranclass.com / femaletutor.com) | — | **Source-limited:** the public catalogue has no syllabus, and Learning cannot publish a course without one; a syllabus is never invented |
 
 **Eight content kinds.** `media.video`, `library.work`, `library.magazine`,
@@ -1544,6 +1545,72 @@ revision with `notes: null` changes texts only and leaves notes held untouched, 
 texts and notes are already held reports the surah unchanged. The summary counts notes written per
 language — never their words.
 
+**QuranEnc's external reference translations (owner decision 2026-11-10,
+`OWNER-DECISION-2026-11-10-EXTERNAL-REFERENCE-TRANSLATIONS`, OPEN_DECISIONS.md §1.2 item 5).** Four
+more review-only `quran.translation` sources read **QuranEnc.com's public API** on its one host
+(`quranenc.com`), one registration per translation: `quranenc-urdu-junagarhi` (Urdu, Muhammad
+Ibrahim Junagarhi), `quranenc-english-saheeh` (Saheeh International), `quranenc-english-rwwad`
+(Rowwad Translation Center) and `quranenc-english-hilali-khan` (Hilali and Khan). Their licence is
+QuranEnc's published re-publication terms — no modification, addition or deletion; the publisher,
+QuranEnc.com and the version named; the latest version followed — named, with their address, in
+each source's recorded policy notes; its authorisation reference is the owner decision. The adapter (`scripts/migration/adapters/quranenc.ts`, parser
+`json-quranenc-translation`) works as Irfan-ul-Quran's does, over JSON:
+
+- **One edition, pinned.** Each translation is pinned to the edition checked on 2026-11-10 (its
+  QuranEnc key, version and last-update time: `urdu_junagarhi` 1.1.3, `english_saheeh` 1.1.2,
+  `english_rwwad` 1.0.21, `english_hilali_khan` 1.1.3). Discovery reads robots.txt and then
+  QuranEnc's own list of the language's translations (`/api/v1/translations/list/{ur|en}`), and
+  **refuses the run (`edition-changed`) unless the list still names exactly that version and update
+  time** — so nothing is ever staged under a version it is not. Each record is one surah, its
+  external key the API's own address (`/api/v1/translation/sura/{key}/{n}`; `--items` are surah
+  numbers).
+- **Verbatim, strictly.** A surah's JSON must hold exactly its ayat 1…count, each row numbered as its
+  surah and ayah; each ayah's `translation` is taken exactly. `arabic_text` is never read.
+- **Footnotes as notes.** Each row's `footnotes` become Part 6 notes with the mark as QuranEnc writes
+  it — `[n]`, the same mark the translation sets (migration
+  `20261110130000_r2_quran_bracketed_note_marks` admits it; DOMAIN_MODEL.md §8.6) — and the words
+  after it verbatim. A footnote opens at the field's or a line's start or after a space (Rowwad sets
+  two on one line); "[1] ، [2] …" is ONE footnote for two marks, opened by the first (Urdu 5:8); a
+  field with no mark is the ayah's one note only where its translation carries none (Urdu 2:285).
+  Every mark must be explained, no mark set twice, the notes in their marks' order — **anything else
+  fails the surah** (`translation-structure-unexpected`). Survey of all four editions (fetched
+  2026-11-10 at one request every ~1.2 s): all 456 surahs parse and normalise with no issue and no
+  personal-data finding, **7,603 Urdu notes, and 1,904, 2,640 and 760 English** (Saheeh, Rowwad,
+  Hilali-Khan), every one tied by Quran's own rule.
+- **The staged-payload ceiling is 400,000 characters (lead decision 2026-11-10).** The Urdu
+  Al-Baqarah (`urdu_junagarhi` surah 2, its footnotes a running commentary) stages a payload of
+  265,210 characters, over the 200,000 the ceiling held until then. **Decision and reason:** a Quran
+  translation's surah is one indivisible source item — splitting it into partial records would
+  complicate every import — and Al-Baqarah is the longest surah, so the ceiling is raised once, to
+  **400,000**, leaving about half again as much room for any translation with notes. Migration
+  `20261110140000_r2_migration_payload_ceiling` (with its rollback, which refuses while a longer
+  revision exists) restates `MigrationStagedRecord_ck` exactly as Phase 30-RD did with only that
+  bound raised, and `MIGRATION_LIMITS.payload` (`@minhaj/contracts/migration`) is 400,000 — the
+  pipeline's own check (an over-long payload is still staged as a stub, `body-too-long`, its evidence
+  kept) and the derived inline-text and video-description bounds follow it. Every QuranEnc surah now
+  stages valid (the longest English, Hilali-Khan's Al-Baqarah, 147,372).
+- **The edition travels with the text.** The staged payload gains `edition` — `{ key, version,
+  lastUpdate }`, `null` for a source that versions none (Irfan-ul-Quran) — and the parser version is
+  `1-<version>`, so a moved pin re-reads even unchanged bytes into revisions that say which version
+  they are. **Do not `--replay` a QuranEnc source after its pin moves**: replay re-reads retained
+  evidence of the earlier edition; run it live.
+
+**The version obligation.** QuranEnc's terms require the latest version. When its list shows a new
+version, the next run is refused; the pin is moved in the adapter (a reviewed code change, with the
+survey re-run), the source is run again live over all 114 surahs, and `quran-reference.sh
+translations` updates the work: its attribution always names the ONE edition its usable revisions
+carry, and a work whose revisions mix two editions is left exactly as it is (`version: "mixed"`)
+until the run completes. Notes the owner's reviewers make on a translation go to QuranEnc (its terms).
+
+`quran-reference.sh translations` imports **every declared work** (`scripts/quran/translation-works.ts`)
+— Irfan-ul-Quran's two, then QuranEnc's four — the owner side registering one `reference`
+provenance source per work (code = the migration source key, no ayat). A QuranEnc work is named and
+described in QuranEnc's own words, attributed "Translation: {language} — {publisher}, v{version}, via
+QuranEnc.com ({browse page}). An external reference translation — not Minhaj-ul-Quran
+International's, and not reviewed by its religious authority.", and created only once it has a
+usable revision; Irfan-ul-Quran stays first wherever translations are listed (the public order is by
+slug).
+
 ### 19.1 Run plan on staging — PLANNED, not yet run
 
 Every figure below is an **expected** count from the R2 survey of the sources, not a result; the
@@ -1568,6 +1635,7 @@ OWNER-ATTESTATION-2026-11-06-R2-COMPREHENSIVE-PRESENTATION-CORPUS --authorised-o
 | 19 | `minhaj-org-collections-en` | 1 / 14 | 11 new Collections, only after their members are public |
 | 20 | `thefatwa-rulings` | 5 / 250 | about 226 new, review-only |
 | 21 | `irfan-ul-quran-ur` · `-en` | 1 / 114 (`--items 1..114`) | 228 staged (222 new), review-only |
+| 22 | `quranenc-urdu-junagarhi` · `-english-saheeh` · `-english-rwwad` · `-english-hilali-khan` (registered with `OWNER-DECISION-2026-11-10-EXTERNAL-REFERENCE-TRANSLATIONS`, authorised on 2026-11-10; the policy notes name QuranEnc's terms) | 1 / 114 (`--items 1,2,…,114`) each | 456 staged, review-only; then `quran-reference.sh translations` |
 
 After each run: the run-wide approval, pictures by host, manifests of 100, each manifest published
 under step-up, then the second administrator's Editorial queue selections. The contact page (1797)

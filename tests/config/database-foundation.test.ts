@@ -285,6 +285,10 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'QuranTranslationNote',
       'QuranTransliteration',
       'QuranTransliterationText',
+      // Quran Part 7 — a word-by-word work, its contributors and its glosses.
+      'QuranWordByWord',
+      'QuranWordByWordContributor',
+      'QuranWordByWordGloss',
       'QuranTafsir',
       'QuranTafsirContributor',
       'QuranTafsirText',

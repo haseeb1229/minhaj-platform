@@ -13,6 +13,7 @@ import {
   neighbourAyah,
   playbackRate,
   readSurahAudio,
+  recitationGroups,
   recitationLabel,
   repeatCount,
   segmentFor,
@@ -519,5 +520,49 @@ describe('a recitation is labelled once by its reciter', () => {
     ).toBe('Shaykh-ul-Islam — Irfan-ul-Quran (Urdu)');
     expect(recitationLabel({ reciter: null, name: 'Murattal' })).toBe('Murattal');
     expect(recitationLabel({ reciter: '  ', name: 'Murattal' })).toBe('Murattal');
+  });
+});
+
+describe('the catalogue is grouped by style and ordered by reciter', () => {
+  const entry = (reciter: string | null, name: string, style: string | null) => ({
+    reciter,
+    name,
+    style,
+  });
+
+  it('puts the style most recitations share first, styleless ones last, each by reciter', () => {
+    const groups = recitationGroups(
+      [
+        entry('NON_QURAN_FIXTURE Zayd', 'Z — Mujawwad', 'Mujawwad'),
+        entry('NON_QURAN_FIXTURE Bakr', 'B — Murattal', 'Murattal'),
+        entry(null, 'NON_QURAN_FIXTURE narration', null),
+        entry('NON_QURAN_FIXTURE Ahmad', 'A — Murattal', 'Murattal'),
+        entry('NON_QURAN_FIXTURE Ahmad', 'A — Mujawwad', 'Mujawwad'),
+        entry('NON_QURAN_FIXTURE Umar', 'U — Murattal', 'Murattal'),
+      ],
+      'en',
+    );
+    expect(
+      groups.map((group) => [group.style, group.entries.map((each) => each.name)]),
+    ).toEqual([
+      ['Murattal', ['A — Murattal', 'B — Murattal', 'U — Murattal']],
+      ['Mujawwad', ['A — Mujawwad', 'Z — Mujawwad']],
+      [null, ['NON_QURAN_FIXTURE narration']],
+    ]);
+  });
+
+  it('orders equal groups by style, one reciter’s recitations by name, and keeps every entry', () => {
+    const groups = recitationGroups(
+      [
+        entry('NON_QURAN_FIXTURE Same', 'Second', 'b-style'),
+        entry('NON_QURAN_FIXTURE Same', 'First', 'b-style'),
+        entry('NON_QURAN_FIXTURE Other', 'Only', 'a-style'),
+        entry('NON_QURAN_FIXTURE Other', 'Again', 'a-style'),
+      ],
+      'en',
+    );
+    expect(groups.map((group) => group.style)).toEqual(['a-style', 'b-style']);
+    expect(groups[1]?.entries.map((each) => each.name)).toEqual(['First', 'Second']);
+    expect(recitationGroups([], 'ur')).toEqual([]);
   });
 });

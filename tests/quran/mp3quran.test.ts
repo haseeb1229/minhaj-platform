@@ -9,9 +9,11 @@ import {
   CURATED_READS,
   HAFS,
   MP3QURAN_ENDPOINTS,
+  MUJAWWAD,
   attributionOf,
   planRead,
   readMoshafs,
+  riwayahOf,
   readSurahTiming,
   readTimedReads,
   streamOfFolderUrl,
@@ -131,6 +133,47 @@ describe('a curated read is planned only from what the API says, exactly', () =>
     });
   });
 
+  it('admits a mujawwad edition only where its own moshaf names Hafs', () => {
+    const mujawwad = timedBody({ rewaya: MUJAWWAD });
+    const englishMujawwad = readMoshafs(
+      recitersBody(
+        'NON_QURAN_FIXTURE Reciter',
+        "Rewayat Hafs A'n Assem - Almusshaf Al Mojawwad",
+      ),
+    );
+    const plan = planRead(
+      READ,
+      readTimedReads(mujawwad),
+      englishMujawwad,
+      readMoshafs(recitersBody('NON_QURAN_FIXTURE القارئ', `${HAFS} - المصحف المجود`)),
+    );
+    expect('skip' in plan ? plan : plan.style).toBe('Almusshaf Al Mojawwad');
+    // The mujawwad label names no riwayah; another riwayah's moshaf is refused.
+    expect(
+      planRead(
+        READ,
+        readTimedReads(mujawwad),
+        englishMujawwad,
+        readMoshafs(recitersBody('NON_QURAN_FIXTURE القارئ', 'ورش عن نافع - مرتل')),
+      ),
+    ).toEqual({ skip: 'not-hafs' });
+    // And so is a Hafs-timed read whose own moshaf says otherwise.
+    expect(
+      planRead(
+        READ,
+        readTimedReads(timedBody()),
+        english(),
+        readMoshafs(recitersBody('NON_QURAN_FIXTURE القارئ', 'ورش عن نافع')),
+      ),
+    ).toEqual({ skip: 'not-hafs' });
+  });
+
+  it('reads a moshaf’s riwayah from the words before its " - "', () => {
+    expect(riwayahOf(`${HAFS} - مرتل`)).toBe(HAFS);
+    expect(riwayahOf(HAFS)).toBe(HAFS);
+    expect(riwayahOf(` - ${HAFS}`)).toBe(` - ${HAFS}`);
+  });
+
   it('skips a read whose reciter the reciters list does not name in both languages', () => {
     expect(planRead(READ, readTimedReads(timedBody()), new Map(), arabic())).toEqual({
       skip: 'no-reciter',
@@ -173,6 +216,27 @@ describe('a curated read is planned only from what the API says, exactly', () =>
       expect(streamOfFolderUrl(`https://cdn.mp3quran.net/${entry.folder}/`)?.path).toBe(
         entry.folder,
       );
+    const folders = CURATED_READS.map((entry) => entry.folder);
+    expect(new Set(folders).size).toBe(folders.length);
+  });
+
+  it('makes one reciter with two reads one Person with two recitations', () => {
+    // The People slug is the reciter's folder; the recitation slug adds the moshaf.
+    const byPerson = new Map<string, string[]>();
+    for (const { folder } of CURATED_READS) {
+      const [, person = '', moshaf = ''] =
+        /^audio\/([a-z0-9-]+)\/(r[0-9]+)$/.exec(folder) ?? [];
+      byPerson.set(person, [...(byPerson.get(person) ?? []), `${person}-${moshaf}`]);
+    }
+    expect(byPerson.get('abdulbasit-abdulsamad')).toEqual([
+      'abdulbasit-abdulsamad-r3',
+      'abdulbasit-abdulsamad-r1',
+    ]);
+    expect(byPerson.get('mahmoud-husary')).toEqual([
+      'mahmoud-husary-r1',
+      'mahmoud-husary-r2',
+    ]);
+    expect(CURATED_READS).toHaveLength(29);
   });
 
   it('asks only the API host', () => {

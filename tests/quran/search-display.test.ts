@@ -60,6 +60,7 @@ describe('quranHitDisplays', () => {
     ]);
     expect(display([arabic], [current])(arabic)).toEqual({
       layer: 'arabic',
+      kind: null,
       language: 'ar',
       text: current.text,
     });
@@ -80,6 +81,7 @@ describe('quranHitDisplays', () => {
     ]);
     expect(display([english], [current])(english)).toEqual({
       layer: 'layer',
+      kind: 'translation',
       language: 'en',
       text: 'NON_QURAN_FIXTURE alpha translation',
     });
@@ -92,6 +94,7 @@ describe('quranHitDisplays', () => {
     ]);
     expect(display([british], [current])(british)).toEqual({
       layer: 'layer',
+      kind: 'translation',
       language: 'en-GB',
       text: 'NON_QURAN_FIXTURE gb',
     });
@@ -101,7 +104,12 @@ describe('quranHitDisplays', () => {
     const english = hit('1:2', 'en');
     const current = record(1, 2, [layer('fixture-urdu', 'ur', 'NON_QURAN_FIXTURE urdu')]);
     const shown = display([english], [current])(english);
-    expect(shown).toEqual({ layer: 'arabic', language: 'ar', text: current.text });
+    expect(shown).toEqual({
+      layer: 'arabic',
+      kind: null,
+      language: 'ar',
+      text: current.text,
+    });
     expect(shown?.text).not.toContain(STALE);
   });
 

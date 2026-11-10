@@ -123,8 +123,13 @@ export const MIGRATION_LIMITS = Object.freeze({
   promotionEntries: 500,
   /** The ceiling on a single response body, in bytes (SQL CHECK too). */
   maxBodyBytes: 8 * 1024 * 1024,
-  /** A staged payload's JSON length (SQL CHECK too). */
-  payload: 200_000,
+  /**
+   * A staged payload's JSON length (SQL CHECK too) — 400,000 since 2026-11-10
+   * (migration `20261110140000_r2_migration_payload_ceiling`): one surah of a
+   * translation with its footnotes is one indivisible record, the longest
+   * (Urdu Al-Baqarah with Junagarhi's notes) about 265,200.
+   */
+  payload: 400_000,
   /** How much of a raw body the escaped operator preview shows. */
   rawPreviewBytes: 64 * 1024,
   /** Hosts one source may name. */

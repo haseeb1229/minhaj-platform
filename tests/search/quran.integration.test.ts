@@ -644,7 +644,12 @@ live('Phase 18 Quran in Search (real SQL Server FTS)', () => {
         expect(shown).toEqual([
           {
             citation: '1:2',
-            display: { layer: 'arabic', language: 'ar', text: primary.ayat[1]!.text },
+            display: {
+              layer: 'arabic',
+              kind: null,
+              language: 'ar',
+              text: primary.ayat[1]!.text,
+            },
           },
         ]);
         expect(JSON.stringify(shown)).not.toContain(TRANSLATION_WORD);
@@ -696,7 +701,7 @@ live('Phase 18 Quran in Search (real SQL Server FTS)', () => {
         expect(shown).toEqual([
           {
             citation: '1:3',
-            display: { layer: 'arabic', language: 'ar', text: reviewedText },
+            display: { layer: 'arabic', kind: null, language: 'ar', text: reviewedText },
           },
         ]);
         expect(JSON.stringify(shown)).not.toContain(CANONICAL_WORD['1:3']!);
@@ -765,6 +770,28 @@ live('Phase 18 Quran in Search (real SQL Server FTS)', () => {
         await h.indexNow();
         expect(await citations(CANONICAL_WORD['2:4']!)).toEqual(['2:4']);
         expect(await citations(RECONCILED_WORD)).toEqual(['2:2']);
+      });
+    });
+
+    describe('Quran Part 7 — a transliteration is searchable only while it is public', () => {
+      it('withdrawing it owes its ayat a re-projection, after which nothing of it matches', async () => {
+        expect(await citations(TRANSLITERATION_WORD)).toEqual(['2:1']);
+        const listed = await quran.transliterations(administrator);
+        const work = listed.items.find(
+          (item) => item.name === 'NON_QURAN_FIXTURE transliteration',
+        );
+        if (work === undefined) throw new Error('fixture transliteration missing');
+        const owed = await intents(db.admin, '2:1');
+        await quran.setTransliterationState(administrator, {
+          id: work.id,
+          expectedVersion: work.version,
+          state: 'archived',
+        });
+        expect(await intents(db.admin, '2:1')).toBe(owed + 1);
+        await h.indexNow();
+        expect(await citations(TRANSLITERATION_WORD)).toEqual([]);
+        // 2:1 had no other English text: only its Arabic document remains.
+        expect(await documentsOf('2:1')).toEqual(['ar/ar']);
       });
     });
   });

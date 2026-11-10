@@ -7,7 +7,9 @@ import type {
   TopicAyahPage,
   TranslationPage,
   TransliterationPage,
+  WordByWordPage,
   AyahDetail,
+  AyahGlosses,
   AyahSearchRecord,
   CandidateAyah,
   CorrectionPreview,
@@ -17,6 +19,7 @@ import type {
   PublicAyahPlace,
   PublicAyahTiming,
   PublicJuz,
+  PublicLayerCoverage,
   PublicLayerWork,
   PublicRecitation,
   PublicRecitationSegment,
@@ -50,6 +53,9 @@ import type {
   TransliterationRecord,
   TransliterationValue,
   VerificationMismatch,
+  WordByWordRecord,
+  WordByWordValue,
+  WordGlossChange,
 } from './values.ts';
 
 /**
@@ -143,6 +149,9 @@ export interface QuranPublicReaderPort {
   transliteration(slug: string): Promise<PublicTransliteration | null>;
   tafsirs(): Promise<readonly PublicLayerWork[]>;
   tafsir(slug: string): Promise<PublicLayerWork | null>;
+  /** The public word-by-word works (Quran Part 7), in slug order. */
+  wordByWords(): Promise<readonly PublicLayerWork[]>;
+  wordByWord(slug: string): Promise<PublicLayerWork | null>;
 
   /**
    * One public Translation's texts for a range of one Surah, each with its
@@ -168,6 +177,25 @@ export interface QuranPublicReaderPort {
     from: number,
     to: number,
   ): Promise<readonly LayerText[]>;
+  /**
+   * How much of the Quran each of these public Transliterations carries, per
+   * Surah (Quran Part 7). ONE grouped read; a work not public now is absent.
+   */
+  transliterationCoverage(
+    workIds: readonly string[],
+  ): Promise<readonly PublicLayerCoverage[]>;
+  /**
+   * One public word-by-word work's glosses for a range of one Surah, each
+   * Ayah's in position order — ONE read per page, never per Ayah or word.
+   */
+  wordByWordGlosses(
+    workId: string,
+    surah: number,
+    from: number,
+    to: number,
+  ): Promise<readonly AyahGlosses[]>;
+  /** Ayat and words glossed per Surah, for each of these public works. ONE grouped read. */
+  wordByWordCoverage(workIds: readonly string[]): Promise<readonly PublicLayerCoverage[]>;
   /** Public Tafsir entries overlapping a range of one Surah, in range order. */
   tafsirEntries(
     workId: string,
@@ -319,6 +347,33 @@ export interface QuranPersistencePort {
       readonly changes: readonly LayerTextChange[];
     },
   ): Promise<TransliterationRecord>;
+
+  /* ---- Word by word (Quran Part 7) -------------------------------------- */
+
+  wordByWords(offset: number): Promise<WordByWordPage>;
+  wordByWord(id: string): Promise<WordByWordRecord | null>;
+  createWordByWord(
+    input: Attributed & { readonly value: WordByWordValue },
+  ): Promise<WordByWordRecord>;
+  updateWordByWord(
+    input: Versioned & { readonly value: WordByWordValue },
+  ): Promise<WordByWordRecord>;
+  setWordByWordState(
+    input: Versioned & { readonly state: QuranLayerState },
+  ): Promise<WordByWordRecord>;
+  /** A word-by-word work's glosses of one Surah, each Ayah's in position order. */
+  wordByWordGlosses(id: string, surah: number): Promise<readonly AyahGlosses[]>;
+  /**
+   * Replaces the glosses of each named Ayah of one Surah WHOLE, in one
+   * transaction under the expected version. The service has already checked
+   * every position against the Ayah's stored text (`ayahWords`).
+   */
+  saveWordByWordGlosses(
+    input: Versioned & {
+      readonly surah: number;
+      readonly changes: readonly WordGlossChange[];
+    },
+  ): Promise<WordByWordRecord>;
 
   tafsirs(offset: number): Promise<TafsirPage>;
   tafsir(id: string): Promise<TafsirRecord | null>;

@@ -61,13 +61,17 @@ import {
   translationPath,
   withReading,
 } from './presentation';
-import { quranIndexable, readSurahs } from './read';
-import { ArabicText, TranslationText } from './scripture';
+import { quranIndexable, readSurahs, readTransliterations } from './read';
+import { ArabicText, TranslationText, TransliterationText } from './scripture';
 import { Contributors, LanguageName } from './works';
 
 /**
  * THE TRANSLATIONS (Quran Part 6; ROUTE_MAP.md §3.3) — the listing, one
  * work's page and the compare view.
+ *
+ * The compare view shows, under the Arabic, every public transliteration of
+ * the Ayah too (Quran Part 7) — a reading aid beside the text, never a
+ * translation — and nothing of one when none is public.
  *
  * EACH TRANSLATION IS ITS OWN WORK, AND NONE IS PRIVILEGED. A page shows what
  * the reader records of a work — its name, language, description, the People
@@ -569,14 +573,15 @@ export async function ComparePage({
   const t = await getTranslations({ locale, namespace: 'quran' });
   const parts = await quranTrail(locale);
   const reader = quranReadRuntime().reader;
-  const [listed, languages, surahs] = await Promise.all([
+  const [listed, languages, surahs, transliterations] = await Promise.all([
     reader.translations(),
     contentLanguages(),
     readSurahs(),
+    readTransliterations(),
   ]);
   const works = inReadingOrder(listed, locale);
   const ref = request.kind === 'shown' ? request.ref : null;
-  const [ayah, texts] = await Promise.all([
+  const [ayah, texts, transliterated] = await Promise.all([
     ref === null ? Promise.resolve(null) : reader.ayah(ref),
     ref === null
       ? Promise.resolve([] as readonly (readonly TranslationLayerText[])[])
@@ -584,6 +589,17 @@ export async function ComparePage({
           works.map((work) =>
             reader.translationTexts(work.id, ref.surah, ref.ayah, ref.ayah),
           ),
+        ),
+    // Quran Part 7: every public transliteration of the Ayah, under its Arabic.
+    ref === null
+      ? Promise.resolve([])
+      : Promise.all(
+          transliterations.map(async (work) => ({
+            work,
+            entry: (
+              await reader.transliterationTexts(work.id, ref.surah, ref.ayah, ref.ayah)
+            )[0],
+          })),
         ),
   ]);
   const title = t('translations.compareTitle');
@@ -645,13 +661,26 @@ export async function ComparePage({
             <TextLink href={ayahPath(locale, ref)}>{t('translations.openAyah')}</TextLink>
           </header>
 
-          <div className="rounded-panel border border-border bg-surface-raised p-4 sm:p-6">
+          <div className="flex flex-col gap-4 rounded-panel border border-border bg-surface-raised p-4 sm:p-6">
             <ArabicText
               id="compare-arabic"
               label={t('layer.arabic')}
               text={ayah.text}
               ayah={ayah.ayah}
             />
+            {transliterated.map(({ work, entry }, position) =>
+              entry === undefined ? null : (
+                <TransliterationText
+                  key={work.id}
+                  id={`compare-transliteration-${work.slug}`}
+                  label={t('layer.transliteration', { name: work.name })}
+                  name={work.name}
+                  text={entry.text}
+                  language={languageOf(languages, work.languageCode)}
+                  index={position}
+                />
+              ),
+            )}
           </div>
 
           {works.length === 0 ? (

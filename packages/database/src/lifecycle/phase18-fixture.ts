@@ -408,8 +408,8 @@ export async function capturePhase18Fixture(
 
 /**
  * The Quran tables whose constraints and triggers must return intact: Phase
- * 18's, Quran Part 5's per-Ayah recitation timing and Quran Part 6's
- * translator's notes.
+ * 18's, Quran Part 5's per-Ayah recitation timing, Quran Part 6's
+ * translator's notes and Quran Part 7's word-by-word works.
  */
 const PHASE18_TABLES = [
   'QuranSource',
@@ -437,6 +437,9 @@ const PHASE18_TABLES = [
   'QuranTopic',
   'QuranRecitationTiming',
   'QuranTranslationNote',
+  'QuranWordByWord',
+  'QuranWordByWordContributor',
+  'QuranWordByWordGloss',
 ] as const;
 
 const PROCEDURES = [
@@ -620,17 +623,21 @@ export async function verifyRestoredPhase18(
           WHERE r.[key]=N'platform-administrator'
             AND rp.[permissionKey] IN (N'quran.read', N'quran.administer', N'quran.editCanonical')) AS [bundled];`,
   );
-  // 44 CHECKs (39 from Phase 18, Quran Part 2's non-empty SurahName.meaning,
-  // Quran Part 5's stream and timing rules, and Quran Part 6's note bounds and
-  // marker shapes), 44 foreign keys (Part 5: the language heard and the
-  // timing's segment; Part 6: the note's translation text) and 29 triggers
-  // (Part 5: the stream rules, the streamed segment and the timing's shape;
-  // Part 6: the note's shape), exactly as the migrations create them: a
-  // restore that silently lost one would otherwise read as "none untrusted".
+  // 48 CHECKs (39 from Phase 18, Quran Part 2's non-empty SurahName.meaning,
+  // Quran Part 5's stream and timing rules, Quran Part 6's note bounds and
+  // marker shapes, and Quran Part 7's word-by-word slug, state, contributor
+  // and gloss rules), 50 foreign keys (Part 5: the language heard and the
+  // timing's segment; Part 6: the note's translation text; Part 7: the work's
+  // language and source, its contributors' work and Person, and the gloss's
+  // work and Ayah) and 31 triggers (Part 5: the stream rules, the streamed
+  // segment and the timing's shape; Part 6: the note's shape; Part 7: a
+  // published work keeps a gloss, twice), exactly as the migrations create
+  // them: a restore that silently lost one would otherwise read as "none
+  // untrusted".
   if (
-    Number(counts?.checks ?? 0) !== 44 ||
-    Number(counts?.keys ?? 0) !== 44 ||
-    Number(counts?.triggers ?? 0) !== 29 ||
+    Number(counts?.checks ?? 0) !== 48 ||
+    Number(counts?.keys ?? 0) !== 50 ||
+    Number(counts?.triggers ?? 0) !== 31 ||
     Number(counts?.procedures ?? 0) !== PROCEDURES.length ||
     Number(counts?.bundled ?? 0) !== 3
   ) {

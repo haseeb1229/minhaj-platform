@@ -553,6 +553,20 @@ export async function verifyRestoredSchema(
       'Restored database is missing the Quran Part 6 table: QuranTranslationNote',
     );
 
+  // Quran Part 7. Its history row without the word-by-word tables would
+  // report an applied migration over a database that has lost every gloss.
+  if (expectedMigrationIds.some((id) => id.includes('r2_quran_word_by_word'))) {
+    const missing = [
+      'QuranWordByWord',
+      'QuranWordByWordContributor',
+      'QuranWordByWordGloss',
+    ].filter((table) => !tables.includes(table));
+    if (missing.length > 0)
+      throw new Error(
+        `Restored database is missing Quran Part 7 tables: ${missing.join(', ')}`,
+      );
+  }
+
   // Phase 19. A restore that carried the Hadith migration's history row but not
   // its source-qualified records, their evidence or the citation mapping would
   // report an applied migration over a database that has lost the identity

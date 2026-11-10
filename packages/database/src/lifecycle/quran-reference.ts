@@ -69,6 +69,39 @@ export const IRFAN_PROVENANCE = Object.freeze({
 
 export type IrfanLanguage = keyof typeof IRFAN_PROVENANCE;
 
+/** The owner decision admitting QuranEnc's external reference translations. */
+export const EXTERNAL_TRANSLATIONS_DECISION =
+  'OWNER-DECISION-2026-11-10-EXTERNAL-REFERENCE-TRANSLATIONS';
+
+/**
+ * QuranEnc's external reference translations' provenance sources: each code
+ * is the translation's migration source key (`quranEncSourceKey` in
+ * `scripts/migration/adapters/quranenc.ts`, held equal by the tests), each
+ * key QuranEnc's own.
+ */
+export const QURANENC_PROVENANCE = Object.freeze([
+  {
+    code: 'quranenc-urdu-junagarhi',
+    key: 'urdu_junagarhi',
+    title: 'QuranEnc — Urdu translation, Muhammad Ibrahim Junagarhi',
+  },
+  {
+    code: 'quranenc-english-saheeh',
+    key: 'english_saheeh',
+    title: 'QuranEnc — English translation, Saheeh International',
+  },
+  {
+    code: 'quranenc-english-rwwad',
+    key: 'english_rwwad',
+    title: 'QuranEnc — English translation, Rowwad Translation Center',
+  },
+  {
+    code: 'quranenc-english-hilali-khan',
+    key: 'english_hilali_khan',
+    title: 'QuranEnc — English translation, Hilali and Khan',
+  },
+] as const);
+
 /** The evidence column's width (R2 migration). */
 const EVIDENCE_MAX = 2000;
 
@@ -125,6 +158,40 @@ export function irfanEvidence(language: IrfanLanguage): string {
     `${QURAN_REFERENCE_DECISION}: staging reference preview only; not reviewed by Minhaj-ul-Quran's religious authority for this platform.`,
   ].join('\n');
 }
+
+/**
+ * A QuranEnc translation's provenance evidence: the source and its terms, the
+ * decision that admits it, and what it is not. Version-free: each staged
+ * revision records the edition it was read from, and the work's attribution
+ * names it.
+ */
+export function quranEncEvidence(entry: (typeof QURANENC_PROVENANCE)[number]): string {
+  return [
+    `QuranEnc.com translation ${entry.key} - https://quranenc.com/en/browse/${entry.key} - re-published under QuranEnc's terms (https://quranenc.com/en/home/api/): no modification, addition or deletion; the publisher, the source and the version named; kept to the latest version.`,
+    `Taken from the staged, review-only revisions of migration source ${entry.code} (${EXTERNAL_TRANSLATIONS_DECISION}), exactly as staged; each revision records the edition it was read from.`,
+    `${QURAN_REFERENCE_DECISION}: staging reference preview only. An external reference translation: not Minhaj-ul-Quran International's, and not reviewed by its religious authority.`,
+  ].join('\n');
+}
+
+/**
+ * Every translation work's provenance source — Irfan-ul-Quran's two, then
+ * QuranEnc's — by code (the work's migration source key), with its evidence.
+ */
+export const TRANSLATION_PROVENANCE: readonly {
+  readonly code: string;
+  readonly title: string;
+  readonly evidence: string;
+}[] = Object.freeze([
+  ...(Object.keys(IRFAN_PROVENANCE) as IrfanLanguage[]).map((language) => ({
+    ...IRFAN_PROVENANCE[language],
+    evidence: irfanEvidence(language),
+  })),
+  ...QURANENC_PROVENANCE.map((entry) => ({
+    code: entry.code,
+    title: entry.title,
+    evidence: quranEncEvidence(entry),
+  })),
+]);
 
 /* ===========================================================================
  * State
@@ -461,23 +528,22 @@ export async function importSurahNames(input: {
 }
 
 /* ===========================================================================
- * Irfan-ul-Quran
+ * Translations: Irfan-ul-Quran and QuranEnc's external reference translations
  * ========================================================================= */
 
 /**
- * Registers (or finds) Irfan-ul-Quran's two provenance sources — authority
+ * Registers (or finds) every translation work's provenance source — authority
  * `reference`, no ayat of their own: a layered work names its source, and a
  * translation's source is a provenance record (DOMAIN_MODEL.md §8). A source
- * already registered with different evidence is refused, never edited.
+ * already registered with different evidence is refused, never edited. The
+ * identifiers, by code.
  */
-export async function registerIrfanProvenance(
+export async function registerTranslationProvenance(
   sql: SqlSession,
-): Promise<Readonly<Record<IrfanLanguage, string>>> {
+): Promise<ReadonlyMap<string, string>> {
   await assertConnectedDatabase(sql);
-  const ids: Partial<Record<IrfanLanguage, string>> = {};
-  for (const language of Object.keys(IRFAN_PROVENANCE) as IrfanLanguage[]) {
-    const { code, title } = IRFAN_PROVENANCE[language];
-    const evidence = irfanEvidence(language);
+  const ids = new Map<string, string>();
+  for (const { code, title, evidence } of TRANSLATION_PROVENANCE) {
     const [existing] = await sql.query<{
       id: string;
       authority: string;
@@ -490,7 +556,7 @@ export async function registerIrfanProvenance(
         throw new Error(
           `A source '${code}' is registered with different evidence; nothing was changed.`,
         );
-      ids[language] = existing.id;
+      ids.set(code, existing.id);
       continue;
     }
     const id = randomUUID();
@@ -498,19 +564,20 @@ export async function registerIrfanProvenance(
       INSERT INTO [dbo].[QuranSource] ([id],[code],[authority],[title],[version],[encoding],[script],[reference])
       VALUES (${n(id)}, ${n(code)}, N'reference', ${n(title)}, N'staged-migration', N'utf-8', NULL, ${n(evidence)});
     `);
-    ids[language] = id;
+    ids.set(code, id);
   }
-  return { ur: ids.ur ?? '', en: ids.en ?? '' };
+  return ids;
 }
 
 /**
- * Registers Irfan-ul-Quran's provenance, then imports its staged translations
- * through Quran's administrative service in the runtime child — which reports,
- * per language, the Surahs saved, unchanged and skipped (with the reason), and
- * whether the work is published. Refused until a canonical corpus exists,
+ * Registers every translation work's provenance, then imports the staged
+ * translations — Irfan-ul-Quran's and QuranEnc's — through Quran's
+ * administrative service in the runtime child, which reports, per work, the
+ * Surahs saved, unchanged and skipped (with the reason), the edition's version
+ * and whether the work is published. Refused until a canonical corpus exists,
  * because a translation's text hangs on canonical ayat.
  */
-export async function importIrfanTranslations(input: {
+export async function importReferenceTranslations(input: {
   readonly owner: SqlSession;
   readonly runtime: SqlServerConnection;
   readonly operator: string;
@@ -527,7 +594,7 @@ export async function importIrfanTranslations(input: {
       'No canonical Quran corpus exists yet; import the reference corpus first.',
     );
 
-  const sources = await registerIrfanProvenance(input.owner);
+  const sources = await registerTranslationProvenance(input.owner);
   return runMigrationTool({
     runtime: input.runtime,
     entry: QURAN_REFERENCE_TOOL_ENTRY,
@@ -535,12 +602,10 @@ export async function importIrfanTranslations(input: {
       'translations',
       '--operator',
       input.operator,
-      '--source-ur',
-      sources.ur,
-      '--source-en',
-      sources.en,
+      '--sources',
+      [...sources].map(([code, id]) => `${code}=${id}`).join(','),
     ],
     environment: input.environment,
-    label: 'Irfan-ul-Quran translation import',
+    label: 'Quran reference translation import',
   });
 }

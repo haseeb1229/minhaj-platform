@@ -45,7 +45,8 @@ import {
   surahPath,
   withReading,
 } from './presentation';
-import { quranIndexable, readSurahs } from './read';
+import { quranIndexable, readRecitations, readSurahs } from './read';
+import { recitationGroups } from './recitation-plan';
 
 /**
  * Recitations — OWNED BY QURAN (DOMAIN_MODEL.md §8.1; ROUTE_MAP.md §3.3, §3.7).
@@ -235,17 +236,36 @@ function RecitationCard({
   );
 }
 
-/** Every public recitation, with each reciter's name resolved in ONE People call. */
+/** The recitations in the catalogue's one order (`recitationGroups`), grouped by style. */
+function grouped(recitations: readonly PublicRecitation[], names: Names, locale: Locale) {
+  return recitationGroups(
+    recitations.map((recitation) => ({
+      recitation,
+      style: recitation.style,
+      reciter: names.people.get(recitation.reciterId)?.name ?? null,
+      name: recitation.name,
+    })),
+    locale,
+  ).map((group) => ({
+    style: group.style,
+    recitations: group.entries.map((entry) => entry.recitation),
+  }));
+}
+
+/**
+ * Every public recitation, with each reciter's name resolved in ONE People
+ * call, in the catalogue's order — and, once two or more styles are listed,
+ * under a heading per style (the source's own word for it), the recitations
+ * naming no style last under "other recitations".
+ */
 async function RecitationList({
   locale,
   recitations,
   label,
-  headingLevel = 'h2',
 }: {
   readonly locale: Locale;
   readonly recitations: readonly PublicRecitation[];
   readonly label: string;
-  readonly headingLevel?: 'h2' | 'h3';
 }) {
   const t = await getTranslations({ locale, namespace: 'quran' });
   const [names, languages] = await Promise.all([
@@ -255,23 +275,48 @@ async function RecitationList({
     ),
     contentLanguages(),
   ]);
+  const groups = grouped(recitations, names, locale);
+  const grid = 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3';
+  const cards = (list: readonly PublicRecitation[], headingLevel: 'h2' | 'h3') =>
+    list.map((recitation) => (
+      <RecitationCard
+        key={recitation.id}
+        locale={locale}
+        recitation={recitation}
+        names={names}
+        languages={languages}
+        t={t}
+        headingLevel={headingLevel}
+      />
+    ));
+  if (groups.filter((group) => group.style !== null).length < 2)
+    return (
+      <ul aria-label={label} className={grid}>
+        {cards(
+          groups.flatMap((group) => group.recitations),
+          'h2',
+        )}
+      </ul>
+    );
   return (
-    <ul
-      aria-label={label}
-      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
-    >
-      {recitations.map((recitation) => (
-        <RecitationCard
-          key={recitation.id}
-          locale={locale}
-          recitation={recitation}
-          names={names}
-          languages={languages}
-          t={t}
-          headingLevel={headingLevel}
-        />
-      ))}
-    </ul>
+    <div className="flex flex-col gap-8">
+      {groups.map((group, index) => {
+        const id = `recitation-style-${String(index)}`;
+        return (
+          <section key={id} aria-labelledby={id} className="flex flex-col gap-4">
+            <h2 id={id} className="text-xl font-semibold break-words" dir="auto">
+              {group.style ?? t('recitations.otherStyles')}{' '}
+              <span className="text-base font-normal text-foreground-muted">
+                ({t('recitations.count', { count: group.recitations.length })})
+              </span>
+            </h2>
+            <ul aria-labelledby={id} className={grid}>
+              {cards(group.recitations, 'h3')}
+            </ul>
+          </section>
+        );
+      })}
+    </div>
   );
 }
 
@@ -583,9 +628,29 @@ export async function ReciterPage({
   const t = await getTranslations({ locale, namespace: 'quran' });
   const parts = await quranTrail(locale);
   const reader = quranReadRuntime().reader;
+  // One reciter's recitations in the WHOLE catalogue's order, so their styles
+  // come as the catalogue ranks them (Murattal before the mujawwad editions).
+  const rank = new Map(
+    recitationGroups(
+      (await readRecitations()).map((recitation) => ({
+        id: recitation.id,
+        style: recitation.style,
+        reciter: null,
+        name: recitation.name,
+      })),
+      locale,
+    )
+      .flatMap((group) => group.entries)
+      .map((entry, index) => [entry.id, index] as const),
+  );
+  const ordered = [...recitations].sort(
+    (a, b) =>
+      (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+      (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+  );
   const [segments, surahs, languages] = await Promise.all([
     Promise.all(
-      recitations.map((recitation) =>
+      ordered.map((recitation) =>
         reader.recitationSegments(recitation.id, null).then(playableSegments),
       ),
     ),
@@ -623,7 +688,7 @@ export async function ReciterPage({
         </p>
       </Prose>
       <ul aria-label={t('sections.recitations')} className="flex flex-col gap-6">
-        {recitations.map((recitation, index) => {
+        {ordered.map((recitation, index) => {
           const own = segments[index] ?? [];
           return (
             <Panel key={recitation.id} as="li">

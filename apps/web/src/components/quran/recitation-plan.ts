@@ -471,3 +471,50 @@ export function recitationLabel(entry: {
     ? entry.name
     : `${reciter} — ${entry.name}`;
 }
+
+/** One style's recitations, in the order a chooser or the catalogue lists them. */
+export interface RecitationGroup<T> {
+  /** The style as the source names it, or null for the recitations that carry none. */
+  readonly style: string | null;
+  readonly entries: readonly T[];
+}
+
+/**
+ * THE CATALOGUE'S ORDER — one rule for the player's chooser, the catalogue
+ * page and a reciter's page, so ~30 recitations stay findable: grouped by
+ * style, the style most recitations share first (on the curated catalogue,
+ * Murattal, then the mujawwad editions), equal groups by their style's name,
+ * and the recitations that name no style last; within a group by reciter,
+ * then by name, in the interface language's collation. No recitation is
+ * privileged: the order is read from the catalogue alone.
+ */
+export function recitationGroups<
+  T extends {
+    readonly style: string | null;
+    readonly reciter: string | null;
+    readonly name: string;
+  },
+>(entries: readonly T[], locale: string): readonly RecitationGroup<T>[] {
+  const collator = new Intl.Collator(locale, { sensitivity: 'base', numeric: true });
+  const byStyle = new Map<string | null, T[]>();
+  for (const entry of entries) {
+    byStyle.set(entry.style, [...(byStyle.get(entry.style) ?? []), entry]);
+  }
+  const named = (entry: T) => {
+    const reciter = entry.reciter?.trim() ?? '';
+    return reciter === '' ? entry.name : reciter;
+  };
+  return [...byStyle.entries()]
+    .map(([style, members]) => ({
+      style,
+      entries: [...members].sort(
+        (a, b) =>
+          collator.compare(named(a), named(b)) || collator.compare(a.name, b.name),
+      ),
+    }))
+    .sort((a, b) => {
+      if (a.style === null || b.style === null)
+        return a.style === b.style ? 0 : a.style === null ? 1 : -1;
+      return b.entries.length - a.entries.length || collator.compare(a.style, b.style);
+    });
+}

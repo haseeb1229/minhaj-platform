@@ -326,6 +326,29 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // behaviour inside `assertQuranCanonicalRules`, its rollback by
   // `assertTranslationNotesRemoved`.
   '20261110000000_r2_quran_translation_notes': ['QuranTranslationNote'],
+  // QURAN PART 7 CREATES THREE TABLES: a word-by-word work (a layered work of
+  // a Translation's shape), its contributors, and one gloss per (work, Ayah,
+  // word position) typed to the Ayah (NO ACTION); four CHECKs and two
+  // "a published work keeps a gloss" triggers (51404). Asserted by
+  // `assertQuranFoundation`, proved as behaviour inside
+  // `assertQuranCanonicalRules`, its rollback by `assertWordByWordRemoved`.
+  '20261110120000_r2_quran_word_by_word': [
+    'QuranWordByWord',
+    'QuranWordByWordContributor',
+    'QuranWordByWordGloss',
+  ],
+  // THE EXTERNAL REFERENCE TRANSLATIONS CREATE NO TABLE. They replace Quran
+  // Part 6's marker CHECK with one that also admits a bracketed footnote
+  // number "[1]".."[9999]" (QuranEnc). Proved as behaviour inside
+  // `assertQuranCanonicalRules`, its rollback by `assertBracketedMarksRemoved`.
+  '20261110130000_r2_quran_bracketed_note_marks': [],
+  // THE STAGED-PAYLOAD CEILING CREATES NO TABLE. It restates Phase 30-RD's
+  // `MigrationStagedRecord_ck` with the payload bound raised from 200,000 to
+  // 400,000 characters. Asserted by `assertSourceAdaptersFoundation` (the
+  // restated CHECK, exactly), proved as behaviour and its rollback refused over
+  // a longer payload by `assertPayloadCeilingRules`, its rollback by
+  // `assertPayloadCeilingRemoved`.
+  '20261110140000_r2_migration_payload_ceiling': [],
   // THE DONATIONS CONTEXT: a campaign with its words per locale and its
   // per-currency policy, the owner's fail-closed provider activation (one
   // immutable row the runtime can only read), the donation — one payment
@@ -1254,6 +1277,8 @@ const EXPECTED_COLUMN_SIZES: readonly {
     'QuranTafsir',
     'QuranRecitation',
     'QuranTajweedRule',
+    // Quran Part 7.
+    'QuranWordByWord',
   ].map((table) => ({ table, column: 'slug', characters: 120 })),
   ...[
     'QuranTranslation',
@@ -1262,7 +1287,11 @@ const EXPECTED_COLUMN_SIZES: readonly {
     'QuranTajweedRuleText',
     // Quran Part 5: the language a recitation is heard in.
     'QuranRecitation',
+    // Quran Part 7: the language a word-by-word work glosses into.
+    'QuranWordByWord',
   ].map((table) => ({ table, column: 'languageCode', characters: 16 })),
+  // Quran Part 7: one word's gloss (QURAN_LIMITS.gloss is the same 200).
+  { table: 'QuranWordByWordGloss', column: 'text', characters: 200 },
   // Quran Part 5: a streamed recitation's provider key and CDN folder — never
   // a URL (RECITATION_STREAM_PATH_MAX is the same 200).
   { table: 'QuranRecitation', column: 'streamProvider', characters: 16 },
@@ -1944,6 +1973,20 @@ const QURAN_PART6_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, str
 };
 
 /**
+ * Quran Part 7's three tables and two triggers (51404, after Part 6's): a
+ * published word-by-word work that has, or would be left with, no gloss.
+ */
+const QURAN_PART7_TABLES = [
+  'QuranWordByWord',
+  'QuranWordByWordContributor',
+  'QuranWordByWordGloss',
+] as const;
+const QURAN_PART7_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, string]>> = {
+  QuranWordByWordPublishedGlosses: ['QuranWordByWord', '51404'],
+  QuranWordByWordGlossKept: ['QuranWordByWordGloss', '51404'],
+};
+
+/**
  * Each Quran trigger, the table it guards and the refusal numbers its body
  * raises: 51180 an immutable registered source, 51181 immutable canonical
  * structure, 51182 a canonical change that is a recorded, one-step correction,
@@ -2088,6 +2131,8 @@ const EXPECTED_TRIGGERS = [
   ...Object.keys(QURAN_PART5_TRIGGER_NUMBERS),
   // Quran Part 6: the translator's note's shape.
   ...Object.keys(QURAN_PART6_TRIGGER_NUMBERS),
+  // Quran Part 7: a published word-by-word work keeps a gloss.
+  ...Object.keys(QURAN_PART7_TRIGGER_NUMBERS),
   // Phase 19: every Hadith invariant no constraint can express — each listed,
   // with the refusal it raises, in `HADITH_TRIGGER_NUMBERS`.
   ...Object.keys(HADITH_TRIGGER_NUMBERS),
@@ -2370,6 +2415,12 @@ const EXPECTED_CHECK_CONSTRAINTS = [
   // Quran Part 6: a note's place (1..20) and length, and its marker's shapes.
   { table: 'QuranTranslationNote', constraint: 'QuranTranslationNote_ck' },
   { table: 'QuranTranslationNote', constraint: 'QuranTranslationNote_marker_ck' },
+  // Quran Part 7: a word-by-word work's lifecycle and slug, its contributor
+  // roles, and a gloss's word position (1..999) and length.
+  { table: 'QuranWordByWord', constraint: 'QuranWordByWord_state_ck' },
+  { table: 'QuranWordByWord', constraint: 'QuranWordByWord_slug_ck' },
+  { table: 'QuranWordByWordContributor', constraint: 'QuranWordByWordContributor_ck' },
+  { table: 'QuranWordByWordGloss', constraint: 'QuranWordByWordGloss_ck' },
   ...[
     'QuranTranslation',
     'QuranTransliteration',
@@ -4813,7 +4864,8 @@ function raisedNumbers(definition: string | null): string {
  *   2. the canonical citation IS the identity: Ayah's key is exactly
  *      `(surahNumber, ayahNumber)`, its history's key adds only the version, no
  *      canonical table has a surrogate `id`, and every reference to an Ayah —
- *      exactly eight — is that two-column citation;
+ *      exactly eight at Phase 18, nine since Quran Part 7's glosses — is that
+ *      two-column citation;
  *   3. no Quran foreign key cascades, its references into other owners are
  *      EXACTLY the nine above, no other owner references a Quran table or
  *      holds a Surah, Ayah, Juz, tafsir or tajweed column, and no Quran table
@@ -4836,12 +4888,17 @@ async function assertQuranFoundation(
   session: SqlSession,
   stage: 'reference' | 'before-reference' = 'reference',
 ): Promise<void> {
-  // With every migration applied, Quran Part 5's timing table and Part 6's
-  // notes table are Quran tables too; after the R2 rollback (which follows
-  // both of theirs) the Phase-18 set is back.
+  // With every migration applied, Quran Part 5's timing table, Part 6's notes
+  // table and Part 7's word-by-word tables are Quran tables too; after the R2
+  // rollback (which follows all of theirs) the Phase-18 set is back.
   const all: readonly string[] =
     stage === 'reference'
-      ? [...QURAN_TABLES, ...QURAN_PART5_TABLES, ...QURAN_PART6_TABLES]
+      ? [
+          ...QURAN_TABLES,
+          ...QURAN_PART5_TABLES,
+          ...QURAN_PART6_TABLES,
+          ...QURAN_PART7_TABLES,
+        ]
       : QURAN_TABLES;
   const tables = all.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',');
   const names = all.map((table) => `N'${table}'`).join(',');
@@ -4856,7 +4913,7 @@ async function assertQuranFoundation(
       .join(' UNION ALL ') + ';',
   );
   const seeded = counts.filter((row) => Number(row.total) !== 0);
-  const tableCount = stage === 'reference' ? 25 : 23;
+  const tableCount = stage === 'reference' ? 28 : 23;
   if (QURAN_TABLES.length !== 23 || counts.length !== tableCount || seeded.length > 0)
     fail(
       `The Quran migrations must create ${String(tableCount)} empty tables and seed no content; ` +
@@ -4907,15 +4964,20 @@ async function assertQuranFoundation(
     GROUP BY fk.[name];
   `);
   const personalAyah = await personalisationAyahKeys(session);
+  // Quran Part 7: a gloss names its Ayah by the same two-column citation.
+  const quranAyahKeys =
+    stage === 'reference'
+      ? [...QURAN_AYAH_KEYS, 'QuranWordByWordGloss_ayah_fkey']
+      : QURAN_AYAH_KEYS;
   if (
     ayahKeys
       .map((row) => row.name)
       .sort()
-      .join(',') !== [...QURAN_AYAH_KEYS, ...personalAyah].sort().join(',') ||
+      .join(',') !== [...quranAyahKeys, ...personalAyah].sort().join(',') ||
     ayahKeys.some((row) => Number(row.columns) !== 2)
   )
     fail(
-      `Every Ayah reference must be the two-column citation, exactly ${QURAN_AYAH_KEYS.join(', ')}; ` +
+      `Every Ayah reference must be the two-column citation, exactly ${quranAyahKeys.join(', ')}; ` +
         `found ${JSON.stringify(ayahKeys)}.`,
     );
 
@@ -4936,10 +4998,16 @@ async function assertQuranFoundation(
     WHERE fk.[parent_object_id] IN (${tables}) AND fk.[referenced_object_id] NOT IN (${tables});
   `);
   const edges = external.map((row) => row.edge).sort();
-  // Quran Part 5: a recitation names the Language it is heard in.
+  // Quran Part 5: a recitation names the Language it is heard in. Quran Part
+  // 7: a word-by-word work names its Language and its contributors as People.
   const externalKeys =
     stage === 'reference'
-      ? [...QURAN_EXTERNAL_KEYS, 'QuranRecitation_languageCode_fkey>Language'].sort()
+      ? [
+          ...QURAN_EXTERNAL_KEYS,
+          'QuranRecitation_languageCode_fkey>Language',
+          'QuranWordByWord_languageCode_fkey>Language',
+          'QuranWordByWordContributor_personId_fkey>Person',
+        ].sort()
       : QURAN_EXTERNAL_KEYS;
   if (edges.join(',') !== externalKeys.join(','))
     fail(
@@ -5010,6 +5078,8 @@ async function assertQuranFoundation(
     ...(stage === 'reference' ? ['QuranTranslationNote.text:nvarchar(-1)'] : []),
     'QuranTranslationText.text:nvarchar(-1)',
     'QuranTransliterationText.text:nvarchar(-1)',
+    // Quran Part 7: one word's gloss, Unicode, bounded at 200 characters.
+    ...(stage === 'reference' ? ['QuranWordByWordGloss.text:nvarchar(400)'] : []),
   ].join(',');
   if (describedTexts !== expectedTexts)
     fail(`Quran text columns differ: ${describedTexts}.`);
@@ -5029,7 +5099,7 @@ async function assertQuranFoundation(
     .join(',');
   // R2 widens the canonical-change trigger with the authority-mixing refusal.
   // Quran Part 5 adds its three, and leaves 51188 the published-audio rule's;
-  // Quran Part 6 adds the note's shape.
+  // Quran Part 6 adds the note's shape; Quran Part 7 the kept gloss.
   const triggerNumbers: Readonly<Record<string, readonly [string, string]>> =
     stage === 'reference'
       ? {
@@ -5037,6 +5107,7 @@ async function assertQuranFoundation(
           AyahCanonicalChange: ['Ayah', '51181+51182+51198'],
           ...QURAN_PART5_TRIGGER_NUMBERS,
           ...QURAN_PART6_TRIGGER_NUMBERS,
+          ...QURAN_PART7_TRIGGER_NUMBERS,
         }
       : QURAN_TRIGGER_NUMBERS;
   const expectedTriggers = Object.entries(triggerNumbers)
@@ -5110,7 +5181,7 @@ async function assertQuranFoundation(
 
   report(
     'quran foundation',
-    `${String(tableCount)} empty tables, citation identity, eight Ayah keys, ` +
+    `${String(tableCount)} empty tables, citation identity, ${String(quranAyahKeys.length)} Ayah keys, ` +
       `${String(externalKeys.length)} non-cascading external keys, ${String(triggers.length)} triggers ` +
       'and 4 procedures by number, three bundled keys',
   );
@@ -6339,6 +6410,13 @@ async function assertQuranCanonicalRules(session: SqlSession): Promise<void> {
       ['an entry without its dash', '1:'],
       ['a letter', 'a'],
       ['a bracketed number', '(1)'],
+      // The external reference translations' "[n]": 1..9999, exactly.
+      ['a square-bracketed 0', '[0]'],
+      ['a square-bracketed 10000', '[10000]'],
+      ['a square-bracketed leading zero', '[01]'],
+      ['a square bracket left open', '[1'],
+      ['a square-bracketed space', '[ 1]'],
+      ['a square-bracketed letter', '[a]'],
     ].map(
       ([why, marker]) =>
         [
@@ -6363,6 +6441,8 @@ async function assertQuranCanonicalRules(session: SqlSession): Promise<void> {
       [6, '99:-', NOTE],
       [7, '', NOTE],
       [8, '٭:', `${NOTE}\n\nits second paragraph`],
+      [9, '[1]', NOTE],
+      [10, '[9999]', NOTE],
     ]),
   );
   await expectAccepted(
@@ -6392,17 +6472,122 @@ async function assertQuranCanonicalRules(session: SqlSession): Promise<void> {
     ],
   ] as const)
     await refuse(label, statement, numbers, ruleName);
-  if ((await notesOn(1)) !== 8 || (await notesOn(2)) !== 1)
+  if ((await notesOn(1)) !== 10 || (await notesOn(2)) !== 1)
     fail('A refused change altered a translator’s note.');
   await expectAccepted(
     session,
     'The last note removed, then every note and the second text',
-    `DELETE FROM [dbo].[QuranTranslationNote] WHERE [translationId]=N'${translation}' AND [ayahNumber]=1 AND [ordinal]=8;
+    `DELETE FROM [dbo].[QuranTranslationNote] WHERE [translationId]=N'${translation}' AND [ayahNumber]=1 AND [ordinal]=10;
      DELETE FROM [dbo].[QuranTranslationNote] WHERE [translationId]=N'${translation}';
      DELETE FROM [dbo].[QuranTranslationText] WHERE [translationId]=N'${translation}' AND [ayahNumber]=2;`,
   );
   if ((await notesOn(1)) !== 0 || (await notesOn(2)) !== 0)
     fail('Removed notes left rows behind.');
+
+  // ---- Quran Part 7: a word-by-word work and its glosses --------------------------
+  //
+  // A gloss names a REAL Ayah by its citation, a word position from 1 within
+  // the structural ceiling and a non-empty text within its bound, once per
+  // (work, Ayah, position); a contributor is a translator or an editor; and a
+  // published work keeps a gloss — it is never published without one, and
+  // its last gloss is never removed while it is published.
+  const wordByWord = randomUUID();
+  const gloss = (ayah: number, position: number, text: string) =>
+    `INSERT INTO [dbo].[QuranWordByWordGloss] ([wordByWordId],[surahNumber],[ayahNumber],[position],[text]) VALUES (N'${wordByWord}',1,${String(ayah)},${String(position)},N'${text}');`;
+  const glossesOf = () =>
+    count(
+      `SELECT COUNT_BIG(*) AS [total] FROM [dbo].[QuranWordByWordGloss] WHERE [wordByWordId]=N'${wordByWord}';`,
+    );
+  const GLOSS = 'NON_QURAN_FIXTURE gloss';
+  const NEEDS_GLOSS = 'A published word-by-word work needs a gloss.';
+  await expectAccepted(
+    session,
+    'A draft word-by-word work',
+    `INSERT INTO [dbo].[QuranWordByWord] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${wordByWord}',N'proof-quran-word-by-word-${run}',N'en',N'NON_QURAN_FIXTURE word by word',N'draft',1,SYSUTCDATETIME());`,
+  );
+  for (const [label, statement, numbers, ruleName] of [
+    [
+      'A word-by-word work without a gloss is never published',
+      publish('QuranWordByWord', wordByWord),
+      [51404],
+      NEEDS_GLOSS,
+    ],
+    [
+      'A published word-by-word work names a registered source',
+      `UPDATE [dbo].[QuranWordByWord] SET [state]=N'published',[publishedAt]=SYSUTCDATETIME() WHERE [id]=N'${wordByWord}';`,
+      [547],
+      'QuranWordByWord_state_ck',
+    ],
+    [
+      'A word-by-word slug keeps its grammar',
+      `INSERT INTO [dbo].[QuranWordByWord] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${randomUUID()}',N'Proof--WBW',N'en',N'NON_QURAN_FIXTURE word by word',N'draft',1,SYSUTCDATETIME());`,
+      [547],
+      'QuranWordByWord_slug_ck',
+    ],
+    [
+      'A gloss names a real Ayah',
+      gloss(9, 1, GLOSS),
+      [547],
+      'QuranWordByWordGloss_ayah_fkey',
+    ],
+    [
+      'A word’s position is at least 1',
+      gloss(1, 0, GLOSS),
+      [547],
+      'QuranWordByWordGloss_ck',
+    ],
+    [
+      'A word’s position is within the ceiling',
+      gloss(1, 1000, GLOSS),
+      [547],
+      'QuranWordByWordGloss_ck',
+    ],
+    ['A gloss says something', gloss(1, 1, ''), [547], 'QuranWordByWordGloss_ck'],
+    [
+      'A contributor is a translator or an editor',
+      `INSERT INTO [dbo].[QuranWordByWordContributor] ([wordByWordId],[personId],[role],[position]) VALUES (N'${wordByWord}',N'${reciter}',N'author',0);`,
+      [547],
+      'QuranWordByWordContributor_ck',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, ruleName);
+  if ((await glossesOf()) !== 0) fail('A refused gloss left rows behind.');
+  await expectAccepted(
+    session,
+    'Glosses on two ayat, a contributor, and publication',
+    `${gloss(1, 1, GLOSS)}
+     ${gloss(1, 2, GLOSS)}
+     ${gloss(2, 1, GLOSS)}
+     INSERT INTO [dbo].[QuranWordByWordContributor] ([wordByWordId],[personId],[role],[position]) VALUES (N'${wordByWord}',N'${reciter}',N'translator',0);
+     ${publish('QuranWordByWord', wordByWord)}`,
+  );
+  await refuse(
+    'A word is glossed once',
+    gloss(1, 1, GLOSS),
+    [2627],
+    'QuranWordByWordGloss_pkey',
+  );
+  await expectAccepted(
+    session,
+    'A published work’s glosses edited and removed while one remains',
+    `UPDATE [dbo].[QuranWordByWordGloss] SET [text]=N'${GLOSS} revised' WHERE [wordByWordId]=N'${wordByWord}' AND [ayahNumber]=1 AND [position]=1;
+     DELETE FROM [dbo].[QuranWordByWordGloss] WHERE [wordByWordId]=N'${wordByWord}' AND [ayahNumber]=1;`,
+  );
+  await refuse(
+    'A published work’s last gloss is never removed',
+    `DELETE FROM [dbo].[QuranWordByWordGloss] WHERE [wordByWordId]=N'${wordByWord}';`,
+    [51404],
+    NEEDS_GLOSS,
+  );
+  if ((await glossesOf()) !== 1) fail('A refused removal altered a gloss.');
+  await expectAccepted(
+    session,
+    'The work archived, then its last gloss removed',
+    `UPDATE [dbo].[QuranWordByWord] SET [state]=N'archived',[version]=[version]+1 WHERE [id]=N'${wordByWord}';
+     DELETE FROM [dbo].[QuranWordByWordGloss] WHERE [wordByWordId]=N'${wordByWord}';
+     DELETE FROM [dbo].[QuranWordByWordContributor] WHERE [wordByWordId]=N'${wordByWord}';`,
+  );
+  if ((await glossesOf()) !== 0) fail('Removed glosses left rows behind.');
 
   // ---- Quran Part 5: a streamed recitation --------------------------------------
   //
@@ -18875,6 +19060,179 @@ async function assertTranslationNotesRemoved(session: SqlSession): Promise<void>
   );
 }
 
+/** Quran Part 7: the word-by-word work, its contributors and its glosses. */
+const WORD_BY_WORD_MIGRATION = '20261110120000_r2_quran_word_by_word';
+
+/**
+ * After the Quran Part 7 rollback: no word-by-word table, CHECK, key or
+ * trigger anywhere — and the Ayah referenced by exactly the keys it had before.
+ */
+async function assertWordByWordRemoved(session: SqlSession): Promise<void> {
+  const [row] = await session.query<{
+    tables: number;
+    added: number;
+    ayahKeys: number;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables WHERE [name] IN (N'QuranWordByWord',
+        N'QuranWordByWordContributor', N'QuranWordByWordGloss')) AS [tables],
+      (SELECT COUNT(*) FROM sys.objects WHERE [name] LIKE N'QuranWordByWord%') AS [added],
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE [referenced_object_id] = OBJECT_ID(N'[dbo].[Ayah]')
+          AND [name] IN (${QURAN_AYAH_KEYS.map((key) => `N'${key}'`).join(',')})) AS [ayahKeys];
+  `);
+  if (
+    Number(row?.tables) !== 0 ||
+    Number(row?.added) !== 0 ||
+    Number(row?.ayahKeys) !== QURAN_AYAH_KEYS.length
+  )
+    fail(
+      `The Quran Part 7 rollback must remove every word-by-word object and leave the ` +
+        `Ayah's references as Part 6 left them; found ${JSON.stringify(row ?? null)}.`,
+    );
+  report(
+    'word-by-word rollback',
+    'three tables, their CHECKs, keys and triggers removed',
+  );
+}
+
+/** The external reference translations: the bracketed footnote mark. */
+const BRACKETED_MARKS_MIGRATION = '20261110130000_r2_quran_bracketed_note_marks';
+
+/**
+ * After its rollback: the notes table keeps exactly one marker CHECK, and that
+ * CHECK is Quran Part 6's again — it names no bracketed number.
+ */
+async function assertBracketedMarksRemoved(session: SqlSession): Promise<void> {
+  const [row] = await session.query<{ checks: number; definition: string | null }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.check_constraints
+        WHERE [parent_object_id] = OBJECT_ID(N'[dbo].[QuranTranslationNote]')
+          AND [name] = N'QuranTranslationNote_marker_ck') AS [checks],
+      (SELECT [definition] FROM sys.check_constraints
+        WHERE [name] = N'QuranTranslationNote_marker_ck') AS [definition];
+  `);
+  if (
+    Number(row?.checks) !== 1 ||
+    row?.definition === null ||
+    row?.definition === undefined ||
+    row.definition.includes('[[]') ||
+    !row.definition.includes('[1-9][0-9]:-')
+  )
+    fail(
+      `The bracketed-marks rollback must restore Quran Part 6's marker CHECK; ` +
+        `found ${JSON.stringify(row ?? null)}.`,
+    );
+  report('bracketed note marks rollback', 'Quran Part 6 marker CHECK restored');
+}
+
+/** Migration & Provenance: the staged-payload ceiling, 200,000 → 400,000 characters. */
+const PAYLOAD_CEILING_MIGRATION = '20261110140000_r2_migration_payload_ceiling';
+
+/** The live definition of `MigrationStagedRecord_ck`, or null. */
+async function stagedRecordCheck(session: SqlSession): Promise<string | null> {
+  const [row] = await session.query<{ definition: string | null }>(`
+    SELECT [definition] FROM sys.check_constraints
+    WHERE [name] = N'MigrationStagedRecord_ck'
+      AND [parent_object_id] = OBJECT_ID(N'[dbo].[MigrationStagedRecord]');
+  `);
+  return row?.definition ?? null;
+}
+
+/**
+ * After its rollback: `MigrationStagedRecord_ck` is exactly Phase 30-RD's
+ * statement again — the 200,000-character payload bound restored.
+ */
+async function assertPayloadCeilingRemoved(
+  session: SqlSession,
+  migrations: readonly Migration[],
+): Promise<void> {
+  const owner = migrations.find((entry) => entry.id === OWNER_DECISIONS_MIGRATION);
+  if (owner === undefined) fail(`${OWNER_DECISIONS_MIGRATION} is not on disk.`);
+  const expected = await derivedCheck(
+    session,
+    'MigrationStagedRecord',
+    statedCheck(owner.forwardSql, 'MigrationStagedRecord'),
+  );
+  if ((await stagedRecordCheck(session)) !== expected)
+    fail(
+      "The payload-ceiling rollback must restore Phase 30-RD's MigrationStagedRecord_ck exactly.",
+    );
+  report('payload ceiling rollback', "Phase 30-RD's staged-revision CHECK restored");
+}
+
+/**
+ * The staged-payload ceiling as BEHAVIOUR, on the re-deployed schema after the
+ * Migration & Provenance rules: a revision of 300,000 characters is staged, one
+ * of 400,001 is refused by `MigrationStagedRecord_ck` — and the ceiling's
+ * rollback REFUSES while the longer revision exists, changing nothing. The
+ * revision copies an existing synthetic one's record, snapshot and run (so the
+ * staged revision's own rules hold) and dies with this disposable database.
+ */
+async function assertPayloadCeilingRules(
+  session: SqlSession,
+  migrations: readonly Migration[],
+): Promise<void> {
+  const ceiling = migrations.find((entry) => entry.id === PAYLOAD_CEILING_MIGRATION);
+  if (ceiling === undefined) fail(`${PAYLOAD_CEILING_MIGRATION} is not on disk.`);
+  const revision = (characters: number) => `
+    INSERT INTO [dbo].[MigrationStagedRecord] ([id],[recordId],[snapshotId],[runId],[revision],[contentKind],[title],[titleKey],[languageCode],[payload],[payloadChecksum],[adapterKey],[adapterVersion],[parserKey],[parserVersion],[normalizerVersion],[codeRevision],[inputChecksum],[producedAt],[validation],[personalData])
+    SELECT TOP 1 N'${randomUUID()}', s.[recordId], s.[snapshotId], s.[runId],
+      (SELECT MAX(m.[revision]) + 1 FROM [dbo].[MigrationStagedRecord] m WHERE m.[recordId] = s.[recordId]),
+      s.[contentKind], s.[title], s.[titleKey], s.[languageCode],
+      N'{"pad":"' + REPLICATE(CAST(N'a' AS NVARCHAR(MAX)), ${String(characters - 10)}) + N'"}',
+      REPLICATE('0', 64), s.[adapterKey], s.[adapterVersion], s.[parserKey], s.[parserVersion],
+      s.[normalizerVersion], s.[codeRevision], s.[inputChecksum], s.[producedAt], N'invalid', N'none'
+    FROM [dbo].[MigrationStagedRecord] s
+    WHERE s.[personalData] = N'none' AND s.[clearanceOfStagedRecordId] IS NULL
+    ORDER BY s.[id];`;
+  const longest = async () => {
+    const [row] = await session.query<{ longest: number | null }>(
+      'SELECT MAX(LEN([payload])) AS [longest] FROM [dbo].[MigrationStagedRecord];',
+    );
+    return Number(row?.longest ?? 0);
+  };
+  await expectRefusal(
+    session,
+    'A staged payload of 400,001 characters',
+    revision(400_001),
+    [547],
+    'MigrationStagedRecord_ck',
+  );
+  await expectAccepted(
+    session,
+    'A staged payload of 300,000 characters',
+    revision(300_000),
+  );
+  if ((await longest()) !== 300_000)
+    fail('The 300,000-character revision must be staged exactly as given.');
+
+  const before = await stagedRecordCheck(session);
+  const failure = await attempt(session, ceiling.rollbackSql);
+  if (
+    failure === null ||
+    failure.number !== 50000 ||
+    !failure.message.includes('longer than 200,000 characters')
+  )
+    fail(
+      'The payload-ceiling rollback must refuse while a longer revision exists; ' +
+        (failure === null
+          ? 'it ran.'
+          : `it failed for another reason (${String(failure.number)}): ` +
+            `${failure.message.split('\n')[0] ?? ''}`),
+    );
+  if (
+    (await stagedRecordCheck(session)) !== before ||
+    !(await appliedMigrationNames(session)).includes(PAYLOAD_CEILING_MIGRATION) ||
+    (await longest()) !== 300_000
+  )
+    fail('A refused payload-ceiling rollback must change nothing.');
+  report(
+    'payload ceiling',
+    '300,000 characters staged, 400,001 refused, and the rollback refused over the longer revision',
+  );
+}
+
 /** The one table Phase 30-RD creates. */
 const PERSONAL_DATA_FINDING_TABLE = 'MigrationPersonalDataFinding';
 
@@ -19764,19 +20122,21 @@ async function derivedCheck(
 /**
  * Proves the five replaced CHECKs and three replaced triggers are, in the
  * catalogue, EXACTLY what `migration` states — every CHECK trusted, every
- * trigger enabled.
+ * trigger enabled. A table in `restated` is held to the later migration that
+ * restates its CHECK instead (the staged-payload ceiling).
  */
 async function assertStatedMigrationRules(
   session: SqlSession,
   migration: Migration,
   label: string,
   triggerNames: readonly string[] = SOURCE_ADAPTER_TRIGGERS,
+  restated: ReadonlyMap<string, Migration> = new Map(),
 ): Promise<void> {
   for (const table of SOURCE_ADAPTER_CHECKS) {
     const expected = await derivedCheck(
       session,
       table,
-      statedCheck(migration.forwardSql, table),
+      statedCheck((restated.get(table) ?? migration).forwardSql, table),
     );
     const [live] = await session.query<{ definition: string; trusted: number }>(`
       SELECT [definition], CASE WHEN [is_disabled] = 0 AND [is_not_trusted] = 0 THEN 1 ELSE 0 END AS [trusted]
@@ -19870,14 +20230,20 @@ async function assertSourceAdaptersFoundation(
     // Phase 30-R restates the five CHECKs and the entry and mapping triggers,
     // and Phase 30-RD restates them again with the staged revision's trigger;
     // the host trigger is still exactly Phase 30's.
-    if (statedBy === 'phase30rd')
+    if (statedBy === 'phase30rd') {
+      // Every migration is applied at this shape: the staged revision's CHECK
+      // is the payload ceiling's restatement of Phase 30-RD's.
+      const ceiling = migrations.find((entry) => entry.id === PAYLOAD_CEILING_MIGRATION);
+      if (ceiling === undefined) fail(`${PAYLOAD_CEILING_MIGRATION} is not on disk.`);
       await assertStatedMigrationRules(
         session,
         owner,
         'Phase 30-RD',
         OWNER_DECISION_TRIGGERS,
+        new Map([['MigrationStagedRecord', ceiling]]),
       );
-    else await assertStatedMigrationRules(session, review, 'Phase 30-R', REVIEW_TRIGGERS);
+    } else
+      await assertStatedMigrationRules(session, review, 'Phase 30-R', REVIEW_TRIGGERS);
     const stated = async (
       name: string,
       from: Migration,
@@ -19912,7 +20278,8 @@ async function assertSourceAdaptersFoundation(
         : statedBy === 'phase30r'
           ? 'five CHECKs and two triggers exactly as Phase 30-R restates them, the staged ' +
             "revision's as Phase 29 states it and the host trigger as Phase 30 states it"
-          : 'five CHECKs and three triggers exactly as Phase 30-RD restates them, the host ' +
+          : 'five CHECKs and three triggers exactly as Phase 30-RD restates them (the staged ' +
+            "revision's CHECK as the payload ceiling restates it), the host " +
             'trigger as Phase 30 states it') +
       ', all trusted and enabled',
   );
@@ -20546,6 +20913,8 @@ async function assertMigrationBundleExtension(
   sourceAdapters: Migration,
   reviewCompleteness: Migration,
   ownerDecisions: Migration,
+  /** Later migrations that restate Migration's own rules (the payload ceiling), newest first. */
+  later: readonly Migration[] = [],
 ): Promise<void> {
   if (!(await migrationPresent(session)))
     fail('The bundle-extension proof needs Phase 29 applied first.');
@@ -20568,6 +20937,9 @@ async function assertMigrationBundleExtension(
   const bundleAt = (stage: BundleStage): string =>
     [...compiledBundleAt(stage)].sort().join(',');
 
+  // A later migration that restates Migration's rules goes first, so Phase
+  // 30-RD's rollback meets the rules it states, and comes back with them.
+  for (const restating of later) await rollbackMigration(session, restating);
   await rollbackMigration(session, ownerDecisions);
   await rollbackMigration(session, reviewCompleteness);
   await rollbackMigration(session, sourceAdapters);
@@ -20600,7 +20972,13 @@ async function assertMigrationBundleExtension(
   );
 
   const redeploy = await deployMigrations(disposableUrl, environment.values);
-  for (const reapplied of [migration, sourceAdapters, reviewCompleteness, ownerDecisions])
+  for (const reapplied of [
+    migration,
+    sourceAdapters,
+    reviewCompleteness,
+    ownerDecisions,
+    ...later,
+  ])
     if (!redeploy.output.includes(reapplied.id))
       fail(`Re-applying ${reapplied.id} did not report it.\n${redeploy.output}`);
   const historyAfter = await appliedMigrationNames(session);
@@ -20787,6 +21165,8 @@ async function assertMigrationRules(
   sourceAdapters: Migration,
   reviewCompleteness: Migration,
   ownerDecisions: Migration,
+  /** The staged-payload ceiling, which restates the staged revision's CHECK. */
+  payloadCeiling: Migration,
 ): Promise<void> {
   const run = randomUUID().replaceAll('-', '').slice(0, 16);
   const at = '2026-10-11T00:00:00';
@@ -24179,6 +24559,7 @@ async function assertMigrationRules(
     ownerDecisions,
     'Phase 30-RD',
     OWNER_DECISION_TRIGGERS,
+    new Map([['MigrationStagedRecord', payloadCeiling]]),
   );
   const [findingTrigger] = await session.query<{
     definition: string | null;
@@ -24968,6 +25349,15 @@ try {
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
     }
+    if (migration.id === PAYLOAD_CEILING_MIGRATION)
+      // The staged-revision CHECK is Phase 30-RD's again, to the character.
+      await assertPayloadCeilingRemoved(session, migrations);
+    if (migration.id === BRACKETED_MARKS_MIGRATION)
+      // The bracketed footnote mark is refused again, as Quran Part 6 made it.
+      await assertBracketedMarksRemoved(session);
+    if (migration.id === WORD_BY_WORD_MIGRATION)
+      // Quran Part 7 is gone without a trace on the Ayah and the other works.
+      await assertWordByWordRemoved(session);
     if (migration.id === TRANSLATION_NOTES_MIGRATION)
       // Quran Part 6 is gone without a trace on the translation tables.
       await assertTranslationNotesRemoved(session);
@@ -25347,12 +25737,18 @@ try {
   );
   if (ownerDecisions === undefined)
     fail(`${OWNER_DECISIONS_MIGRATION} is not among the migrations on disk.`);
+  const payloadCeiling = migrations.find(
+    (entry) => entry.id === PAYLOAD_CEILING_MIGRATION,
+  );
+  if (payloadCeiling === undefined)
+    fail(`${PAYLOAD_CEILING_MIGRATION} is not among the migrations on disk.`);
   await assertMigrationBundleExtension(
     session,
     migrationProvenance,
     sourceAdapters,
     reviewCompleteness,
     ownerDecisions,
+    [payloadCeiling],
   );
   await assertSourceAdaptersFoundation(session, migrations, 're-deploy');
   await assertReviewCompletenessFoundation(session, 're-deploy');
@@ -25362,7 +25758,16 @@ try {
   // deleted and every decision is history, so — like the canonical proofs —
   // their synthetic rows die with this disposable database. Each later
   // rollback is then shown to REFUSE over them rather than discard them.
-  await assertMigrationRules(session, sourceAdapters, reviewCompleteness, ownerDecisions);
+  await assertMigrationRules(
+    session,
+    sourceAdapters,
+    reviewCompleteness,
+    ownerDecisions,
+    payloadCeiling,
+  );
+  // And the staged-payload ceiling, on those rows: its longer revision, too,
+  // dies with this disposable database, and its rollback refuses over it.
+  await assertPayloadCeilingRules(session, migrations);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

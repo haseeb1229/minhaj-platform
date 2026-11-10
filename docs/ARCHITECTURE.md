@@ -1691,9 +1691,11 @@ read-only into the exact-SHA operations image), verifies their structure and exa
 registers the source and activates the corpus as the owner, and has the corpus accepted by Quran's
 canonical service in a runtime child under the operator's live `quran-canonical-edit` step-up
 (earned on `/admin/quran/surahs`); it resumes an interrupted import and refuses once a corpus is
-active. `translations --operator <id>` imports Irfan-ul-Quran from the staged migration revisions
-through Quran's administrative service — since Quran Part 6 each Ayah's translator's notes with its
-text, from revisions staged by parser version 3 (an earlier revision leaves the held notes
+active. `translations --operator <id>` imports Irfan-ul-Quran — and, since 2026-11-10, QuranEnc's
+four external reference translations (`scripts/quran/translation-works.ts`; each work its own
+provenance source, its attribution naming its staged edition's version) — from the staged migration
+revisions through Quran's administrative service — since Quran Part 6 each Ayah's translator's notes
+with its text, from revisions staged by parser version 3 (an earlier revision leaves the held notes
 untouched; DOMAIN_MODEL.md §8.6). `names --sha256 <metadata hex> --operator <id>` (Quran
 Part 2) reads the same mounted `quran-data.xml`, refuses unless its digest is the one the registered
 source's evidence records, and saves each Surah's English display name and meaning (Tanzil's
@@ -1712,12 +1714,12 @@ different evidence is refused, never edited), then starts the runtime child
 `QURAN_RECITATIONS_TOOL_ENTRY`), composed by `composition/quran-reference-runner.ts` — which now also
 supplies Quran's segment upload into Storage and People's administrative service, gated by the
 operator's `people.administer` read live. `recitations-mp3quran --operator <id>` imports mp3quran.net's
-twelve curated Ayah-timed Hafs reads (pinned by moshaf id and CDN folder) as STREAMED recitations —
+curated Ayah-timed Hafs reads — twelve at Part 5, twenty-nine since 2026-11-10 — (pinned by moshaf id and CDN folder) as STREAMED recitations —
 the audio stays on the CDN — through the safe fetch boundary bound to `www.mp3quran.net` alone, one
 request at a time at least a second apart, three attempts for a transient failure: each reciter a
 People Person (mp3quran's Arabic and English names verbatim), one timed whole-Surah segment per Surah,
-a Surah whose timing does not cover the corpus's ayat skipped and reported; about half an hour, and
-a re-run adds only what is missing. `recitations-irfan-urdu --operator <id>` downloads the
+a Surah whose timing does not cover the corpus's ayat skipped and reported; about half an hour for
+the first twelve reads (about an hour for all twenty-nine), and a re-run adds only what is missing. `recitations-irfan-urdu --operator <id>` downloads the
 owner-attested Irfan-ul-Quran Urdu narration archive once into `/srv/minhaj/imports/quran-recitations/`
 (created by the script for uid 1000, mounted read-write into `ingest` only) through the new safe
 download boundary (`createSafeDownloader`: exact host `minhaj.net`, the fetcher's scope, pin and

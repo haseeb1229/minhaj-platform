@@ -88,6 +88,7 @@ export async function quranCopy(locale: Locale) {
       unchanged: t('unchanged'),
       'fixture-over-approved': t('fixtureOverApproved'),
       'note-untied': t('noteUntied'),
+      'word-outside-ayah': t('wordOutsideAyah'),
       // The upload route's own transport refusals.
       unsupported: t('typeNotAllowed'),
       'rate-limited': t('rateLimited'),
@@ -578,7 +579,12 @@ export function EditorHeading({
 }
 
 export type StateKind =
-  'translation' | 'transliteration' | 'tafsir' | 'recitation' | 'tajweed';
+  | 'translation'
+  | 'transliteration'
+  | 'word-by-word'
+  | 'tafsir'
+  | 'recitation'
+  | 'tajweed';
 
 /**
  * The lifecycle controls: one small form per reachable state, each carrying the

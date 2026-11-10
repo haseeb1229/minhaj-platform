@@ -1,4 +1,4 @@
-import type { TranslationNote } from '@minhaj/contracts/quran';
+import type { AyahWord, TranslationNote, WordGloss } from '@minhaj/contracts/quran';
 
 import { arabicIndic } from './citation';
 import { noteParagraphs, noteSegments } from './translation-notes';
@@ -112,6 +112,13 @@ export interface NoteLabels {
  * from beneath it as its attribution. The group is NAMED by that attribution,
  * so a screen reader announces whose translation it is.
  *
+ * ALIGNED TO ITS OWN READING START. The block is measured (`max-w-[68ch]`) and
+ * its inline-end margin is `auto` in its OWN direction, so an Urdu block on an
+ * English page hugs the right edge the Arabic ends at, and an English block on
+ * an Urdu page the left — never stranded at the page's start. Its text is set
+ * from its OWN start too (`text-start`), so an alignment inherited from a page
+ * of the other direction never sets an English line flush right.
+ *
  * `index` is the work's place among the translations the page rendered: the
  * reader shows or hides each by it (`data-shown` on the reader, Quran Part 1).
  * `data-translation-*` is what Copy and the reading-mode sheet read.
@@ -163,7 +170,7 @@ export function TranslationText({
       dir={language.direction}
       data-translation-work={name}
       data-translation-index={index}
-      className="flex min-w-0 max-w-[68ch] flex-col gap-1.5"
+      className="me-auto flex w-full min-w-0 max-w-[68ch] flex-col gap-1.5 text-start"
     >
       <p
         lang={language.code}
@@ -232,6 +239,146 @@ export function TranslationText({
           </ol>
         </details>
       )}
+    </div>
+  );
+}
+
+/**
+ * One TRANSLITERATION of one Ayah (Quran Part 7): a sourced work's text — never
+ * one derived from the Arabic — set between the Arabic and the translations.
+ * Marked with its own language and direction, so Latin text on an Urdu or
+ * Arabic page is an isolated left-to-right run that hugs its own start
+ * (`me-auto`); set in the reading face, quieter than a translation
+ * (`.quran-transliteration-text`, italic only in a Latin script), and named by
+ * its work like a translation. `index` is its place among the
+ * transliterations the page rendered: the reader shows the one chosen by it
+ * (`data-transliteration`), and nothing by default.
+ */
+export function TransliterationText({
+  id,
+  label,
+  name,
+  text,
+  language,
+  index,
+}: {
+  readonly id: string;
+  /** "Transliteration: {name}" — the accessible name. */
+  readonly label: string;
+  readonly name: string;
+  readonly text: string;
+  readonly language: { readonly code: string; readonly direction: 'ltr' | 'rtl' };
+  readonly index: number;
+}) {
+  return (
+    <div
+      role="group"
+      aria-labelledby={id}
+      dir={language.direction}
+      data-transliteration-index={index}
+      className="quran-transliteration me-auto flex w-full min-w-0 max-w-[68ch] flex-col gap-1 text-start"
+    >
+      <p
+        lang={language.code}
+        dir={language.direction}
+        className="quran-transliteration-text reading-face break-words"
+      >
+        {text}
+      </p>
+      <p id={id} className="text-caption text-foreground-muted">
+        <span className="sr-only">{label}</span>
+        <span aria-hidden="true">
+          — <bdi>{name}</bdi>
+        </span>
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The Arabic of one Ayah WORD BY WORD (Quran Part 7): each word of the stored
+ * text, as the one segmentation cuts it (`ayahWords`, `@minhaj/contracts/quran`),
+ * drawn as a unit with its sourced gloss BENEATH it as real text — never a
+ * tooltip — so a screen reader reads each word and then its meaning, a
+ * keyboard needs nothing to reach it, and no script is needed to see it.
+ *
+ * THE TEXT IS NEVER CHANGED. Each word is a verbatim slice of the stored text
+ * (a pause sign stays with its word); a word the work does not gloss is shown
+ * alone; a gloss whose position the text does not have is not shown. The
+ * plain Arabic line stays in the document — what Copy reads — and the reader
+ * shows this in its place only while the work is chosen, in Translation mode
+ * (`data-words`, `globals.css`). The Ayah-end mark is presentation, hidden
+ * from assistive technology, as on the plain line. `index` is the work's place
+ * among the word-by-word works the page rendered.
+ */
+export function WordByWordText({
+  id,
+  label,
+  name,
+  words,
+  glosses,
+  language,
+  index,
+  mark,
+}: {
+  readonly id: string;
+  /** "Word by word: {name}" — the accessible name. */
+  readonly label: string;
+  readonly name: string;
+  readonly words: readonly AyahWord[];
+  readonly glosses: readonly WordGloss[];
+  readonly language: { readonly code: string; readonly direction: 'ltr' | 'rtl' };
+  readonly index: number;
+  /** The presentational Ayah-end mark ("۝٣"), or null. */
+  readonly mark: string | null;
+}) {
+  const glossOf = new Map(glosses.map((gloss) => [gloss.position, gloss.text]));
+  return (
+    <div
+      role="group"
+      aria-labelledby={id}
+      data-words-index={index}
+      className="quran-wbw flex min-w-0 flex-col gap-2"
+    >
+      <span id={id} className="sr-only">
+        {label}
+      </span>
+      <ol dir="rtl" className="quran-wbw-words">
+        {words.map((word) => {
+          const gloss = glossOf.get(word.position);
+          return (
+            <li key={word.position} className="quran-wbw-word">
+              <span
+                lang="ar"
+                dir="rtl"
+                translate="no"
+                className="quran-text quran-wbw-arabic"
+              >
+                {word.text}
+              </span>
+              {gloss === undefined ? null : (
+                <span
+                  lang={language.code}
+                  dir={language.direction}
+                  className="quran-wbw-gloss reading-face"
+                >
+                  {gloss}
+                </span>
+              )}
+            </li>
+          );
+        })}
+        {mark === null ? null : (
+          <li aria-hidden="true" className="quran-wbw-word quran-wbw-end">
+            <span lang="ar" className="quran-name quran-wbw-mark">
+              {mark}
+            </span>
+          </li>
+        )}
+      </ol>
+      <p className="text-caption text-foreground-muted" aria-hidden="true">
+        — <bdi>{name}</bdi>
+      </p>
     </div>
   );
 }

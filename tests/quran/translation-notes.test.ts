@@ -148,6 +148,58 @@ describe('the tie rule', () => {
   });
 });
 
+describe('the tie rule for bracketed footnote marks (QuranEnc, owner decision 2026-11-10)', () => {
+  it('finds "[1]" … "[9999]" as bracketed marks, and nothing else in brackets', () => {
+    expect(
+      translationNoteMarks('NON_QURAN_FIXTURE [All] a[8] b[2017] [0] [10000] [x]'),
+    ).toEqual([
+      { start: 25, end: 28, kind: 'bracketed', size: 8 },
+      { start: 30, end: 36, kind: 'bracketed', size: 2017 },
+    ]);
+    for (const marker of ['[1]', '[9999]'])
+      expect(TRANSLATION_NOTE_MARKER.test(marker), marker).toBe(true);
+    for (const marker of ['[0]', '[01]', '[10000]', '[1', '[ 1]', '[a]'])
+      expect(TRANSLATION_NOTE_MARKER.test(marker), marker).toBe(false);
+  });
+
+  it('ties each "[n]" to the ONE mark "[n]", in the marks’ order', () => {
+    expect(
+      tieTranslationNotes('a[3] [all] b[4]', [{ marker: '[3]' }, { marker: '[4]' }]),
+    ).toEqual([0, 1]);
+    // Fewer notes than marks: the rest stay text.
+    expect(tieTranslationNotes('a[3] b[4]', [{ marker: '[4]' }])).toEqual([1]);
+    // A mark the text lacks, the wrong order, or a mark set twice.
+    expect(tieTranslationNotes('a[3]', [{ marker: '[4]' }])).toBeNull();
+    expect(
+      tieTranslationNotes('a[3] b[4]', [{ marker: '[4]' }, { marker: '[3]' }]),
+    ).toBeNull();
+    expect(tieTranslationNotes('a[3] b[3]', [{ marker: '[3]' }])).toBeNull();
+    expect(
+      tieTranslationNotes('a[3]', [{ marker: '[3]' }, { marker: '[3]' }]),
+    ).toBeNull();
+  });
+
+  it('leaves the earlier shapes’ rules exactly as they were beside bracketed marks', () => {
+    // An unmarked note answers the one star or numbered mark, not a footnote number.
+    expect(tieTranslationNotes('a٭ b[1]', [{ marker: '' }])).toEqual([0]);
+    expect(tieTranslationNotes('a[1]', [{ marker: '' }])).toEqual([null]);
+    expect(tieTranslationNotes('a* b[1]', [{ marker: '*' }, { marker: '[1]' }])).toEqual([
+      0, 1,
+    ]);
+  });
+
+  it('cuts a bracketed mark out exactly, the text joined unchanged', () => {
+    const text = 'NON_QURAN_FIXTURE [All] praise[4] -';
+    const segments = noteSegments(text, [{ marker: '[4]' }]);
+    expect(segments).toEqual([
+      { text: 'NON_QURAN_FIXTURE [All] praise', note: null },
+      { text: '[4]', note: 0 },
+      { text: ' -', note: null },
+    ]);
+    expect(segments.map((segment) => segment.text).join('')).toBe(text);
+  });
+});
+
 describe('the text cut at its notes’ marks', () => {
   it('joins back into the stored text, character for character', () => {
     for (const [text, notes] of [
@@ -437,6 +489,7 @@ describe('search', () => {
     const [display] = [...quranHitDisplays([hit], [record]).values()];
     expect(display).toEqual({
       layer: 'layer',
+      kind: 'translation',
       language: 'en',
       text: 'NON_QURAN_FIXTURE translation b',
     });

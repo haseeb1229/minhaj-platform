@@ -3,6 +3,8 @@ import 'server-only';
 import { z } from 'zod';
 
 import {
+  QURAN_PAGE,
+  ayahWords,
   layerTextSaveSchema,
   quranIdSchema,
   quranLayerStateSchema,
@@ -20,6 +22,8 @@ import {
   translationInputSchema,
   translationTextSaveSchema,
   transliterationInputSchema,
+  wordByWordInputSchema,
+  wordGlossSaveSchema,
   type LayerTextChange,
   type QuranActor,
   type QuranAuthorityPort,
@@ -28,13 +32,15 @@ import {
   type QuranRef,
   type QuranSourceAuthority,
   type TranslationTextChange,
+  type WordGlossChange,
 } from '@minhaj/contracts/quran';
 
 import { QuranRefusal, asRefusal } from '../domain/refusal.ts';
 
 /**
  * The Quran administrative service — the LAYERED works (Translation,
- * Transliteration, Tafsir, Recitation and its segments, Tajweed guidance),
+ * Transliteration, Tafsir, word by word, Recitation and its segments, Tajweed
+ * guidance),
  * Surah display names and Ayah topic assignments (DOMAIN_MODEL.md §8.2;
  * DELIVERY_PLAN.md Phase 18).
  *
@@ -123,6 +129,8 @@ const translationCreate = creation(translationInputSchema);
 const translationEdit = versioned(translationInputSchema);
 const transliterationCreate = creation(transliterationInputSchema);
 const transliterationEdit = versioned(transliterationInputSchema);
+const wordByWordCreate = creation(wordByWordInputSchema);
+const wordByWordEdit = versioned(wordByWordInputSchema);
 const tafsirCreate = creation(tafsirInputSchema);
 const tafsirEdit = versioned(tafsirInputSchema);
 const recitationCreate = creation(recitationInputSchema);
@@ -161,6 +169,14 @@ export interface TranslationTextSaveInput {
   readonly expectedVersion: number;
   readonly surah: number;
   readonly changes: readonly TranslationTextChange[];
+}
+
+/** A word-by-word work's save: each change replaces one Ayah's glosses whole (Quran Part 7). */
+export interface WordGlossSaveInput {
+  readonly id: string;
+  readonly expectedVersion: number;
+  readonly surah: number;
+  readonly changes: readonly WordGlossChange[];
 }
 
 /** What publication needs of a work, whatever kind it is. */
@@ -420,6 +436,95 @@ export function createQuranService(deps: {
       const save = parse(layerTextSaveSchema, { surah, changes });
       return run(
         store.saveTransliterationTexts({
+          actorId: actor.accountId,
+          id,
+          expectedVersion,
+          ...save,
+        }),
+      );
+    },
+
+    /* ---- Word by word (Quran Part 7) -------------------------------------- */
+
+    async wordByWords(actor: QuranActor, offset = 0) {
+      await read(actor);
+      return run(store.wordByWords(parse(offsetSchema, offset)));
+    },
+
+    async wordByWord(actor: QuranActor, id: string) {
+      await read(actor);
+      return run(store.wordByWord(parse(quranIdSchema, id)));
+    },
+
+    async createWordByWord(actor: QuranActor, input: In<typeof wordByWordCreate>) {
+      await administer(actor);
+      const { value } = parse(wordByWordCreate, input);
+      return run(store.createWordByWord({ actorId: actor.accountId, value }));
+    },
+
+    async updateWordByWord(actor: QuranActor, input: In<typeof wordByWordEdit>) {
+      await administer(actor);
+      const edit = parse(wordByWordEdit, input);
+      return run(store.updateWordByWord({ actorId: actor.accountId, ...edit }));
+    },
+
+    async setWordByWordState(actor: QuranActor, input: In<typeof stateChange>) {
+      await administer(actor);
+      const change = parse(stateChange, input);
+      await publishable(
+        change.state,
+        change.expectedVersion,
+        () => store.wordByWord(change.id),
+        (work) => work.textCount > 0,
+        'text-required',
+      );
+      return run(store.setWordByWordState({ actorId: actor.accountId, ...change }));
+    },
+
+    async wordByWordGlosses(actor: QuranActor, id: string, surah: number) {
+      await read(actor);
+      return run(
+        store.wordByWordGlosses(
+          parse(quranIdSchema, id),
+          parse(surahNumberSchema, surah),
+        ),
+      );
+    },
+
+    /**
+     * EVERY GLOSS ON A WORD THE AYAH HAS. Each changed Ayah's stored text is
+     * read and cut by the one segmentation (`ayahWords`); an Ayah the Surah
+     * does not hold is `outside-surah`, and a position beyond its words is
+     * `word-outside-ayah` — a gloss is never moved to a word that exists.
+     * Only the canonical pages holding the changed ayat are read.
+     */
+    async saveWordByWordGlosses(actor: QuranActor, input: WordGlossSaveInput) {
+      await administer(actor);
+      const { id, expectedVersion, surah, changes } = parse(textSave, input);
+      const save = parse(wordGlossSaveSchema, { surah, changes });
+      const offsets = [
+        ...new Set(
+          save.changes.map(
+            (change) => Math.floor((change.ayah - 1) / QURAN_PAGE) * QURAN_PAGE,
+          ),
+        ),
+      ];
+      const pages = await Promise.all(
+        offsets.map((offset) => run(store.surahAyat(save.surah, offset))),
+      );
+      const words = new Map(
+        pages.flatMap((page) =>
+          page.items.map((ayah) => [ayah.ayah, ayahWords(ayah.text).length] as const),
+        ),
+      );
+      for (const change of save.changes) {
+        const count = words.get(change.ayah);
+        if (count === undefined) throw new QuranRefusal('outside-surah');
+        if (change.glosses.some((gloss) => gloss.position > count))
+          throw new QuranRefusal('word-outside-ayah');
+      }
+      return run(
+        store.saveWordByWordGlosses({
           actorId: actor.accountId,
           id,
           expectedVersion,

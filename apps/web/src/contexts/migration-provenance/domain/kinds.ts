@@ -872,6 +872,8 @@ function quranTranslation(input: Ready, record: ParsedQuranTranslation): Normali
     surah: surah ?? 0,
     ayat,
     notes,
+    // The source's edition, as the adapter read it, where it versions its text.
+    ...(record.edition === undefined ? {} : { edition: record.edition }),
     legacyIdentifier: identifier(input, record.legacyIdentifier),
   };
   return finish('quran.translation', payload, words, {

@@ -226,6 +226,8 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/quran/tafsir/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/tafsir/[slug]/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/transliteration/page.tsx',
+  // Quran Part 7: every public word-by-word work — a 404 while none is.
+  'apps/web/src/app/[locale]/(public)/quran/word-by-word/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/tajweed/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/tajweed/[rule]/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/recitations/page.tsx',

@@ -11,7 +11,8 @@ import {
  * shown are unit-tested.
  *
  * PRESENTATION AND PLACE, NOTHING ELSE. The reading mode, which of the page's
- * translations are shown and how, the two text sizes, the line spacing, and
+ * translations are shown and how, which transliteration and which word-by-word
+ * work are shown (Quran Part 7), the two text sizes, the line spacing, and
  * the last Ayah read on this device. Kept in `localStorage` under two keys,
  * never sent anywhere, carrying no account identifier; an account's reading
  * position is Personalisation's, set only through its own signed-in controls.
@@ -60,6 +61,14 @@ export const SCALE = Object.freeze({ min: 0.8, max: 1.6, step: 0.1, initial: 1 }
  */
 export const TRANSLATIONS_RENDERED_MAX = 4;
 
+/**
+ * How many transliterations, and how many word-by-word works, one reading page
+ * renders (Quran Part 7) so the reader's settings can show any one of them
+ * without another request. A further public work is chosen through the reading
+ * form (`?transliteration=`, `?words=`).
+ */
+export const STUDY_LAYERS_RENDERED_MAX = 2;
+
 export interface ReaderPreferences {
   readonly mode: ReadingMode;
   /** The master switch: no translation at all while off. */
@@ -71,6 +80,10 @@ export interface ReaderPreferences {
   readonly leading: Leading;
   readonly layout: TranslationLayout;
   readonly notes: NoteDisplay;
+  /** The transliteration shown under the Arabic, by slug; `null` is none. */
+  readonly transliteration: string | null;
+  /** The word-by-word work the Arabic is shown with, by slug; `null` is none. */
+  readonly words: string | null;
 }
 
 export const DEFAULT_PREFERENCES: ReaderPreferences = Object.freeze({
@@ -82,6 +95,8 @@ export const DEFAULT_PREFERENCES: ReaderPreferences = Object.freeze({
   leading: 'comfortable',
   layout: 'stacked',
   notes: 'request',
+  transliteration: null,
+  words: null,
 });
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -101,6 +116,13 @@ function oneOf<T extends string>(values: readonly T[], value: unknown, fallback:
   return typeof value === 'string' && (values as readonly string[]).includes(value)
     ? (value as T)
     : fallback;
+}
+
+/** A stored single work: one slug, or none. */
+function workOf(value: unknown): string | null {
+  return typeof value === 'string' && quranSlugSchema.safeParse(value).success
+    ? value
+    : null;
 }
 
 /** A stored list of works: slugs only, each once, at most the rendered maximum. */
@@ -138,6 +160,8 @@ export function readPreferences(raw: string | null): ReaderPreferences {
     leading: oneOf(LEADINGS, parsed['leading'], DEFAULT_PREFERENCES.leading),
     layout: oneOf(TRANSLATION_LAYOUTS, parsed['layout'], DEFAULT_PREFERENCES.layout),
     notes: oneOf(NOTE_DISPLAYS, parsed['notes'], DEFAULT_PREFERENCES.notes),
+    transliteration: workOf(parsed['transliteration']),
+    words: workOf(parsed['words']),
   };
 }
 
@@ -151,6 +175,8 @@ export function writePreferences(preferences: ReaderPreferences): string {
     leading: preferences.leading,
     layout: preferences.layout,
     notes: preferences.notes,
+    transliteration: preferences.transliteration,
+    words: preferences.words,
   });
 }
 
@@ -211,6 +237,30 @@ export function shownOf(
     : [...new Set(chosen)].sort((a, b) => a - b);
 }
 
+/** One study layer a page rendered (Quran Part 7): its works' slugs, in index order. */
+export interface RenderedLayer {
+  readonly slugs: readonly string[];
+  /** The address chose the work itself: it always shows. */
+  readonly fixed: boolean;
+}
+
+export const NO_RENDERED_LAYER: RenderedLayer = Object.freeze({
+  slugs: [],
+  fixed: false,
+});
+
+/**
+ * Which rendered work of a study layer shows, as the reader element carries it:
+ * its index, or `''` for none. One the address chose always shows; otherwise
+ * the stored choice when this page rendered it, and none by default — a
+ * transliteration or a word-by-word gloss is something a reader asks for.
+ */
+export function layerShownOf(choice: string | null, layer: RenderedLayer): string {
+  if (layer.fixed) return layer.slugs.length > 0 ? '0' : '';
+  const index = choice === null ? -1 : layer.slugs.indexOf(choice);
+  return index >= 0 ? String(index) : '';
+}
+
 /* ===========================================================================
  * What the reader element carries
  * ========================================================================= */
@@ -227,6 +277,10 @@ export interface ReaderPresentation {
   readonly leading: Leading;
   readonly layout: TranslationLayout;
   readonly notes: NoteDisplay;
+  /** The shown transliteration's index, or `''` (`layerShownOf`). */
+  readonly transliteration: string;
+  /** The shown word-by-word work's index, or `''`. */
+  readonly words: string;
   readonly arabicScale: number | null;
   readonly translationScale: number;
 }
@@ -236,6 +290,8 @@ export function presentationOf(
   page: RenderedTranslations & {
     readonly modes: boolean;
     readonly explicitSize: boolean;
+    readonly transliterations: RenderedLayer;
+    readonly words: RenderedLayer;
   },
 ): ReaderPresentation {
   return {
@@ -244,6 +300,8 @@ export function presentationOf(
     leading: preferences.leading,
     layout: preferences.layout,
     notes: preferences.notes,
+    transliteration: layerShownOf(preferences.transliteration, page.transliterations),
+    words: layerShownOf(preferences.words, page.words),
     arabicScale: page.explicitSize ? null : preferences.arabicScale,
     translationScale: preferences.translationScale,
   };
@@ -255,10 +313,13 @@ export function presentationOf(
  * preferences, and writes only `data-*` attributes and two CSS custom
  * properties on that element (through the CSSOM, which `style-src 'self'`
  * permits). It never throws: unreadable storage leaves the server's render.
+ * The study layers (Quran Part 7) are read the same way: `data-transliterations`
+ * and `data-word-works` list what was rendered, and the shown index is written
+ * to `data-transliteration` and `data-words` unless the address fixed it.
  * Its first act marks the element `data-script`, so controls that need script
  * are drawn from the first paint when script runs, and never without it.
  */
-export const READER_BOOT_SCRIPT = `(function(r){if(!r)return;r.setAttribute("data-script","");var p;try{p=JSON.parse(window.localStorage.getItem(${JSON.stringify(PREFERENCES_KEY)})||"null")}catch(e){return}if(!p||typeof p!=="object"||Array.isArray(p))return;function one(v,a){return typeof v==="string"&&a.indexOf(v)>=0}function sc(v){return typeof v==="number"&&isFinite(v)&&v>=${String(SCALE.min)}&&v<=${String(SCALE.max)}}if(r.hasAttribute("data-modes")&&one(p.mode,${JSON.stringify(READING_MODES)}))r.setAttribute("data-mode",p.mode);if(one(p.leading,${JSON.stringify(LEADINGS)}))r.setAttribute("data-leading",p.leading);if(one(p.layout,${JSON.stringify(TRANSLATION_LAYOUTS)}))r.setAttribute("data-layout",p.layout);if(one(p.notes,${JSON.stringify(NOTE_DISPLAYS)}))r.setAttribute("data-notes",p.notes);if(!r.hasAttribute("data-fixed")){var s=(r.getAttribute("data-slugs")||"").split(" ").filter(Boolean),d=r.getAttribute("data-shown")||"",w=null;if(p.translationsOn===false||p.translations==="none")w="";else if(Array.isArray(p.translations)){var ok=true;for(var i=0;i<p.translations.length;i++)if(typeof p.translations[i]!=="string"||!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(p.translations[i])||p.translations[i].length<2||p.translations[i].length>120)ok=false;if(ok){if(p.translations.length===0)w="";else{var c=[];for(var j=0;j<p.translations.length&&j<${String(TRANSLATIONS_RENDERED_MAX)};j++){var k=s.indexOf(p.translations[j]);if(k>=0&&c.indexOf(k)<0)c.push(k)}c.sort(function(a,b){return a-b});w=c.length?c.join(" "):d}}}if(w!==null)r.setAttribute("data-shown",w)}if(sc(p.arabicScale)&&!r.hasAttribute("data-explicit-size"))r.style.setProperty("--quran-arabic-scale",String(p.arabicScale));if(sc(p.translationScale))r.style.setProperty("--quran-translation-scale",String(p.translationScale))})(document.currentScript&&document.currentScript.parentElement)`;
+export const READER_BOOT_SCRIPT = `(function(r){if(!r)return;r.setAttribute("data-script","");var p;try{p=JSON.parse(window.localStorage.getItem(${JSON.stringify(PREFERENCES_KEY)})||"null")}catch(e){return}if(!p||typeof p!=="object"||Array.isArray(p))return;function one(v,a){return typeof v==="string"&&a.indexOf(v)>=0}function sc(v){return typeof v==="number"&&isFinite(v)&&v>=${String(SCALE.min)}&&v<=${String(SCALE.max)}}if(r.hasAttribute("data-modes")&&one(p.mode,${JSON.stringify(READING_MODES)}))r.setAttribute("data-mode",p.mode);if(one(p.leading,${JSON.stringify(LEADINGS)}))r.setAttribute("data-leading",p.leading);if(one(p.layout,${JSON.stringify(TRANSLATION_LAYOUTS)}))r.setAttribute("data-layout",p.layout);if(one(p.notes,${JSON.stringify(NOTE_DISPLAYS)}))r.setAttribute("data-notes",p.notes);if(!r.hasAttribute("data-fixed")){var s=(r.getAttribute("data-slugs")||"").split(" ").filter(Boolean),d=r.getAttribute("data-shown")||"",w=null;if(p.translationsOn===false||p.translations==="none")w="";else if(Array.isArray(p.translations)){var ok=true;for(var i=0;i<p.translations.length;i++)if(typeof p.translations[i]!=="string"||!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(p.translations[i])||p.translations[i].length<2||p.translations[i].length>120)ok=false;if(ok){if(p.translations.length===0)w="";else{var c=[];for(var j=0;j<p.translations.length&&j<${String(TRANSLATIONS_RENDERED_MAX)};j++){var k=s.indexOf(p.translations[j]);if(k>=0&&c.indexOf(k)<0)c.push(k)}c.sort(function(a,b){return a-b});w=c.length?c.join(" "):d}}}if(w!==null)r.setAttribute("data-shown",w)}function lay(l,f,c,v){if(r.hasAttribute(f))return;var s=(r.getAttribute(l)||"").split(" ").filter(Boolean),k=typeof v==="string"?s.indexOf(v):-1;r.setAttribute(c,k>=0?String(k):"")}lay("data-transliterations","data-transliteration-fixed","data-transliteration",p.transliteration);lay("data-word-works","data-words-fixed","data-words",p.words);if(sc(p.arabicScale)&&!r.hasAttribute("data-explicit-size"))r.style.setProperty("--quran-arabic-scale",String(p.arabicScale));if(sc(p.translationScale))r.style.setProperty("--quran-translation-scale",String(p.translationScale))})(document.currentScript&&document.currentScript.parentElement)`;
 
 /* ===========================================================================
  * The last place read on this device

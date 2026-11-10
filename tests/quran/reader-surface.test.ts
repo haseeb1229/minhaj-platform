@@ -24,6 +24,7 @@ import {
   SCALE,
   TRANSLATIONS_RENDERED_MAX,
   defaultShown,
+  layerShownOf,
   presentationOf,
   readLastRead,
   readPreferences,
@@ -173,6 +174,8 @@ describe('the reader’s preferences, as this browser stores them', () => {
       leading: 'spacious',
       layout: 'side',
       notes: 'inline',
+      transliteration: 'a-transliteration',
+      words: 'a-word-by-word',
     } as const;
     expect(readPreferences(writePreferences(stored))).toEqual(stored);
   });
@@ -266,6 +269,21 @@ describe('the reader’s preferences, as this browser stores them', () => {
     ).toEqual([0]);
   });
 
+  it('shows a study layer only when chosen and rendered, or fixed by the address (Part 7)', () => {
+    const layer = { slugs: ['tr-one', 'tr-two'], fixed: false };
+    expect(layerShownOf(null, layer)).toBe('');
+    expect(layerShownOf('tr-two', layer)).toBe('1');
+    // A work this page did not render — withdrawn, or never public — is none.
+    expect(layerShownOf('gone', layer)).toBe('');
+    expect(layerShownOf('tr-one', { slugs: [], fixed: false })).toBe('');
+    // A work the ADDRESS chose always shows, whatever is stored.
+    expect(layerShownOf(null, { slugs: ['tr-two'], fixed: true })).toBe('0');
+    // Stored values are slugs or nothing.
+    expect(
+      readPreferences(JSON.stringify({ transliteration: 'B!', words: ['a'] })),
+    ).toEqual(DEFAULT_PREFERENCES);
+  });
+
   it('keeps the last place read only when the corpus has it', () => {
     const counts = new Map([
       [18, 110],
@@ -332,6 +350,10 @@ const PAGES = [
       'data-leading': 'comfortable',
       'data-layout': 'stacked',
       'data-notes': 'request',
+      'data-transliterations': 'tr-one tr-two',
+      'data-transliteration': '',
+      'data-word-works': 'wbw-one',
+      'data-words': '',
     },
     page: {
       slugs: ['ur-work', 'en-work'],
@@ -339,6 +361,8 @@ const PAGES = [
       fixed: false,
       modes: true,
       explicitSize: false,
+      transliterations: { slugs: ['tr-one', 'tr-two'], fixed: false },
+      words: { slugs: ['wbw-one'], fixed: false },
     },
   },
   {
@@ -351,6 +375,11 @@ const PAGES = [
       'data-leading': 'comfortable',
       'data-layout': 'stacked',
       'data-notes': 'request',
+      'data-transliterations': 'tr-two',
+      'data-transliteration': '0',
+      'data-transliteration-fixed': '',
+      'data-word-works': '',
+      'data-words': '',
     },
     page: {
       slugs: ['en-work'],
@@ -358,6 +387,8 @@ const PAGES = [
       fixed: true,
       modes: false,
       explicitSize: true,
+      transliterations: { slugs: ['tr-two'], fixed: true },
+      words: { slugs: [], fixed: false },
     },
   },
 ] as const;
@@ -388,6 +419,11 @@ const STORED: readonly (string | null)[] = [
   // Quran Part 6: where translator's notes are read.
   JSON.stringify({ notes: 'inline' }),
   JSON.stringify({ notes: 'popover', mode: 'reading' }),
+  // Quran Part 7: the transliteration and the word-by-word work chosen.
+  JSON.stringify({ transliteration: 'tr-two', words: 'wbw-one' }),
+  JSON.stringify({ transliteration: 'tr-one', words: 'gone' }),
+  JSON.stringify({ transliteration: '<b>', words: 7 }),
+  JSON.stringify({ transliteration: null, words: null, mode: 'mushaf' }),
 ];
 
 describe('the boot script', () => {
@@ -404,6 +440,10 @@ describe('the boot script', () => {
         expect(reader.attributes.get('data-leading'), label).toBe(expected.leading);
         expect(reader.attributes.get('data-layout'), label).toBe(expected.layout);
         expect(reader.attributes.get('data-notes'), label).toBe(expected.notes);
+        expect(reader.attributes.get('data-transliteration'), label).toBe(
+          expected.transliteration,
+        );
+        expect(reader.attributes.get('data-words'), label).toBe(expected.words);
         const arabic = reader.properties.get('--quran-arabic-scale');
         expect(
           arabic === undefined ? (page.explicitSize ? null : 1) : Number(arabic),

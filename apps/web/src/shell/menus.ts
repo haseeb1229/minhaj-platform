@@ -1,4 +1,5 @@
 import { exploreSlugsOf, ownerPathOf, type ExploreSection } from '@/shell/explore';
+import { routeOffered, type PresenceSnapshot } from '@/shell/presence';
 import {
   LEGAL_DOCUMENTS,
   SHELL_ROUTES,
@@ -16,7 +17,11 @@ import {
  * published: the visitor sees the organisation's whole map, and a destination
  * with nothing published yet answers with its own honest empty or
  * publication-status state. This restores the navigation the R1/R2
- * content-aware policy had replaced, which hid most of it.
+ * content-aware policy had replaced, which hid most of it. ONE EXCEPTION, by
+ * the owner's later decision (2026-11-09): the Quran's Transliteration and word
+ * by word are built but hidden until a work of each is published, so their
+ * links are resolved only while the presence snapshot says one is
+ * (`routeOffered`, `@/shell/presence`).
  *
  * A SEPARATE MODULE FROM THE REGISTRY, deliberately. The registry says which
  * routes exist; it is frozen in shape and in primary order. HOW those routes
@@ -152,6 +157,7 @@ const QURAN: DomainMenuSpec = {
     column('menu.columns.study', [
       link('quran.translations'),
       link('quran.transliteration'),
+      link('quran.word-by-word'),
       link('quran.tafsir'),
       link('quran.tajweed'),
     ]),
@@ -466,45 +472,58 @@ export interface DomainMenu {
   readonly columns: readonly MenuColumn[];
 }
 
+/**
+ * What the shell is resolved FOR: a request's presence snapshot, which leaves
+ * out a hidden-until-published route (`routeOffered`), or `'all'` — every
+ * link the shell can ever show, for the read-only administration view.
+ */
+export type MenuAudience = PresenceSnapshot | 'all';
+
+const offered =
+  (audience: MenuAudience) =>
+  (spec: MenuLinkSpec): boolean =>
+    audience === 'all' || routeOffered(audience, spec.route);
+
 /** One link, resolved through the registry. Throws on an unknown key. */
 export function resolveLink(spec: MenuLinkSpec): MenuLink {
   const route = requireRoute(spec.route);
   return { key: spec.route, route, label: spec.label ?? route.label };
 }
 
-function resolveColumn(spec: MenuColumnSpec): MenuColumn {
+function resolveColumn(spec: MenuColumnSpec, audience: MenuAudience): MenuColumn {
+  const links = spec.links.filter(offered(audience)).map(resolveLink);
   if ('route' in spec.heading) {
     const route = requireRoute(spec.heading.route);
     return {
       key: spec.heading.route,
       heading: { label: route.label, route },
-      links: spec.links.map(resolveLink),
+      links,
     };
   }
   return {
     key: spec.heading.label,
     heading: { label: spec.heading.label, route: null },
-    links: spec.links.map(resolveLink),
+    links,
   };
 }
 
-/** Every mega menu, resolved — what the header renders. */
-export function domainMenus(): readonly DomainMenu[] {
+/** Every mega menu, resolved for an audience — what the header renders. */
+export function domainMenus(audience: MenuAudience): readonly DomainMenu[] {
   return DOMAIN_MENUS.map((menu) => ({
     key: menu.key,
     landing: requireRoute(menu.key),
-    columns: menu.columns.map(resolveColumn),
+    columns: menu.columns.map((column) => resolveColumn(column, audience)),
   }));
 }
 
-/** The footer columns, resolved. */
-export function footerColumns(): readonly {
+/** The footer columns, resolved for an audience. */
+export function footerColumns(audience: MenuAudience): readonly {
   readonly heading: ShellMessageKey;
   readonly links: readonly MenuLink[];
 }[] {
   return FOOTER_COLUMNS.map((entry) => ({
     heading: entry.heading,
-    links: entry.links.map(resolveLink),
+    links: entry.links.filter(offered(audience)).map(resolveLink),
   }));
 }
 
@@ -529,7 +548,7 @@ export function shellLinkedKeys(): ReadonlySet<string> {
     'search',
     'my-minhaj',
     'donate',
-    ...domainMenus().flatMap((menu) => [
+    ...domainMenus('all').flatMap((menu) => [
       menu.landing.key,
       ...menu.columns.flatMap((column) => [
         ...(column.heading.route === null ? [] : [column.heading.route.key]),
@@ -537,7 +556,7 @@ export function shellLinkedKeys(): ReadonlySet<string> {
       ]),
     ]),
     ...headerUtility().map((entry) => entry.key),
-    ...footerColumns().flatMap((column) => column.links.map((entry) => entry.key)),
+    ...footerColumns('all').flatMap((column) => column.links.map((entry) => entry.key)),
     ...footerUtility().map((entry) => entry.key),
   ]);
 }

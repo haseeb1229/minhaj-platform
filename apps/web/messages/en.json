@@ -377,7 +377,8 @@
       "books": "Books on the Quran",
       "videos": "Videos on the Quran",
       "research": "Research on the Quran",
-      "courses": "Courses on the Quran"
+      "courses": "Courses on the Quran",
+      "word-by-word": "Quran word by word"
     },
     "media": {
       "photos": "Photographs",
@@ -679,6 +680,7 @@
         "ayah": "Ayah",
         "translation": "Quran translation",
         "transliteration": "Transliteration",
+        "wordByWord": "Word-by-word work",
         "tafsir": "Tafsir",
         "recitation": "Recitation",
         "tajweed": "Tajweed rule"
@@ -2258,7 +2260,6 @@
     "limitedTitle": "Search paused",
     "backToSearch": "Return to search",
     "quranArabic": "Arabic text",
-    "quranLayer": "Translation or transliteration · {language}",
     "hadithOriginal": "Original text",
     "hadithTranslation": "Translation · {language}",
     "start": {
@@ -2266,7 +2267,9 @@
       "library": "Books, research, magazines and articles, browsed by kind, language and topic.",
       "exploreTitle": "Explore every section",
       "explore": "A map of the whole platform, section by section."
-    }
+    },
+    "quranTransliteration": "Transliteration · {language}",
+    "quranTranslation": "Translation · {language}"
   },
   "topics": {
     "title": "Topics",
@@ -3060,14 +3063,15 @@
   },
   "quran": {
     "title": "Quran",
-    "description": "Read the Quran by Surah, by Juz and by Ayah, with translations, tafsir, transliteration, tajweed guidance and recitations.",
-    "intro": "Read the Quran by Surah, by Juz or by citation, and study it alongside translations, tafsir, transliteration, tajweed guidance and recitations. Every Ayah has one permanent address you can cite.",
+    "description": "Read the Quran by Surah, by Juz and by Ayah, with translations, tafsir, tajweed guidance and recitations.",
+    "intro": "Read the Quran by Surah, by Juz or by citation, and study it alongside translations, tafsir, tajweed guidance and recitations. Every Ayah has one permanent address you can cite.",
     "fixture": "Test fixture — this deployment shows non-authoritative engineering fixture text. It is not the Quran.",
     "reference": {
       "notice": "Preview: this Quran text and translation are shown for review and have not yet been checked by Minhaj-ul-Quran’s religious authority for this platform. <link>About this text</link>",
       "aboutHeading": "About this text",
       "arabic": "Arabic text: <tanzil>Tanzil Project</tanzil>, Uthmani text version 1.1, licensed under <licence>Creative Commons Attribution 3.0</licence> and reproduced without any change.",
       "translation": "Translation: Irfan-ul-Quran by Shaykh-ul-Islam Dr Muhammad Tahir-ul-Qadri, © Minhaj-ul-Quran International (<official>irfan-ul-quran.com</official>).",
+      "externalTranslations": "Other translations shown here are external reference translations — not Minhaj-ul-Quran’s, and not reviewed by its religious authority — each credited as its publisher requires:",
       "names": "Surah names in English and their meanings: <tanzil>Tanzil Project</tanzil> Quran Metadata 1.0, licensed under <licence>Creative Commons Attribution 3.0</licence> and reproduced as published.",
       "status": "Shown here for preview; not yet reviewed by Minhaj-ul-Quran’s religious authority for this platform.",
       "body": "A licensed preview of the Quran text with the Irfan-ul-Quran translation, not yet reviewed for this platform."
@@ -3081,7 +3085,7 @@
       "awaiting": "Opens when the corpus is activated",
       "parts": {
         "read": "The Arabic text in its own order, with one permanent address for every verse you can cite.",
-        "study": "Translations, tafsir, transliteration, tajweed guidance and recitations, each its own published work.",
+        "study": "Translations, tafsir, tajweed guidance and recitations, each its own published work.",
         "explore": "Books, videos, research and topics from across the platform, connected through the topic hub.",
         "learn": "Structured courses and learning paths, taught through Learn."
       },
@@ -3119,13 +3123,14 @@
       "videos": "Videos on the Quran",
       "research": "Research on the Quran",
       "topics": "The Quran as a topic",
-      "courses": "Courses on the Quran"
+      "courses": "Courses on the Quran",
+      "wordByWord": "Word by word"
     },
     "sectionBody": {
       "read": "Choose a Surah, or go straight to an Ayah by its number.",
       "surah": "Every Surah in order, with the number of its ayat.",
       "juz": "Every Juz in order, by its opening words, with the ayat, Surahs and pages it covers.",
-      "search": "Search the Arabic text and every published translation and transliteration.",
+      "search": "Search the Arabic text and every published translation.",
       "translations": "Published translations of the Quran, each its own work with its own translators and source.",
       "tafsir": "Published works of tafsir, with commentary arranged by Ayah.",
       "transliteration": "Published transliterations, each read alongside the Arabic text.",
@@ -3135,7 +3140,8 @@
       "videos": "Videos classified under the Quran.",
       "research": "Research from the Library classified under the Quran.",
       "topics": "Everything on the platform classified under the Quran, in one place.",
-      "courses": "Courses from Learn classified under the Quran."
+      "courses": "Courses from Learn classified under the Quran.",
+      "wordByWord": "Published word-by-word works: each Arabic word with its meaning beneath it."
     },
     "surahName": "Surah {number}",
     "ayahName": "Surah {surah}, Ayah {ayah}",
@@ -3183,7 +3189,8 @@
       "translation": "Translation: {name}",
       "transliteration": "Transliteration: {name}",
       "tafsir": "Tafsir: {name}",
-      "note": "Translator’s note: {name}"
+      "note": "Translator’s note: {name}",
+      "words": "Word by word: {name}"
     },
     "notes": {
       "title": "Translator’s note",
@@ -3199,7 +3206,8 @@
     "layerMissing": {
       "translation": "{name} has no translation of this Ayah.",
       "transliteration": "{name} has no transliteration of this Ayah.",
-      "tafsir": "{name} has no commentary on this Ayah."
+      "tafsir": "{name} has no commentary on this Ayah.",
+      "words": "{name} has no word-by-word glosses of this Ayah."
     },
     "tafsirOne": "{name} — commentary on Ayah {ayah}",
     "tafsirRange": "{name} — commentary on ayat {start}–{end}",
@@ -3207,7 +3215,8 @@
       "translation": "The translation you asked for is not available, so no translation is shown.",
       "transliteration": "The transliteration you asked for is not available, so no transliteration is shown.",
       "tafsir": "The tafsir you asked for is not available, so no tafsir is shown.",
-      "reciter": "The recitation you asked for is not available, so no recitation is offered."
+      "reciter": "The recitation you asked for is not available, so no recitation is offered.",
+      "words": "The word-by-word work you asked for is not available, so the Arabic is shown on its own."
     },
     "reading": {
       "heading": "Reading options",
@@ -3219,8 +3228,9 @@
       "none": "None",
       "apply": "Apply",
       "reset": "Reset reading options",
-      "summary": "Choose a particular translation, a transliteration, a tafsir or a recitation.",
-      "defaultTranslation": "Default translations"
+      "summary": "Choose a particular translation, a tafsir or a recitation, or another published study aid.",
+      "defaultTranslation": "Default translations",
+      "words": "Word by word"
     },
     "size": {
       "small": "Small",
@@ -3317,7 +3327,6 @@
     "worksEmpty": {
       "translations": "No translation has been published yet.",
       "tafsir": "No tafsir has been published yet.",
-      "transliteration": "No transliteration has been published yet.",
       "tajweed": "No tajweed guidance has been published yet.",
       "recitations": "No recitation has been published yet."
     },
@@ -3482,6 +3491,15 @@
         "page": "Page {number}",
         "hizb": "Hizb {number}",
         "sajdah": "Prostration"
+      },
+      "fixedLayer": "Showing {name}, chosen for this page.",
+      "study": {
+        "transliteration": "Transliteration",
+        "transliterationHelp": "Shown under the Arabic in Translation mode.",
+        "words": "Word by word",
+        "wordsHelp": "Each Arabic word with its meaning beneath it, in Translation mode.",
+        "none": "None",
+        "reset": "Choose in these settings instead"
       }
     },
     "start": {
@@ -3556,6 +3574,7 @@
       "filterAll": "All",
       "filterApply": "Show",
       "filterNone": "No recitation matches these choices.",
+      "otherStyles": "Other recitations",
       "count": "{count, plural, one {# recitation} other {# recitations}}",
       "surahs": "{count, plural, one {# Surah} other {# Surahs}}",
       "timed": "Verse by verse",
@@ -3564,6 +3583,16 @@
       "surahList": "Surahs",
       "playSurah": "Play {name}",
       "readSurah": "Read and listen"
+    },
+    "study": {
+      "coverageTerm": "Surahs covered",
+      "wordsTerm": "Words glossed",
+      "words": "{count, plural, =0 {None} one {# word} other {# words}}",
+      "sample": "Sample · {citation}",
+      "readTransliteration": "Read with this transliteration",
+      "readWords": "Read word by word",
+      "howTransliteration": "Open a Surah and choose it in the reader’s settings, under Transliteration, or with the button below.",
+      "howWords": "Open a Surah and choose it in the reader’s settings, under Word by word, or with the button below."
     }
   },
   "quranAdmin": {
@@ -3573,6 +3602,7 @@
       "ayat": "Ayat",
       "translations": "Translations",
       "transliterations": "Transliterations",
+      "word-by-word": "Word by word",
       "tafsir": "Tafsir",
       "recitations": "Recitations",
       "tajweed": "Tajweed"
@@ -3582,6 +3612,7 @@
       "ayat": "Choose a Surah to read its canonical ayat. The text is read-only here; a correction is made one Ayah at a time from that Ayah's own page, with its own permission and confirmation.",
       "translations": "Translation works layered over the canonical text. Each is a separate work with its own source, contributors and lifecycle; editing one never changes the Arabic.",
       "transliterations": "Transliteration works layered over the canonical text, each with its own scheme, source and lifecycle. Nothing is transliterated automatically.",
+      "word-by-word": "Word-by-word works: a gloss for each word of the canonical text, entered exactly as a registered source gives it. Each has its own source, contributors and lifecycle. No gloss is ever generated, and editing one never changes the Arabic.",
       "tafsir": "Tafsir works, each made of entries that cover a range of ayat within one Surah. Editing a tafsir never changes the Arabic.",
       "recitations": "Recitation works: a reciter, and audio segments that each cover a range of ayat within one Surah.",
       "tajweed": "Tajweed rules: sourced, plain-text study aids with a title and a body in each language."
@@ -3589,6 +3620,7 @@
     "create": {
       "translations": "New translation",
       "transliterations": "New transliteration",
+      "word-by-word": "New word-by-word work",
       "tafsir": "New tafsir",
       "recitations": "New recitation",
       "tajweed": "New tajweed rule"
@@ -3618,6 +3650,7 @@
     "unchanged": "Nothing changed, so nothing was saved.",
     "fixtureOverApproved": "A work with a test fixture source cannot be published while the corpus comes from an approved source.",
     "noteUntied": "A translator’s note must answer a mark in its Ayah’s text — “٭”, “*” or “(1)” — or be the only note, opened with no mark. Nothing was saved.",
+    "wordOutsideAyah": "A gloss names a word this Ayah’s text does not have. Nothing was saved.",
     "rateLimited": "Too many uploads in a short time. Wait a few minutes and try again.",
     "noSession": "Sign in again to continue.",
     "secondFactorRequired": "Set up two-step verification and confirm your recovery codes before using this.",
@@ -3838,6 +3871,14 @@
       "noteText": "Note {number}",
       "addNote": "Add a translator’s note",
       "notesHelp": "Each note opens with the mark it answers in the text above, exactly as written — “٭”, “*”, “**” or “1:-” for the mark “(1)” — or with no mark when it is the Ayah’s only note. Empty a note’s text to remove it."
+    },
+    "glosses": {
+      "title": "Glosses",
+      "count": "Ayat glossed",
+      "help": "Choose a Surah, then enter each word’s gloss exactly as the registered source gives it. Each Arabic word is shown from the canonical text, read-only; a sign between words belongs to the word before it. Only the ayat you change are saved; empty a field to remove that word’s gloss.",
+      "word": "Gloss of word {position}",
+      "missing": "No gloss",
+      "save": "Save changed glosses"
     },
     "contributors": {
       "title": "Contributors",

@@ -8,7 +8,9 @@ import {
   QURAN_SURAH_MAX,
   TAFSIR_CONTRIBUTOR_ROLES,
   TRANSLATION_CONTRIBUTOR_ROLES,
+  ayahWords,
   numericSegment,
+  type AyahGlosses,
   type AyahRecord,
   type LayerText,
   type QuranActor,
@@ -21,6 +23,7 @@ import {
   type TranslationNote,
   type TranslationRecord,
   type TransliterationRecord,
+  type WordByWordRecord,
 } from '@minhaj/contracts/quran';
 import type { LanguageView } from '@minhaj/contracts/taxonomy';
 
@@ -50,6 +53,8 @@ import {
   saveTafsirEntry,
   saveTranslation,
   saveTransliteration,
+  saveWordByWord,
+  saveWordGlosses,
 } from './actions';
 import {
   actorOf,
@@ -78,8 +83,10 @@ import {
 } from './shared';
 
 /**
- * The layered works — Translations, Transliterations and Tafsir (ROUTE_MAP.md
- * §7: `/admin/quran/{translations|transliterations|tafsir}`), Phase 18.
+ * The layered works — Translations, Transliterations, word-by-word works and
+ * Tafsir (ROUTE_MAP.md §7:
+ * `/admin/quran/{translations|transliterations|word-by-word|tafsir}`), Phase 18
+ * and Quran Part 7.
  *
  * EACH IS ITS OWN WORK, never a field on the Ayah (DOMAIN_MODEL.md §8.2): its
  * own identity, source, lifecycle and version. `quran.administer` manages them
@@ -98,17 +105,25 @@ import {
  * 6): each note a marker and a plain textarea, saved with the text under the
  * same authority, version and audit, and refused unless every note answers a
  * mark of the Ayah's text (`note-untied`).
+ * A word-by-word work (Quran Part 7) is edited word by word: each Arabic word
+ * of an Ayah, cut from its stored text by the one segmentation (`ayahWords`),
+ * beside a one-line field for that word's gloss — sourced, never generated.
  * Each page of a Surah's editor carries at most one listing page of ayat, which
  * keeps every save comfortably inside the Server Action body cap.
  */
 
-export type LayerKind = 'translation' | 'transliteration' | 'tafsir';
+export type LayerKind = 'translation' | 'transliteration' | 'word-by-word' | 'tafsir';
 
-type LayerRecord = TranslationRecord | TransliterationRecord | TafsirRecord;
+type LayerRecord =
+  TranslationRecord | TransliterationRecord | WordByWordRecord | TafsirRecord;
 
-const PATHS: Record<LayerKind, 'translations' | 'transliterations' | 'tafsir'> = {
+const PATHS: Record<
+  LayerKind,
+  'translations' | 'transliterations' | 'word-by-word' | 'tafsir'
+> = {
   translation: 'translations',
   transliteration: 'transliterations',
+  'word-by-word': 'word-by-word',
   tafsir: 'tafsir',
 };
 
@@ -120,6 +135,7 @@ function listOf(
   const service = quranRuntime().quran;
   if (kind === 'translation') return service.translations(actor, offset);
   if (kind === 'transliteration') return service.transliterations(actor, offset);
+  if (kind === 'word-by-word') return service.wordByWords(actor, offset);
   return service.tafsirs(actor, offset);
 }
 
@@ -131,6 +147,7 @@ function recordOf(
   const service = quranRuntime().quran;
   if (kind === 'translation') return service.translation(actor, id);
   if (kind === 'transliteration') return service.transliteration(actor, id);
+  if (kind === 'word-by-word') return service.wordByWord(actor, id);
   return service.tafsir(actor, id);
 }
 
@@ -182,7 +199,11 @@ async function Directory(kind: LayerKind, { params, searchParams }: ListParams) 
             t('language.label'),
             t('source'),
             t('state'),
-            kind === 'tafsir' ? t('tafsir.entries') : t('texts.count'),
+            kind === 'tafsir'
+              ? t('tafsir.entries')
+              : kind === 'word-by-word'
+                ? t('glosses.count')
+                : t('texts.count'),
             t('version'),
           ]}
         >
@@ -248,6 +269,10 @@ export function TranslationDirectory(props: ListParams) {
 
 export function TransliterationDirectory(props: ListParams) {
   return Directory('transliteration', props);
+}
+
+export function WordByWordDirectory(props: ListParams) {
+  return Directory('word-by-word', props);
 }
 
 export function TafsirDirectory(props: ListParams) {
@@ -359,7 +384,11 @@ async function Editor(kind: LayerKind, { params, searchParams }: EditorParams) {
       <section className="flex flex-col gap-4" aria-labelledby="work-texts">
         <SectionHeading>
           <span id="work-texts">
-            {kind === 'tafsir' ? t('tafsir.entries') : t('texts.title')}
+            {kind === 'tafsir'
+              ? t('tafsir.entries')
+              : kind === 'word-by-word'
+                ? t('glosses.title')
+                : t('texts.title')}
           </span>
         </SectionHeading>
         {surahs.length === 0 ? (
@@ -373,7 +402,19 @@ async function Editor(kind: LayerKind, { params, searchParams }: EditorParams) {
             copy={copy}
           />
         )}
-        {surah === undefined ? null : kind === 'tafsir' ? (
+        {surah === undefined ? null : kind === 'word-by-word' ? (
+          <WordGlosses
+            locale={locale}
+            base={base}
+            record={record}
+            surah={surah}
+            language={languages.get(record.languageCode)}
+            administer={administer}
+            copy={copy}
+            offset={pageOffset(query, QURAN_PAGE)}
+            actor={actor}
+          />
+        ) : kind === 'tafsir' ? (
           <TafsirEntries
             locale={locale}
             record={record}
@@ -414,6 +455,10 @@ export function TransliterationEditor(props: EditorParams) {
   return Editor('transliteration', props);
 }
 
+export function WordByWordEditor(props: EditorParams) {
+  return Editor('word-by-word', props);
+}
+
 export function TafsirEditor(props: EditorParams) {
   return Editor('tafsir', props);
 }
@@ -447,7 +492,9 @@ function WorkForm({
       ? saveTranslation
       : kind === 'transliteration'
         ? saveTransliteration
-        : saveTafsir;
+        : kind === 'word-by-word'
+          ? saveWordByWord
+          : saveTafsir;
 
   return (
     <ActionForm
@@ -896,6 +943,146 @@ function AyahNotes({
       ) : null}
       <p className="text-caption text-foreground-muted">{t('texts.notesHelp')}</p>
     </fieldset>
+  );
+}
+
+/* ===========================================================================
+ * Word-by-word glosses (Quran Part 7)
+ * ========================================================================= */
+
+/**
+ * One Surah's page of a word-by-word work: each Ayah's Arabic words, cut from
+ * its stored text by `ayahWords` and shown exactly as stored, each beside its
+ * gloss. To an administrator every word carries a one-line field named for its
+ * Ayah and position (`gloss-{ayah}-{position}`) in the Surah's one form; an
+ * emptied field removes that word's gloss. To a reader, the glosses as stored.
+ * The words run right to left and wrap, word and field together, on a phone.
+ */
+async function WordGlosses({
+  locale,
+  base,
+  record,
+  surah,
+  language,
+  administer,
+  copy,
+  offset,
+  actor,
+}: {
+  readonly locale: Locale;
+  readonly base: string;
+  readonly record: LayerRecord;
+  readonly surah: SurahRecord;
+  readonly language: LanguageView | undefined;
+  readonly administer: boolean;
+  readonly copy: Copy;
+  readonly offset: number;
+  readonly actor: QuranActor;
+}) {
+  const { t } = copy;
+  const service = quranRuntime().quran;
+  const [glossed, canonical]: [readonly AyahGlosses[], QuranPage<AyahRecord>] =
+    await Promise.all([
+      service.wordByWordGlosses(actor, record.id, surah.number),
+      service.surahAyat(actor, surah.number, offset),
+    ]);
+  const glossesOf = new Map(
+    glossed.map((entry) => [
+      entry.ayah,
+      new Map(entry.glosses.map((gloss) => [gloss.position, gloss.text])),
+    ]),
+  );
+  const direction = language?.direction ?? 'ltr';
+  const label = surahText(surah, locale, copy);
+
+  if (canonical.items.length === 0) return <EmptyState>{t('empty')}</EmptyState>;
+
+  const ayat = canonical.items.map((ayah) => {
+    const stored = glossesOf.get(ayah.ayah);
+    return (
+      <fieldset key={ayah.ayah} className="flex min-w-0 flex-col gap-3">
+        <legend className="pb-1 text-sm font-semibold">
+          {t('ayahName', { surah: ayah.surah, ayah: ayah.ayah })}
+        </legend>
+        <ol dir="rtl" className="flex flex-wrap gap-3">
+          {ayahWords(ayah.text).map((word) => {
+            const id = `gloss-${String(ayah.ayah)}-${String(word.position)}`;
+            const gloss = stored?.get(word.position);
+            const name = t('glosses.word', { position: word.position });
+            return (
+              <li
+                key={word.position}
+                className="flex w-full min-w-0 flex-col gap-1.5 rounded-control border border-border p-2 min-[26rem]:w-44"
+              >
+                <Scripture text={word.text} as="span" />
+                {administer ? (
+                  <>
+                    <label htmlFor={id} className="sr-only">
+                      {name}:{' '}
+                      <span lang="ar" dir="rtl">
+                        {word.text}
+                      </span>
+                    </label>
+                    <TextInput
+                      id={id}
+                      name={id}
+                      defaultValue={gloss ?? ''}
+                      maxLength={QURAN_LIMITS.gloss}
+                      lang={record.languageCode}
+                      dir={direction}
+                    />
+                  </>
+                ) : (
+                  <p className="text-sm">
+                    <span className="sr-only">{name}: </span>
+                    {gloss === undefined ? (
+                      <span className="text-foreground-muted">
+                        {t('glosses.missing')}
+                      </span>
+                    ) : (
+                      <span lang={record.languageCode} dir={direction}>
+                        {gloss}
+                      </span>
+                    )}
+                  </p>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </fieldset>
+    );
+  });
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionHeading>{label}</SectionHeading>
+      <p className="text-sm text-foreground-muted">{t('glosses.help')}</p>
+      {administer ? (
+        <ActionForm
+          action={saveWordGlosses}
+          submitLabel={t('glosses.save')}
+          pendingLabel={t('pending')}
+          messages={copy.messages}
+          preserveInput
+        >
+          <EditIdentity locale={locale} record={record} />
+          <input type="hidden" name="surah" value={String(surah.number)} />
+          {ayat}
+        </ActionForm>
+      ) : (
+        <div className="flex flex-col gap-6">{ayat}</div>
+      )}
+      <Pager
+        offset={offset}
+        total={canonical.total}
+        hrefFor={(number) =>
+          `${base}?surah=${String(surah.number)}${number > 1 ? `&page=${String(number)}` : ''}`
+        }
+        label={label}
+        copy={copy}
+      />
+    </div>
   );
 }
 

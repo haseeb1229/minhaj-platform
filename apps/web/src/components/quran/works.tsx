@@ -7,7 +7,6 @@ import {
   QURAN_PAGE,
   type PublicLayerWork,
   type PublicTajweedRule,
-  type PublicTransliteration,
   type QuranAvailability,
 } from '@minhaj/contracts/quran';
 
@@ -36,20 +35,20 @@ import {
   offsetPathOf,
   pageLinks,
   quranPath,
-  surahPath,
   tafsirPath,
   tajweedLocales,
   tajweedRulePath,
   tajweedTextFor,
   withReading,
 } from './presentation';
-import { quranIndexable, readSurahs } from './read';
+import { quranIndexable } from './read';
 
 /**
- * The layered works and study aids — Tafsir, Transliteration and Tajweed
- * (ROUTE_MAP.md §3.3; DOMAIN_MODEL.md §8.2). The Translations have their own
- * pages since Quran Part 6 (`./translations`), which share this module's
- * language name and contributor line.
+ * The layered works and study aids — Tafsir and Tajweed (ROUTE_MAP.md §3.3;
+ * DOMAIN_MODEL.md §8.2). The Translations have their own pages since Quran
+ * Part 6 (`./translations`), and Transliteration and word by word since Part 7
+ * (`./study-works`); both share this module's language name and contributor
+ * line.
  *
  * EACH WORK IS ITS OWN THING, AND NONE IS PRIVILEGED. A page names the work, its
  * language, its contributors and the attribution its source supplied — never a
@@ -112,30 +111,25 @@ export function Contributors({
   );
 }
 
-/** One work as a row of a listing. */
+/** One Tafsir as a row of the listing. */
 function WorkRow({
   locale,
-  kind,
   work,
   languages,
   names,
   t,
-  scheme = null,
 }: {
   readonly locale: Locale;
-  readonly kind: 'tafsir' | 'transliteration';
   readonly work: PublicLayerWork;
   readonly languages: ReadonlyMap<string, ContentLanguage>;
   readonly names: Names;
   readonly t: QuranTranslator;
-  readonly scheme?: string | null;
 }) {
-  const href = kind === 'tafsir' ? tafsirPath(locale, work.slug) : null;
   return (
     <Panel as="li">
       <div className="flex min-w-0 flex-col gap-2">
         <h2 className="text-lg font-semibold break-words" dir="auto">
-          {href === null ? work.name : <TextLink href={href}>{work.name}</TextLink>}
+          <TextLink href={tafsirPath(locale, work.slug)}>{work.name}</TextLink>
         </h2>
         <p className="text-sm text-foreground-muted">
           <LanguageName languages={languages} code={work.languageCode} />
@@ -144,12 +138,6 @@ function WorkRow({
         {work.description === null ? null : (
           <p className="line-clamp-3 text-sm break-words" dir="auto">
             {work.description}
-          </p>
-        )}
-        {scheme === null ? null : (
-          <p className="text-sm break-words" dir="auto">
-            <span className="text-foreground-muted">{t('work.scheme')}: </span>
-            {scheme}
           </p>
         )}
         {work.attribution === null ? null : (
@@ -163,26 +151,20 @@ function WorkRow({
 }
 
 /* ===========================================================================
- * /quran/tafsir, /quran/transliteration
+ * /quran/tafsir
  * ========================================================================= */
 
 export async function WorkListingPage({
   locale,
   availability,
-  kind,
 }: {
   readonly locale: Locale;
   readonly availability: QuranAvailability;
-  readonly kind: 'tafsir' | 'transliteration';
 }) {
   const t = await getTranslations({ locale, namespace: 'quran' });
   const parts = await quranTrail(locale);
   const reader = quranReadRuntime().reader;
-  const [works, languages, surahs] = await Promise.all([
-    kind === 'tafsir' ? reader.tafsirs() : reader.transliterations(),
-    contentLanguages(),
-    readSurahs(),
-  ]);
+  const [works, languages] = await Promise.all([reader.tafsirs(), contentLanguages()]);
   const names = await referenceNames(
     {
       personIds: works.flatMap((work) => work.contributors.map((c) => c.personId)),
@@ -190,9 +172,7 @@ export async function WorkListingPage({
     },
     locale,
   );
-  const title = t(`sections.${kind}`);
-  const first = surahs[0];
-  const layer = kind;
+  const title = t('sections.tafsir');
 
   return (
     <QuranFrame
@@ -202,46 +182,23 @@ export async function WorkListingPage({
     >
       <div className="flex flex-col gap-2">
         <PageHeading>{title}</PageHeading>
-        <p className="text-foreground-muted">{t(`sectionBody.${kind}`)}</p>
+        <p className="text-foreground-muted">{t('sectionBody.tafsir')}</p>
       </div>
       {works.length === 0 ? (
-        <EmptyState>{t(`worksEmpty.${kind}`)}</EmptyState>
+        <EmptyState>{t('worksEmpty.tafsir')}</EmptyState>
       ) : (
         <ul aria-label={title} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {works.map((work) => (
             <WorkRow
               key={work.id}
               locale={locale}
-              kind={kind}
               work={work}
               languages={languages}
               names={names}
               t={t}
-              scheme={'scheme' in work ? (work as PublicTransliteration).scheme : null}
             />
           ))}
         </ul>
-      )}
-      {kind !== 'transliteration' || first === undefined || works.length === 0 ? null : (
-        <section className="flex flex-col gap-3" aria-labelledby="transliteration-read">
-          <SectionHeading>
-            <span id="transliteration-read">{t('work.readWith')}</span>
-          </SectionHeading>
-          <ul className="flex flex-col gap-2">
-            {works.map((work) => (
-              <li key={work.id}>
-                <TextLink
-                  href={withReading(surahPath(locale, first.number), {
-                    ...NO_READING_CHOICE,
-                    [layer]: work.slug,
-                  })}
-                >
-                  <span dir="auto">{t('work.readWithName', { name: work.name })}</span>
-                </TextLink>
-              </li>
-            ))}
-          </ul>
-        </section>
       )}
     </QuranFrame>
   );

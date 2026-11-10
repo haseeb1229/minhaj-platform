@@ -51,6 +51,8 @@ export interface CatalogueEntry {
   readonly slug: string;
   readonly name: string;
   readonly reciter: string | null;
+  /** The style as the source names it ("Murattal" …), which the chooser groups by. */
+  readonly style: string | null;
   readonly languageCode: string | null;
   readonly timed: boolean;
 }

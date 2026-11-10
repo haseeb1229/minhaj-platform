@@ -827,9 +827,12 @@ describe('pipeline: every content kind end to end', () => {
   });
 
   it('stores an oversize payload as a stub naming its kind, rejected as body-too-long', async () => {
+    // Thirty paragraphs whose words alone outrun the payload ceiling.
+    const repeats =
+      Math.ceil(MIGRATION_LIMITS.payload / (30 * 'paragraph 0 '.length)) + 50;
     const paragraphs = Array.from(
       { length: 30 },
-      (_, n) => `<p>${`paragraph ${n} `.repeat(600)}</p>`,
+      (_, n) => `<p>${`paragraph ${n} `.repeat(repeats)}</p>`,
     ).join('');
     const world = authorisedWorld([
       { ...SAMPLES['editorial.article'], bodyHtml: paragraphs },

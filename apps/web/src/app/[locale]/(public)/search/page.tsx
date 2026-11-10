@@ -727,7 +727,12 @@ function ResultItem({
               ? null
               : quran.layer === 'arabic'
                 ? t('quranArabic')
-                : t('quranLayer', { language: language?.name ?? textLanguage }),
+                : t(
+                    quran.kind === 'transliteration'
+                      ? 'quranTransliteration'
+                      : 'quranTranslation',
+                    { language: language?.name ?? textLanguage },
+                  ),
             // A translation is never presented as the original text.
             hadith === undefined
               ? null

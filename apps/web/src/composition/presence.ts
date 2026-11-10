@@ -57,6 +57,11 @@ const PROBES: Readonly<Record<PresenceSignal, Probe>> = {
     const mode: string | null = availability.active ? availability.mode : null;
     return mode === 'reference';
   },
+  // Quran Part 7: the public reader lists only works public NOW — beside an
+  // active corpus, published, with a registered source the mode admits.
+  quranTransliteration: async () =>
+    (await quranReadRuntime().reader.transliterations()).length > 0,
+  quranWordByWord: async () => (await quranReadRuntime().reader.wordByWords()).length > 0,
   hadith: async () => {
     const availability = await hadithReadRuntime().reader.availability();
     return availability.active && availability.mode === 'approved';

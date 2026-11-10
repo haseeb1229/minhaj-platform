@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import type { Locale } from '../env/shared.ts';
-import { exactText, labelText } from '../exact-text.ts';
+import { exactText, hasControlCharacter, labelText } from '../exact-text.ts';
 
 /**
  * Quran — the platform's strictest-integrity content context
@@ -208,9 +208,11 @@ export const QURAN_LIMITS = Object.freeze({
   layerText: 12_000,
   /** One translator's note (Quran Part 6) — the longest real note is a few thousand. */
   noteText: 20_000,
-  /** A note's opening mark: "", "٭", "**", "٭:", "12:-" (`TRANSLATION_NOTE_MARKER`). */
+  /** A note's opening mark: "", "٭", "**", "٭:", "12:-", "[12]" (`TRANSLATION_NOTE_MARKER`). */
   noteMarker: 8,
   notesPerAyah: 20,
+  /** One word's gloss in a word-by-word work (Quran Part 7): a word or a short phrase. */
+  gloss: 200,
   tafsirText: 60_000,
   name: 200,
   surahName: 100,
@@ -231,6 +233,14 @@ export const QURAN_LIMITS = Object.freeze({
   /** How many mismatches a verification report names before it only counts. */
   reportedMismatches: 20,
 });
+
+/**
+ * A STRUCTURAL CEILING on a word's position in an Ayah (Quran Part 7), as
+ * `ayahWords` counts them. It is NOT the length of any Ayah: how many words
+ * an Ayah has is what its stored text says, and the service refuses a gloss
+ * beyond that count.
+ */
+export const QURAN_WORD_POSITION_MAX = 999;
 
 /** Admin and public listing page size. */
 export const QURAN_PAGE = 50;
@@ -541,9 +551,12 @@ export type LayerTextSave = z.output<typeof layerTextSaveSchema>;
  *   ''          no mark at all (a note the source opens with its words);
  *   ٭ * ** ٭:   a run of one to four stars, Urdu "٭" or ASCII "*" (the source
  *               mixes them), optionally followed by the ":" it sometimes sets;
- *   1:- … 99:-  a numbered entry, answering the translation's "(1)" … "(99)".
+ *   1:- … 99:-  a numbered entry, answering the translation's "(1)" … "(99)";
+ *   [1] … [9999] a bracketed footnote number, answering the SAME mark in the
+ *               translation (QuranEnc's footnotes: owner decision 2026-11-10).
  */
-export const TRANSLATION_NOTE_MARKER = /^(?:|[٭*]{1,4}:?|[1-9][0-9]?:-)$/;
+export const TRANSLATION_NOTE_MARKER =
+  /^(?:|[٭*]{1,4}:?|[1-9][0-9]?:-|\[[1-9][0-9]{0,3}\])$/;
 
 /** One translator's note on one Ayah, as an administrator or the import gives it. */
 export const translationNoteSchema = z.strictObject({
@@ -586,36 +599,47 @@ export type TranslationTextSave = z.output<typeof translationTextSaveSchema>;
 export interface TranslationNoteMark {
   readonly start: number;
   readonly end: number;
-  /** A run of stars, or a numbered mark "(n)". */
-  readonly kind: 'star' | 'numbered';
+  /** A run of stars, a numbered mark "(n)", or a bracketed footnote number "[n]". */
+  readonly kind: 'star' | 'numbered' | 'bracketed';
   /** The run's length in stars, or the mark's number. */
   readonly size: number;
 }
 
-/** Every star run ("٭", "*", "**" …) and numbered mark ("(1)" …) of a text, in order. */
+/**
+ * Every star run ("٭", "*", "**" …), numbered mark ("(1)" …) and bracketed
+ * footnote number ("[1]" …) of a text, in order.
+ */
 export function translationNoteMarks(text: string): readonly TranslationNoteMark[] {
   const marks: TranslationNoteMark[] = [];
-  for (const match of text.matchAll(/[٭*]+|\(([1-9][0-9]?)\)/g)) {
+  for (const match of text.matchAll(/[٭*]+|\(([1-9][0-9]?)\)|\[([1-9][0-9]{0,3})\]/g)) {
     const start = match.index;
-    const numbered = match[1];
+    const [whole, numbered, bracketed] = match;
     marks.push({
       start,
-      end: start + match[0].length,
-      kind: numbered === undefined ? 'star' : 'numbered',
-      size: numbered === undefined ? match[0].length : Number(numbered),
+      end: start + whole.length,
+      kind:
+        numbered !== undefined
+          ? 'numbered'
+          : bracketed !== undefined
+            ? 'bracketed'
+            : 'star',
+      size: Number(numbered ?? bracketed ?? whole.length),
     });
   }
   return marks;
 }
 
-/** A note's marker read for its shape: a star run, a numbered entry, or none. */
-function markerOf(
-  marker: string,
-): { readonly kind: 'star' | 'numbered' | 'none'; readonly size: number } | null {
+/** A note's marker read for its shape: a star run, a numbered entry, a bracketed number, or none. */
+function markerOf(marker: string): {
+  readonly kind: 'star' | 'numbered' | 'bracketed' | 'none';
+  readonly size: number;
+} | null {
   if (!TRANSLATION_NOTE_MARKER.test(marker)) return null;
   if (marker === '') return { kind: 'none', size: 0 };
   const numbered = /^([1-9][0-9]?):-$/.exec(marker);
   if (numbered !== null) return { kind: 'numbered', size: Number(numbered[1]) };
+  const bracketed = /^\[([1-9][0-9]{0,3})\]$/.exec(marker);
+  if (bracketed !== null) return { kind: 'bracketed', size: Number(bracketed[1]) };
   return { kind: 'star', size: marker.replace(':', '').length };
 }
 
@@ -632,8 +656,11 @@ function markerOf(
  *             length ("٭" and "*" are one mark in two spellings, which the
  *             source mixes); a text with NO star mark at all carries its star
  *             notes on the Ayah as a whole, as its source sets them;
+ *   bracketed each "[n]" answers the text's ONE mark "[n]", the notes in the
+ *             order of their marks (QuranEnc, owner decision 2026-11-10);
  *   none      a note opened with no mark is the Ayah's ONLY note, and answers
- *             the one mark the text carries — or the Ayah, when it has none.
+ *             the one star or numbered mark the text carries — or the Ayah,
+ *             when it has none.
  *
  * A mark no note answers stays what it is: text.
  */
@@ -665,17 +692,33 @@ export function tieTranslationNotes(
   const starMarks = marks
     .map((mark, index) => ({ mark, index }))
     .filter(({ mark }) => mark.kind === 'star');
+  const bracketedMarks = marks
+    .map((mark, index) => ({ mark, index }))
+    .filter(({ mark }) => mark.kind === 'bracketed');
+  const unbracketed = marks
+    .map((mark, index) => ({ mark, index }))
+    .filter(({ mark }) => mark.kind !== 'bracketed');
   const taken = new Set<number>();
   let after = -1;
+  let afterBracketed = -1;
   const ties: (number | null)[] = [];
   for (const marker of markers) {
     if (marker.kind === 'numbered') {
       ties.push(numberedMarks[marker.size - 1]?.index ?? null);
       continue;
     }
+    if (marker.kind === 'bracketed') {
+      const same = bracketedMarks.filter(({ mark }) => mark.size === marker.size);
+      const [only] = same;
+      if (only === undefined || same.length !== 1 || only.index <= afterBracketed)
+        return null;
+      afterBracketed = only.index;
+      ties.push(only.index);
+      continue;
+    }
     if (marker.kind === 'none') {
-      if (marks.length > 1) return null;
-      ties.push(marks.length === 1 ? 0 : null);
+      if (unbracketed.length > 1) return null;
+      ties.push(unbracketed[0]?.index ?? null);
       continue;
     }
     if (starMarks.length === 0) {
@@ -693,6 +736,128 @@ export function tieTranslationNotes(
   }
   return ties;
 }
+
+/* ===========================================================================
+ * Word by word (Quran Part 7)
+ * ========================================================================= */
+
+/**
+ * A WORD-BY-WORD work: a gloss for each word of the Arabic, sourced — never
+ * derived — and layered over the Ayah like a Translation (DOMAIN_MODEL.md
+ * §8.7). Its contributors are a Translation's: a gloss renders a word into a
+ * language, as a translator does.
+ */
+export const wordByWordInputSchema = z.strictObject({
+  ...layerWorkFields,
+  contributors: contributors(TRANSLATION_CONTRIBUTOR_ROLES),
+});
+export type WordByWordValue = z.output<typeof wordByWordInputSchema>;
+
+/**
+ * Is this whitespace-separated run of an Ayah's stored text a WORD? It is when
+ * it carries a letter. A run that carries none is a SIGN the text writes
+ * between its words — a pause mark (U+06D6–U+06DC: ۖ ۗ ۘ ۙ ۚ ۛ ۜ), the rub'
+ * al-hizb ۞ that opens a quarter, the sajdah ۩ — and is never counted as one.
+ * The one rule the word-by-word segmentation and a Juz's opening words share.
+ */
+export function isAyahWordToken(token: string): boolean {
+  return /\p{L}/u.test(token);
+}
+
+/** One word of an Ayah, as `ayahWords` cuts it from the stored text. */
+export interface AyahWord {
+  /** Its place among the Ayah's words, from 1. */
+  readonly position: number;
+  /** Where it lies in the stored text (UTF-16 offsets, end exclusive). */
+  readonly start: number;
+  readonly end: number;
+  /** The stored text from `start` to `end`, unchanged. */
+  readonly text: string;
+}
+
+/**
+ * THE WORD SEGMENTATION, ONE PURE FUNCTION (Quran Part 7): an Ayah's words as
+ * its canonical text has them, VERBATIM — the stored text split on whitespace,
+ * nothing respelled, normalised or rejoined.
+ *
+ * A SIGN BELONGS TO A WORD. A run with no letter (`isAyahWordToken`) is not a
+ * word: it is attached to the word BEFORE it, with the space between them, so
+ * "رَيْبَ ۛ" is one word and a pause mark never shifts a position; a sign
+ * that OPENS the text (the ۞ a quarter begins with) has no word before it and
+ * is attached to the word after it. A text with no word has none.
+ *
+ * Every word is one contiguous slice of the stored text, so the words and the
+ * whitespace between them are the text again, exactly. The count it gives is
+ * the count Tanzil's Uthmani text gives when pause signs are not words — the
+ * count the Quranic Arabic Corpus numbers its words by — so a gloss sourced
+ * against those positions lands on its word.
+ */
+export function ayahWords(text: string): readonly AyahWord[] {
+  const spans: { start: number; end: number }[] = [];
+  let leading: number | null = null;
+  for (const match of text.matchAll(/\S+/gu)) {
+    const start = match.index;
+    const end = start + match[0].length;
+    const last = spans.at(-1);
+    if (isAyahWordToken(match[0])) {
+      spans.push({ start: leading ?? start, end });
+      leading = null;
+    } else if (last === undefined) {
+      leading ??= start;
+    } else {
+      last.end = end;
+    }
+  }
+  return spans.map((span, index) => ({
+    position: index + 1,
+    start: span.start,
+    end: span.end,
+    text: text.slice(span.start, span.end),
+  }));
+}
+
+/**
+ * One word's gloss, as its source wrote it: one line, exactly as supplied —
+ * surrounding whitespace and any control character, line breaks included,
+ * are refused rather than repaired.
+ */
+export const wordGlossSchema = z.strictObject({
+  position: z.number().int().min(1).max(QURAN_WORD_POSITION_MAX),
+  text: exactText(QURAN_LIMITS.gloss).refine(
+    (value) => !hasControlCharacter(value),
+    'A gloss is one line.',
+  ),
+});
+export type WordGlossValue = z.output<typeof wordGlossSchema>;
+
+/**
+ * One Ayah's glosses in a word-by-word work, WHOLE: the glosses it keeps, each
+ * position once, in any order; a position not named loses its gloss, and `[]`
+ * removes the Ayah's glosses. Whether a position is one of the Ayah's words is
+ * the service's question (`ayahWords`), asked against the stored text.
+ */
+export const wordGlossChangeSchema = z.strictObject({
+  ayah: ayahNumberSchema,
+  glosses: z
+    .array(wordGlossSchema)
+    .max(QURAN_WORD_POSITION_MAX)
+    .refine(
+      (list) => new Set(list.map((gloss) => gloss.position)).size === list.length,
+      'A word is glossed once.',
+    ),
+});
+export type WordGlossChange = z.output<typeof wordGlossChangeSchema>;
+
+export const wordGlossSaveSchema = z
+  .strictObject({
+    surah: surahNumberSchema,
+    changes: z.array(wordGlossChangeSchema).min(1).max(QURAN_LIMITS.textsPerSave),
+  })
+  .refine(
+    (value) => new Set(value.changes.map((c) => c.ayah)).size === value.changes.length,
+    { path: ['changes'], message: 'An ayah is changed once per save.' },
+  );
+export type WordGlossSave = z.output<typeof wordGlossSaveSchema>;
 
 /** One Tafsir entry over a same-Surah range of ayat. */
 export const tafsirEntryInputSchema = z
@@ -965,6 +1130,10 @@ export interface TransliterationRecord extends LayerWorkRecordBase {
 export interface TafsirRecord extends LayerWorkRecordBase {
   readonly contributors: readonly QuranContributorRef[];
 }
+/** A word-by-word work (Quran Part 7); `textCount` counts the ayat it glosses. */
+export interface WordByWordRecord extends LayerWorkRecordBase {
+  readonly contributors: readonly QuranContributorRef[];
+}
 
 export interface RecitationRecord {
   readonly id: string;
@@ -1047,6 +1216,18 @@ export interface TranslationLayerText extends LayerText {
   readonly notes: readonly TranslationNote[];
 }
 
+/** One word's gloss, exactly as stored. */
+export interface WordGloss {
+  readonly position: number;
+  readonly text: string;
+}
+
+/** One Ayah's glosses in a word-by-word work, in position order (Quran Part 7). */
+export interface AyahGlosses {
+  readonly ayah: number;
+  readonly glosses: readonly WordGloss[];
+}
+
 export interface TafsirEntryRecord {
   readonly id: string;
   readonly surah: number;
@@ -1079,6 +1260,11 @@ export interface TranslationPage {
 }
 export interface TransliterationPage {
   readonly items: readonly TransliterationRecord[];
+  readonly total: number;
+  readonly offset: number;
+}
+export interface WordByWordPage {
+  readonly items: readonly WordByWordRecord[];
   readonly total: number;
   readonly offset: number;
 }
@@ -1154,10 +1340,21 @@ export interface PublicJuz {
   /** Every hizb the source recorded in it, ascending — empty when it recorded none. */
   readonly hizbs: readonly number[];
   /**
-   * The stored text of the Ayah it begins with, unchanged: a Juz is known by
-   * its opening words, and these are the only words it may be shown by.
+   * The stored text, unchanged, of the Ayah a Juz is known by
+   * (`juzOpeningAyah`): a Juz is known by its opening words, and these are the
+   * only words it may be shown by.
    */
-  readonly startText: string;
+  readonly openingText: string;
+}
+
+/**
+ * THE AYAH A JUZ IS KNOWN BY: the one it begins with — except the first Juz,
+ * which begins with Al-Fatihah but is known, as printed mushafs and readers
+ * name it, by the opening of Al-Baqarah (2:1, "الٓمٓ"). Al-Fatihah opens the
+ * whole Quran; it is not the first Juz's name.
+ */
+export function juzOpeningAyah(start: QuranRef): QuranRef {
+  return start.surah === 1 && start.ayah === 1 ? { surah: 2, ayah: 1 } : start;
 }
 
 /** Where an Ayah falls — its citation, hizb and mushaf page — without its text. */
@@ -1201,6 +1398,23 @@ export interface PublicTranslationCoverage {
     readonly surah: number;
     readonly ayat: number;
     readonly notes: number;
+  }[];
+}
+
+/**
+ * How much of the Quran one public Transliteration or word-by-word work
+ * carries (Quran Part 7): for each Surah it has any text in, how many ayat
+ * carry it and — for a word-by-word work — how many words are glossed.
+ * Counted, never claimed: a Surah is complete only when its count equals the
+ * Surah's own.
+ */
+export interface PublicLayerCoverage {
+  readonly workId: string;
+  readonly surahs: readonly {
+    readonly surah: number;
+    readonly ayat: number;
+    /** Words glossed; 0 for a Transliteration, which has no words of its own. */
+    readonly words: number;
   }[];
 }
 

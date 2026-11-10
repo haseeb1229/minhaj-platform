@@ -4,6 +4,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Container, Prose, StatusBadge } from '@/components/ui';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
+import { ROUTE_SIGNALS } from '@/shell/presence';
 import {
   SHELL_ROUTES,
   isAvailable,
@@ -28,7 +29,12 @@ import {
  *     of an authenticated area is not navigation, it is reconnaissance;
  *   - ADMINISTRATIVE routes, which are not in the public registry at all;
  *   - API, `robots.txt` and the machine sitemaps, which are not pages;
- *   - DEFERRED capabilities, which have no route to list.
+ *   - DEFERRED capabilities, which have no route to list;
+ *   - a HIDDEN-UNTIL-PUBLISHED route — the Quran's Transliteration and word
+ *     by word (owner decision 2026-11-09, `ROUTE_SIGNALS`). This page is
+ *     prerendered and cannot know whether a work of either is public now, so
+ *     it never lists one rather than ever listing a 404; while one is public,
+ *     the Quran menu and the Quran landing lead to it.
  *
  * WHAT IT INCLUDES HONESTLY. Reserved shells appear, MARKED as reserved. A
  * visitor looking for the privacy policy is better served by "this page exists
@@ -64,7 +70,9 @@ export default async function HumanSitemapPage({
 
   const listed: readonly AvailableRoute[] = SHELL_ROUTES.filter(
     (route): route is AvailableRoute =>
-      isAvailable(route) && route.visibility === 'public',
+      isAvailable(route) &&
+      route.visibility === 'public' &&
+      !(route.key in ROUTE_SIGNALS),
   );
 
   return (

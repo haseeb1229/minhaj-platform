@@ -6,6 +6,7 @@ import { getTranslations } from 'next-intl/server';
 import { localeSchema, type Locale } from '@minhaj/contracts';
 import {
   QURAN_SURAH_MAX,
+  ayahWords,
   citationOf,
   type LayerText,
   type PublicAyah,
@@ -18,6 +19,7 @@ import {
   type TafsirEntryRecord,
   type TranslationLayerText,
   type TranslationNote,
+  type WordGloss,
 } from '@minhaj/contracts/quran';
 
 import {
@@ -47,12 +49,12 @@ import {
   TextInput,
   TextLink,
 } from '@/components/ui';
+import { arabicIndic } from './citation';
 import { inReadingOrder } from './compare';
 import { ContinueReading, QuickJumpForm } from './landing-islands';
 import {
   AboutThisText,
   LAYER_SIZE,
-  LayerBlock,
   LayerNotices,
   QuranFrame,
   noteLabelsFor,
@@ -76,6 +78,7 @@ import {
   surahPath,
   tafsirPlacement,
   withReading,
+  type LayerRequest,
   type ReadingChoice,
   type ReadingRequest,
   type TextSize,
@@ -94,7 +97,12 @@ import { JuzIndex, type JuzIndexLabels } from './juz-index-island';
 import { QUICK_JUMP_MAX_LENGTH, hizbJuzOf, type JumpSurah } from './quick-jump';
 import { listenLabels } from './recitation-host';
 import { RecitationListen } from './recitation-listen';
-import { ArabicText, TranslationText } from './scripture';
+import {
+  ArabicText,
+  TranslationText,
+  TransliterationText,
+  WordByWordText,
+} from './scripture';
 import { juzSpans, type SurahIndexQuery, type SurahIndexRow } from './surah-index';
 import { SurahIndex, type SurahIndexLabels } from './surah-index-island';
 import {
@@ -118,6 +126,7 @@ import {
 import type { ReadingSeries } from './reader-effects';
 import {
   READER_BOOT_SCRIPT,
+  STUDY_LAYERS_RENDERED_MAX,
   TRANSLATIONS_RENDERED_MAX,
   defaultShown,
 } from './reader-preferences';
@@ -430,7 +439,7 @@ function juzIndexRows(
     return {
       number: juz.number,
       href: juzPath(locale, juz.number),
-      opening: openings ? openingWords(juz.startText) : null,
+      opening: openings ? openingWords(juz.openingText) : null,
       range: juzRange(juz, t),
       facts: juzFacts(juz, t),
       surahs:
@@ -594,13 +603,27 @@ interface TranslationLayer {
   readonly notes: ReadonlyMap<number, readonly TranslationNote[]>;
 }
 
+/** A transliteration or a word-by-word work the page rendered (Quran Part 7). */
+interface StudyLayer {
+  readonly work: PublicLayerWork;
+  readonly language: ReturnType<typeof languageOf>;
+  /** Its place among the rendered works of its kind: the reader shows it by this. */
+  readonly index: number;
+}
+
+interface TransliterationLayer extends StudyLayer {
+  readonly texts: ReadonlyMap<number, string>;
+}
+
+interface WordByWordLayer extends StudyLayer {
+  /** Each glossed Ayah's glosses, in position order. */
+  readonly glosses: ReadonlyMap<number, readonly WordGloss[]>;
+}
+
 interface AyahLayers {
   readonly translations: readonly TranslationLayer[];
-  readonly transliteration: {
-    readonly name: string;
-    readonly language: ReturnType<typeof languageOf>;
-    readonly texts: ReadonlyMap<number, string>;
-  } | null;
+  readonly transliterations: readonly TransliterationLayer[];
+  readonly words: readonly WordByWordLayer[];
   readonly tafsir: {
     readonly name: string;
     readonly language: ReturnType<typeof languageOf>;
@@ -608,10 +631,36 @@ interface AyahLayers {
   } | null;
 }
 
-/** The translations a page renders, and whether the address chose them. */
-interface TranslationSet {
+/** The works of one layer a page renders, and whether the address chose them. */
+interface StudySet {
   readonly works: readonly PublicLayerWork[];
   readonly fixed: boolean;
+}
+
+/**
+ * The translations a page renders, and whether the address chose them — and,
+ * since Quran Part 7, the transliterations and word-by-word works beside them.
+ */
+interface TranslationSet extends StudySet {
+  readonly transliterations: StudySet;
+  readonly words: StudySet;
+}
+
+/**
+ * WHICH TRANSLITERATIONS, AND WHICH WORD-BY-WORD WORKS, A PAGE RENDERS (Quran
+ * Part 7) — the translations' rule: one the address chose is rendered alone
+ * and always shown; one it asked for that is not public is NOTHING (the page
+ * says so); otherwise the public works, up to `STUDY_LAYERS_RENDERED_MAX`,
+ * none shown until the reader chooses one. No public work, nothing rendered.
+ */
+function studySet(
+  chosen: PublicLayerWork | null,
+  request: LayerRequest,
+  options: readonly PublicLayerWork[],
+): StudySet {
+  if (chosen !== null) return { works: [chosen], fixed: true };
+  if (request.state !== 'none') return { works: [], fixed: false };
+  return { works: options.slice(0, STUDY_LAYERS_RENDERED_MAX), fixed: false };
 }
 
 /**
@@ -632,14 +681,22 @@ function translationSet(
   request: ReadingRequest,
   locale: Locale,
 ): TranslationSet {
+  const study = {
+    transliterations: studySet(
+      context.chosen.transliteration,
+      request.transliteration,
+      context.options.transliterations,
+    ),
+    words: studySet(context.chosen.words, request.words, context.options.wordByWords),
+  };
   const chosen = context.chosen.translation;
-  if (chosen !== null) return { works: [chosen], fixed: true };
-  if (request.translation.state !== 'none') return { works: [], fixed: false };
+  if (chosen !== null) return { works: [chosen], fixed: true, ...study };
+  if (request.translation.state !== 'none') return { works: [], fixed: false, ...study };
   const works = inReadingOrder(context.options.translations, locale).slice(
     0,
     TRANSLATIONS_RENDERED_MAX,
   );
-  return { works, fixed: false };
+  return { works, fixed: false, ...study };
 }
 
 /** The indexes shown before the reader chooses: all chosen ones, else the default. */
@@ -663,18 +720,24 @@ async function layersFor(
   shown: readonly number[],
 ): Promise<AyahLayers> {
   const reader = quranReadRuntime().reader;
-  const { transliteration, tafsir } = context.chosen;
-  const [translationTexts, transliterationTexts, tafsirEntries] = await Promise.all([
-    Promise.all(
-      set.works.map((work) => reader.translationTexts(work.id, surah, from, to)),
-    ),
-    transliteration === null
-      ? Promise.resolve([])
-      : reader.transliterationTexts(transliteration.id, surah, from, to),
-    tafsir === null
-      ? Promise.resolve([])
-      : reader.tafsirEntries(tafsir.id, surah, from, to),
-  ]);
+  const { tafsir } = context.chosen;
+  const [translationTexts, transliterationTexts, glosses, tafsirEntries] =
+    await Promise.all([
+      Promise.all(
+        set.works.map((work) => reader.translationTexts(work.id, surah, from, to)),
+      ),
+      Promise.all(
+        set.transliterations.works.map((work) =>
+          reader.transliterationTexts(work.id, surah, from, to),
+        ),
+      ),
+      Promise.all(
+        set.words.works.map((work) => reader.wordByWordGlosses(work.id, surah, from, to)),
+      ),
+      tafsir === null
+        ? Promise.resolve([])
+        : reader.tafsirEntries(tafsir.id, surah, from, to),
+    ]);
   return {
     translations: set.works.map((work, index) => ({
       work,
@@ -683,14 +746,20 @@ async function layersFor(
       texts: byAyah(translationTexts[index] ?? []),
       notes: notesByAyah(translationTexts[index] ?? []),
     })),
-    transliteration:
-      transliteration === null
-        ? null
-        : {
-            name: transliteration.name,
-            language: languageOf(languages, transliteration.languageCode),
-            texts: byAyah(transliterationTexts),
-          },
+    transliterations: set.transliterations.works.map((work, index) => ({
+      work,
+      index,
+      language: languageOf(languages, work.languageCode),
+      texts: byAyah(transliterationTexts[index] ?? []),
+    })),
+    words: set.words.works.map((work, index) => ({
+      work,
+      index,
+      language: languageOf(languages, work.languageCode),
+      glosses: new Map(
+        (glosses[index] ?? []).map((entry) => [entry.ayah, entry.glosses] as const),
+      ),
+    })),
     tafsir:
       tafsir === null
         ? null
@@ -702,7 +771,12 @@ async function layersFor(
   };
 }
 
-const NO_LAYERS: AyahLayers = { translations: [], transliteration: null, tafsir: null };
+const NO_LAYERS: AyahLayers = {
+  translations: [],
+  transliterations: [],
+  words: [],
+  tafsir: null,
+};
 
 /* ===========================================================================
  * One Ayah, as a Surah, a page, a Juz or a citation shows it
@@ -962,6 +1036,83 @@ function AyahMarks({
 }
 
 /**
+ * WORD BY WORD (Quran Part 7): one Ayah's words with each rendered work's
+ * glosses — a sibling of its Arabic line, which the reader hides while one of
+ * these is shown (`globals.css`). An Ayah a work does not gloss renders none
+ * of it, so its plain line stays. The words are cut once, by the contract's
+ * one segmentation, from the stored text.
+ */
+function AyahWordByWord({
+  ayah,
+  layers,
+  idBase,
+  t,
+}: {
+  readonly ayah: PublicAyah;
+  readonly layers: AyahLayers;
+  readonly idBase: string;
+  readonly t: QuranTranslator;
+}) {
+  const glossed = layers.words.flatMap((layer) => {
+    const glosses = layer.glosses.get(ayah.ayah);
+    return glosses === undefined ? [] : [{ layer, glosses }];
+  });
+  if (glossed.length === 0) return null;
+  const words = ayahWords(ayah.text);
+  const mark = `۝${arabicIndic(ayah.ayah)}`;
+  return glossed.map(({ layer, glosses }) => (
+    <WordByWordText
+      key={layer.work.id}
+      id={layer.index === 0 ? idBase : `${idBase}-${String(layer.index + 1)}`}
+      label={t('layer.words', { name: layer.work.name })}
+      name={layer.work.name}
+      words={words}
+      glosses={glosses}
+      language={layer.language}
+      index={layer.index}
+      mark={mark}
+    />
+  ));
+}
+
+/**
+ * One Ayah's rendered transliterations (Quran Part 7), between its Arabic and
+ * its translations; the reader shows the one chosen, and none by default.
+ */
+function AyahTransliterations({
+  ayah,
+  layers,
+  idBase,
+  t,
+}: {
+  readonly ayah: number;
+  readonly layers: AyahLayers;
+  readonly idBase: string;
+  readonly t: QuranTranslator;
+}) {
+  const shown = layers.transliterations.flatMap((layer) => {
+    const text = layer.texts.get(ayah);
+    return text === undefined ? [] : [{ layer, text }];
+  });
+  if (shown.length === 0) return null;
+  return (
+    <div className="quran-transliterations flex flex-col gap-3">
+      {shown.map(({ layer, text }) => (
+        <TransliterationText
+          key={layer.work.id}
+          id={layer.index === 0 ? idBase : `${idBase}-${String(layer.index + 1)}`}
+          label={t('layer.transliteration', { name: layer.work.name })}
+          name={layer.work.name}
+          text={text}
+          language={layer.language}
+          index={layer.index}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
  * One Ayah as a list item: an `<article>` NAMED "Surah 2, Ayah 3" so a screen
  * reader announces the verse it is in, the stable `id="ayah-2-3"` every
  * listing uses, the citation chip (keyboard-reachable, and the way to its
@@ -990,7 +1141,6 @@ function AyahItem({
   const ref = { surah: ayah.surah, ayah: ayah.ayah };
   const key = `${String(ayah.surah)}-${String(ayah.ayah)}`;
   const canonical = ayahPath(locale, ref);
-  const transliteration = layers.transliteration?.texts.get(ayah.ayah);
   const tafsirLayer = layers.tafsir;
   const tafsir = tafsirLayer?.placed.get(ayah.ayah) ?? [];
   const translations = layers.translations.flatMap((layer) => {
@@ -1043,6 +1193,7 @@ function AyahItem({
           ayah={ayah.ayah}
           open={t('reader.openAyah', ref)}
         />
+        <AyahWordByWord ayah={ayah} layers={layers} idBase={`words-${key}`} t={t} />
         {ayah.sajdah === null ? null : (
           <span
             className="quran-mark-sajdah quran-mark-division"
@@ -1051,6 +1202,12 @@ function AyahItem({
             {t('reader.marks.sajdah')}
           </span>
         )}
+        <AyahTransliterations
+          ayah={ayah.ayah}
+          layers={layers}
+          idBase={`transliteration-${key}`}
+          t={t}
+        />
         {translations.length === 0 ? null : (
           <div className="quran-translations">
             {translations.map(({ layer, text, notes }) => (
@@ -1066,18 +1223,6 @@ function AyahItem({
                 noteLabels={noteLabelsFor(locale, t, notes.length)}
               />
             ))}
-          </div>
-        )}
-        {layers.transliteration === null || transliteration === undefined ? null : (
-          <div className="quran-layer max-w-[var(--measure-prose)]">
-            <LayerBlock
-              id={`transliteration-${key}`}
-              label={t('layer.transliteration', { name: layers.transliteration.name })}
-              text={transliteration}
-              language={layers.transliteration.language}
-              size={choice.size}
-              muted
-            />
           </div>
         )}
         {tafsirLayer === null || tafsir.length === 0 ? null : (
@@ -1236,6 +1381,14 @@ async function controlLabels(locale: Locale): Promise<ReaderControlLabels> {
       help: t('notes.display.help'),
     },
     noteTitle: t('notes.title'),
+    study: {
+      transliteration: t('reader.study.transliteration'),
+      transliterationHelp: t('reader.study.transliterationHelp'),
+      words: t('reader.study.words'),
+      wordsHelp: t('reader.study.wordsHelp'),
+      none: t('reader.study.none'),
+      reset: t('reader.study.reset'),
+    },
     reset: t('reader.reset'),
     kept: t('reader.kept'),
     moreOptions: t('reader.moreOptions'),
@@ -1303,8 +1456,8 @@ async function ReadingFrame({
   } | null;
   /** The reading the page's windows belong to, and where the shown one starts in it. */
   readonly series: ReadingSeries | null;
-  /** This page with its default translations: the address chose none. */
-  readonly defaultsHref: string;
+  /** This page without the work the address chose for a layer: its defaults again. */
+  readonly defaultsHref: (layer: 'translation' | 'transliteration' | 'words') => string;
   readonly children: ReactNode;
 }) {
   const t = await getTranslations({ locale, namespace: 'quran' });
@@ -1312,6 +1465,21 @@ async function ReadingFrame({
   const explicitSize = request.size !== DEFAULT_TEXT_SIZE;
   const defaults = shownByDefault(set, locale);
   const chosen = set.fixed ? set.works[0] : undefined;
+  // The study layers the page rendered (Quran Part 7), as the settings list them.
+  const study = (layer: 'transliteration' | 'words', rendered: StudySet) => ({
+    works: rendered.works.map((work) => ({
+      slug: work.slug,
+      name: work.name,
+      language: languageOf(languages, work.languageCode).name,
+    })),
+    fixed:
+      rendered.fixed && rendered.works[0] !== undefined
+        ? {
+            text: t('reader.fixedLayer', { name: rendered.works[0].name }),
+            resetHref: defaultsHref(layer),
+          }
+        : null,
+  });
 
   return (
     <div
@@ -1325,6 +1493,14 @@ async function ReadingFrame({
       data-leading="comfortable"
       data-layout="stacked"
       data-notes="request"
+      data-transliterations={set.transliterations.works
+        .map((work) => work.slug)
+        .join(' ')}
+      data-transliteration={set.transliterations.fixed ? '0' : ''}
+      {...(set.transliterations.fixed ? { 'data-transliteration-fixed': '' } : {})}
+      data-word-works={set.words.works.map((work) => work.slug).join(' ')}
+      data-words={set.words.fixed ? '0' : ''}
+      {...(set.words.fixed ? { 'data-words-fixed': '' } : {})}
       suppressHydrationWarning
       className={`quran-reader quran-size-${request.size} flex min-w-0 flex-col`}
     >
@@ -1353,9 +1529,11 @@ async function ReadingFrame({
                 ? null
                 : {
                     text: t('reader.fixed', { name: chosen.name }),
-                    resetHref: defaultsHref,
+                    resetHref: defaultsHref('translation'),
                   }
             }
+            transliterations={study('transliteration', set.transliterations)}
+            words={study('words', set.words)}
             explicitSize={explicitSize}
             modes={modes}
             initialJuz={initialJuz}
@@ -1627,7 +1805,7 @@ export async function SurahPage({
             offset: window.start - 1,
             total: surah.ayahCount,
           }}
-          defaultsHref={withReading(path, { ...choice, translation: null })}
+          defaultsHref={(layer) => withReading(path, { ...choice, [layer]: null })}
         >
           {earlier === null ? null : (
             <p className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-4 text-sm">
@@ -2009,7 +2187,9 @@ export async function MushafPage({
           modes
           surah={null}
           series={null}
-          defaultsHref={withReading(path, { ...context.choice, translation: null })}
+          defaultsHref={(layer) =>
+            withReading(path, { ...context.choice, [layer]: null })
+          }
         >
           <div id={TEXT_ID} tabIndex={-1} className="flex scroll-mt-20 flex-col">
             <SurahRuns
@@ -2171,7 +2351,20 @@ export async function AyahPage({
     { name: surahHeading, path: surahPath(locale, surah.number) },
     { name: heading, path },
   ];
-  const transliteration = layers.transliteration?.texts.get(ref.ayah);
+  // A transliteration or a word-by-word work the ADDRESS chose that does not
+  // carry this Ayah is said to be missing, as a chosen translation is.
+  const missing = [
+    ...(set.transliterations.fixed
+      ? layers.transliterations
+          .filter((layer) => !layer.texts.has(ref.ayah))
+          .map((layer) => t('layerMissing.transliteration', { name: layer.work.name }))
+      : []),
+    ...(set.words.fixed
+      ? layers.words
+          .filter((layer) => !layer.glosses.has(ref.ayah))
+          .map((layer) => t('layerMissing.words', { name: layer.work.name }))
+      : []),
+  ];
   const tafsirLayer = layers.tafsir;
   const tafsir = tafsirLayer?.placed.get(ref.ayah) ?? [];
   const chosenTranslation = context.chosen.translation;
@@ -2233,7 +2426,7 @@ export async function AyahPage({
           modes={false}
           surah={null}
           series={null}
-          defaultsHref={withReading(path, { ...choice, translation: null })}
+          defaultsHref={(layer) => withReading(path, { ...choice, [layer]: null })}
         >
           <div
             data-ayah={citationOf(ref)}
@@ -2250,6 +2443,18 @@ export async function AyahPage({
               text={ayah.text}
               ayah={ayah.ayah}
             />
+            <AyahWordByWord ayah={ayah} layers={layers} idBase="ayah-words" t={t} />
+            <AyahTransliterations
+              ayah={ref.ayah}
+              layers={layers}
+              idBase="ayah-transliteration"
+              t={t}
+            />
+            {missing.map((text) => (
+              <p key={text} className="text-sm text-foreground-muted">
+                {text}
+              </p>
+            ))}
             {chosenTranslation !== null &&
             layers.translations[0]?.texts.get(ref.ayah) === undefined ? (
               <p className="text-sm text-foreground-muted">
@@ -2279,24 +2484,6 @@ export async function AyahPage({
                 );
               })}
             </div>
-            {layers.transliteration === null ? null : transliteration === undefined ? (
-              <p className="text-sm text-foreground-muted">
-                {t('layerMissing.transliteration', { name: layers.transliteration.name })}
-              </p>
-            ) : (
-              <div className="max-w-[var(--measure-prose)]">
-                <LayerBlock
-                  id="ayah-transliteration"
-                  label={t('layer.transliteration', {
-                    name: layers.transliteration.name,
-                  })}
-                  text={transliteration}
-                  language={layers.transliteration.language}
-                  size={choice.size}
-                  muted
-                />
-              </div>
-            )}
           </div>
         </ReadingFrame>
 
@@ -2495,7 +2682,7 @@ function JuzOpening({
   readonly label: string;
   readonly className: string;
 }) {
-  const opening = openingWords(juz.startText);
+  const opening = openingWords(juz.openingText);
   if (opening.text === '') return null;
   return (
     // Right to left whatever the interface: the words begin on the right.
@@ -2808,11 +2995,13 @@ export async function JuzPage({
               offset: shown.offset,
               total: juz.ayahCount,
             }}
-            defaultsHref={withJuzWindow(
-              withReading(path, { ...choice, translation: null }),
-              windows,
-              index,
-            )}
+            defaultsHref={(layer) =>
+              withJuzWindow(
+                withReading(path, { ...choice, [layer]: null }),
+                windows,
+                index,
+              )
+            }
           >
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border py-4 text-sm">
               {index === 0 ? null : (

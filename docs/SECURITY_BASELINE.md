@@ -380,11 +380,29 @@ is layered text of its Translation, never canonical Arabic and never a field on 
 - **Typed, bounded and written once.** The note names its text by that text's own composite key
   (NO ACTION), so a note cannot exist without its text and a text cannot be removed from under its
   notes; at most twenty to a text, each non-empty within 20,000 UTF-16 units, its marker one of the
-  exact shapes of `TRANSLATION_NOTE_MARKER` (`QuranTranslationNote_ck`, `_marker_ck`). The runtime
+  exact shapes of `TRANSLATION_NOTE_MARKER` (`QuranTranslationNote_ck`, `_marker_ck`; since 2026-11-10 also a bracketed footnote number "[1]" … "[9999]"). The runtime
   principal holds SELECT, INSERT and DELETE only — UPDATE and ALTER are denied — and trigger 51403
   refuses an edit in place or an Ayah's notes numbered with a gap, so a change replaces an Ayah's
   notes whole. Whether a note answers a mark of its text is one pure rule the service applies
   (`tieTranslationNotes`, refusal `note-untied`); nothing is re-placed to make it fit.
+
+**Quran Part 7 — word by word (DOMAIN_MODEL.md §8.7).** Rules 1–5 hold: a gloss is layered text of
+its word-by-word work, never canonical Arabic and never a field on the Ayah, and nothing derives one
+from the Arabic.
+
+- **Same authority as every layered work.** `QuranWordByWord`, its contributors and its glosses are
+  written only through Quran's administrative service under `quran.administer` (re-read live), each
+  write one transaction under the work's expected version with its audit entry (counts and field
+  names, never a word). A work is public exactly when the one public predicate says so, and its
+  glosses only then; they are not indexed for search.
+- **Typed and bounded.** A gloss names its Ayah by the canonical citation (a real foreign key, NO
+  ACTION) and its word by position, one gloss per (work, Surah, Ayah, position); position 1–999 and
+  one line of at most 200 UTF-16 units (`QuranWordByWordGloss_ck`); the service refuses a position
+  beyond the Ayah's words as the one segmentation counts them (`word-outside-ayah`). The runtime
+  principal holds SELECT, INSERT and UPDATE on the work (UPDATE of `slug` denied, no DELETE),
+  SELECT, INSERT and DELETE on its contributors, and SELECT, INSERT, UPDATE and DELETE on its
+  glosses with UPDATE of their key columns denied; ALTER is denied on all three. Trigger 51404 keeps
+  a published work's last gloss.
 
 ### 5.2 Hadith
 

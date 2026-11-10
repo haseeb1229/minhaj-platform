@@ -722,6 +722,94 @@ body:has([data-quran-dock]) {
   line-height: 2.1;
 }
 
+/*
+ * QURAN PART 7 — TRANSLITERATION AND WORD BY WORD. Each is chosen, never
+ * shown by default: the reader element names the shown work's index
+ * (`data-transliteration`, `data-words`), set by the server for a work the
+ * address chose and by the boot script before the first paint for a stored
+ * choice, so nothing moves once the text is drawn. A page renders at most two
+ * of each (`STUDY_LAYERS_RENDERED_MAX`).
+ *
+ * The transliteration sits between the Arabic and the translations, a little
+ * smaller and quieter than a translation, italic only in a Latin script.
+ * Word by word REPLACES the plain Arabic line of an Ayah it glosses, in
+ * Translation mode only: each word a unit with its gloss beneath, wrapping
+ * right to left. The reading and page modes keep the flowing Arabic alone.
+ */
+.quran-reader:not([data-transliteration='0']) [data-transliteration-index='0'],
+.quran-reader:not([data-transliteration='1']) [data-transliteration-index='1'] {
+  display: none;
+}
+.quran-transliteration-text {
+  font-size: calc(
+    0.95 * var(--quran-translation-base, 1.0625rem) * var(--quran-translation-scale, 1)
+  );
+  line-height: calc(1.6 * var(--quran-leading, 1));
+  font-style: italic;
+  color: var(--color-foreground-muted);
+}
+.quran-transliteration-text:is(:lang(ur), :lang(ar), :lang(fa)) {
+  font-style: normal;
+  line-height: calc(2 * var(--quran-leading, 1));
+}
+/* Outside a reader (a listing's sample) a word-by-word block simply shows. */
+.quran-reader .quran-wbw {
+  display: none;
+}
+.quran-reader[data-mode='translation'][data-words='0'] [data-words-index='0'],
+.quran-reader[data-mode='translation'][data-words='1'] [data-words-index='1'] {
+  display: flex;
+}
+.quran-reader[data-mode='translation'][data-words='0']
+  :has(> [data-words-index='0'])
+  > .quran-ayah-arabic,
+.quran-reader[data-mode='translation'][data-words='1']
+  :has(> [data-words-index='1'])
+  > .quran-ayah-arabic {
+  display: none;
+}
+.quran-wbw-words {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem 1.25rem;
+}
+.quran-wbw-word {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  text-align: center;
+}
+.quran-wbw-arabic {
+  font-size: calc(var(--quran-arabic-base, 1.625rem) * var(--quran-arabic-scale, 1));
+  line-height: calc(1.9 * var(--quran-leading, 1));
+  overflow-wrap: anywhere;
+}
+.quran-wbw-gloss {
+  max-width: 12rem;
+  font-size: calc(
+    0.85 * var(--quran-translation-base, 1.0625rem) * var(--quran-translation-scale, 1)
+  );
+  line-height: 1.35;
+  color: var(--color-foreground-muted);
+  overflow-wrap: anywhere;
+}
+.quran-wbw-gloss:lang(ur) {
+  line-height: 1.9;
+}
+.quran-wbw-end {
+  align-self: center;
+}
+/* The Ayah-end mark after the words: the plain line's mark, its own element. */
+.quran-wbw-mark {
+  font-size: calc(var(--quran-arabic-base, 1.625rem) * var(--quran-arabic-scale, 1));
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
 /* Copy, Share, Save-in-place and the reading-mode Ayah button need script. */
 .quran-reader:not([data-enhanced]) .quran-ayah-tool,
 .quran-ayah-open {
@@ -778,7 +866,13 @@ body:has([data-quran-dock]) {
   padding: 0;
 }
 .quran-reader:is([data-mode='reading'], [data-mode='mushaf'])
-  :is(.quran-ayah-head, .quran-translations, .quran-layer, .quran-tafsir) {
+  :is(
+    .quran-ayah-head,
+    .quran-translations,
+    .quran-transliterations,
+    .quran-layer,
+    .quran-tafsir
+  ) {
   display: none;
 }
 .quran-reader[data-enhanced]:is([data-mode='reading'], [data-mode='mushaf'])

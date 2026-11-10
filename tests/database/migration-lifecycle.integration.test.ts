@@ -461,6 +461,10 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'QuranRecitationTiming',
         // Quran Part 6 — a translation text's translator's notes.
         'QuranTranslationNote',
+        // Quran Part 7 — a word-by-word work, its contributors and its glosses.
+        'QuranWordByWord',
+        'QuranWordByWordContributor',
+        'QuranWordByWordGloss',
         // Phase 19 — Hadith: registered source systems, editions and
         // activations; the canonical structure and source-qualified records with
         // immutable history, gradings, verification, citation mapping and

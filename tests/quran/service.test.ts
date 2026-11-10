@@ -140,6 +140,10 @@ const READS = [
   ['recitation', ID(1)],
   ['tajweedRules'],
   ['tajweedRule', ID(1)],
+  // Quran Part 7.
+  ['wordByWords', 0],
+  ['wordByWord', ID(1)],
+  ['wordByWordGlosses', ID(1), 2],
 ] as const;
 
 /** Every change, called with well-formed input. */
@@ -223,6 +227,10 @@ const WRITES = [
     },
   ],
   ['setTajweedRuleState', { id: ID(1), expectedVersion: 3, state: 'draft' }],
+  // Quran Part 7: a word-by-word work is managed exactly as a Translation is.
+  ['createWordByWord', { value: translationValue() }],
+  ['updateWordByWord', { id: ID(1), expectedVersion: 3, value: translationValue() }],
+  ['setWordByWordState', { id: ID(1), expectedVersion: 3, state: 'archived' }],
 ] as const;
 
 type AnyService = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -575,6 +583,136 @@ describe('translator’s notes are tied to their text (Quran Part 6)', () => {
       ),
     ).toBe('invalid');
     expect(calls).toEqual([]);
+  });
+});
+
+describe('every gloss lands on a word its Ayah has (Quran Part 7)', () => {
+  /**
+   * The canonical page the service reads: 2:1 has three words — a pause sign
+   * is not one — and 2:2 one word opened by the rub' al-hizb. Neutral Arabic,
+   * never an Ayah.
+   */
+  const page = {
+    items: [
+      { surah: 2, ayah: 1, text: `${NEUTRAL.split(' ').slice(0, 2).join(' ')} ۚ اختبار` },
+      { surah: 2, ayah: 2, text: '۞ اختبار' },
+    ],
+    total: 2,
+    offset: 0,
+  };
+  const save = (changes: unknown) => ({
+    id: ID(1),
+    expectedVersion: 3,
+    surah: 2,
+    changes,
+  });
+
+  it('saves glosses on the words the stored text has, exactly as given', async () => {
+    const { service, calls } = harness({ records: { surahAyat: page } });
+    const changes = [
+      {
+        ayah: 1,
+        glosses: [
+          { position: 3, text: 'NON_QURAN_FIXTURE third' },
+          { position: 1, text: 'NON_QURAN_FIXTURE first' },
+        ],
+      },
+      { ayah: 2, glosses: [] },
+    ];
+    expect(await failure(service.saveWordByWordGlosses(actor, save(changes)))).toBe(
+      'accepted',
+    );
+    // ONE canonical page is read for the two ayat, then the save.
+    expect(calls.map((call) => call.method)).toEqual([
+      'surahAyat',
+      'saveWordByWordGlosses',
+    ]);
+    expect(calls[0]?.args).toEqual([2, 0]);
+    expect(calls[1]?.args[0]).toEqual({ actorId: actor.accountId, ...save(changes) });
+  });
+
+  it('refuses a gloss beyond the Ayah’s words, and never moves it to one that exists', async () => {
+    const { service, calls } = harness({ records: { surahAyat: page } });
+    // 2:1 has three words: the pause sign is the third word's, not a fourth.
+    expect(
+      await failure(
+        service.saveWordByWordGlosses(
+          actor,
+          save([{ ayah: 1, glosses: [{ position: 4, text: 'NON_QURAN_FIXTURE' }] }]),
+        ),
+      ),
+    ).toBe('word-outside-ayah');
+    // 2:2's opening ۞ is its one word's, not a word of its own.
+    expect(
+      await failure(
+        service.saveWordByWordGlosses(
+          actor,
+          save([{ ayah: 2, glosses: [{ position: 2, text: 'NON_QURAN_FIXTURE' }] }]),
+        ),
+      ),
+    ).toBe('word-outside-ayah');
+    expect(calls.some((call) => call.method === 'saveWordByWordGlosses')).toBe(false);
+  });
+
+  it('refuses an Ayah the Surah does not hold', async () => {
+    const { service, calls } = harness({ records: { surahAyat: page } });
+    expect(
+      await failure(
+        service.saveWordByWordGlosses(
+          actor,
+          save([{ ayah: 60, glosses: [{ position: 1, text: 'NON_QURAN_FIXTURE' }] }]),
+        ),
+      ),
+    ).toBe('outside-surah');
+    // The page that would hold 2:60 is the one read.
+    expect(calls[0]?.args).toEqual([2, 50]);
+    expect(calls.some((call) => call.method === 'saveWordByWordGlosses')).toBe(false);
+  });
+
+  it('refuses before reading anything without quran.administer, and malformed glosses', async () => {
+    const reader = harness({ permissions: ['quran.read'], records: { surahAyat: page } });
+    expect(
+      await failure(
+        reader.service.saveWordByWordGlosses(
+          actor,
+          save([{ ayah: 1, glosses: [{ position: 1, text: 'x' }] }]),
+        ),
+      ),
+    ).toBe('denied');
+    expect(reader.calls).toEqual([]);
+    const { service, calls } = harness({ records: { surahAyat: page } });
+    for (const glosses of [
+      [{ position: 0, text: 'x' }],
+      [{ position: 1, text: ' x' }],
+      [{ position: 1, text: 'a\nb' }],
+      [
+        { position: 1, text: 'a' },
+        { position: 1, text: 'b' },
+      ],
+    ])
+      expect(
+        await failure(service.saveWordByWordGlosses(actor, save([{ ayah: 1, glosses }]))),
+        JSON.stringify(glosses),
+      ).toBe('invalid');
+    expect(calls).toEqual([]);
+  });
+
+  it('publishes a word-by-word work only with a registered source and glosses', async () => {
+    const published = { id: ID(1), expectedVersion: 3, state: 'published' };
+    const bare = harness({ records: { wordByWord: layerRecord({ textCount: 0 }) } });
+    expect(await failure(bare.service.setWordByWordState(actor, published))).toBe(
+      'text-required',
+    );
+    const unsourced = harness({
+      records: { wordByWord: layerRecord({ sourceId: null, sourceAuthority: null }) },
+    });
+    expect(await failure(unsourced.service.setWordByWordState(actor, published))).toBe(
+      'source-required',
+    );
+    const ready = harness({ records: { wordByWord: layerRecord() } });
+    expect(await failure(ready.service.setWordByWordState(actor, published))).toBe(
+      'accepted',
+    );
   });
 });
 

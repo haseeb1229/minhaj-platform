@@ -4,7 +4,12 @@ import { useId } from 'react';
 
 import { Icon } from '@/components/ui/icon';
 import { recitationLabel } from './recitation-plan';
-import { chooseRecitation, playFrom, usePlayer } from './recitation-store';
+import {
+  chooseRecitation,
+  playFrom,
+  usePlayer,
+  type CatalogueEntry,
+} from './recitation-store';
 
 /**
  * A PAGE'S LISTEN CONTROLS (Quran Part 5): which recitation, and Play — from
@@ -16,6 +21,45 @@ import { chooseRecitation, playFrom, usePlayer } from './recitation-store';
  * A recitation without per-Ayah timing is said to be one in words: it plays
  * whole Surahs, and no verse is highlighted.
  */
+
+/**
+ * A recitation chooser's options, in the catalogue's own order
+ * (`recitationGroups`, applied where the catalogue is built): each style's run
+ * an `<optgroup>` named as the source names the style, once two or more
+ * styles are offered; recitations that name no style follow, ungrouped.
+ */
+export function RecitationOptions({
+  catalogue,
+}: {
+  readonly catalogue: readonly CatalogueEntry[];
+}) {
+  const runs: { style: string | null; entries: CatalogueEntry[] }[] = [];
+  for (const entry of catalogue) {
+    const last = runs.at(-1);
+    if (last?.style === entry.style) last.entries.push(entry);
+    else runs.push({ style: entry.style, entries: [entry] });
+  }
+  const option = (entry: CatalogueEntry) => (
+    <option key={entry.slug} value={entry.slug}>
+      {recitationLabel(entry)}
+    </option>
+  );
+  if (runs.filter((run) => run.style !== null).length < 2)
+    return <>{catalogue.map(option)}</>;
+  return (
+    <>
+      {runs.map((run, index) =>
+        run.style === null ? (
+          run.entries.map(option)
+        ) : (
+          <optgroup key={`${String(index)}-${run.style}`} label={run.style}>
+            {run.entries.map(option)}
+          </optgroup>
+        ),
+      )}
+    </>
+  );
+}
 
 export interface ListenLabels {
   readonly heading: string;
@@ -53,11 +97,7 @@ export function RecitationListen({
           onChange={(event) => chooseRecitation(event.currentTarget.value)}
           className="min-h-11 w-full min-w-0 rounded-control border border-border-strong bg-surface px-3 text-sm text-foreground"
         >
-          {state.catalogue.map((entry) => (
-            <option key={entry.slug} value={entry.slug}>
-              {recitationLabel(entry)}
-            </option>
-          ))}
+          <RecitationOptions catalogue={state.catalogue} />
         </select>
       </label>
       <button

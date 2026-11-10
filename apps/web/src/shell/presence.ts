@@ -10,12 +10,18 @@
  * can answer — the search page's result-type facets and its "browse instead"
  * links, the Quran text's licence attribution in the footer, and the
  * administration dashboard's status. It does NOT decide the header or footer
- * navigation: from Rebaseline R1 until the owner's direction of 2026-11-08 it
- * did, and hid every area without published content; the navigation is now
- * unconditional (`@/shell/menus`, INFORMATION_ARCHITECTURE.md §2.2).
+ * navigation as a whole: from Rebaseline R1 until the owner's direction of
+ * 2026-11-08 it did, and hid every area without published content; the
+ * navigation is now unconditional (`@/shell/menus`, INFORMATION_ARCHITECTURE.md
+ * §2.2) — with ONE named exception below.
  *
- * NOTHING HERE HIDES A ROUTE. Every route stays reachable by its address and
- * answers with its own honest state.
+ * HIDDEN UNTIL PUBLISHED (owner decision 2026-11-09, OPEN_DECISIONS.md §1.2
+ * item 3). The Quran's Transliteration and word-by-word works are built but no
+ * lawful source of either is recorded, so their routes are offered by the
+ * menus and the footer only while a work of each is public (`ROUTE_SIGNALS`,
+ * `routeOffered`) — the prerendered human sitemap never lists them — and the
+ * routes themselves answer 404 until then. Every other route stays reachable by its address and answers
+ * with its own honest state.
  *
  * FAIL CLOSED. A read that fails, or no database at all, contributes no
  * signal.
@@ -31,6 +37,10 @@ export const PRESENCE_SIGNALS = Object.freeze([
   'quran',
   /** The active Quran corpus is a reference preview (it needs attribution). */
   'quranReference',
+  /** At least one Quran Transliteration work is public (Quran Part 7). */
+  'quranTransliteration',
+  /** At least one Quran word-by-word work is public (Quran Part 7). */
+  'quranWordByWord',
   /** An approved (not fixture) Hadith corpus is active. */
   'hadith',
   /** At least one published Library work, periodical or article. */
@@ -68,4 +78,20 @@ export interface PresenceSnapshot {
 
 export function hasSignal(snapshot: PresenceSnapshot, signal: PresenceSignal): boolean {
   return snapshot.signals.has(signal);
+}
+
+/**
+ * The registry routes offered ONLY while a signal holds — the hidden-until-
+ * published study layers, and nothing else. A route absent here is offered
+ * always.
+ */
+export const ROUTE_SIGNALS: Readonly<Record<string, PresenceSignal>> = Object.freeze({
+  'quran.transliteration': 'quranTransliteration',
+  'quran.word-by-word': 'quranWordByWord',
+});
+
+/** May the shell offer this registry route now? */
+export function routeOffered(snapshot: PresenceSnapshot, routeKey: string): boolean {
+  const signal = ROUTE_SIGNALS[routeKey];
+  return signal === undefined || hasSignal(snapshot, signal);
 }

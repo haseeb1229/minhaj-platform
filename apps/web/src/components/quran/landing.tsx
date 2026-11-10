@@ -26,7 +26,14 @@ import { pathFor, requireRoute } from '@/shell/registry';
 import { ContinueReading, QuickJumpForm } from './landing-islands';
 import { AboutThisText, CorpusNotice, quranTrail } from './parts';
 import { quranPath } from './presentation';
-import { readJuzList, readLastPage, readQuranTopic, readSurahs } from './read';
+import {
+  readJuzList,
+  readLastPage,
+  readQuranTopic,
+  readSurahs,
+  readTransliterations,
+  readWordByWords,
+} from './read';
 import { hizbJuzOf } from './quick-jump';
 import {
   JuzIndexSection,
@@ -79,6 +86,7 @@ export async function QuranLandingPage({
     translations,
     tafsirs,
     transliterations,
+    wordByWords,
     tajweed,
     recitations,
     topic,
@@ -88,7 +96,8 @@ export async function QuranLandingPage({
     readJuzList(),
     reader.translations(),
     reader.tafsirs(),
-    reader.transliterations(),
+    readTransliterations(),
+    readWordByWords(),
     reader.tajweedRules(),
     reader.recitations(),
     readQuranTopic(locale),
@@ -100,7 +109,12 @@ export async function QuranLandingPage({
   const study = [
     ...(translations.length > 0 ? [section('translations')] : []),
     ...(tafsirs.length > 0 ? [section('tafsir')] : []),
+    // Hidden until published (Quran Part 7): each study layer only while a
+    // work of it is public.
     ...(transliterations.length > 0 ? [section('transliteration')] : []),
+    ...(wordByWords.length > 0
+      ? [{ key: 'wordByWord', href: quranPath(locale, 'word-by-word') }]
+      : []),
     ...(tajweed.length > 0 ? [section('tajweed')] : []),
     ...(recitations.length > 0 ? [section('recitations')] : []),
   ];

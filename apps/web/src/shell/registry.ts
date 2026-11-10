@@ -563,8 +563,9 @@ const LISTEN: readonly ShellRoute[] = Object.freeze([
 /**
  * The Quran surfaces — Phase 18 (ROUTE_MAP.md §3.3).
  *
- * The reader entry, the Surah and Juz indexes, Quran search, the four study
- * aids, the recitations, and the four related-material views whose owners
+ * The reader entry, the Surah and Juz indexes, Quran search, the study aids
+ * (word by word since Quran Part 7 — it and Transliteration offered by the
+ * shell only while a work of each is public, `ROUTE_SIGNALS`), the recitations, and the four related-material views whose owners
  * expose a public by-topic read (Library's Works and Research, Media's Videos
  * and, since Phase 22, Learning's Courses).
  * NO PLACEMENT — they are reached from `/quran`, the single entry point in the
@@ -590,6 +591,7 @@ const QURAN_SURFACES = Object.freeze([
   'translations',
   'tafsir',
   'transliteration',
+  'word-by-word',
   'tajweed',
   'recitations',
   'books',

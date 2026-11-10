@@ -1040,6 +1040,7 @@ model Language {
   hadithScienceTexts HadithScienceText[] @relation("HadithScienceTextLanguage")
   fatwaRevisions FatwaRevision[]
   quranTransliterations QuranTransliteration[]
+  quranWordByWords QuranWordByWord[]
   quranTafsirs QuranTafsir[]
   quranTajweedTexts QuranTajweedRuleText[]
   quranRecitations QuranRecitation[]
@@ -1184,6 +1185,7 @@ model Person {
   statementContributions StatementContributor[]
   mediaCoverageContributions MediaCoverageContributor[]
   quranTranslationContributions QuranTranslationContributor[]
+  quranWordByWordContributions QuranWordByWordContributor[]
   hadithTranslationContributions HadithTranslationContributor[]
   hadithCommentaryContributions  HadithCommentaryContributor[]
   fatwaPublicationsPublished     FatwaPublication[] @relation("FatwaPublicationPublisherPerson")
@@ -3886,6 +3888,7 @@ model QuranSource {
   verificationRuns QuranVerificationRun[]
   translations     QuranTranslation[]
   transliterations QuranTransliteration[]
+  wordByWords      QuranWordByWord[]
   tafsirs          QuranTafsir[]
   recitations      QuranRecitation[]
   tajweedRules     QuranTajweedRule[]
@@ -3986,6 +3989,7 @@ model Ayah {
   revisions            QuranAyahRevision[]
   translationTexts     QuranTranslationText[]
   transliterationTexts QuranTransliterationText[]
+  wordByWordGlosses    QuranWordByWordGloss[]
   tafsirStarts         QuranTafsirText[]          @relation("QuranTafsirTextStart")
   tafsirEnds           QuranTafsirText[]          @relation("QuranTafsirTextEnd")
   segmentStarts        QuranRecitationSegment[]   @relation("QuranRecitationSegmentStart")
@@ -4168,6 +4172,68 @@ model QuranTransliterationText {
   @@id([transliterationId, surahNumber, ayahNumber])
   @@index([surahNumber, ayahNumber], map: "QuranTransliterationText_ayah_idx")
   @@map("QuranTransliterationText")
+}
+
+/// A word-by-word work (Quran Part 7): a gloss for each word of the Arabic, as
+/// its source wrote it — sourced glosses only, never derived from the Arabic.
+/// Layered over the Ayah like a Translation, with its own source, lifecycle,
+/// version and contributors (translator, editor).
+model QuranWordByWord {
+  id           String    @id @db.NVarChar(36)
+  /// Immutable once chosen: the runtime holds no UPDATE on it.
+  slug         String    @unique @db.NVarChar(120)
+  languageCode String    @db.NVarChar(16)
+  name         String    @db.NVarChar(200)
+  description  String?   @db.NVarChar(2000)
+  attribution  String?   @db.NVarChar(400)
+  sourceId     String?   @db.NVarChar(36)
+  /// draft | published | archived
+  state        String    @db.NVarChar(16)
+  version      Int
+  createdAt    DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt    DateTime  @db.DateTime2
+  publishedAt  DateTime? @db.DateTime2
+
+  language     Language                     @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  source       QuranSource?                 @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contributors QuranWordByWordContributor[]
+  glosses      QuranWordByWordGloss[]
+
+  @@index([state, slug])
+  @@map("QuranWordByWord")
+}
+
+model QuranWordByWordContributor {
+  wordByWordId String @db.NVarChar(36)
+  personId     String @db.NVarChar(36)
+  role         String @db.NVarChar(32)
+  position     Int
+
+  wordByWord QuranWordByWord @relation(fields: [wordByWordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  person     Person          @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([wordByWordId, personId, role])
+  @@index([personId])
+  @@map("QuranWordByWordContributor")
+}
+
+/// One word's gloss in a word-by-word work, exactly as its source wrote it:
+/// the word is its position (from 1) in the Ayah's stored text as
+/// `ayahWords` (`@minhaj/contracts/quran`) cuts it. Sourced glosses only —
+/// never derived from the Arabic (Quran Part 7).
+model QuranWordByWordGloss {
+  wordByWordId String @db.NVarChar(36)
+  surahNumber  Int
+  ayahNumber   Int
+  position     Int
+  text         String @db.NVarChar(200)
+
+  wordByWord QuranWordByWord @relation(fields: [wordByWordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ayah       Ayah            @relation(fields: [surahNumber, ayahNumber], references: [surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([wordByWordId, surahNumber, ayahNumber, position])
+  @@index([surahNumber, ayahNumber], map: "QuranWordByWordGloss_ayah_idx")
+  @@map("QuranWordByWordGloss")
 }
 
 model QuranTafsir {

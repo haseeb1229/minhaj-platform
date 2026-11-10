@@ -172,7 +172,7 @@ describe('the Juz each Surah spans', () => {
       ayahCount: 1,
       pages: null,
       hizbs: [],
-      startText: '',
+      openingText: '',
     }) satisfies PublicJuz;
 
   it('derives each span from the reader’s own Juz ranges', () => {

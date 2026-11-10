@@ -95,6 +95,7 @@ describe('reading preferences are validated, never broadened', () => {
     const request = readReadingRequest({});
     expect(request.translation).toEqual({ state: 'none' });
     expect(request.transliteration).toEqual({ state: 'none' });
+    expect(request.words).toEqual({ state: 'none' });
     expect(request.tafsir).toEqual({ state: 'none' });
     expect(request.reciter).toEqual({ state: 'none' });
     expect(request.size).toBe(DEFAULT_TEXT_SIZE);
@@ -128,6 +129,26 @@ describe('reading preferences are validated, never broadened', () => {
     expect(request.tafsir).toEqual({ state: 'invalid' });
     expect(request.reciter).toEqual({ state: 'invalid' });
     expect(request.transliteration).toEqual({ state: 'invalid' });
+  });
+
+  it('reads a word-by-word work as `?words=`, and refuses one that is not a slug (Part 7)', () => {
+    expect(readReadingRequest({ words: 'fixture-glosses' }).words).toEqual({
+      state: 'requested',
+      slug: 'fixture-glosses',
+    });
+    expect(readReadingRequest({ words: ['a-one', 'a-two'] }).words).toEqual({
+      state: 'invalid',
+    });
+    expect(
+      withReading('/quran/surah/2', {
+        ...NO_READING_CHOICE,
+        reciter: 'fixture-recitation',
+        words: 'fixture-glosses',
+        transliteration: 'fixture-scheme',
+      }),
+    ).toBe(
+      '/quran/surah/2?transliteration=fixture-scheme&words=fixture-glosses&reciter=fixture-recitation',
+    );
   });
 
   it('treats an unknown size as the default display size', () => {

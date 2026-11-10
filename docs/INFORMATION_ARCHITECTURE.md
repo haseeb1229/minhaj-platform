@@ -177,7 +177,11 @@ components and their keyboard behaviour.
   route registry `apps/web/src/shell/registry.ts`, so a link cannot name a route that does not
   exist). A destination with nothing published — a Quran landing with only a fixture corpus, a
   reserved Explore page, an unpublished legal document — answers with its own honest unavailable,
-  empty or publication-status state, never a 404. No presence signal gates the header or footer.
+  empty or publication-status state, never a 404. No presence signal gates the header or footer —
+  with ONE exception, by the owner's later decision (2026-11-09, OPEN_DECISIONS.md §1.2 item 3): the
+  Quran's **Transliteration** and **Word by word** are built but hidden until a lawful source is
+  recorded, so their links appear only while a work of each is public (`ROUTE_SIGNALS` in
+  `apps/web/src/shell/presence.ts`) and their routes are 404s until then.
 - **From 1280 px up** each domain is a disclosure button opening a **mega panel**: the domain's
   one-line purpose and a link to its landing ("{domain} overview"), its labelled columns of links,
   and — for **Watch**, **Library** and **News & Events**, where the corpus has one — a featured
@@ -401,10 +405,12 @@ Digital Resources heading on the Explore landing page.*
 | Read | Study | Explore | Learn |
 |---|---|---|---|
 | Read Quran | Translation | Quran Topics | Quran Courses |
-| Surah Index | Transliteration | Quran Books | Quran Teachers |
-| Juz / Para Index | Tafsir | Quran Videos | — |
-| Search Quran | Tajweed | Quran Articles | — |
-| Recitation / Audio | — | Quran Research | — |
+| Surah Index | Transliteration † | Quran Books | Quran Teachers |
+| Juz / Para Index | Word by word † | Quran Videos | — |
+| Search Quran | Tafsir | Quran Articles | — |
+| Recitation / Audio | Tajweed | Quran Research | — |
+
+† Hidden until a work of it is published (Quran Part 7; §2.2).
 
 Signed-in additions surfaced in-context (not in the menu): bookmarks, notes, reading
 progress, continue reading. Since Phase 21 these appear on an Ayah's own page as a private control

@@ -41,6 +41,12 @@ export function citationOfResource(
 export interface QuranHitDisplay {
   /** `arabic` is the canonical text; `layer` a public translation or transliteration. */
   readonly layer: 'arabic' | 'layer';
+  /**
+   * Which kind of work a `layer` text is from, so it is labelled as what it is
+   * (Quran Part 7) — a transliteration never passes for a translation, and a
+   * page names transliteration only when it shows one. `null` for the Arabic.
+   */
+  readonly kind: 'translation' | 'transliteration' | null;
   /** The language the text is in: `ar` for the canonical text. */
   readonly language: string;
   readonly text: string;
@@ -104,6 +110,7 @@ export function quranHitDisplays(
 
     const canonical: QuranHitDisplay = {
       layer: 'arabic',
+      kind: null,
       language: 'ar',
       text: bounded(record.text),
     };
@@ -122,7 +129,12 @@ export function quranHitDisplays(
       quranHitKey(hit),
       layer === undefined
         ? canonical
-        : { layer: 'layer', language: layer.languageCode, text: bounded(layer.text) },
+        : {
+            layer: 'layer',
+            kind: layer.kind === 'transliteration' ? 'transliteration' : 'translation',
+            language: layer.languageCode,
+            text: bounded(layer.text),
+          },
     );
   }
   return displays;

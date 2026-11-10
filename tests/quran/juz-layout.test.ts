@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import type { PublicAyahPlace } from '../../packages/contracts/src/quran/index.ts';
+import {
+  juzOpeningAyah,
+  type PublicAyahPlace,
+} from '../../packages/contracts/src/quran/index.ts';
 import {
   JUZ_OPENING_WORDS,
   filterJuz,
@@ -332,5 +335,13 @@ describe('the quick jump opens a hizb in its Juz', () => {
     expect(quickJumpPathOf({ kind: 'hizb', hizb: 3, juz: 2 })).toBe(
       '/quran/juz/2?hizb=3',
     );
+  });
+});
+
+describe('the Ayah a Juz is known by', () => {
+  it('is its first Ayah, except the first Juz, known by Al-Baqarah 2:1', () => {
+    expect(juzOpeningAyah({ surah: 1, ayah: 1 })).toEqual({ surah: 2, ayah: 1 });
+    expect(juzOpeningAyah({ surah: 2, ayah: 142 })).toEqual({ surah: 2, ayah: 142 });
+    expect(juzOpeningAyah({ surah: 78, ayah: 1 })).toEqual({ surah: 78, ayah: 1 });
   });
 });

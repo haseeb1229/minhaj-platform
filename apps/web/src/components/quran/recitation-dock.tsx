@@ -11,8 +11,8 @@ import {
   PLAY_REQUEST,
   REPEAT_MAX,
   playbackRate,
-  recitationLabel,
 } from './recitation-plan';
+import { RecitationOptions } from './recitation-listen';
 import {
   chooseRecitation,
   closePlayer,
@@ -714,11 +714,7 @@ function DockOptions({
             value={state.choice ?? ''}
             onChange={(event) => chooseRecitation(event.currentTarget.value)}
           >
-            {state.catalogue.map((entry) => (
-              <option key={entry.slug} value={entry.slug}>
-                {recitationLabel(entry)}
-              </option>
-            ))}
+            <RecitationOptions catalogue={state.catalogue} />
           </select>
         </label>
         <label className={field}>

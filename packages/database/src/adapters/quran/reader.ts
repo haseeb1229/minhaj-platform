@@ -9,6 +9,8 @@ import {
   QURAN_MODE_POSTURE,
   QURAN_PAGE,
   QURAN_SEARCH_RECORDS_MAX,
+  QURAN_WORD_POSITION_MAX,
+  juzOpeningAyah,
   recitationStreamOf,
   type AyahSearchRecord,
   type PublicAyah,
@@ -28,6 +30,7 @@ import {
 
 import { getDatabaseClient } from '../../client.ts';
 import { TRANSLATION_NOTES, toEntry } from './layers.ts';
+import { groupByAyah } from './word-by-word.ts';
 import {
   activeMode,
   ayahRange,
@@ -412,7 +415,7 @@ export function createQuranPublicReader(
     }
     if (byJuz.size === 0) return [];
 
-    const starts = [...byJuz.values()].map((entry) => refOf(entry.first));
+    const starts = [...byJuz.values()].map((entry) => juzOpeningAyah(refOf(entry.first)));
     const texts = await db.ayah.findMany({
       where: {
         OR: starts.map((ref) => ({ surahNumber: ref.surah, ayahNumber: ref.ayah })),
@@ -434,7 +437,10 @@ export function createQuranPublicReader(
           ? null
           : { start: Math.min(...entry.pages), end: Math.max(...entry.pages) },
       hizbs: [...new Set(entry.hizbs)].sort((a, b) => a - b),
-      startText: textOf.get(entry.first) ?? '',
+      openingText: (() => {
+        const opening = juzOpeningAyah(refOf(entry.first));
+        return textOf.get(opening.surah * CITATION_KEY + opening.ayah) ?? '';
+      })(),
     }));
   }
 
@@ -756,6 +762,30 @@ export function createQuranPublicReader(
       return row === null ? null : { ...toWork(row, []), scheme: row.scheme };
     },
 
+    /* ---- Word by word (Quran Part 7) ------------------------------------ */
+
+    async wordByWords() {
+      const mode = await activeMode(db, admission);
+      if (mode === null) return [];
+      const rows = await db.quranWordByWord.findMany({
+        where: publicWork(mode),
+        select: { ...PUBLIC_WORK, contributors: CONTRIBUTORS },
+        orderBy: [...BY_SLUG],
+        take: WORK_LIST,
+      });
+      return rows.map((row) => toWork(row, row.contributors));
+    },
+
+    async wordByWord(slug) {
+      const mode = await activeMode(db, admission);
+      if (mode === null) return null;
+      const row = await db.quranWordByWord.findFirst({
+        where: { slug, ...publicWork(mode) },
+        select: { ...PUBLIC_WORK, contributors: CONTRIBUTORS },
+      });
+      return row === null ? null : toWork(row, row.contributors);
+    },
+
     async tafsirs() {
       const mode = await activeMode(db, admission);
       if (mode === null) return [];
@@ -855,6 +885,85 @@ export function createQuranPublicReader(
         take: QURAN_AYAH_NUMBER_MAX,
       });
       return rows.map((row) => ({ ayah: row.ayahNumber, text: row.text }));
+    },
+
+    /**
+     * Quran Part 7. One grouped read for every work named — the ayat with
+     * text per work and Surah — and only works that are public now.
+     */
+    async transliterationCoverage(workIds) {
+      const mode = await activeMode(db, admission);
+      if (mode === null) return [];
+      const ids = [...new Set(workIds)].slice(0, WORK_LIST);
+      if (ids.length === 0) return [];
+      const texts = await db.quranTransliterationText.groupBy({
+        by: ['transliterationId', 'surahNumber'],
+        where: { transliterationId: { in: ids }, transliteration: publicWork(mode) },
+        _count: { _all: true },
+      });
+      return ids.flatMap((workId) => {
+        const surahs = texts
+          .filter((row) => row.transliterationId === workId)
+          .map((row) => ({ surah: row.surahNumber, ayat: row._count._all, words: 0 }))
+          .sort((a, b) => a.surah - b.surah);
+        return surahs.length === 0 ? [] : [{ workId, surahs }];
+      });
+    },
+
+    /** One public work's glosses over a range of one Surah: ONE bounded read. */
+    async wordByWordGlosses(workId, surah, from, to) {
+      const mode = await activeMode(db, admission);
+      if (mode === null) return [];
+      const rows = await db.quranWordByWordGloss.findMany({
+        where: {
+          wordByWordId: workId,
+          surahNumber: surah,
+          ayahNumber: ayahRange(from, to),
+          wordByWord: publicWork(mode),
+        },
+        select: { ayahNumber: true, position: true, text: true },
+        orderBy: [{ ayahNumber: 'asc' }, { position: 'asc' }],
+        take: QURAN_AYAH_NUMBER_MAX * QURAN_WORD_POSITION_MAX,
+      });
+      return groupByAyah(rows);
+    },
+
+    /**
+     * Quran Part 7. The works named that are public now, then ONE grouped read
+     * of their glosses by (work, Surah, Ayah): each Surah's ayat glossed and
+     * the words glossed in them.
+     */
+    async wordByWordCoverage(workIds) {
+      const mode = await activeMode(db, admission);
+      if (mode === null) return [];
+      const named = [...new Set(workIds)].slice(0, WORK_LIST);
+      if (named.length === 0) return [];
+      const visible = await db.quranWordByWord.findMany({
+        where: { id: { in: named }, ...publicWork(mode) },
+        select: { id: true },
+      });
+      const ids = named.filter((id) => visible.some((row) => row.id === id));
+      if (ids.length === 0) return [];
+      const rows = await db.quranWordByWordGloss.groupBy({
+        by: ['wordByWordId', 'surahNumber', 'ayahNumber'],
+        where: { wordByWordId: { in: ids } },
+        _count: { _all: true },
+      });
+      return ids.flatMap((workId) => {
+        const bySurah = new Map<number, { ayat: number; words: number }>();
+        for (const row of rows) {
+          if (row.wordByWordId !== workId) continue;
+          const held = bySurah.get(row.surahNumber) ?? { ayat: 0, words: 0 };
+          bySurah.set(row.surahNumber, {
+            ayat: held.ayat + 1,
+            words: held.words + row._count._all,
+          });
+        }
+        const surahs = [...bySurah.entries()]
+          .map(([surah, held]) => ({ surah, ...held }))
+          .sort((a, b) => a.surah - b.surah);
+        return surahs.length === 0 ? [] : [{ workId, surahs }];
+      });
     },
 
     async tafsirEntries(workId, surah, from, to) {

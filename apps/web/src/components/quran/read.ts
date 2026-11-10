@@ -51,6 +51,14 @@ export const readSurah = cache((number: number) =>
 
 export const readSurahs = cache(() => quranReadRuntime().reader.surahs());
 
+/** Every public Transliteration, read once per request (Quran Part 7). */
+export const readTransliterations = cache(() =>
+  quranReadRuntime().reader.transliterations(),
+);
+
+/** Every public word-by-word work, read once per request (Quran Part 7). */
+export const readWordByWords = cache(() => quranReadRuntime().reader.wordByWords());
+
 /** Every public recitation, read once per request — the page and the Quran layout's player share it. */
 export const readRecitations = cache(() => quranReadRuntime().reader.recitations());
 
@@ -114,7 +122,7 @@ export const readQuranTopic = cache(async (locale: Locale) => {
 /**
  * The reading preferences a page can honour, resolved against the PUBLIC works.
  *
- * FOUR LIST READS, NOT ONE PER REQUESTED SLUG: the form needs every public work
+ * ONE LIST READ PER LAYER, NOT ONE PER REQUESTED SLUG: the form needs every public work
  * as an option anyway, and a requested slug is resolved by finding it among
  * them. A slug that is malformed, repeated or not public now is reported as
  * UNAVAILABLE — the page says so and shows no layer for it. It is never widened
@@ -123,12 +131,14 @@ export const readQuranTopic = cache(async (locale: Locale) => {
  */
 export async function readingContext(request: ReadingRequest) {
   const reader = quranReadRuntime().reader;
-  const [translations, transliterations, tafsirs, recitations] = await Promise.all([
-    reader.translations(),
-    reader.transliterations(),
-    reader.tafsirs(),
-    readRecitations(),
-  ]);
+  const [translations, transliterations, wordByWords, tafsirs, recitations] =
+    await Promise.all([
+      reader.translations(),
+      readTransliterations(),
+      readWordByWords(),
+      reader.tafsirs(),
+      readRecitations(),
+    ]);
 
   const pick = <T extends { readonly slug: string }>(
     wanted: ReadingRequest[ReadingLayer],
@@ -141,6 +151,7 @@ export async function readingContext(request: ReadingRequest) {
   const chosen = {
     translation: pick(request.translation, translations),
     transliteration: pick(request.transliteration, transliterations),
+    words: pick(request.words, wordByWords),
     tafsir: pick(request.tafsir, tafsirs),
     reciter: pick(request.reciter, recitations),
   };
@@ -152,13 +163,14 @@ export async function readingContext(request: ReadingRequest) {
   const choice: ReadingChoice = {
     translation: chosen.translation?.slug ?? null,
     transliteration: chosen.transliteration?.slug ?? null,
+    words: chosen.words?.slug ?? null,
     tafsir: chosen.tafsir?.slug ?? null,
     reciter: chosen.reciter?.slug ?? null,
     size: request.size,
   };
 
   return {
-    options: { translations, transliterations, tafsirs, recitations },
+    options: { translations, transliterations, wordByWords, tafsirs, recitations },
     chosen,
     unavailable,
     choice,

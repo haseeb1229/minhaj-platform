@@ -3140,6 +3140,129 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > a work's Surahs, the compare view and its form without script, the admin note refused then saved,
 > 320 px and axe. *CI and staging evidence are recorded when they exist.*
 
+> **Quran Part 7 — transliteration and word by word (owner decision 2026-11-09, OPEN_DECISIONS.md
+> §1.2 item 3; on `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered, **hidden until a
+> lawful source is recorded** (DOMAIN_MODEL.md §8.7; ROUTE_MAP.md §3.3, §7). No data is imported,
+> nothing is scraped, and nothing is derived from the Arabic:
+>
+> - **Data.** Migration `20261110120000_r2_quran_word_by_word` (**37 migrations**, with its
+>   rollback): `QuranWordByWord` (a Translation-shaped layered work), `QuranWordByWordContributor`
+>   (translator, editor) and `QuranWordByWordGloss` (one gloss per work, Surah, Ayah and word
+>   position, typed to the canonical Ayah; position 1–999, one line of at most 200 units), refusal
+>   51404 (a published work keeps a gloss). Grants: the work SELECT, INSERT, UPDATE (slug denied);
+>   contributors SELECT, INSERT, DELETE; glosses SELECT, INSERT, UPDATE, DELETE (keys denied).
+>   Restore proof: 48 CHECKs, 50 foreign keys, 31 triggers. Transliteration's model is unchanged.
+> - **The rule.** `ayahWords` (`@minhaj/contracts/quran`) cuts an Ayah's stored text on whitespace,
+>   verbatim; a run with no letter (a pause mark, ۞, ۩) belongs to the word before it — or, opening
+>   the text, the word after it. The service refuses a gloss beyond its Ayah's words
+>   (`word-outside-ayah`); the Juz opening words share the word rule.
+> - **Reader.** A chosen transliteration sits between the Arabic and the translations in its own
+>   language and direction; a chosen word-by-word work draws each glossed Ayah's words as units with
+>   the gloss beneath, wrapping right to left. The settings sheet offers each (remembered, applied
+>   before the first paint), the reading form chooses one without script (`?transliteration=`,
+>   `?words=`), Translation mode only; Surah, Ayah, mushaf page and Juz alike; the compare view shows
+>   every public transliteration under the Arabic. A translation, transliteration or notes block in
+>   a script of the other direction now aligns to its own reading start (`me-auto`), so an Urdu
+>   translation on an English page ends where the Arabic does.
+> - **Pages.** `/quran/transliteration` and `/quran/word-by-word`: each work's language, scheme or
+>   credited People, attribution, counted coverage (and words glossed), a sample and "Read with".
+> - **Hidden until published.** While no work of a layer is public its route is a 404, and the Quran
+>   menu (the presence snapshot's `quranTransliteration` / `quranWordByWord`, the one exception to
+>   the unconditional navigation), the Quran landing, the reader's settings and form and the search
+>   page's languages omit it; the hub's copy no longer names transliteration; a search result's
+>   layer says "Translation" or "Transliteration" as it is.
+> - **Administration.** `/admin/quran/word-by-word` (directory, create) and `/{id}` (lifecycle,
+>   metadata and People, and a per-Surah gloss editor: each stored Arabic word beside a one-line
+>   field), under `quran.administer` with the same audit as a Transliteration.
+> - **Search.** A public transliteration is searchable and a withdrawn one is not (unchanged
+>   projection); glosses are not indexed.
+>
+> **Proof:** `tests/quran/word-by-word.test.ts` (the segmentation on Uthmani-shaped synthetic text —
+> pause marks, ۞, ۩, maddah letters, exact rejoining — the gloss schemas and the rendered layers),
+> `tests/quran/service.test.ts` (authority, positions beyond the words, an Ayah outside the Surah,
+> malformed glosses, publication), `tests/quran/reader-surface.test.ts` (the two preferences and the
+> boot script), `tests/quran/presentation.test.ts` (`?words=`), `tests/shell/menus.test.ts` (the
+> gated links); on SQL Server `tests/quran/persistence.integration.test.ts`, the migration rehearsal
+> (`db:migrate:test`), `db:test:permissions` and the populated restore proof; the browser journey
+> (`tests/browser/quran.spec.ts`): the hidden state (menu, settings and form without the layers, both
+> routes 404), the published fixtures (transliteration line and word-by-word view, settings kept,
+> Urdu and Arabic, 320 px, axe, the two listings, the admin gloss editor). *CI and staging evidence
+> are recorded when they exist.*
+
+> **Quran — more recitations and QuranEnc translations (owner direction 2026-11-10: "add recitation
+> of Shaykh Mishary Rashid Al Afasy and some other famous qari's too. and add urdu translation of
+> famous translators too. and also english translation."; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Staging only; the production gates of
+> OPEN_DECISIONS.md §1.1, §1.2 and §2.4 are unchanged.
+>
+> - **More qaris** (OPEN_DECISIONS.md §1.2 item 1). The curated mp3quran reads grow from twelve to
+>   **twenty-nine** (`CURATED_READS`, `scripts/quran/mp3quran.ts`), each re-verified against the live
+>   timed-reads list by the importer as before: twelve more murattal and five **mujawwad** editions
+>   (Maher Al Meaqli, Abdulbasit Abdulsamad, Mahmoud Khalil Al-Hussary, Mustafa Ismail, Mahmoud Ali
+>   Albanna). A mujawwad read — whose timed-read riwayah is mp3quran's "المصحف المجود" — is admitted
+>   only where its own Arabic moshaf says Hafs, and every read's Arabic moshaf must now say Hafs
+>   (`riwayahOf`). A qari with two reads is one People Person (the reciter's CDN folder) with two
+>   recitations, told apart by mp3quran's moshaf names.
+> - **Finding a recitation among ~30.** One order (`recitationGroups`,
+>   `apps/web/src/components/quran/recitation-plan.ts`) for the player's chooser, the catalogue and a
+>   reciter's page: grouped by style — the most common first (Murattal, then the mujawwad editions),
+>   styleless ones last — then by reciter in the interface language's collation. The chooser shows
+>   each style as an `<optgroup>`; `/quran/recitations` (and `/listen/recitations`) a heading per
+>   style with its count ("Other recitations" for those naming none); the player's default is the
+>   first timed recitation in that order (none privileged).
+> - **External reference translations** (OPEN_DECISIONS.md §1.2 item 5,
+>   `OWNER-DECISION-2026-11-10-EXTERNAL-REFERENCE-TRANSLATIONS`; MIGRATION_STRATEGY.md §19). Four
+>   review-only migration sources read QuranEnc.com's public API — Urdu Muhammad Ibrahim Junagarhi,
+>   English Saheeh International, Rowwad Translation Center and Hilali-Khan — each pinned to the
+>   edition checked on 2026-11-10 (a run is refused once QuranEnc lists another), translation and
+>   footnotes verbatim. `quran-reference.sh translations` now imports every declared work
+>   (`scripts/quran/translation-works.ts`): Irfan-ul-Quran's two first, then QuranEnc's four, each
+>   with its own `reference` provenance source; a QuranEnc work's attribution names the publisher,
+>   QuranEnc.com with its link, the VERSION its staged text is, and that it is an external reference
+>   translation, not Minhaj-ul-Quran's; "About this text" lists every such work under that statement.
+>   Other famous Urdu translations (Kanz-ul-Iman, Jalandhry, Maududi) have no lawful digital source
+>   and are not added.
+> - **Data.** Migration `20261110130000_r2_quran_bracketed_note_marks` (**38 migrations**, with its
+>   rollback) replaces `QuranTranslationNote_marker_ck` with one that also admits a bracketed
+>   footnote number "[1]"…"[9999]"; no table, column, grant or trigger changes. The tie rule
+>   (`tieTranslationNotes`) ties each "[n]" to the text's one mark "[n]", in order; every earlier
+>   shape's rule is unchanged. The staged `quran.translation` payload gains `edition`.
+>   Migration `20261110140000_r2_migration_payload_ceiling` (**39 migrations**, with its rollback,
+>   which refuses while a longer revision exists) raises the staged-payload ceiling from 200,000 to
+>   **400,000** characters (`MIGRATION_LIMITS.payload`; `MigrationStagedRecord_ck` restated exactly
+>   as Phase 30-RD with only that bound changed). Lead decision 2026-11-10: a translation's surah is
+>   one indivisible source item and the Urdu Al-Baqarah with Junagarhi's notes stages 265,210
+>   characters; splitting a surah would complicate every import, and 400,000 leaves about half again
+>   as much room.
+> - **Search.** The new works are indexed by the unchanged projection, like Irfan-ul-Quran's, once
+>   published.
+>
+> **Operator steps on staging** (after deploying the release that carries the migration): register
+> the four sources (`migration-run.sh register --source <key> --operator <adminId>
+> --authorisation-reference OWNER-DECISION-2026-11-10-EXTERNAL-REFERENCE-TRANSLATIONS --authorised-on
+> 2026-11-10 --activate`; each source's policy notes name QuranEnc's terms), run each (`migration-run.sh run
+> --source <key> --operator <adminId> --pages 1 --limit 114 --items 1,2,…,114`), then
+> `quran-reference.sh translations --operator <accountId>` and `quran-reference.sh
+> recitations-mp3quran --operator <accountId>`.
+>
+> **Proof:** `tests/quran/mp3quran.test.ts` (the mujawwad and Hafs rule, one Person for two reads,
+> the pinned list), `tests/quran/recitation-plan.test.ts` (the catalogue's order),
+> `tests/migration/tooling/adapters/quranenc.test.ts` (trimmed real API answers: Surah 108 of each
+> edition, the one-line, joint and unmarked footnote forms, discovery's edition check, robots and
+> every refusal), `tests/quran/translation-works.test.ts` (the declared works, their provenance and
+> catalogue registrations, Irfan-ul-Quran first, the attribution), `tests/quran/translation-notes.test.ts`
+> (bracketed marks), `tests/migration/tooling/catalogue.test.ts`, `tests/migration/kinds.test.ts`;
+> a one-off survey of all 456 QuranEnc surahs through the adapter and the normaliser (no failure, no
+> issue, no personal-data finding, every note tied, every staged payload within the 400,000
+> ceiling — the longest the Urdu Al-Baqarah's, 265,210); on SQL Server `tests/quran/reference.integration.test.ts`
+> (every provenance source registered once, no work created without a revision, the QuranEnc import
+> with its footnotes, another edition's revision refused, a new edition's version named),
+> `tests/quran/recitations-import.integration.test.ts` and the migration rehearsal
+> (`db:migrate:test`: the bracketed marker accepted and refused at its bounds, the rollback restoring
+> Part 6's CHECK; the restated staged-revision CHECK exactly, a 300,000-character payload staged and
+> a 400,001 one refused, the ceiling's rollback refused over the longer revision and, once rolled
+> back, Phase 30-RD's CHECK restored). *CI and staging evidence are recorded when they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

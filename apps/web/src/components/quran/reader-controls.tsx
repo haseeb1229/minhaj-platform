@@ -26,6 +26,7 @@ import {
   READING_MODES,
   SCALE,
   TRANSLATION_LAYOUTS,
+  layerShownOf,
   presentationOf,
   shownOf,
   stepScale,
@@ -87,6 +88,16 @@ export interface ReaderControlLabels {
   readonly notes: Readonly<Record<NoteDisplay | 'label' | 'help', string>>;
   /** A translator's note's dialog title. */
   readonly noteTitle: string;
+  /** The study layers' choices (Quran Part 7). */
+  readonly study: {
+    readonly transliteration: string;
+    readonly transliterationHelp: string;
+    readonly words: string;
+    readonly wordsHelp: string;
+    readonly none: string;
+    /** Leave the work the address chose, and choose here instead. */
+    readonly reset: string;
+  };
   readonly reset: string;
   readonly kept: string;
   readonly moreOptions: string;
@@ -106,6 +117,16 @@ export interface ReaderControlLabels {
   readonly linkCopied: string;
   readonly copyFailed: string;
   readonly loadFailed: string;
+}
+
+/**
+ * A study layer the page rendered (Quran Part 7) — its transliterations, or
+ * its word-by-word works — and, where the address chose one, what to say and
+ * where its defaults are.
+ */
+export interface RenderedStudy {
+  readonly works: readonly RenderedWork[];
+  readonly fixed: { readonly text: string; readonly resetHref: string } | null;
 }
 
 /** One translation the page rendered, in index order. */
@@ -129,6 +150,10 @@ export interface ReaderControlsProps {
   readonly defaults: readonly number[];
   /** The address chose the translation itself: the choice steps aside. */
   readonly fixedTranslation: { readonly text: string; readonly resetHref: string } | null;
+  /** The transliterations the server rendered, none shown until chosen. */
+  readonly transliterations: RenderedStudy;
+  /** The word-by-word works the server rendered, none shown until chosen. */
+  readonly words: RenderedStudy;
   /** The address set a size (`?size=`): a stored size does not override it. */
   readonly explicitSize: boolean;
   /** Whether the page reads in modes (a Surah, a Juz, a mushaf page). */
@@ -191,6 +216,8 @@ export function QuranReaderControls({
   translations,
   defaults,
   fixedTranslation,
+  transliterations,
+  words,
   explicitSize,
   modes,
   initialJuz,
@@ -222,6 +249,19 @@ export function QuranReaderControls({
     [translations, defaults, fixedTranslation],
   );
   const shown = shownOf(preferences, page);
+  const studyPage = useMemo(
+    () => ({
+      transliterations: {
+        slugs: transliterations.works.map((work) => work.slug),
+        fixed: transliterations.fixed !== null,
+      },
+      words: {
+        slugs: words.works.map((work) => work.slug),
+        fixed: words.fixed !== null,
+      },
+    }),
+    [transliterations, words],
+  );
   const anyTranslation = translations.length > 0;
 
   // The page's own controls, revealed once there is script to run them.
@@ -240,11 +280,12 @@ export function QuranReaderControls({
       reader,
       presentationOf(preferences, {
         ...page,
+        ...studyPage,
         modes,
         explicitSize: explicitSize && !arabicTouched,
       }),
     );
-  }, [readerId, preferences, page, modes, explicitSize, arabicTouched]);
+  }, [readerId, preferences, page, studyPage, modes, explicitSize, arabicTouched]);
 
   const say = useCallback((text: string) => {
     setStatus(text);
@@ -540,6 +581,28 @@ export function QuranReaderControls({
               ))}
             </fieldset>
           ) : null}
+
+          <StudyChoice
+            legend={labels.study.transliteration}
+            help={labels.study.transliterationHelp}
+            none={labels.study.none}
+            name={`${base}-transliteration`}
+            study={transliterations}
+            useDefault={labels.study.reset}
+            value={layerShownOf(preferences.transliteration, studyPage.transliterations)}
+            onChange={(slug) => updateReaderPreferences({ transliteration: slug })}
+          />
+
+          <StudyChoice
+            legend={labels.study.words}
+            help={labels.study.wordsHelp}
+            none={labels.study.none}
+            name={`${base}-words`}
+            study={words}
+            useDefault={labels.study.reset}
+            value={layerShownOf(preferences.words, studyPage.words)}
+            onChange={(slug) => updateReaderPreferences({ words: slug })}
+          />
 
           {anyTranslation ? (
             <div className="flex flex-col gap-2">
@@ -888,6 +951,82 @@ function Choice<T extends string>({
           </label>
         ))}
       </div>
+    </fieldset>
+  );
+}
+
+/**
+ * ONE STUDY LAYER'S CHOICE (Quran Part 7): none, or one of the works the page
+ * rendered, as native radio buttons — or, when the address chose the work,
+ * what is shown and the way back to the page's defaults. A layer with no
+ * public work is not offered at all: nothing here names a feature the
+ * platform has not published.
+ */
+function StudyChoice({
+  legend,
+  help,
+  none,
+  name,
+  study,
+  useDefault,
+  value,
+  onChange,
+}: {
+  readonly legend: string;
+  readonly help: string;
+  readonly none: string;
+  readonly name: string;
+  readonly study: RenderedStudy;
+  readonly useDefault: string;
+  /** The shown work's index, or `''` for none (`layerShownOf`). */
+  readonly value: string;
+  readonly onChange: (slug: string | null) => void;
+}) {
+  if (study.works.length === 0) return null;
+  if (study.fixed !== null)
+    return (
+      <div className="flex flex-col gap-2 text-sm">
+        <p className="font-semibold">{legend}</p>
+        <p className="text-foreground-muted">{study.fixed.text}</p>
+        <a
+          href={study.fixed.resetHref}
+          className="inline-flex min-h-11 items-center self-start font-semibold text-action underline-offset-4 hover:underline"
+        >
+          {useDefault}
+        </a>
+      </div>
+    );
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="pb-2 text-sm font-semibold">{legend}</legend>
+      <label className={CHOICE}>
+        <input
+          type="radio"
+          name={name}
+          value=""
+          checked={value === ''}
+          onChange={() => onChange(null)}
+          className="size-4 shrink-0 accent-action"
+        />
+        {none}
+      </label>
+      {study.works.map((work, index) => (
+        <label key={work.slug} className={CHOICE}>
+          <input
+            type="radio"
+            name={name}
+            value={work.slug}
+            checked={value === String(index)}
+            onChange={() => onChange(work.slug)}
+            className="size-4 shrink-0 accent-action"
+          />
+          <span className="flex min-w-0 flex-col">
+            <bdi className="break-words">{work.name}</bdi>
+            <span className="text-caption text-foreground-muted">{work.language}</span>
+          </span>
+        </label>
+      ))}
+      <p className="text-caption text-foreground-muted">{help}</p>
     </fieldset>
   );
 }

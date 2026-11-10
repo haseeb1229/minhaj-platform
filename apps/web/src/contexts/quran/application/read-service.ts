@@ -101,6 +101,8 @@ export function createQuranReadService(
     transliteration: (slug) => (slugOk(slug) ? reader.transliteration(slug) : absent()),
     tafsirs: () => reader.tafsirs(),
     tafsir: (slug) => (slugOk(slug) ? reader.tafsir(slug) : absent()),
+    wordByWords: () => reader.wordByWords(),
+    wordByWord: (slug) => (slugOk(slug) ? reader.wordByWord(slug) : absent()),
 
     translationTexts: (workId, surah, from, to) =>
       idOk(workId) && rangeOk(surah, from, to)
@@ -116,6 +118,18 @@ export function createQuranReadService(
       idOk(workId) && rangeOk(surah, from, to)
         ? reader.transliterationTexts(workId, surah, from, to)
         : none(),
+    transliterationCoverage: (workIds) => {
+      const valid = [...new Set(workIds.filter(idOk))].slice(0, ENUMERATION_MAX);
+      return valid.length === 0 ? none() : reader.transliterationCoverage(valid);
+    },
+    wordByWordGlosses: (workId, surah, from, to) =>
+      idOk(workId) && rangeOk(surah, from, to)
+        ? reader.wordByWordGlosses(workId, surah, from, to)
+        : none(),
+    wordByWordCoverage: (workIds) => {
+      const valid = [...new Set(workIds.filter(idOk))].slice(0, ENUMERATION_MAX);
+      return valid.length === 0 ? none() : reader.wordByWordCoverage(valid);
+    },
     tafsirEntries: (workId, surah, from, to) =>
       idOk(workId) && rangeOk(surah, from, to)
         ? reader.tafsirEntries(workId, surah, from, to)

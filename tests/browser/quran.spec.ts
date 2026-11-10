@@ -4,8 +4,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { AxeBuilder } from '@axe-core/playwright';
-import type { BrowserContext, Locator, Page, Response } from '@playwright/test';
+import type { BrowserContext, Locator, Page, Response, TestInfo } from '@playwright/test';
 
+import { ayahWords } from '../../packages/contracts/src/quran/values.ts';
 import type { SqlSession } from '../../packages/database/src/lifecycle/sql-connection.ts';
 import {
   sha256,
@@ -154,6 +155,17 @@ const urduText = (surah: number, ayah: number) =>
   }`;
 
 /**
+ * Quran Part 7: the fixture word-by-word work's glosses — invented sentinels,
+ * never a meaning of any word: [surah, ayah, position, gloss]. 1:1 glosses its
+ * first two words only, 1:2 its first; 1:3 has none, so it keeps its plain line.
+ */
+const GLOSSES: readonly (readonly [number, number, number, string])[] = [
+  [1, 1, 1, 'NON_QURAN_FIXTURE gloss one'],
+  [1, 1, 2, 'NON_QURAN_FIXTURE gloss two'],
+  [1, 2, 1, 'NON_QURAN_FIXTURE gloss three'],
+];
+
+/**
  * Quran Part 6: the fixture translator's notes — invented sentinels, never a
  * real note. 2:1's answer the marks above; 2:2's English note is on the Ayah
  * as a whole (its text carries no mark), in two paragraphs.
@@ -172,6 +184,8 @@ const ids = {
   translation: randomUUID(),
   urdu: randomUUID(),
   transliteration: randomUUID(),
+  // Quran Part 7: a fixture word-by-word work.
+  wordByWord: randomUUID(),
   tafsir: randomUUID(),
   tafsirEntry: randomUUID(),
   rule: randomUUID(),
@@ -191,6 +205,8 @@ const slug = {
   translation: `fixture-translation-${run}`,
   urdu: `fixture-urdu-${run}`,
   transliteration: `fixture-transliteration-${run}`,
+  wordByWord: `fixture-word-by-word-${run}`,
+  adminWordByWord: `fixture-admin-word-by-word-${run}`,
   tafsir: `fixture-tafsir-${run}`,
   rule: `fixture-tajweed-${run}`,
   recitation: `fixture-recitation-${run}`,
@@ -207,6 +223,8 @@ const NAME = {
   translation: `NON_QURAN_FIXTURE translation ${run}`,
   urdu: `NON_QURAN_FIXTURE urdu translation ${run}`,
   transliteration: `NON_QURAN_FIXTURE transliteration ${run}`,
+  wordByWord: `NON_QURAN_FIXTURE word by word ${run}`,
+  adminWordByWord: `NON_QURAN_FIXTURE admin word by word ${run}`,
   tafsir: `NON_QURAN_FIXTURE tafsir ${run}`,
   rule: `NON_QURAN_FIXTURE tajweed rule ${run}`,
   recitation: `NON_QURAN_FIXTURE recitation ${run}`,
@@ -471,6 +489,14 @@ async function seedWorks(): Promise<void> {
       (N'${ids.transliteration}', 1, 2, N'NON_QURAN_FIXTURE_TRANSLITERATION_1_2');
     UPDATE [dbo].[QuranTransliteration] SET [state]=N'published', [sourceId]=N'${ids.source}', [publishedAt]=SYSUTCDATETIME(), [version]=2, [updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${ids.transliteration}';
 
+    INSERT INTO [dbo].[QuranWordByWord] ([id],[slug],[languageCode],[name],[description],[attribution],[state],[version],[createdAt],[updatedAt]) VALUES
+      (N'${ids.wordByWord}', N'${slug.wordByWord}', N'en', ${n(NAME.wordByWord)}, N'NON_QURAN_FIXTURE browser word-by-word work.', N'NON_QURAN_FIXTURE attribution', N'draft', 1, SYSUTCDATETIME(), SYSUTCDATETIME());
+    INSERT INTO [dbo].[QuranWordByWordContributor] ([wordByWordId],[personId],[role],[position]) VALUES
+      (N'${ids.wordByWord}', N'${ids.reciter}', N'translator', 0);
+    INSERT INTO [dbo].[QuranWordByWordGloss] ([wordByWordId],[surahNumber],[ayahNumber],[position],[text]) VALUES
+      ${GLOSSES.map(([surah, ayah, position, gloss]) => `(N'${ids.wordByWord}', ${String(surah)}, ${String(ayah)}, ${String(position)}, ${n(gloss)})`).join(', ')};
+    UPDATE [dbo].[QuranWordByWord] SET [state]=N'published', [sourceId]=N'${ids.source}', [publishedAt]=SYSUTCDATETIME(), [version]=2, [updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${ids.wordByWord}';
+
     INSERT INTO [dbo].[QuranTafsir] ([id],[slug],[languageCode],[name],[state],[version],[createdAt],[updatedAt]) VALUES
       (N'${ids.tafsir}', N'${slug.tafsir}', N'ur', ${n(NAME.tafsir)}, N'draft', 1, SYSUTCDATETIME(), SYSUTCDATETIME());
     INSERT INTO [dbo].[QuranTafsirText] ([id],[tafsirId],[surahNumber],[startAyah],[endAyah],[text]) VALUES
@@ -587,6 +613,36 @@ test.describe('while no corpus is active', () => {
       expect(response.status(), missing).toBe(404);
       expect(response.headers()['set-cookie'], missing).toBeUndefined();
     }
+  });
+
+  test('Part 7: transliteration and word by word are hidden — no menu link, and both routes 404', async ({
+    page,
+    request,
+  }) => {
+    // Both fixture works are published, but no corpus is active, so neither
+    // is public: the feature does not exist for a visitor.
+    for (const missing of [
+      '/quran/transliteration',
+      '/quran/word-by-word',
+      '/ur/quran/word-by-word',
+    ]) {
+      const response = await request.get(missing, { maxRedirects: 0 });
+      expect(response.status(), missing).toBe(404);
+    }
+    await page.goto('/');
+    for (const path of ['/quran/transliteration', '/quran/word-by-word']) {
+      await expect(
+        page.getByRole('banner').locator(`a[href="${path}"]`),
+        path,
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole('contentinfo').locator(`a[href="${path}"]`),
+      ).toHaveCount(0);
+    }
+    await page.goto('/sitemap');
+    expect(
+      (await hrefsIn(page)).filter((href) => /transliteration|word-by-word/.test(href)),
+    ).toEqual([]);
   });
 
   test('Listen links no recitation catalogue', async ({ page }) => {
@@ -1453,14 +1509,15 @@ test.describe('a fixture corpus', () => {
     const missing = await request.get('/quran/read?q=hizb%209', { maxRedirects: 0 });
     expect(missing.status()).toBe(200);
 
-    // Urdu and Arabic: right to left, the opening words marked Arabic.
+    // Urdu and Arabic: right to left, the opening words marked Arabic — the
+    // first Juz's from Al-Baqarah 2:1, its traditional name (`juzOpeningAyah`).
     for (const locale of ['ur', 'ar'] as const) {
       await visitFixture(page, localizedPath(locale, '/quran/juz'), locale);
       await expect(page.locator('html'), locale).toHaveAttribute('dir', 'rtl');
       await expect(
         page.getByRole('main').locator('ol span[lang="ar"]').first(),
         locale,
-      ).toContainText(canonicalText(1, 1).split(' ').slice(0, 3).join(' '));
+      ).toContainText(canonicalText(2, 1).split(' ').slice(0, 3).join(' '));
     }
 
     await page.setViewportSize({ width: 320, height: 800 });
@@ -1884,6 +1941,421 @@ test.describe('a fixture corpus', () => {
         blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
         target,
       ).toEqual([]);
+    }
+  });
+
+  /* ---- Quran Part 7: transliteration and word by word -------------------- */
+
+  /** No serious or critical accessibility finding; lesser ones annotated. */
+  async function axeClean(page: Page, target: string, testInfo: TestInfo): Promise<void> {
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    const blocking = results.violations.filter(
+      (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+    );
+    for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+      testInfo.annotations.push({
+        type: 'axe',
+        description: `${target}: ${finding.id} (${String(finding.impact)})`,
+      });
+    expect(
+      blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+      target,
+    ).toEqual([]);
+  }
+
+  /** The reader's settings sheet, opened. */
+  async function openSettings(page: Page): Promise<Locator> {
+    await page.getByRole('button', { name: 'Settings' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Reading settings' });
+    await expect(sheet).toBeVisible();
+    return sheet;
+  }
+
+  /** How many header links lead to a path, after a fresh page load. */
+  async function headerLinks(page: Page, path: string): Promise<number> {
+    await page.goto('/quran');
+    return page.getByRole('banner').locator(`a[href="${path}"]`).count();
+  }
+
+  test('Part 7: while no work of a layer is public, nothing offers it — menu, landing, settings, form — and its route is a 404', async ({
+    page,
+    request,
+  }, testInfo) => {
+    test.setTimeout(300_000);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    // While both ARE public: the menu, the landing and the settings offer them.
+    await expect
+      .poll(() => headerLinks(page, '/quran/word-by-word'), {
+        timeout: 90_000,
+        intervals: [3_000],
+      })
+      .toBeGreaterThan(0);
+    expect(await hrefsIn(page)).toContain('/quran/word-by-word');
+
+    // The operator withdraws both works (draft): nothing of either is public.
+    const withdraw = (state: 'draft' | 'published') =>
+      sql.query(`
+        UPDATE [dbo].[QuranTransliteration] SET [state]=N'${state}', [version]=[version]+1, [updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${ids.transliteration}';
+        UPDATE [dbo].[QuranWordByWord] SET [state]=N'${state}', [version]=[version]+1, [updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${ids.wordByWord}';
+      `);
+    await withdraw('draft');
+    try {
+      for (const missing of ['/quran/transliteration', '/quran/word-by-word']) {
+        const response = await request.get(missing, { maxRedirects: 0 });
+        expect(response.status(), missing).toBe(404);
+      }
+      // The reader: no choice in its settings, none in its reading form, and
+      // an address that names one says it is unavailable and shows nothing.
+      await visitFixture(page, '/quran/surah/1');
+      await readerReady(page);
+      const sheet = await openSettings(page);
+      await expect(sheet.getByRole('group', { name: 'Transliteration' })).toHaveCount(0);
+      await expect(sheet.getByRole('group', { name: 'Word by word' })).toHaveCount(0);
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#reading-transliteration')).toHaveCount(0);
+      await expect(page.locator('#reading-words')).toHaveCount(0);
+      await expect(
+        page.locator('[data-transliteration-index], [data-words-index]'),
+      ).toHaveCount(0);
+      await visitFixture(page, `/quran/surah/1?words=${slug.wordByWord}`);
+      await expect(page.getByRole('main')).toContainText(
+        'The word-by-word work you asked for is not available',
+      );
+      await expect(page.locator('[data-words-index]')).toHaveCount(0);
+      // The landing lists neither.
+      await visitFixture(page, '/quran');
+      const landing = await hrefsIn(page);
+      expect(landing).not.toContain('/quran/transliteration');
+      expect(landing).not.toContain('/quran/word-by-word');
+      // The Quran menu drops both once the presence snapshot (cached for at
+      // most 30 seconds) sees it.
+      for (const path of ['/quran/transliteration', '/quran/word-by-word'])
+        await expect
+          .poll(() => headerLinks(page, path), { timeout: 90_000, intervals: [3_000] })
+          .toBe(0);
+      const quranMenu = page
+        .getByRole('navigation', { name: 'Main navigation' })
+        // On a Quran page the button also says it is the current section.
+        .getByRole('button', { name: /^Quran\b/ });
+      await quranMenu.click();
+      await expect(
+        page
+          .getByRole('banner')
+          .getByRole('link', { name: 'Quran translations' })
+          .first(),
+      ).toBeVisible();
+      await page.screenshot({
+        path: testInfo.outputPath('part7-hidden-quran-menu-1440.png'),
+      });
+      await page.keyboard.press('Escape');
+    } finally {
+      await withdraw('published');
+    }
+    // Published again: everything appears again.
+    for (const path of ['/quran/transliteration', '/quran/word-by-word'])
+      await expect
+        .poll(() => headerLinks(page, path), { timeout: 90_000, intervals: [3_000] })
+        .toBeGreaterThan(0);
+    expect((await request.get('/quran/word-by-word')).status()).toBe(200);
+  });
+
+  test('Part 7: a chosen transliteration sits under the Arabic and word by word replaces its line — kept, without script, RTL, 320px, axe', async ({
+    page,
+    browser,
+  }, testInfo) => {
+    test.setTimeout(360_000);
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    // An RTL translation on an English page aligns to its own start: its
+    // block ends where the Arabic line ends, not at the column's left.
+    await visitFixture(page, `/quran/surah/2?translation=${slug.urdu}`);
+    const urduBlock = await page
+      .locator(`#ayah-2-1 [data-translation-work="${NAME.urdu}"]`)
+      .boundingBox();
+    const arabicLine = await page.locator('#ayah-2-1 .quran-ayah-arabic').boundingBox();
+    expect(urduBlock).not.toBeNull();
+    expect(
+      Math.abs(
+        (urduBlock?.x ?? 0) +
+          (urduBlock?.width ?? 0) -
+          ((arabicLine?.x ?? 0) + (arabicLine?.width ?? 0)),
+      ),
+      'the Urdu block’s right edge is the Arabic line’s',
+    ).toBeLessThanOrEqual(4);
+    // And an English one on an Urdu page starts where the Arabic line starts.
+    await visitFixture(page, `/ur/quran/surah/2?translation=${slug.translation}`, 'ur');
+    const englishBlock = await page
+      .locator(`#ayah-2-1 [data-translation-work="${NAME.translation}"]`)
+      .boundingBox();
+    const urduArabic = await page.locator('#ayah-2-1 .quran-ayah-arabic').boundingBox();
+    expect(Math.abs((englishBlock?.x ?? 0) - (urduArabic?.x ?? 0))).toBeLessThanOrEqual(
+      4,
+    );
+    // …and its words run from that start, not flush right.
+    expect(
+      await page
+        .locator(
+          `#ayah-2-1 [data-translation-work="${NAME.translation}"] [data-translation-text]`,
+        )
+        .evaluate((element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          return range.getBoundingClientRect().x - element.getBoundingClientRect().x;
+        }),
+    ).toBeLessThanOrEqual(2);
+
+    // Nothing of either layer shows until it is chosen.
+    await visitFixture(page, '/quran/surah/1');
+    await readerReady(page);
+    const row = page.locator('#ayah-1-1');
+    const transliteration = row.locator('[data-transliteration-index="0"]');
+    const words = row.locator('[data-words-index="0"]');
+    const plain = row.locator('.quran-ayah-arabic');
+    await expect(transliteration).toBeHidden();
+    await expect(words).toBeHidden();
+    await expect(plain).toBeVisible();
+
+    // Chosen in the settings: the transliteration, between the Arabic and the
+    // translation, in its own language; the words, each with its gloss.
+    const sheet = await openSettings(page);
+    await sheet
+      .getByRole('group', { name: 'Transliteration' })
+      .getByRole('radio', { name: NAME.transliteration })
+      .check();
+    await sheet
+      .getByRole('group', { name: 'Word by word' })
+      .getByRole('radio', { name: NAME.wordByWord })
+      .check();
+    await page.keyboard.press('Escape');
+    await expect(transliteration).toBeVisible();
+    await expect(transliteration.locator('p[lang="en"]')).toHaveText(
+      'NON_QURAN_FIXTURE_TRANSLITERATION_1_1',
+    );
+    await expect(transliteration.locator('p[lang="en"]')).toHaveAttribute('dir', 'ltr');
+    await expect(words).toBeVisible();
+    await expect(plain).toBeHidden();
+    const units = words.locator('li.quran-wbw-word:not(.quran-wbw-end)');
+    const expected = ayahWords(canonicalText(1, 1));
+    await expect(units).toHaveCount(expected.length);
+    await expect(units.locator('[lang="ar"]')).toHaveText(
+      expected.map((word) => word.text),
+    );
+    await expect(units.nth(0).locator('.quran-wbw-gloss')).toHaveText(
+      'NON_QURAN_FIXTURE gloss one',
+    );
+    await expect(units.nth(2).locator('.quran-wbw-gloss')).toHaveCount(0);
+    // The gloss is beneath its word, and the first word is on the right.
+    const firstWord = await units.nth(0).locator('[lang="ar"]').boundingBox();
+    const firstGloss = await units.nth(0).locator('.quran-wbw-gloss').boundingBox();
+    const secondWord = await units.nth(1).locator('[lang="ar"]').boundingBox();
+    expect((firstGloss?.y ?? 0) > (firstWord?.y ?? 0)).toBe(true);
+    expect((firstWord?.x ?? 0) > (secondWord?.x ?? 0)).toBe(true);
+    // The order: words (in the Arabic's place), transliteration, translation.
+    const wordsBox = await words.boundingBox();
+    const transliterationBox = await transliteration.boundingBox();
+    const translationBox = await row
+      .locator(`[data-translation-work="${NAME.translation}"]`)
+      .boundingBox();
+    expect((wordsBox?.y ?? 0) < (transliterationBox?.y ?? 0)).toBe(true);
+    expect((transliterationBox?.y ?? 0) < (translationBox?.y ?? 0)).toBe(true);
+    // An Ayah the work does not gloss keeps its plain line.
+    await expect(page.locator('#ayah-1-3 [data-words-index]')).toHaveCount(0);
+    await expect(page.locator('#ayah-1-3 .quran-ayah-arabic')).toBeVisible();
+    // Copy still carries the stored Arabic, whatever is shown.
+    await expect(plain.locator('[data-ayah-arabic]')).toHaveText(canonicalText(1, 1));
+
+    // The recitation highlight still marks the whole Ayah, words included.
+    await row.evaluate((element) => element.setAttribute('data-recited', ''));
+    expect(
+      await row
+        .locator('.quran-ayah-body')
+        .evaluate((element) => getComputedStyle(element).backgroundColor),
+    ).not.toBe('rgba(0, 0, 0, 0)');
+    await row.evaluate((element) => element.removeAttribute('data-recited'));
+
+    // Kept in this browser, and in place before the first paint.
+    await page.reload();
+    await expect(page.locator('#quran-reader')).toHaveAttribute(
+      'data-transliteration',
+      '0',
+    );
+    await expect(page.locator('#quran-reader')).toHaveAttribute('data-words', '0');
+    await expect(words).toBeVisible();
+    await row.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath('part7-reader-en-1440.png') });
+
+    // The Reading and Page modes keep the flowing Arabic alone.
+    await readerReady(page);
+    const modes = page.getByRole('group', { name: 'Reading mode' }).first();
+    await modes.getByText('Reading', { exact: true }).click();
+    await expect(page.locator('#quran-reader')).toHaveAttribute('data-mode', 'reading');
+    await expect(words).toBeHidden();
+    await expect(transliteration).toBeHidden();
+    await expect(plain).toBeVisible();
+    await modes.getByText('Translation', { exact: true }).click();
+    await expect(page.locator('#quran-reader')).toHaveAttribute(
+      'data-mode',
+      'translation',
+    );
+    await expect(words).toBeVisible();
+
+    // Wherever translations show: an Ayah's own page, a Juz, a mushaf page.
+    await visitFixture(page, `/quran/surah/1/1?words=${slug.wordByWord}`);
+    await expect(page.locator('[aria-labelledby="ayah-words"]')).toContainText(
+      'NON_QURAN_FIXTURE gloss two',
+    );
+    await expect(page.locator('[aria-labelledby="ayah-transliteration"]')).toBeVisible();
+    for (const target of ['/quran/juz/1', '/quran/page/1']) {
+      await visitFixture(page, target);
+      await expect(
+        page.locator('#ayah-1-1 [data-words-index="0"]'),
+        target,
+      ).toBeVisible();
+    }
+
+    // Urdu and Arabic: the page is right to left, the Latin transliteration
+    // and the English glosses left to right inside it.
+    for (const [locale, target] of [
+      ['ur', '/ur/quran/surah/1'],
+      ['ar', '/ar/quran/surah/1'],
+    ] as const) {
+      await visitFixture(page, target, locale);
+      await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+      await expect(
+        row.locator('[data-transliteration-index="0"] p[lang="en"]'),
+      ).toHaveAttribute('dir', 'ltr');
+      await expect(row.locator('.quran-wbw-gloss').first()).toHaveAttribute('dir', 'ltr');
+      await expect(row.locator('.quran-wbw-words')).toHaveAttribute('dir', 'rtl');
+      // The Latin line and its attribution begin at their own (left) start,
+      // never set flush right by the page's direction.
+      for (const part of ['p[lang="en"]', 'p[id]'])
+        expect(
+          await row
+            .locator(`[data-transliteration-index="0"] ${part}`)
+            .evaluate((element) => {
+              const range = document.createRange();
+              range.selectNodeContents(element);
+              return range.getBoundingClientRect().x - element.getBoundingClientRect().x;
+            }),
+          `${locale} ${part}`,
+        ).toBeLessThanOrEqual(2);
+      if (locale === 'ur') {
+        await row.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: testInfo.outputPath('part7-reader-ur-1440.png') });
+      }
+    }
+
+    // 320px: nothing scrolls sideways; 390px screenshots; no serious finding.
+    for (const target of ['/quran/surah/1', '/ur/quran/surah/1', '/ar/quran/surah/1/1']) {
+      await page.setViewportSize({ width: 320, height: 800 });
+      await page.goto(target);
+      await readerReady(page);
+      const { overflow, offenders } = await overflowOf(page);
+      expect(overflow, `${target}: ${offenders.join(', ')}`).toBeLessThanOrEqual(0);
+    }
+    for (const [name, target] of [
+      ['en', '/quran/surah/1'],
+      ['ur', '/ur/quran/surah/1'],
+    ] as const) {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(target);
+      await readerReady(page);
+      await page.locator('#ayah-1-1').scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: testInfo.outputPath(`part7-reader-${name}-390.png`),
+      });
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await axeClean(page, target, testInfo);
+    }
+
+    // Without script: the reading form chooses both, and the server draws them.
+    const noScript = await browser.newContext({
+      baseURL: baseUrl(),
+      javaScriptEnabled: false,
+    });
+    contexts.push(noScript);
+    const bare = await noScript.newPage();
+    await bare.goto('/quran/surah/1');
+    await bare.locator('#reading-options summary').click();
+    await bare.locator('#reading-transliteration').selectOption(slug.transliteration);
+    await bare.locator('#reading-words').selectOption(slug.wordByWord);
+    await bare.locator('#reading-options').getByRole('button', { name: 'Apply' }).click();
+    await bare.waitForURL(/words=/);
+    await expect(
+      bare.locator('#ayah-1-1 [data-transliteration-index="0"]'),
+    ).toBeVisible();
+    await expect(bare.locator('#ayah-1-1 [data-words-index="0"]')).toBeVisible();
+    await expect(bare.locator('#ayah-1-1 .quran-ayah-arabic')).toBeHidden();
+
+    // Back to none, so the journey's later pages read as before.
+    await page.goto('/quran/surah/1');
+    await readerReady(page);
+    const reset = await openSettings(page);
+    await reset
+      .getByRole('group', { name: 'Transliteration' })
+      .getByRole('radio', { name: 'None' })
+      .check();
+    await reset
+      .getByRole('group', { name: 'Word by word' })
+      .getByRole('radio', { name: 'None' })
+      .check();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#quran-reader')).toHaveAttribute('data-words', '');
+  });
+
+  test('Part 7: the transliteration and word-by-word listings count, sample and lead to the reader', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(240_000);
+    await visitFixture(page, '/quran/transliteration');
+    const card = page.getByRole('article', { name: NAME.transliteration });
+    // Two of Surah 1's three ayat: none complete, one in part.
+    await expect(card).toContainText('0 of 3 Surahs · 1 more in part');
+    await expect(card).toContainText('NON_QURAN_FIXTURE scheme');
+    await expect(card.locator('figure p[data-ayah-arabic]')).toHaveText(
+      canonicalText(1, 1),
+    );
+    await expect(
+      card.locator('figure [data-transliteration-index] p[lang="en"]'),
+    ).toHaveText('NON_QURAN_FIXTURE_TRANSLITERATION_1_1');
+    await expect(
+      card.getByRole('link', { name: 'Read with this transliteration' }),
+    ).toHaveAttribute('href', `/quran/surah/1?transliteration=${slug.transliteration}`);
+
+    await visitFixture(page, '/quran/word-by-word');
+    const words = page.getByRole('article', { name: NAME.wordByWord });
+    await expect(words).toContainText('3 words');
+    await expect(words).toContainText(NAME.reciter);
+    await expect(words).toContainText('NON_QURAN_FIXTURE attribution');
+    await expect(words.locator('figure .quran-wbw-gloss').first()).toHaveText(
+      'NON_QURAN_FIXTURE gloss one',
+    );
+    await expect(words.getByRole('link', { name: 'Read word by word' })).toHaveAttribute(
+      'href',
+      `/quran/surah/1?words=${slug.wordByWord}`,
+    );
+
+    // The compare view shows the transliteration under the Arabic.
+    await visitFixture(page, '/quran/translations/compare?surah=1&ayah=1');
+    await expect(page.locator('article[data-ayah="1:1"]')).toContainText(
+      'NON_QURAN_FIXTURE_TRANSLITERATION_1_1',
+    );
+
+    for (const target of [
+      '/ur/quran/transliteration',
+      '/ar/quran/word-by-word',
+      '/quran/word-by-word',
+    ]) {
+      await page.setViewportSize({ width: 320, height: 800 });
+      await page.goto(target);
+      if (!target.startsWith('/quran'))
+        await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+      const { overflow, offenders } = await overflowOf(page);
+      expect(overflow, `${target}: ${offenders.join(', ')}`).toBeLessThanOrEqual(0);
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await axeClean(page, target, testInfo);
     }
   });
 
@@ -3020,6 +3492,92 @@ test.describe('Quran administration', () => {
       'SELECT [version] FROM [dbo].[Ayah] WHERE [surahNumber]=1 AND [ayahNumber]=1;',
     );
     expect(ayah?.version).toBe(1);
+  });
+
+  test('Part 7: quran.administer glosses each Arabic word, saves only what changed, and publishes a word-by-word work', async () => {
+    test.setTimeout(180_000);
+    const page = administrator;
+    await page.goto('/admin/quran/word-by-word');
+    await page.locator('#new-word-by-word-slug').fill(slug.adminWordByWord);
+    await page.locator('#new-word-by-word-name').fill(NAME.adminWordByWord);
+    await page.locator('#new-word-by-word-language').selectOption('en');
+    await page.locator('#new-word-by-word-source').selectOption(ids.source);
+    await page.getByRole('button', { name: 'Create', exact: true }).click();
+    await page.waitForURL(/\/admin\/quran\/word-by-word\/[0-9a-f-]{36}$/);
+    const id = page.url().split('/').pop() ?? '';
+
+    // Publishing with no gloss is refused, before and by the database.
+    await page.getByRole('button', { name: 'Publish', exact: true }).click();
+    await expect(page.getByRole('main')).toContainText(
+      'cannot be published until it has text to show',
+    );
+
+    // Surah 1: each stored Arabic word, read-only, beside its gloss field.
+    await page.locator('#surah-picker').selectOption('1');
+    await page.getByRole('button', { name: 'Show' }).click();
+    await page.waitForURL(/\?surah=1/);
+    const words = ayahWords(canonicalText(1, 1));
+    await expect(page.locator('input[name^="gloss-1-"]')).toHaveCount(words.length);
+    // Each field is named by its word, as the stored text has it.
+    await expect(page.locator('#gloss-1-2')).toHaveAccessibleName(
+      `Gloss of word 2: ${words[1]?.text ?? ''}`,
+    );
+    await page.locator('#gloss-1-1').fill('NON_QURAN_FIXTURE_ADMIN_GLOSS_1_1');
+    await page.locator('#gloss-2-1').fill('NON_QURAN_FIXTURE_ADMIN_GLOSS_2_1');
+    await page.getByRole('button', { name: 'Save changed glosses' }).click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Saved.' }).first(),
+    ).toBeVisible();
+    // Nothing changed is "unchanged", never a silent second save.
+    await page.getByRole('button', { name: 'Save changed glosses' }).click();
+    await expect(page.getByRole('main')).toContainText('Nothing changed');
+    await expect
+      .poll(async () =>
+        sql.query<{ ayah: number; position: number; text: string }>(
+          `SELECT [ayahNumber] AS [ayah],[position],[text] FROM [dbo].[QuranWordByWordGloss] WHERE [wordByWordId]=N'${id}' ORDER BY [ayahNumber],[position];`,
+        ),
+      )
+      .toEqual([
+        { ayah: 1, position: 1, text: 'NON_QURAN_FIXTURE_ADMIN_GLOSS_1_1' },
+        { ayah: 2, position: 1, text: 'NON_QURAN_FIXTURE_ADMIN_GLOSS_2_1' },
+      ]);
+
+    // Published: read beside the canonical Arabic, which is untouched.
+    await page.getByRole('button', { name: 'Publish', exact: true }).click();
+    await expect
+      .poll(async () => {
+        const [row] = await sql.query<{ state: string }>(
+          `SELECT [state] FROM [dbo].[QuranWordByWord] WHERE [id]=N'${id}';`,
+        );
+        return row?.state;
+      })
+      .toBe('published');
+    await page.goto(`/quran/surah/1/1?words=${slug.adminWordByWord}`);
+    await expect(page.locator('[aria-labelledby="ayah-words"]')).toContainText(
+      'NON_QURAN_FIXTURE_ADMIN_GLOSS_1_1',
+    );
+    const [ayah] = await sql.query<{ version: number }>(
+      'SELECT [version] FROM [dbo].[Ayah] WHERE [surahNumber]=1 AND [ayahNumber]=2;',
+    );
+    expect(ayah?.version).toBe(1);
+
+    // quran.read alone sees the glosses and no field to change them.
+    await reader.goto(`/admin/quran/word-by-word/${id}?surah=1`);
+    await expect(reader.getByRole('main')).toContainText(
+      'NON_QURAN_FIXTURE_ADMIN_GLOSS_1_1',
+    );
+    await expect(reader.locator('input[name^="gloss-"]')).toHaveCount(0);
+    // Withdrawn again, so the reader's later pages see only the fixture work.
+    await page.goto(`/admin/quran/word-by-word/${id}`);
+    await page.getByRole('button', { name: 'Archive', exact: true }).click();
+    await expect
+      .poll(async () => {
+        const [row] = await sql.query<{ state: string }>(
+          `SELECT [state] FROM [dbo].[QuranWordByWord] WHERE [id]=N'${id}';`,
+        );
+        return row?.state;
+      })
+      .toBe('archived');
   });
 
   test('quran.editCanonical corrects one Ayah only behind its own step-up, and only to the exact source text', async () => {

@@ -11,7 +11,8 @@ import { WorkspaceNav } from '@/components/workspace/workspace-nav';
 /**
  * The Quran administration shell (ROUTE_MAP.md §7:
  * `/admin/quran/{surahs|ayat|translations|tafsir|transliterations|recitations}`,
- * with Tajweed rules at `/admin/quran/tajweed`), Phase 18.
+ * with Tajweed rules at `/admin/quran/tajweed`), Phase 18, and the word-by-word
+ * works at `/admin/quran/word-by-word` (Quran Part 7).
  *
  * ITS OWN SURFACE, NEVER THE EDITORIAL CMS. Religious content is administered
  * through its own screens with its own permissions (SECURITY_BASELINE.md §5.3);
@@ -36,6 +37,7 @@ const SURFACES = [
   'ayat',
   'translations',
   'transliterations',
+  'word-by-word',
   'tafsir',
   'recitations',
   'tajweed',

@@ -197,6 +197,10 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'QuranRecitationTiming',
       // Quran Part 6 — a translation text's translator's notes.
       'QuranTranslationNote',
+      // Quran Part 7 — a word-by-word work, its contributors and its glosses.
+      'QuranWordByWord',
+      'QuranWordByWordContributor',
+      'QuranWordByWordGloss',
       // Phase 19 — Hadith's source systems, editions and activations, canonical
       // structure, records and evidence, layered works and typed topic
       // assignment.

@@ -220,6 +220,8 @@ describe('a deferred capability cannot be linked', () => {
       'quran.translations',
       'quran.transliteration',
       'quran.videos',
+      // Quran Part 7: offered only while a work of it is public (`ROUTE_SIGNALS`).
+      'quran.word-by-word',
     ]);
     for (const entry of quran) {
       expect(isAvailable(entry) && entry.availability, entry.key).toBe('delivered');

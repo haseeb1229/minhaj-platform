@@ -27,8 +27,11 @@
 # principal under that live grant, and activates it. It resumes an interrupted
 # import and refuses once the corpus is active.
 #
-# `translations` needs an account holding migration.read, quran.read and
-# quran.administer.
+# `translations` imports every declared translation work from its staged
+# migration revisions — Irfan-ul-Quran's two and, since 2026-11-10, QuranEnc's
+# four external reference translations, each work's attribution naming the
+# edition its staged text is. It needs an account holding migration.read,
+# quran.read and quran.administer.
 #
 # `names` (Quran Part 2) reads the same quran-data.xml, checks its SHA-256
 # against --sha256 AND against the digest the registered reference source
@@ -43,8 +46,8 @@
 # reciter as a People record. It runs in the `ingest` container, the one with
 # an outbound network; the safe fetch boundary pins every request to the API's
 # one host, a second apart. It needs an account holding quran.read,
-# quran.administer and people.administer, and takes about half an hour; a
-# re-run adds only what is missing.
+# quran.administer and people.administer, and takes about an hour for the
+# twenty-nine curated reads; a re-run adds only what is missing.
 #
 # `recitations-irfan-urdu` downloads Minhaj-ul-Quran's Irfan-ul-Quran Urdu
 # narration archive (owner attestation of 2026-11-06) ONCE into

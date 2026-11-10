@@ -838,6 +838,7 @@ Independent first-class context with the platform's strictest integrity requirem
 | Juz | The 30 parts and their ayah ranges |
 | Translation / TranslationText | A named translation work; its rendering per ayah, with the translator's notes on it (§8.6) |
 | Transliteration | A scheme and its per-ayah text |
+| WordByWord / WordByWordGloss | A named word-by-word work; one sourced gloss per word of an Ayah (§8.7) |
 | Tafsir / TafsirText | A named exegetical work; content per ayah or range |
 | **Recitation / RecitationSegment** | **A reciter's recitation work and its verse/surah mapping** |
 | TajweedRule | Tajweed guidance |
@@ -864,8 +865,8 @@ General non-Quran audio (lectures, talks) remains owned by Media.
 - **Quranic Arabic text is immutable in normal operation.** Change requires
   `quran.editCanonical`, a documented authoritative source, step-up reauthentication, and a
   full audit entry.
-- Translation, transliteration, tafsir and recitation are **separate works layered over**
-  the Ayah — never fields on it. Multiple translations coexist; none is privileged.
+- Translation, transliteration, word by word, tafsir and recitation are **separate works layered
+  over** the Ayah — never fields on it. Multiple translations coexist; none is privileged.
 - Every Ayah has a stable canonical reference (surah:ayah) that never changes.
 - **Quran is never merged into Library.** Books *about* the Quran are Works; the Quran is not.
 
@@ -1026,7 +1027,12 @@ translation, is registered as two **provenance** sources (`irfan-ul-quran-ur`,
 `irfan-ul-quran-en`, authority `reference`, **zero ayat** — a translation's source is a provenance
 record) and saved surah by surah through Quran's administrative service (`quran.administer`) from
 the staged, review-only migration revisions exactly as staged; a surah whose staged revision fails
-validation is skipped and reported, never repaired (MIGRATION_STRATEGY.md §19).
+validation is skipped and reported, never repaired (MIGRATION_STRATEGY.md §19). Since 2026-11-10
+(`OWNER-DECISION-2026-11-10-EXTERNAL-REFERENCE-TRANSLATIONS`, OPEN_DECISIONS.md §1.2 item 5) the same
+import also saves QuranEnc's four external reference translations (`quranenc-urdu-junagarhi`,
+`quranenc-english-saheeh`, `quranenc-english-rwwad`, `quranenc-english-hilali-khan`), each with its
+own provenance source of the same shape; each such work's attribution names its publisher,
+QuranEnc.com, the version of its staged text and that it is not Minhaj-ul-Quran's.
 
 **Surah display names (Quran Part 2, 2026-11-09).** `SurahName` gains one nullable column,
 `meaning` (`NVARCHAR(100)`, an empty one refused by `SurahName_meaning_ck`; migration
@@ -1056,7 +1062,9 @@ of its first Ayah (one read grouped by Juz and hizb, and one read of at most thi
 public reader adds `juzOutline(n)` (each Ayah's citation, hizb and page, no text — one bounded read)
 and `juzAyat(n, from, to)` (one read of at most `QURAN_JUZ_WINDOW` = 100 ayat between two citations,
 replacing the Phase-18 offset page and its `PublicAyahPage`). No Juz name is stored or written: a Juz
-is shown by the opening words of its first Ayah, cut verbatim from the stored text by one pure rule.
+is shown by the opening words of its first Ayah, cut verbatim from the stored text by one pure rule —
+**except the first Juz, known by Al-Baqarah 2:1 ("الٓمٓ") as printed mushafs name it** (owner-delegated
+decision, 2026-11-10: `juzOpeningAyah`; `PublicJuz.openingText`, formerly `startText`).
 **Rub' al-hizb quarters are not stored.** The canonical structure carries the source's hizb (1–60),
 derived at registration from Tanzil's 240 quarters; a quarter's start exists only in the metadata
 file, and Tanzil text 1.1 and metadata 1.0 disagree on one quarter start (15:49 against 15:50).
@@ -1124,7 +1132,9 @@ surah)` (one bounded read); segment audio is a file OR the recitation's stream (
 the public-work predicate is unchanged.
 
 **What staging holds once the operator runs the imports** (ARCHITECTURE.md staging operations):
-mp3quran.net's twelve curated, Ayah-timed Hafs ʿan ʿĀṣim murattal reads, each pinned by moshaf id
+mp3quran.net's curated, Ayah-timed Hafs ʿan ʿĀṣim reads — twelve murattal at Part 5, twenty-nine
+since 2026-11-10 (seventeen more, five of them mujawwad editions admitted only where their own moshaf
+names Hafs; a qari with two reads is one Person with two recitations) — each pinned by moshaf id
 and CDN folder, streamed — never copied — with each reciter a People Person (mp3quran's own Arabic
 and English names, verbatim; no biography or portrait) and one timed segment per Surah, only
 `start_time`/`end_time` read (never the mushaf-page polygons), a Surah whose timing does not cover
@@ -1149,7 +1159,7 @@ the one Quran-owned table that holds them:
 | Fact | Shape | Rule |
 |---|---|---|
 | A note | `QuranTranslationNote (translationId, surahNumber, ayahNumber, ordinal, marker, text)` | A typed composite key to the `QuranTranslationText` row it annotates (NO ACTION): a note exists only beside its text, and a text that carries notes cannot be removed until they are. `ordinal` numbers an Ayah's notes 1..n in the source's order with no gap, at most twenty (`QuranTranslationNote_ck`, trigger 51403); the text is non-empty, within 20,000 UTF-16 units, exactly as the source wrote it, paragraphs separated by one blank line |
-| What it opens with | `marker` | Exactly as written: none (`''`), a run of one to four stars ("٭", "*", mixed, optionally followed by ":"), or a numbered entry "1:-" … "99:-" (`TRANSLATION_NOTE_MARKER`; `QuranTranslationNote_marker_ck`) |
+| What it opens with | `marker` | Exactly as written: none (`''`), a run of one to four stars ("٭", "*", mixed, optionally followed by ":"), a numbered entry "1:-" … "99:-", or — since 2026-11-10 (QuranEnc's footnotes; migration `20261110130000_r2_quran_bracketed_note_marks` replaced the CHECK) — a bracketed footnote number "[1]" … "[9999]" (`TRANSLATION_NOTE_MARKER`; `QuranTranslationNote_marker_ck`) |
 | Written once | — | Inserted with its text's save and never edited in place: a change replaces an Ayah's notes whole (trigger 51403; the runtime principal holds SELECT, INSERT and DELETE only) |
 
 **The tie rule is one pure function** (`tieTranslationNotes`, `@minhaj/contracts/quran`), applied by
@@ -1157,7 +1167,9 @@ Quran's service to every save and by the reader to every render: numbered notes 
 answer exactly the text's "(1)" … "(m)"; star notes take, in order, the next star run of their own
 length ("٭" and "*" are one mark in two spellings); a text with no star mark at all carries its star
 notes on the Ayah as a whole (the source's English often sets a note with no mark in the text); a
-note opened with no mark is the Ayah's only note and answers its one mark, or the Ayah. A save whose
+bracketed note "[n]" answers the text's one mark "[n]", the notes in their marks' order (a bracketed
+word such as "[All]" is text, never a mark); a note opened with no mark is the Ayah's only note and
+answers its one star or numbered mark, or the Ayah. A save whose
 notes do not tie — the ones it names, or the ones the Ayah keeps under a new text — is refused
 (`note-untied`); a note is never placed by guesswork and a mark is never added, moved or removed. A
 mark no note answers stays text.
@@ -1181,6 +1193,69 @@ Irfan-ul-Quran parser, version 3, reads each Ayah's notes verbatim into the stag
 `notes` (Urdu from the row's later `h2.ur`, English from `p.en`), and `quran-reference.sh
 translations` saves them with the texts, idempotently; a revision staged by an earlier parser
 (`notes: null`) leaves the held notes untouched.
+
+### 8.7 Transliteration and word by word (Quran Part 7)
+
+**Built, and hidden until a lawful source is recorded** (owner decision 2026-11-09,
+OPEN_DECISIONS.md §1.2 item 3). Every candidate source the study-layer register surveyed is blocked
+(Tanzil's and irfan-ul-quran.com's Roman text are verbatim-only and not first-party; the Quranic
+Arabic Corpus glosses are not offered for download; QUL is blocked and the Quran Foundation API was
+declined), so **nothing is imported, nothing is scraped, and no transliteration or gloss is ever
+derived from the Arabic**. Both layers are complete and proved with fixture works; the public sees
+neither until an authorised editor publishes a work that names a registered source.
+
+**Transliteration is unchanged in the model** (§8.3: `QuranTransliteration` +
+`QuranTransliterationText`, sourced text only). Part 7 adds no table for it; the public reader gains
+`transliterationCoverage` (ayat per Surah, one grouped read) for its listing.
+
+**Word by word is a new layered work, a Translation's sibling.** Migration
+`20261110120000_r2_quran_word_by_word` (with its rollback) adds three Quran-owned tables:
+
+| Fact | Shape | Rule |
+|---|---|---|
+| The work | `QuranWordByWord` (slug, name, description, attribution, content Language, optional registered source, `draft`/`published`/`archived`, version, `publishedAt`) | Exactly a Translation's: immutable slug (`QuranWordByWord_slug_ck`; runtime UPDATE of `slug` denied), `QuranWordByWord_state_ck` (published needs a source and `publishedAt`), public under the one `publicWork` predicate |
+| Its contributors | `QuranWordByWordContributor (wordByWordId, personId, role, position)` → People `Person` | A Translation's roles, `translator` and `editor`; positions 0–11 (`_ck`); a credit grants nothing |
+| A gloss | `QuranWordByWordGloss (wordByWordId, surahNumber, ayahNumber, position, text)` | Typed keys to the work and to the canonical `Ayah` (NO ACTION); one gloss per (work, Surah, Ayah, position) — the primary key; `position` 1–999 and the text 1–200 UTF-16 units (`QuranWordByWordGloss_ck`), one line, exactly as the source wrote it; a published work keeps at least one gloss (triggers `QuranWordByWordPublishedGlosses` and `QuranWordByWordGlossKept`, refusal 51404 → `text-required`) |
+
+**The word segmentation is defined once** (`ayahWords`, `@minhaj/contracts/quran`): an Ayah's words
+are its STORED canonical text split on whitespace, verbatim. A run that carries no letter
+(`isAyahWordToken`) is a sign, not a word — a pause mark (U+06D6–U+06DC), the rub' al-hizb ۞, the
+sajdah ۩ — and is attached to the word before it with the space between them or, when it opens the
+text (the ۞ of a quarter's first Ayah), to the word after it. Each word is one contiguous slice of
+the stored text, so the words and the whitespace between them are the text again; letters written
+alone with the maddah (the shape of a Surah's opening letters) are one word. This follows how
+Tanzil's Uthmani text 1.1 sets its signs — each its own space-separated run, as `tanzil-corpus.ts`
+and the Juz opening-words rule already read it — and gives the word count the Quranic Arabic Corpus
+numbers positions by, so a gloss sourced against those positions lands on its word. The Juz index's
+opening words (`openingWords`) use the same word rule. *The rule is proved on synthetic text in
+Tanzil's shapes (no Quran text is written in the repository); a check against the full staged
+corpus — every Ayah has at least one word, and the text rejoins exactly — belongs to the first
+import of a lawful source.*
+
+**Who writes what.** `quran.administer` creates, edits and publishes a work and saves glosses
+through Quran's service (`saveWordByWordGlosses`) — the same authority, step-up posture and audit as
+a Transliteration (no step-up; audit actions `quran.word-by-word.created`, `.updated`,
+`.state-changed`, `.glosses-saved`, counts and field names only). A save names each changed Ayah's
+glosses WHOLE; the service reads that Ayah's stored text and refuses an Ayah the Surah does not hold
+(`outside-surah`) and a position beyond its words (`word-outside-ayah`) — a gloss is never moved to
+a word that exists. The database enforces the structural ceiling, the keys and the shapes; a later
+canonical correction that changed an Ayah's word count would leave a gloss beyond it, which the
+reader simply does not show. Runtime grants: the work SELECT, INSERT, UPDATE (slug denied, no
+DELETE); contributors SELECT, INSERT, DELETE; glosses SELECT, INSERT, UPDATE, DELETE (key columns
+denied). A save updates, inserts, and removes LAST, in one transaction under the expected version.
+Restore proof: 48 CHECKs, 50 foreign keys and 31 triggers on the Quran tables.
+
+**Public reads** (`QuranPublicReaderPort`): `wordByWords`, `wordByWord(slug)`,
+`wordByWordGlosses(work, surah, from, to)` (one bounded read per window, never per word) and
+`wordByWordCoverage` (ayat and words glossed per Surah); nothing while the corpus is inactive and
+no work that is not public now.
+
+**Search.** A public Transliteration's texts are already Ayah layer documents of their language
+(§8.3) — searchable while public, gone once the work is not. **Glosses are not indexed**: a gloss is
+a word or two, so indexing them would make ordinary words match thousands of ayat and bury the
+translations a reader searches, and a gloss means something only beside the word it explains. A
+search result's layer label now names its kind ("Translation · English", "Transliteration ·
+English"), so a transliteration never passes for a translation.
 
 ---
 

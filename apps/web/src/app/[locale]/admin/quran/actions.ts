@@ -24,11 +24,15 @@ import {
   translationInputSchema,
   translationTextSaveSchema,
   transliterationInputSchema,
+  wordByWordInputSchema,
+  wordGlossSaveSchema,
   type LayerTextChange,
   type TranslationNoteValue,
   type TranslationTextChange,
   type QuranActor,
   type VerificationReport,
+  type WordGloss,
+  type WordGlossChange,
 } from '@minhaj/contracts/quran';
 
 import {
@@ -155,7 +159,7 @@ function contributors(form: FormData) {
     .map((row) => ({ personId: row.personId, role: row.role ?? '' }));
 }
 
-/** The metadata every Translation, Transliteration and Tafsir carries. */
+/** The metadata every Translation, Transliteration, word-by-word work and Tafsir carries. */
 function layerWork(form: FormData) {
   return {
     slug: form.get('slug'),
@@ -416,6 +420,41 @@ export async function saveTransliteration(
   return SAVED;
 }
 
+/** Creates or edits a word-by-word work's metadata and contributors (Quran Part 7). */
+export async function saveWordByWord(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  let destination: string | null = null;
+
+  try {
+    const { locale, actor } = await authorise(form);
+    if (actor === null) return DENIED;
+
+    const parsed = wordByWordInputSchema.safeParse({
+      ...layerWork(form),
+      contributors: contributors(form),
+    });
+    if (!parsed.success) return INVALID;
+
+    const service = quranRuntime().quran;
+    if (value(form, 'id') === null) {
+      const created = await service.createWordByWord(actor, { value: parsed.data });
+      destination = localizedPath(locale, `/admin/quran/word-by-word/${created.id}`);
+    } else {
+      const target = versioned(form);
+      if (!target.success) return INVALID;
+      await service.updateWordByWord(actor, { ...target.data, value: parsed.data });
+    }
+    refresh(locale);
+  } catch (error) {
+    return rejected(error, 'quran-save-word-by-word');
+  }
+
+  if (destination !== null) redirect(destination);
+  return SAVED;
+}
+
 export async function saveTafsir(
   _state: FormActionState,
   form: FormData,
@@ -582,6 +621,74 @@ function translationChanges(
     );
   }
   return changes;
+}
+
+/** One gloss field's name: `gloss-{ayah}-{position}`, both canonical decimals. */
+const GLOSS_FIELD = /^gloss-([1-9][0-9]{0,2})-([1-9][0-9]{0,2})$/;
+
+/**
+ * Saves one Surah's page of a word-by-word work's glosses (Quran Part 7).
+ *
+ * EACH AYAH WHOLE, AND ONLY THE ONES THAT CHANGED. The form draws one field per
+ * word of every Ayah on its page; the fields it submitted name their Ayah and
+ * word, and nothing else is read — the request body's cap bounds them. A
+ * gloss is taken exactly as typed (the schema refuses surrounding whitespace
+ * rather than trimming it); an emptied field glosses nothing. An Ayah whose
+ * glosses differ from the stored ones is sent with every gloss it keeps, and
+ * `[]` removes them all. Whether each word exists in the Ayah's stored text is
+ * the service's question (`word-outside-ayah`).
+ *
+ * NEVER CANONICAL. The Arabic words beside the fields are read-only context.
+ */
+export async function saveWordGlosses(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  try {
+    const { locale, actor } = await authorise(form);
+    if (actor === null) return DENIED;
+
+    const target = versioned(form);
+    const surah = surahNumberSchema.safeParse(whole(form, 'surah'));
+    if (!target.success || !surah.success) return INVALID;
+
+    const submitted = new Map<number, WordGloss[]>();
+    for (const [field, raw] of form.entries()) {
+      const match = GLOSS_FIELD.exec(field);
+      if (match === null || typeof raw !== 'string') continue;
+      const ayah = Number(match[1]);
+      const list = submitted.get(ayah) ?? [];
+      submitted.set(ayah, list);
+      if (raw !== '') list.push({ position: Number(match[2]), text: raw });
+    }
+
+    const service = quranRuntime().quran;
+    const current = await service.wordByWordGlosses(actor, target.data.id, surah.data);
+    const stored = new Map(current.map((entry) => [entry.ayah, entry.glosses]));
+    const key = (glosses: readonly WordGloss[]) =>
+      JSON.stringify(
+        [...glosses]
+          .sort((a, b) => a.position - b.position)
+          .map((gloss) => [gloss.position, gloss.text]),
+      );
+    const changes: WordGlossChange[] = [];
+    for (const [ayah, glosses] of [...submitted].sort(([a], [b]) => a - b))
+      if (key(glosses) !== key(stored.get(ayah) ?? [])) changes.push({ ayah, glosses });
+    if (changes.length === 0) return { status: 'error', failure: 'unchanged' };
+
+    const parsed = wordGlossSaveSchema.safeParse({ surah: surah.data, changes });
+    if (!parsed.success) return INVALID;
+    await service.saveWordByWordGlosses(actor, {
+      ...target.data,
+      surah: parsed.data.surah,
+      changes: parsed.data.changes,
+    });
+
+    refresh(locale);
+    return SAVED;
+  } catch (error) {
+    return rejected(error, 'quran-save-word-glosses');
+  }
 }
 
 /** Adds a Tafsir entry over a same-Surah range, or replaces an existing one. */
@@ -810,7 +917,14 @@ export async function changeQuranState(
     if (actor === null) return DENIED;
 
     const kind = z
-      .enum(['translation', 'transliteration', 'tafsir', 'recitation', 'tajweed'])
+      .enum([
+        'translation',
+        'transliteration',
+        'word-by-word',
+        'tafsir',
+        'recitation',
+        'tajweed',
+      ])
       .safeParse(form.get('kind'));
     const target = versioned(form);
     const state = quranLayerStateSchema.safeParse(form.get('state'));
@@ -824,6 +938,9 @@ export async function changeQuranState(
         break;
       case 'transliteration':
         await service.setTransliterationState(actor, input);
+        break;
+      case 'word-by-word':
+        await service.setWordByWordState(actor, input);
         break;
       case 'tafsir':
         await service.setTafsirState(actor, input);

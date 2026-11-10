@@ -8,6 +8,7 @@ import { referenceNames } from '@/composition/public-references';
 import { surahName } from './presentation';
 import { quranAvailability, readRecitations, readSurahs } from './read';
 import { RecitationDock, type DockLabels } from './recitation-dock';
+import { recitationGroups } from './recitation-plan';
 import type { ListenLabels } from './recitation-listen';
 import type { CatalogueEntry } from './recitation-store';
 
@@ -47,15 +48,21 @@ export async function RecitationHost({ locale }: { readonly locale: Locale }) {
     getTranslations({ locale, namespace: 'quran' }),
   ]);
 
-  const catalogue: CatalogueEntry[] = recitations
-    .filter((recitation) => recitation.surahCount > 0)
-    .map((recitation) => ({
-      slug: recitation.slug,
-      name: recitation.name,
-      reciter: names.people.get(recitation.reciterId)?.name ?? null,
-      languageCode: recitation.languageCode,
-      timed: recitation.timed,
-    }));
+  // In the catalogue's one order (`recitationGroups`): the chooser groups it
+  // as listed, and the first timed entry is the player's default.
+  const catalogue: readonly CatalogueEntry[] = recitationGroups(
+    recitations
+      .filter((recitation) => recitation.surahCount > 0)
+      .map((recitation) => ({
+        slug: recitation.slug,
+        name: recitation.name,
+        reciter: names.people.get(recitation.reciterId)?.name ?? null,
+        style: recitation.style,
+        languageCode: recitation.languageCode,
+        timed: recitation.timed,
+      })),
+    locale,
+  ).flatMap((group) => group.entries);
   if (catalogue.length === 0) return null;
 
   const labels: DockLabels = {

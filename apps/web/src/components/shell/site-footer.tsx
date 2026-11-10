@@ -37,7 +37,7 @@ export async function SiteFooter({ locale }: { readonly locale: Locale }) {
     readPresence(),
   ]);
 
-  const columns = footerColumns();
+  const columns = footerColumns(presence);
   const utility = footerUtility();
 
   return (

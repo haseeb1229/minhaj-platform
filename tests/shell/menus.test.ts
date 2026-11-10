@@ -22,6 +22,11 @@ import {
   type MenuLink,
 } from '../../apps/web/src/shell/menus.ts';
 import {
+  ROUTE_SIGNALS,
+  routeOffered,
+  type PresenceSignal,
+} from '../../apps/web/src/shell/presence.ts';
+import {
   LEGAL_DOCUMENTS,
   SHELL_ROUTES,
   type AvailableRoute,
@@ -64,8 +69,8 @@ function routesOfMenu(menu: ReturnType<typeof domainMenus>[number]): AvailableRo
 
 function everyMenuRoute(): AvailableRoute[] {
   return [
-    ...domainMenus().flatMap(routesOfMenu),
-    ...footerColumns().flatMap((column) => column.links.map((link) => link.route)),
+    ...domainMenus('all').flatMap(routesOfMenu),
+    ...footerColumns('all').flatMap((column) => column.links.map((link) => link.route)),
     ...footerUtility().map((link) => link.route),
   ];
 }
@@ -111,7 +116,7 @@ function messageAt(root: Record<string, unknown>, dotted: string): unknown {
 
 describe('every menu link is a route the registry stands behind', () => {
   it('resolves, so nothing below passes vacuously', () => {
-    expect(domainMenus()).toHaveLength(9);
+    expect(domainMenus('all')).toHaveLength(9);
     expect(everyMenuRoute().length).toBeGreaterThan(150);
   });
 
@@ -158,14 +163,14 @@ describe('the mega menus follow INFORMATION_ARCHITECTURE.md §3', () => {
   });
 
   it('leads each menu from its own public landing', () => {
-    for (const menu of domainMenus()) {
+    for (const menu of domainMenus('all')) {
       expect(menu.landing.key).toBe(menu.key);
       expect(menu.landing.visibility).toBe('public');
     }
   });
 
   it('gives every column at least one link, and repeats nothing within a menu', () => {
-    for (const menu of domainMenus()) {
+    for (const menu of domainMenus('all')) {
       expect(menu.columns.length, menu.key).toBeGreaterThan(0);
       for (const column of menu.columns) {
         expect(column.links.length, `${menu.key} ${column.key}`).toBeGreaterThan(0);
@@ -177,7 +182,7 @@ describe('the mega menus follow INFORMATION_ARCHITECTURE.md §3', () => {
   });
 
   it('reaches every Explore section and page from the Explore menu', () => {
-    const explore = domainMenus().find((menu) => menu.key === 'explore');
+    const explore = domainMenus('all').find((menu) => menu.key === 'explore');
     expect(explore).toBeDefined();
 
     const paths = new Set(routesOfMenu(explore!).map((route) => route.path));
@@ -200,12 +205,12 @@ describe('the mega menus follow INFORMATION_ARCHITECTURE.md §3', () => {
   it('opens the Explore panel on a section page, never on the bare landing', () => {
     // The keyboard proof tabs once into the panel and expects an
     // `/explore/{section}` address: the first column heading must be one.
-    const [first] = domainMenus()[0]!.columns;
+    const [first] = domainMenus('all')[0]!.columns;
     expect(first?.heading.route?.path).toMatch(/^\/explore\/[a-z-]+$/);
   });
 
   it('keeps Listen inside Watch, so audio is not lost behind a video label', () => {
-    const watch = domainMenus().find((menu) => menu.key === 'watch')!;
+    const watch = domainMenus('all').find((menu) => menu.key === 'watch')!;
     const paths = routesOfMenu(watch).map((route) => route.path);
 
     expect(paths).toContain('/listen');
@@ -225,7 +230,7 @@ describe('the footer follows INFORMATION_ARCHITECTURE.md §4', () => {
     ]);
 
     const keys = [
-      ...footerColumns().flatMap((column) => {
+      ...footerColumns('all').flatMap((column) => {
         expect(column.links.length, column.heading).toBeGreaterThan(0);
         return column.links.map((link) => link.key);
       }),
@@ -236,7 +241,7 @@ describe('the footer follows INFORMATION_ARCHITECTURE.md §4', () => {
 
   it('indexes every Explore section, then the legal documents and the sitemap', () => {
     const columns = new Set(
-      footerColumns().flatMap((column) => column.links.map((link) => link.key)),
+      footerColumns('all').flatMap((column) => column.links.map((link) => link.key)),
     );
     for (const section of EXPLORE_SECTIONS) {
       expect(columns.has(`explore.${section}`), section).toBe(true);
@@ -261,7 +266,7 @@ describe('the footer follows INFORMATION_ARCHITECTURE.md §4', () => {
     // /en/sitemap and /en/legal/terms; the footer is on all four, so it alone
     // guarantees the ones the header does not.
     const paths = new Set(
-      [...footerColumns().flatMap((column) => column.links), ...footerUtility()].map(
+      [...footerColumns('all').flatMap((column) => column.links), ...footerUtility()].map(
         (link) => link.route.path,
       ),
     );
@@ -291,7 +296,7 @@ describe('every label the menus render exists in every catalogue', () => {
       'menu.overview',
       ...DOMAINS.map((key) => `nav.intros.${key === 'news-events' ? 'newsEvents' : key}`),
       ...headerUtility().map((link) => link.label),
-      ...domainMenus().flatMap((menu) => [
+      ...domainMenus('all').flatMap((menu) => [
         menu.landing.label,
         ...menu.columns.flatMap((column) => [
           column.heading.label,
@@ -299,7 +304,7 @@ describe('every label the menus render exists in every catalogue', () => {
         ]),
       ]),
       ...FOOTER_COLUMNS.map((column) => column.heading),
-      ...footerColumns().flatMap((column) => column.links.map((link) => link.label)),
+      ...footerColumns('all').flatMap((column) => column.links.map((link) => link.label)),
       ...footerUtility().map((link) => link.label),
     ];
 
@@ -326,7 +331,7 @@ describe('every label the menus render exists in every catalogue', () => {
       const pinned = ['nav.openMenu', 'nav.closeMenu', 'nav.search'].map((key) =>
         String(messageAt(shell, key)).toLowerCase(),
       );
-      for (const menu of domainMenus()) {
+      for (const menu of domainMenus('all')) {
         const name = String(messageAt(shell, menu.landing.label)).toLowerCase();
         for (const word of pinned)
           expect(name, `${locale} ${menu.key}`).not.toContain(word);
@@ -352,10 +357,55 @@ describe('the header and footer links are unconditional', () => {
   });
 
   it('keeps the full breadth: over a hundred header links, over seventy in the footer', () => {
-    const header = domainMenus().flatMap((menu) =>
+    const header = domainMenus('all').flatMap((menu) =>
       menu.columns.flatMap((column) => column.links),
     );
     expect(header.length).toBeGreaterThan(100);
-    expect(footerColumns().flatMap((column) => column.links).length).toBeGreaterThan(70);
+    expect(footerColumns('all').flatMap((column) => column.links).length).toBeGreaterThan(
+      70,
+    );
+  });
+});
+
+describe('the Quran study layers are hidden until published (Quran Part 7)', () => {
+  const quranLinks = (audience: Parameters<typeof domainMenus>[0]) =>
+    (domainMenus(audience).find((menu) => menu.key === 'quran')?.columns ?? []).flatMap(
+      (column) => column.links.map((link) => link.key),
+    );
+  const nothing = { signals: new Set<PresenceSignal>() };
+
+  it('leaves Transliteration and Word by word out while no work of either is public', () => {
+    const links = quranLinks(nothing);
+    expect(links).not.toContain('quran.transliteration');
+    expect(links).not.toContain('quran.word-by-word');
+    // Everything else stays: the navigation is otherwise unconditional.
+    expect(links).toContain('quran.translations');
+    expect(links).toContain('quran.tafsir');
+    for (const column of footerColumns(nothing))
+      for (const link of column.links)
+        expect(Object.keys(ROUTE_SIGNALS), link.key).not.toContain(link.key);
+  });
+
+  it('offers each as soon as a work of it is public, and only that one', () => {
+    expect(
+      quranLinks({ signals: new Set<PresenceSignal>(['quranTransliteration']) }),
+    ).toEqual(quranLinks('all').filter((key) => key !== 'quran.word-by-word'));
+    expect(quranLinks({ signals: new Set<PresenceSignal>(['quranWordByWord']) })).toEqual(
+      quranLinks('all').filter((key) => key !== 'quran.transliteration'),
+    );
+    expect(routeOffered(nothing, 'quran.translations')).toBe(true);
+    expect(routeOffered(nothing, 'quran.word-by-word')).toBe(false);
+  });
+
+  it('gates exactly the two study-layer routes, each by its own signal', () => {
+    expect(ROUTE_SIGNALS).toEqual({
+      'quran.transliteration': 'quranTransliteration',
+      'quran.word-by-word': 'quranWordByWord',
+    });
+    for (const key of Object.keys(ROUTE_SIGNALS))
+      expect(
+        SHELL_ROUTES.some((route) => route.key === key),
+        key,
+      ).toBe(true);
   });
 });

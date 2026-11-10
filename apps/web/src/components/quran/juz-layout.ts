@@ -1,6 +1,7 @@
 import type { Locale } from '@minhaj/contracts';
 import {
   QURAN_JUZ_WINDOW,
+  isAyahWordToken,
   type PublicAyahPlace,
   type QuranRef,
 } from '@minhaj/contracts/quran';
@@ -36,9 +37,6 @@ export interface OpeningWords {
   readonly more: boolean;
 }
 
-/** A run of the text between spaces that carries a letter — a word, not a sign. */
-const isWord = (token: string) => /\p{L}/u.test(token);
-
 /**
  * THE OPENING WORDS OF A STORED AYAH TEXT, VERBATIM. The result is one
  * contiguous slice of the text exactly as stored — never respelled,
@@ -47,10 +45,12 @@ const isWord = (token: string) => /\p{L}/u.test(token);
  * so a sign the text writes between words (the rub' al-hizb mark ۞ that opens
  * many a Juz, or a pause mark) is never counted as one: one that LEADS the
  * text is not part of its opening words, and one that falls between two of
- * them stays exactly where the text has it. A text with no word has none.
+ * them stays exactly where the text has it. A text with no word has none. The
+ * word rule is the contract's one (`isAyahWordToken`), which the word-by-word
+ * segmentation uses too (Quran Part 7).
  */
 export function openingWords(text: string, count = JUZ_OPENING_WORDS): OpeningWords {
-  const words = [...text.matchAll(/\S+/gu)].filter((token) => isWord(token[0]));
+  const words = [...text.matchAll(/\S+/gu)].filter((token) => isAyahWordToken(token[0]));
   const first = words[0];
   const last = words[Math.min(count, words.length) - 1];
   if (first === undefined || last === undefined || count < 1)

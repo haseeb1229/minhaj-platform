@@ -38,5 +38,5 @@ export default async function TafsirListingRoute({ params }: SectionParams) {
     const t = await getTranslations({ locale, namespace: 'quran' });
     return <QuranUnavailable locale={locale} section={t('sections.tafsir')} />;
   }
-  return <WorkListingPage locale={locale} availability={availability} kind="tafsir" />;
+  return <WorkListingPage locale={locale} availability={availability} />;
 }
