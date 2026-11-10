@@ -76,6 +76,7 @@ import {
   mediaQueryPath,
   videoStructuredData,
   viewOfFormat,
+  watchLanding,
   WATCH_VIEWS,
 } from './presentation';
 
@@ -1677,7 +1678,7 @@ function surfacePath(locale: Locale, surface: string): string {
  */
 export async function WatchLandingPage({
   locale,
-  sort,
+  sort: requested,
 }: {
   readonly locale: Locale;
   readonly sort: 'featured' | 'latest';
@@ -1688,8 +1689,8 @@ export async function WatchLandingPage({
     const format = formatOfView(view);
     return format === null ? [] : [{ view, format }];
   });
-  const [page, programmes, ...byFormat] = await Promise.all([
-    reads.videos({ featured: sort === 'featured' }),
+  const [asked, programmes, ...byFormat] = await Promise.all([
+    reads.videos({ featured: requested === 'featured' }),
     reads.seriesList('program', 0),
     ...views.map(({ format }) => reads.videos({ format })),
   ]);
@@ -1699,6 +1700,12 @@ export async function WatchLandingPage({
       videos: (await reads.seriesVideos(programme.id, 0)).items.slice(0, SHELF),
     })),
   );
+
+  const { sort, tabs } = watchLanding(
+    requested,
+    requested === 'featured' ? asked.items.length : 1,
+  );
+  const page = sort === requested ? asked : await reads.videos({ featured: false });
 
   const heading = t(`sort.${sort}`);
   const ordered = interfaceLanguageFirst(
@@ -1748,31 +1755,21 @@ export async function WatchLandingPage({
               heading={heading}
               intro={t(`landing.${sort}Intro`)}
             />
-            <LinkTabs
-              label={t('sort.label')}
-              tabs={(['featured', 'latest'] as const).map((option) => ({
-                href: localizedPath(
-                  locale,
-                  `/watch${option === 'featured' ? '' : '?sort=latest'}`,
-                ),
-                text: t(`sort.${option}`),
-                current: option === sort,
-              }))}
-            />
+            {tabs ? (
+              <LinkTabs
+                label={t('sort.label')}
+                tabs={(['featured', 'latest'] as const).map((option) => ({
+                  href: localizedPath(
+                    locale,
+                    `/watch${option === 'featured' ? '' : '?sort=latest'}`,
+                  ),
+                  text: t(`sort.${option}`),
+                  current: option === sort,
+                }))}
+              />
+            ) : null}
             {page.items.length === 0 ? (
-              <EmptyState
-                icon="video"
-                {...(sort === 'featured'
-                  ? {
-                      action: {
-                        href: localizedPath(locale, '/watch?sort=latest'),
-                        text: t('sort.latest'),
-                      },
-                    }
-                  : {})}
-              >
-                {sort === 'featured' ? t('featuredEmpty') : t('empty')}
-              </EmptyState>
+              <EmptyState icon="video">{t('empty')}</EmptyState>
             ) : (
               <VideoGrid
                 locale={locale}

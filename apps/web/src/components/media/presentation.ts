@@ -255,6 +255,20 @@ export function readWatchSort(
   return query['sort'] === 'latest' ? 'latest' : 'featured';
 }
 
+/**
+ * What the Watch landing shows: the sort asked for, except that Featured with
+ * nothing featured opens on Latest instead of an empty section — and then the
+ * Featured/Latest tabs are not offered, since only one view has anything in it.
+ */
+export function watchLanding(
+  requested: 'featured' | 'latest',
+  featuredCount: number,
+): { readonly sort: 'featured' | 'latest'; readonly tabs: boolean } {
+  return requested === 'featured' && featuredCount === 0
+    ? { sort: 'latest', tabs: false }
+    : { sort: requested, tabs: true };
+}
+
 /** A plain offset from `?offset=`, bounded, for the grouping pages. */
 export function readOffset(query: Record<string, string | string[] | undefined>): number {
   const raw = query['offset'];

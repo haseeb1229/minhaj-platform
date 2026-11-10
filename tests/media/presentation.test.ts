@@ -18,6 +18,7 @@ import {
   mediaQueryPath,
   videoStructuredData,
   viewOfFormat,
+  watchLanding,
   WATCH_VIEWS,
 } from '../../apps/web/src/components/media/presentation.ts';
 
@@ -93,6 +94,10 @@ describe('query state', () => {
     expect(readWatchSort({})).toBe('featured');
     expect(readWatchSort({ sort: 'latest' })).toBe('latest');
     expect(readWatchSort({ sort: 'popular' })).toBe('featured');
+    // Featured with nothing featured opens on Latest, with no tabs to offer.
+    expect(watchLanding('featured', 0)).toEqual({ sort: 'latest', tabs: false });
+    expect(watchLanding('featured', 3)).toEqual({ sort: 'featured', tabs: true });
+    expect(watchLanding('latest', 0)).toEqual({ sort: 'latest', tabs: true });
     expect(readOffset({ offset: '48' })).toBe(48);
     expect(readOffset({ offset: '999999999' })).toBe(0);
   });
