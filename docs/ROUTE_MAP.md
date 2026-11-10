@@ -669,7 +669,7 @@ whole page. No route changes.
 
 | Route | Purpose |
 |---|---|
-| `/watch` | Landing — `?sort=featured\|latest` |
+| `/watch` | Landing — `?sort=featured\|latest`; with nothing featured, the default view opens on Latest and offers no sort tabs |
 | `/watch/videos` · `/watch/videos/{slug}` | Videos — `?topic, speaker, series, language` |
 | `/watch/{lectures\|events\|highlights\|interviews\|documentaries}` | Filtered views |
 | `/watch/series` · `/{slug}` · `/watch/programs` · `/{slug}` · `/watch/playlists` · `/{slug}` | Groupings — a programme is a Series of kind `program`; each Series is canonical under exactly one of the two families, and the other answers one 301 (Phase 10) |
