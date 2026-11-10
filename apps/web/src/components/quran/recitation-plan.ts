@@ -454,3 +454,20 @@ export function playbackRate(value: unknown): PlaybackRate {
     ? (value as PlaybackRate)
     : 1;
 }
+
+/**
+ * A recitation's label in a chooser: "{reciter} — {name}", or the name alone
+ * when there is no reciter or the name already begins with the reciter's name
+ * (an imported catalogue names each recitation after its qari).
+ */
+export function recitationLabel(entry: {
+  readonly reciter: string | null;
+  readonly name: string;
+}): string {
+  const reciter = entry.reciter?.trim() ?? '';
+  if (reciter === '') return entry.name;
+  const fold = (text: string) => text.trim().toLocaleLowerCase();
+  return fold(entry.name).startsWith(fold(reciter))
+    ? entry.name
+    : `${reciter} — ${entry.name}`;
+}

@@ -3,6 +3,7 @@
 import { useId } from 'react';
 
 import { Icon } from '@/components/ui/icon';
+import { recitationLabel } from './recitation-plan';
 import { chooseRecitation, playFrom, usePlayer } from './recitation-store';
 
 /**
@@ -54,7 +55,7 @@ export function RecitationListen({
         >
           {state.catalogue.map((entry) => (
             <option key={entry.slug} value={entry.slug}>
-              {entry.reciter === null ? entry.name : `${entry.reciter} — ${entry.name}`}
+              {recitationLabel(entry)}
             </option>
           ))}
         </select>

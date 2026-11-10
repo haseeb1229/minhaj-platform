@@ -13,6 +13,7 @@ import {
   neighbourAyah,
   playbackRate,
   readSurahAudio,
+  recitationLabel,
   repeatCount,
   segmentFor,
   startMsOf,
@@ -502,5 +503,21 @@ describe('a repeat count and a speed are clamped to what is offered', () => {
     [undefined, 1],
   ])('playbackRate(%j) is %d', (value, expected) => {
     expect(playbackRate(value)).toBe(expected);
+  });
+});
+
+describe('a recitation is labelled once by its reciter', () => {
+  it('prefixes the reciter only when the name does not already begin with it', () => {
+    expect(
+      recitationLabel({ reciter: 'Mishary Alafasi', name: 'Mishary Alafasi — Murattal' }),
+    ).toBe('Mishary Alafasi — Murattal');
+    expect(
+      recitationLabel({ reciter: 'mishary alafasi ', name: 'Mishary Alafasi - Hafs' }),
+    ).toBe('Mishary Alafasi - Hafs');
+    expect(
+      recitationLabel({ reciter: 'Shaykh-ul-Islam', name: 'Irfan-ul-Quran (Urdu)' }),
+    ).toBe('Shaykh-ul-Islam — Irfan-ul-Quran (Urdu)');
+    expect(recitationLabel({ reciter: null, name: 'Murattal' })).toBe('Murattal');
+    expect(recitationLabel({ reciter: '  ', name: 'Murattal' })).toBe('Murattal');
   });
 });
