@@ -2348,6 +2348,7 @@ model Work {
   collectionItems CollectionItem[]
   savedItems SavedItem[]
   readingHistory ReadingHistory[]
+  quranPassages WorkQuranPassage[]
   @@index([state, slug])
   migrationMappings MigrationLegacyMapping[]
   migrationEntries MigrationManifestEntry[]
@@ -2376,6 +2377,21 @@ model WorkContributor {
   person Person @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   @@id([workId, personId, role])
   @@index([personId, workId])
+}
+/// Quran Part 8: a Quran passage this Work explains — a CITATION VALUE owned by
+/// Library, with no key into Quran (DOMAIN_MODEL.md §10.1). Ordered by the
+/// editor (`position` 0..39), never repeated; a CHECK holds the shape and the
+/// service whether the range ends within its Surah.
+model WorkQuranPassage {
+  workId String @db.NVarChar(36)
+  position Int
+  surahNumber Int
+  ayahFrom Int
+  ayahTo Int
+  work Work @relation(fields: [workId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([workId, position])
+  @@unique([workId, surahNumber, ayahFrom, ayahTo], map: "WorkQuranPassage_citation_key")
+  @@index([surahNumber, ayahFrom, ayahTo], map: "WorkQuranPassage_surah_idx")
 }
 model WorkTopic {
   workId String @db.NVarChar(36)
@@ -2914,6 +2930,7 @@ model Video {
   collectionItems CollectionItem[]
   savedItems SavedItem[]
   watchHistory WatchHistory[]
+  quranPassages VideoQuranPassage[]
   migrationMappings MigrationLegacyMapping[]
   migrationEntries MigrationManifestEntry[]
   @@unique([provider, providerVideoId])
@@ -2948,6 +2965,22 @@ model VideoSpeaker {
   person Person @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   @@id([videoId, personId])
   @@index([personId, videoId])
+}
+
+/// Quran Part 8: a Quran passage this Video explains — a CITATION VALUE owned by
+/// Media, with no key into Quran (DOMAIN_MODEL.md §11) — and where in the video
+/// the lecture begins it (`startSeconds`, 0..86399, or null).
+model VideoQuranPassage {
+  videoId String @db.NVarChar(36)
+  position Int
+  surahNumber Int
+  ayahFrom Int
+  ayahTo Int
+  startSeconds Int?
+  video Video @relation(fields: [videoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([videoId, position])
+  @@unique([videoId, surahNumber, ayahFrom, ayahTo], map: "VideoQuranPassage_citation_key")
+  @@index([surahNumber, ayahFrom, ayahTo], map: "VideoQuranPassage_surah_idx")
 }
 
 model VideoTopic {
@@ -3891,6 +3924,8 @@ model QuranSource {
   wordByWords      QuranWordByWord[]
   tafsirs          QuranTafsir[]
   recitations      QuranRecitation[]
+  /// Quran translation audio: the narration alignments this source records.
+  recitationAlignments QuranRecitationAlignment[]
   tajweedRules     QuranTajweedRule[]
 
   @@map("QuranSource")
@@ -4316,6 +4351,8 @@ model QuranRecitation {
   source   QuranSource?             @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   language Language?                @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
   segments QuranRecitationSegment[]
+  /// The narration segments whose Arabic was aligned against this recitation.
+  alignedAgainst QuranRecitationAlignment[] @relation("QuranRecitationAlignmentReference")
 
   @@index([state, slug])
   @@index([personId, state])
@@ -4338,14 +4375,16 @@ model QuranRecitationSegment {
   end        Ayah            @relation("QuranRecitationSegmentEnd", fields: [surahNumber, endAyah], references: [surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction)
   asset      Asset?          @relation("QuranRecitationSegmentAsset", fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   timings    QuranRecitationTiming[]
+  alignment  QuranRecitationAlignment?
 
   @@unique([recitationId, surahNumber, startAyah], map: "QuranRecitationSegment_start_key")
   @@map("QuranRecitationSegment")
 }
 
 /// When one Ayah is heard in a segment's audio, [startMs, endMs). A segment is
-/// timed for every Ayah of its range or for none, monotonic, written once with
-/// it and never edited (Quran Part 5).
+/// timed for every Ayah of its range or for none, monotonic, written once —
+/// with it, or once later with a narration's alignment — and never edited
+/// (Quran Part 5; translation audio).
 model QuranRecitationTiming {
   segmentId  String @db.NVarChar(36)
   ayahNumber Int
@@ -4356,6 +4395,40 @@ model QuranRecitationTiming {
 
   @@id([segmentId, ayahNumber])
   @@map("QuranRecitationTiming")
+}
+
+/// Where a first-party narration segment's timing and translation spans came
+/// from: a `reference` provenance source and the timed Arabic recitation its
+/// Arabic was matched against - a recording, never a credit. Written once with
+/// the segment's timing and spans; the segment's file is then fixed (51405).
+model QuranRecitationAlignment {
+  segmentId             String @id @db.NVarChar(36)
+  sourceId              String @db.NVarChar(36)
+  referenceRecitationId String @db.NVarChar(36)
+
+  segment   QuranRecitationSegment           @relation(fields: [segmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  source    QuranSource                      @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reference QuranRecitation                  @relation("QuranRecitationAlignmentReference", fields: [referenceRecitationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  spans     QuranRecitationTranslationSpan[]
+
+  @@index([referenceRecitationId])
+  @@map("QuranRecitationAlignment")
+}
+
+/// Where one passage's translation is heard in an aligned segment's audio,
+/// [startMs, endMs): after its last Ayah's Arabic, before the next Ayah's. The
+/// passages partition the segment's range, every Ayah or none (51405).
+model QuranRecitationTranslationSpan {
+  segmentId String @db.NVarChar(36)
+  startAyah Int
+  endAyah   Int
+  startMs   Int
+  endMs     Int
+
+  alignment QuranRecitationAlignment @relation(fields: [segmentId], references: [segmentId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([segmentId, startAyah])
+  @@map("QuranRecitationTranslationSpan")
 }
 
 model QuranTajweedRule {

@@ -51,6 +51,8 @@ import {
   type QuranSearchFilters,
   type QuranSearchForm,
 } from './search-view';
+import { resourceCount, resourcesForAyah, tafsirSurahPath } from './tafsir-layout';
+import { readTafsirResources } from './tafsir-read';
 
 /**
  * `/quran/search` — Quran search over the shared Search Foundation
@@ -353,6 +355,21 @@ async function JumpCard({
       : null;
   const name = surah === null ? null : surahName(surah, locale);
   const ayah = jump.kind === 'ayah' ? await readAyah(jump.surah, jump.ayah) : null;
+  // Quran Part 8: what explains the place named — the Tafsir hub's own read.
+  const explained =
+    jump.kind === 'ayah'
+      ? resourceCount(
+          resourcesForAyah(
+            await readTafsirResources(jump.surah, jump.ayah, jump.ayah),
+            jump.surah,
+            jump.ayah,
+          ),
+        )
+      : jump.kind === 'surah' && surah !== null
+        ? await readTafsirResources(surah.number, 1, surah.ayahCount).then(
+            (found) => found.texts.length + found.books.length + found.lectures.length,
+          )
+        : 0;
   const ref = jump.kind === 'ayah' ? { surah: jump.surah, ayah: jump.ayah } : null;
   // The one Ayah the catalogue names on its own (Ayat al-Kursi) — a fixed
   // citation from the reader's starting points, never a name written here.
@@ -439,6 +456,24 @@ async function JumpCard({
             </TextLink>
           </p>
         </>
+      )}
+      {explained === 0 || (jump.kind !== 'ayah' && jump.kind !== 'surah') ? null : (
+        <p className="text-sm">
+          <TextLink
+            href={
+              jump.kind === 'ayah'
+                ? `${tafsirSurahPath(locale, jump.surah)}?ayah=${String(jump.ayah)}`
+                : tafsirSurahPath(locale, jump.surah)
+            }
+          >
+            {t(
+              jump.kind === 'ayah' ? 'search.jump.tafsirAyah' : 'search.jump.tafsirSurah',
+              {
+                count: explained,
+              },
+            )}
+          </TextLink>
+        </p>
       )}
     </section>
   );

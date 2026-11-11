@@ -2425,7 +2425,8 @@
       "fallback": "Watch “{title}” on {provider}",
       "frameTitle": "{title} — {provider} player",
       "unavailable": "{provider} does not currently offer this video to be played here.",
-      "tryProvider": "Try opening it on {provider}"
+      "tryProvider": "Try opening it on {provider}",
+      "startsAt": "Opens at {time}"
     },
     "metadataNotice": "This title and description describe the video in your language. They are not a translation or a dubbed version of it; the language of the video itself is stated below.",
     "captionsAvailable": "Captions are offered in the {provider} player.",
@@ -3132,7 +3133,7 @@
       "juz": "Every Juz in order, by its opening words, with the ayat, Surahs and pages it covers.",
       "search": "Search the Arabic text and every published translation.",
       "translations": "Published translations of the Quran, each its own work with its own translators and source.",
-      "tafsir": "Published works of tafsir, with commentary arranged by Ayah.",
+      "tafsir": "Minhaj-ul-Quran’s tafsir in one place: tafsir texts, Shaykh-ul-Islam’s tafsir books and Minhaj TV lectures, each linked to the ayat it explains.",
       "transliteration": "Published transliterations, each read alongside the Arabic text.",
       "tajweed": "Guidance on the rules of recitation.",
       "recitations": "Recitations by reciters, played Surah by Surah alongside the text.",
@@ -3378,7 +3379,9 @@
         "heading": "Go straight there",
         "surahFacts": "Surah {number} · {count, plural, one {# ayah} other {# ayat}}",
         "inSurah": "Read it in its Surah",
-        "open": "Open"
+        "open": "Open",
+        "tafsirAyah": "Tafsir and lectures on this Ayah ({count})",
+        "tafsirSurah": "Tafsir of this Surah ({count})"
       },
       "results": "Ayat that match",
       "count": "{count, plural, one {# result} other {# results}} for “{query}”",
@@ -3448,7 +3451,8 @@
         "copy": "Copy with citation",
         "share": "Share",
         "save": "Save to My Minhaj",
-        "play": "Play from this Ayah"
+        "play": "Play from this Ayah",
+        "tafsir": "Tafsir ({count})"
       },
       "status": {
         "copied": "Copied with its citation.",
@@ -3500,6 +3504,13 @@
         "wordsHelp": "Each Arabic word with its meaning beneath it, in Translation mode.",
         "none": "None",
         "reset": "Choose in these settings instead"
+      },
+      "tafsir": {
+        "title": "Tafsir of {citation}",
+        "texts": "Tafsir",
+        "books": "Books",
+        "lectures": "Lectures",
+        "all": "All tafsir of Surah {surah}"
       }
     },
     "start": {
@@ -3555,6 +3566,12 @@
       "rangeActive": "Repeating ayat {from}–{to}",
       "follow": "Follow along: highlight and scroll to the Ayah being recited",
       "continuous": "Carry on into the next Surah",
+      "translation": "Urdu translation after each passage",
+      "translationAbout": "After each passage, the Irfan-ul-Quran Urdu narration (Tasleem Ahmed Sabri) reads its translation. Where each passage ends was found by audio comparison and is not yet reviewed.",
+      "translationNotHere": "Not available for this Surah. Surahs that have it: {count}.",
+      "translationNarration": "The narration chosen already reads the Urdu translation.",
+      "translating": "Urdu translation · ayat {from}–{to}",
+      "translatingOne": "Urdu translation · Ayah {ayah}",
       "shortcuts": "While the player has focus: Space or K plays and pauses; J and L go to the previous and next Ayah.",
       "surahFallback": "Surah {number}"
     },
@@ -3579,6 +3596,8 @@
       "surahs": "{count, plural, one {# Surah} other {# Surahs}}",
       "timed": "Verse by verse",
       "untimed": "Whole Surah",
+      "byPassage": "{count, plural, one {Translation by passage: # Surah} other {Translation by passage: # Surahs}}",
+      "arabicIdentified": "{count, plural, one {Arabic recitation: {reciter} — identified by audio comparison in # Surah; not confirmed by Minhaj-ul-Quran.} other {Arabic recitation: {reciter} — identified by audio comparison in # Surahs; not confirmed by Minhaj-ul-Quran.}}",
       "play": "Play",
       "surahList": "Surahs",
       "playSurah": "Play {name}",
@@ -3593,6 +3612,68 @@
       "readWords": "Read word by word",
       "howTransliteration": "Open a Surah and choose it in the reader’s settings, under Transliteration, or with the button below.",
       "howWords": "Open a Surah and choose it in the reader’s settings, under Word by word, or with the button below."
+    },
+    "tafsirHub": {
+      "eyebrow": "Tafsir hub",
+      "lede": "Tafsir texts, Shaykh-ul-Islam’s tafsir books and Minhaj TV lectures, each linked to the ayat it explains — Surah by Surah, Ayah by Ayah.",
+      "statTexts": "{count, plural, one {tafsir text} other {tafsir texts}}",
+      "statBooks": "{count, plural, one {book} other {books}}",
+      "statLectures": "{count, plural, one {lecture} other {lectures}}",
+      "statSurahs": "{count, plural, one {Surah with tafsir} other {Surahs with tafsir}}",
+      "find": "Find tafsir",
+      "findSurah": "Surah",
+      "findAyah": "Ayah (optional)",
+      "findSubmit": "Show tafsir",
+      "chooseSurah": "Choose a Surah",
+      "empty": "No tafsir is linked to an Ayah yet. Books and lectures appear here as editors link them to the passages they explain.",
+      "textsHeading": "Tafsir texts",
+      "textsHelp": "Tafsir supplied by Minhaj-ul-Quran, arranged by Ayah. Read it on its own or beside the Quran.",
+      "workCoverage": "{surahs, plural, one {# Surah} other {# Surahs}} · {entries, plural, one {# entry} other {# entries}}",
+      "readWith": "Read the Quran with it",
+      "gridHeading": "Tafsir by Surah",
+      "gridHelp": "Every Surah with the tafsir texts, books and lectures linked to it. A Surah with nothing linked yet is shown without a link.",
+      "texts": "{count, plural, one {# text} other {# texts}}",
+      "books": "{count, plural, one {# book} other {# books}}",
+      "lectures": "{count, plural, one {# lecture} other {# lectures}}",
+      "nothingYet": "Nothing linked yet",
+      "booksHeading": "Tafsir books",
+      "booksHelp": "Books from the Library, shelved by the first Surah they explain, with the passages they cover.",
+      "lecturesHeading": "Tafsir lectures",
+      "lecturesHelp": "Minhaj TV lectures, by the first Surah they explain. A lecture opens where it begins the passage, when that is recorded.",
+      "bookType": "Book",
+      "lectureType": "Lecture",
+      "startsAt": "from {time}",
+      "about": "Every book and lecture here is Minhaj-ul-Quran’s own, from the Library and Watch; no external tafsir is shown. Which ayat each one explains is recorded by editors and may be corrected."
+    },
+    "tafsirSurah": {
+      "title": "Tafsir of {name}",
+      "intro": "Everything linked to this Surah of {count, plural, one {# ayah} other {# ayat}}: tafsir texts, books and lectures, beside the ayat they explain.",
+      "readSurah": "Read the Surah",
+      "allTafsir": "The tafsir hub",
+      "notLinked": "Nothing is linked to Ayah {ayah} yet.",
+      "readAyah": "Read Ayah {ayah}",
+      "empty": "No tafsir is linked to this Surah yet.",
+      "inThisSurah": "In this Surah",
+      "wholeShort": "Whole Surah",
+      "jumpLabel": "Go to Ayah",
+      "jumpSubmit": "Go",
+      "translationLabel": "Translation",
+      "translationNone": "Arabic only",
+      "translationSubmit": "Show",
+      "wholeHeading": "On the whole Surah",
+      "groupOne": "Ayah {ayah}",
+      "groupRange": "Ayat {from}–{to}",
+      "showAyat": "{count, plural, one {The Ayah} other {The # ayat}}",
+      "textsLabel": "Tafsir",
+      "booksLabel": "Books",
+      "lecturesLabel": "Lectures",
+      "entryLabel": "{name}, {range}",
+      "previous": "Tafsir of Surah {number}",
+      "next": "Tafsir of Surah {number}"
+    },
+    "tafsirLinks": {
+      "heading": "On the Quran",
+      "help": "The passages of the Quran this explains. Each opens its tafsir: the ayat, and everything else linked to them."
     }
   },
   "quranAdmin": {
@@ -8854,5 +8935,32 @@
         "matches": "Matching time zones: {count}"
       }
     }
+  },
+  "quranPassages": {
+    "heading": "Quran passages",
+    "helpWork": "The passages of the Quran this book explains, in order. The Tafsir hub and the Quran reader list the book under each.",
+    "helpVideo": "The passages of the Quran this lecture explains, in order, and where in the video it begins each (optional). The Tafsir hub and the Quran reader open the lecture there.",
+    "empty": "No passage is recorded.",
+    "position": "Passage {number}",
+    "startsAt": "starts at {time}",
+    "moveEarlier": "Move earlier",
+    "moveLater": "Move later",
+    "remove": "Remove",
+    "full": "At most {max} passages can be recorded.",
+    "add": "Add a passage",
+    "addSubmit": "Add passage",
+    "surah": "Surah",
+    "chooseSurah": "Choose a Surah",
+    "surahOption": "{name} ({count} ayat)",
+    "surahNumber": "Surah {number}",
+    "surahNamed": "{number}. {name}",
+    "from": "From Ayah",
+    "fromHelp": "Empty for the whole Surah.",
+    "to": "To Ayah",
+    "toHelp": "Empty for one Ayah.",
+    "start": "Starts at",
+    "startHelp": "Where the lecture begins this passage: seconds, 12:34 or 1:02:03. Optional.",
+    "pending": "Saving…",
+    "duplicate": "That passage is already recorded."
   }
 }

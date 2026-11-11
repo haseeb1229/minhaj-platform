@@ -1717,6 +1717,28 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
           (entry) => entry.startAyah,
         ),
       ).toEqual([1]);
+      // Quran Part 8: the Tafsir hub's per-Surah coverage — entries and the
+      // ayat they cover, counted from the public entries themselves.
+      const [publicTafsir] = await reader.tafsirs();
+      const allEntries = (await reader.tafsirEntryPage(publicTafsir!.id, 0)).items;
+      const expectedCoverage = new Map<number, { entries: number; ayat: number }>();
+      for (const item of allEntries) {
+        const seen = expectedCoverage.get(item.surah) ?? { entries: 0, ayat: 0 };
+        expectedCoverage.set(item.surah, {
+          entries: seen.entries + 1,
+          ayat: seen.ayat + item.endAyah - item.startAyah + 1,
+        });
+      }
+      expect(allEntries.length).toBeGreaterThan(0);
+      expect(await reader.tafsirCoverage([publicTafsir!.id])).toEqual([
+        {
+          workId: publicTafsir!.id,
+          surahs: [...expectedCoverage.entries()]
+            .sort(([a], [b]) => a - b)
+            .map(([surah, counted]) => ({ surah, ...counted })),
+        },
+      ]);
+      expect(await reader.tafsirCoverage([])).toEqual([]);
       expect((await reader.recitations()).map((r) => r.id)).toEqual([recitationId]);
       expect((await reader.recitationsByReciter(reciter)).map((r) => r.id)).toEqual([
         recitationId,
@@ -2113,6 +2135,220 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
       expect((await reader.wordByWords()).map((work) => work.slug)).toEqual([
         wordByWord.slug,
       ]);
+    });
+
+    it('aligns a narration segment: timing, translation spans and provenance, written once and read in public (translation audio)', async () => {
+      // The alignment's provenance: a `reference` source, registered by the owner.
+      const alignmentSource = randomUUID();
+      await db.admin.query(`
+        INSERT INTO [dbo].[QuranSource] ([id],[code],[authority],[title],[version],[encoding],[reference])
+        VALUES (${n(alignmentSource)}, ${n(`non-quran-fixture-alignment-${alignmentSource.slice(0, 8)}`)}, N'reference',
+                N'NON_QURAN_FIXTURE alignment source', N'fixture-1', N'utf-8',
+                N'NON_QURAN_FIXTURE alignment evidence');
+      `);
+      const value = (languageCode: string) => ({
+        slug: `non-quran-fixture-aligned-${randomUUID().slice(0, 8)}`,
+        name: 'NON_QURAN_FIXTURE recitation',
+        reciterId: reciter,
+        style: null,
+        attribution: null,
+        sourceId: primary.id,
+        languageCode,
+      });
+      const filed = async (
+        id: string,
+        version: number,
+        surah: number,
+        ayat: number,
+        timed: boolean,
+      ) => {
+        const added = await persistence.addRecitationSegment({
+          actorId,
+          id,
+          expectedVersion: version,
+          value: {
+            surah,
+            startAyah: 1,
+            endAyah: ayat,
+            ...(timed
+              ? {
+                  timings: Array.from({ length: ayat }, (_, index) => ({
+                    ayah: index + 1,
+                    startMs: index * 1000,
+                    endMs: (index + 1) * 1000,
+                  })),
+                }
+              : {}),
+          },
+        });
+        const segment = added.segments.find((entry) => entry.surah === surah)!;
+        return persistence.attachSegmentAsset({
+          actorId,
+          id,
+          expectedVersion: added.version,
+          segmentId: segment.id,
+          assetId: await asset(db.admin),
+        });
+      };
+
+      // The Arabic the narration was matched against, timed and published.
+      const arabic = await persistence.createRecitation({
+        actorId,
+        value: value('ar'),
+        stream: null,
+      });
+      const arabicFiled = await filed(arabic.id, 1, 2, 4, true);
+      await persistence.setRecitationState({
+        actorId,
+        id: arabic.id,
+        expectedVersion: arabicFiled.version,
+        state: 'published',
+      });
+
+      // The narration: Surah 2 (four ayat), untimed, with its file.
+      const narration = await persistence.createRecitation({
+        actorId,
+        value: value('ur'),
+        stream: null,
+      });
+      let detail = await filed(narration.id, 1, 2, 4, false);
+      const segmentId = detail.segments[0]!.id;
+      // Ayat 1-2 one passage, 3 and 4 their own; each Urdu between its Arabic
+      // and the next Ayah's.
+      const timings = [
+        { ayah: 1, startMs: 1000, endMs: 2000 },
+        { ayah: 2, startMs: 2000, endMs: 3000 },
+        { ayah: 3, startMs: 6000, endMs: 7000 },
+        { ayah: 4, startMs: 9000, endMs: 10000 },
+      ];
+      const spans = [
+        { startAyah: 1, endAyah: 2, startMs: 3000, endMs: 6000 },
+        { startAyah: 3, endAyah: 3, startMs: 7000, endMs: 9000 },
+        { startAyah: 4, endAyah: 4, startMs: 10000, endMs: 12000 },
+      ];
+      const align = (
+        overrides: Partial<{
+          expectedVersion: number;
+          sourceId: string;
+          referenceRecitationId: string;
+          spans: typeof spans;
+        }> = {},
+      ) =>
+        persistence.alignRecitationSegment({
+          actorId,
+          id: narration.id,
+          expectedVersion: overrides.expectedVersion ?? detail.version,
+          value: {
+            segmentId,
+            sourceId: overrides.sourceId ?? alignmentSource,
+            referenceRecitationId: overrides.referenceRecitationId ?? arabic.id,
+            timings,
+            spans: overrides.spans ?? spans,
+          },
+        });
+
+      // Fail closed, and nothing written: a stale version, a non-reference
+      // source, an alignment against itself, passages that leave an Ayah out.
+      expect(await reasonOf(align({ expectedVersion: detail.version - 1 }))).toBe(
+        'conflict',
+      );
+      expect(await reasonOf(align({ sourceId: primary.id }))).toBe('invalid');
+      expect(await reasonOf(align({ referenceRecitationId: narration.id }))).toBe(
+        'invalid',
+      );
+      expect(await reasonOf(align({ spans: spans.slice(0, 2) }))).toBe('invalid');
+      for (const table of [
+        'QuranRecitationTiming',
+        'QuranRecitationAlignment',
+        'QuranRecitationTranslationSpan',
+      ])
+        expect(await count(db.admin, table, `[segmentId] = ${n(segmentId)}`)).toBe(0);
+
+      detail = await align();
+      expect(detail.segments[0]).toMatchObject({ timedAyat: 4, translationSpans: 3 });
+      expect(detail.version).toBe(narration.version + 3);
+      // Never twice, never edited, and the segment's file stays the one aligned.
+      expect(await reasonOf(align())).toBe('invalid');
+      expect(
+        await reasonOf(
+          persistence.attachSegmentAsset({
+            actorId,
+            id: narration.id,
+            expectedVersion: detail.version,
+            segmentId,
+            assetId: await asset(db.admin),
+          }),
+        ),
+      ).toBe('invalid');
+      expect(
+        await sqlNumber(
+          app.query('UPDATE [dbo].[QuranRecitationTranslationSpan] SET [endMs]=[endMs];'),
+        ),
+      ).toBe(229);
+      expect(
+        await sqlNumber(
+          app.query('UPDATE [dbo].[QuranRecitationAlignment] SET [sourceId]=[sourceId];'),
+        ),
+      ).toBe(229);
+
+      // Published, it is public with its translated Surahs, its spans and what
+      // its Arabic was matched against.
+      await persistence.setRecitationState({
+        actorId,
+        id: narration.id,
+        expectedVersion: detail.version,
+        state: 'published',
+      });
+      expect(await reader.recitation(narration.slug)).toMatchObject({
+        languageCode: 'ur',
+        translatedSurahs: [2],
+        timed: true,
+      });
+      expect((await reader.recitation(arabic.slug))?.translatedSurahs).toEqual([]);
+      expect(await reader.recitationTranslationSpans(narration.id, 2)).toEqual(
+        spans.map((span) => ({ segmentId, ...span })),
+      );
+      expect(await reader.recitationTranslationSpans(narration.id, 1)).toEqual([]);
+      expect(await reader.recitationTranslationSpans(arabic.id, 2)).toEqual([]);
+      expect(await reader.recitationAlignments(narration.id)).toEqual([
+        { referenceRecitationId: arabic.id, surahCount: 1 },
+      ]);
+
+      // A reference that is not public now is not named.
+      const arabicNow = (await persistence.recitation(arabic.id))!;
+      await persistence.setRecitationState({
+        actorId,
+        id: arabic.id,
+        expectedVersion: arabicNow.version,
+        state: 'archived',
+      });
+      expect(await reader.recitationAlignments(narration.id)).toEqual([]);
+
+      // Archived, the narration's spans are gone from every public read at once.
+      const narrationNow = (await persistence.recitation(narration.id))!;
+      await persistence.setRecitationState({
+        actorId,
+        id: narration.id,
+        expectedVersion: narrationNow.version,
+        state: 'archived',
+      });
+      expect(await reader.recitation(narration.slug)).toBeNull();
+      expect(await reader.recitationTranslationSpans(narration.id, 2)).toEqual([]);
+      expect(await reader.recitationAlignments(narration.id)).toEqual([]);
+
+      // Removing the segment removes its spans, alignment and timing with it.
+      await persistence.removeRecitationSegment({
+        actorId,
+        id: narration.id,
+        expectedVersion: narrationNow.version + 1,
+        segmentId,
+      });
+      for (const table of [
+        'QuranRecitationTiming',
+        'QuranRecitationAlignment',
+        'QuranRecitationTranslationSpan',
+      ])
+        expect(await count(db.admin, table, `[segmentId] = ${n(segmentId)}`)).toBe(0);
     });
 
     it('beside an APPROVED corpus, shows only approved-source works and lists the sitemap', async () => {

@@ -11,6 +11,7 @@ import {
   PLAY_REQUEST,
   REPEAT_MAX,
   playbackRate,
+  translationOffer,
 } from './recitation-plan';
 import { RecitationOptions } from './recitation-listen';
 import {
@@ -28,8 +29,10 @@ import {
   setRange,
   setRate,
   setRepeat,
+  setTranslation,
   stepAyah,
   togglePlay,
+  translationSource,
   usePlayer,
   type CatalogueEntry,
   type PlayerState,
@@ -62,6 +65,11 @@ import { ayahElementId } from './reading-layout';
  * THE LOCK SCREEN KNOWS WHAT PLAYS. The Media Session names the Surah, the
  * Ayah and the reciter, and its play, pause, previous, next and seek controls
  * drive the same commands as the dock's buttons.
+ *
+ * A PASSAGE'S TRANSLATION, WHEN ASKED FOR. The settings offer "Urdu
+ * translation after each passage" where a narration is aligned for the Surah;
+ * while a translation plays, the passage's ayat stay marked, the dock says
+ * so (politely, in its status line) and so does the lock screen.
  */
 
 export interface DockLabels {
@@ -103,6 +111,18 @@ export interface DockLabels {
   readonly rangeActive: string;
   readonly follow: string;
   readonly continuous: string;
+  /** The switch: hear each passage's Urdu translation after its recitation. */
+  readonly translation: string;
+  /** What the translation is, and how its passages were found. */
+  readonly translationAbout: string;
+  /** "Not available for this Surah. Surahs that have it: {count}." */
+  readonly translationNotHere: string;
+  /** The chosen recitation already speaks the translation. */
+  readonly translationNarration: string;
+  /** "Urdu translation · ayat {from}–{to}" */
+  readonly translating: string;
+  /** "Urdu translation · Ayah {ayah}" — a passage of one Ayah. */
+  readonly translatingOne: string;
   readonly shortcuts: string;
   /** Each Surah's display label, by number. */
   readonly surahs: Readonly<Record<string, string>>;
@@ -133,9 +153,20 @@ export function surahLabel(labels: DockLabels, surah: number): string {
   return labels.surahs[String(surah)] ?? fill(labels.surahFallback, { number: surah });
 }
 
+/** What the dock and the lock screen say while a passage's translation plays. */
+function translatingText(state: PlayerState, labels: DockLabels): string | null {
+  const passage = state.translating;
+  if (passage === null) return null;
+  return passage.from === passage.to
+    ? fill(labels.translatingOne, { ayah: passage.from })
+    : fill(labels.translating, { from: passage.from, to: passage.to });
+}
+
 /** The words the dock says about where playback is. */
 function statusText(state: PlayerState, labels: DockLabels): string | null {
   if (state.problem === 'failed') return labels.failed;
+  const translating = translatingText(state, labels);
+  if (translating !== null && state.status !== 'paused') return translating;
   if (state.problem === 'no-audio') return labels.noAudio;
   if (state.status === 'loading') return labels.loading;
   if (state.status === 'buffering') return labels.buffering;
@@ -177,13 +208,30 @@ function useFollowAlong(): void {
     const onKey = (event: globalThis.KeyboardEvent) => {
       if (NAVIGATION_KEYS.has(event.key)) suspend();
     };
+    // The rows marked besides the Ayah being heard: a passage's other ayat,
+    // while its translation plays.
+    let passage: readonly string[] = [];
     function apply() {
       const state = playerState();
       const id =
         state.playing !== null && state.surah !== null && state.ayah !== null
           ? ayahElementId({ surah: state.surah, ayah: state.ayah })
           : null;
-      if (id !== marked && marked !== null)
+      const surah = state.surah;
+      const translated = state.translating;
+      const others =
+        state.playing === null || surah === null || translated === null
+          ? []
+          : Array.from({ length: translated.to - translated.from + 1 }, (_, index) =>
+              ayahElementId({ surah, ayah: translated.from + index }),
+            ).filter((other) => other !== id);
+      for (const other of passage)
+        if (!others.includes(other))
+          document.getElementById(other)?.removeAttribute('data-recited');
+      for (const other of others)
+        document.getElementById(other)?.setAttribute('data-recited', '');
+      passage = others;
+      if (id !== marked && marked !== null && !others.includes(marked))
         document.getElementById(marked)?.removeAttribute('data-recited');
       const row = id === null ? null : document.getElementById(id);
       if (row === null) {
@@ -220,8 +268,8 @@ function useFollowAlong(): void {
       window.removeEventListener('wheel', suspend);
       window.removeEventListener('touchmove', suspend);
       window.removeEventListener('keydown', onKey);
-      if (marked !== null)
-        document.getElementById(marked)?.removeAttribute('data-recited');
+      for (const other of [...passage, ...(marked === null ? [] : [marked])])
+        document.getElementById(other)?.removeAttribute('data-recited');
     };
   }, []);
 }
@@ -327,12 +375,15 @@ function usePageFollowsSurah(locale: string): void {
 function useMediaSession(labels: DockLabels): void {
   const state = usePlayer();
   const entry = state.catalogue.find((item) => item.slug === state.playing);
-  const title =
+  const translating = translatingText(state, labels);
+  const heard =
     state.surah === null
       ? null
       : state.ayah === null
         ? surahLabel(labels, state.surah)
         : fill(labels.now, { surah: surahLabel(labels, state.surah), ayah: state.ayah });
+  const title =
+    heard === null || translating === null ? heard : `${heard} · ${translating}`;
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return undefined;
@@ -517,6 +568,7 @@ export function RecitationDock({
         ? surahLabel(labels, state.surah)
         : fill(labels.now, { surah: surahLabel(labels, state.surah), ayah: state.ayah });
   const status = statusText(state, labels);
+  const translating = translatingText(state, labels);
   const positionText = fill(labels.positionValue, {
     position: clock(state.positionMs, locale),
     duration: clock(state.durationMs, locale),
@@ -554,6 +606,11 @@ export function RecitationDock({
       data-status={state.status}
       data-playing-surah={state.surah ?? undefined}
       data-playing-ayah={state.ayah ?? undefined}
+      data-translating={
+        state.translating === null
+          ? undefined
+          : `${String(state.translating.from)}-${String(state.translating.to)}`
+      }
       data-position={Math.round(state.positionMs / 100) * 100}
       aria-label={labels.region}
       onKeyDown={onKeyDown}
@@ -593,7 +650,7 @@ export function RecitationDock({
               {title}
             </p>
             <p className="truncate text-caption text-foreground-muted" dir="auto">
-              {entry?.reciter ?? entry?.name ?? ''}
+              {translating ?? entry?.reciter ?? entry?.name ?? ''}
             </p>
           </div>
           <button
@@ -638,7 +695,9 @@ export function RecitationDock({
           <span className="tabular-nums">{positionText}</span>
         </p>
 
-        {open ? <DockOptions id={optionsId} state={state} labels={labels} /> : null}
+        {open ? (
+          <DockOptions id={optionsId} state={state} labels={labels} locale={locale} />
+        ) : null}
       </div>
     </section>
   );
@@ -683,15 +742,17 @@ function SeekBar({
   );
 }
 
-/** The dock's settings: recitation, speed, repeats, a range, following. */
+/** The dock's settings: recitation, speed, repeats, a range, following, translation. */
 function DockOptions({
   id,
   state,
   labels,
+  locale,
 }: {
   readonly id: string;
   readonly state: PlayerState;
   readonly labels: DockLabels;
+  readonly locale: string;
 }) {
   const [from, setFrom] = useState(state.plan.range?.from ?? state.ayah ?? 1);
   const [to, setTo] = useState(state.plan.range?.to ?? state.ayah ?? 1);
@@ -700,6 +761,10 @@ function DockOptions({
   const select =
     'min-h-11 w-full min-w-0 rounded-control border border-border-strong bg-surface px-3 text-sm text-foreground';
   const surahHeard = state.surah;
+  const source = translationSource(state.catalogue);
+  const chosen = state.catalogue.find((entry) => entry.slug === state.choice);
+  const offer = translationOffer(chosen, source, state.surah);
+  const translationId = `${id}-translation`;
 
   return (
     <div
@@ -838,6 +903,33 @@ function DockOptions({
           />
           {labels.continuous}
         </label>
+        {offer === 'none' || source === undefined ? null : (
+          <div className="flex flex-col gap-1">
+            <label className="inline-flex min-h-11 cursor-pointer items-center gap-3 text-sm">
+              <input
+                type="checkbox"
+                role="switch"
+                checked={state.plan.translation}
+                disabled={offer === 'narration-chosen'}
+                aria-describedby={translationId}
+                onChange={(event) => setTranslation(event.currentTarget.checked)}
+                className="size-4 accent-action"
+              />
+              {labels.translation}
+            </label>
+            <p id={translationId} className="ps-7 text-caption text-foreground-muted">
+              {offer === 'narration-chosen'
+                ? labels.translationNarration
+                : offer === 'not-this-surah'
+                  ? fill(labels.translationNotHere, {
+                      count: new Intl.NumberFormat(locale).format(
+                        source.translatedSurahs.length,
+                      ),
+                    })
+                  : labels.translationAbout}
+            </p>
+          </div>
+        )}
       </div>
       <p className="text-caption text-foreground-muted">{labels.shortcuts}</p>
     </div>

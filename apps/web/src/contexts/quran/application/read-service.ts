@@ -138,6 +138,10 @@ export function createQuranReadService(
       idOk(workId) && offsetOk(offset)
         ? reader.tafsirEntryPage(workId, offset)
         : emptyPage(offset),
+    tafsirCoverage: (workIds) => {
+      const valid = [...new Set(workIds.filter(idOk))].slice(0, ENUMERATION_MAX);
+      return valid.length === 0 ? none() : reader.tafsirCoverage(valid);
+    },
 
     recitations: () => reader.recitations(),
     recitation: (slug) => (slugOk(slug) ? reader.recitation(slug) : absent()),
@@ -151,6 +155,12 @@ export function createQuranReadService(
       idOk(recitationId) && surahOk(surah)
         ? reader.recitationTimings(recitationId, surah)
         : none(),
+    recitationTranslationSpans: (recitationId, surah) =>
+      idOk(recitationId) && surahOk(surah)
+        ? reader.recitationTranslationSpans(recitationId, surah)
+        : none(),
+    recitationAlignments: (recitationId) =>
+      idOk(recitationId) ? reader.recitationAlignments(recitationId) : none(),
 
     tajweedRules: () => reader.tajweedRules(),
     tajweedRule: (slug) => (slugOk(slug) ? reader.tajweedRule(slug) : absent()),

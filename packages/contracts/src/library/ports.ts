@@ -1,3 +1,4 @@
+import type { Locale } from '../env/shared.ts';
 import type {
   WorkInput,
   EditionInput,
@@ -7,6 +8,7 @@ import type {
   AssetPurpose,
   LibraryCover,
 } from './values.ts';
+import type { PassageQuery, PassageSurahCount, QuranPassage } from '../passage/index.ts';
 import type {
   MagazineIssueRecord,
   ScholarlyAdminQuery,
@@ -66,6 +68,29 @@ export interface SalePointRecord extends SalePointInput {
 export interface WorkDetail extends WorkRecord {
   editions: EditionRecord[];
   salePoints: SalePointRecord[];
+  /**
+   * Quran Part 8: the Quran passages this Work explains, in the order its
+   * editor gave them — citation VALUES (`@minhaj/contracts/passage`), owned by
+   * Library, with no reference into Quran (DOMAIN_MODEL.md §10.1).
+   */
+  quranPassages: readonly QuranPassage[];
+}
+
+/**
+ * Quran Part 8: one PUBLIC Work that explains a Quran passage, as the Tafsir
+ * hub composes it at Layer 4 — identity, address, titles, card cover, credits
+ * and every passage it carries. No Edition, file or availability detail.
+ */
+export interface QuranPassageWork {
+  readonly id: string;
+  readonly slug: string;
+  readonly primaryLocale: Locale;
+  readonly labels: readonly { readonly locale: Locale; readonly title: string }[];
+  readonly cover: (LibraryCover & { readonly editionId: string }) | null;
+  readonly contributors: readonly { readonly personId: string; readonly role: string }[];
+  /** The latest publication year among its published Editions, or null. */
+  readonly year: number | null;
+  readonly passages: readonly QuranPassage[];
 }
 export interface WorkPage {
   items: WorkRecord[];
@@ -188,6 +213,18 @@ export interface LibraryPublicReaderPort {
   workReferences(ids: readonly string[]): Promise<readonly WorkReference[]>;
   /** Public Works an editor may choose, narrowed by title text. Bounded. */
   workChoices(text: string | null, limit: number): Promise<readonly WorkReference[]>;
+
+  /**
+   * QURAN PART 8 — WHICH PUBLIC WORKS EXPLAIN A PASSAGE. Every public Work
+   * (the ordinary public predicate) one of whose Quran passages overlaps the
+   * query's range of its Surah — or, with no Surah, every public Work carrying
+   * a passage — ordered by its earliest passage, then slug. Bounded by the
+   * query's limit; one read, never one per Work. Library answers by citation
+   * value: it reads nothing of Quran.
+   */
+  quranPassageWorks(query: PassageQuery): Promise<readonly QuranPassageWork[]>;
+  /** How many public Works carry a passage in each Surah. ONE grouped read. */
+  quranPassageCounts(): Promise<readonly PassageSurahCount[]>;
 
   /* -------------------------------------------------------------------------
    * Phase 9 — Research, ResearchPaper, Publication, Magazine, MagazineIssue and
@@ -330,6 +367,19 @@ export interface LibraryPersistencePort {
     expectedVersion: number | null;
     value: SalePointInput;
   }): Promise<SalePointRecord>;
+  /**
+   * Quran Part 8. Replaces a Work's ordered Quran passages with `passages` —
+   * ONLY while the Work is still at `expectedVersion`, which it advances — and
+   * audits the named change: an editor's `add`, `remove` or `move`, or
+   * `title`, a set the operator command proposed from the Work's title.
+   */
+  setWorkQuranPassages(input: {
+    actorId: string;
+    workId: string;
+    expectedVersion: number;
+    passages: readonly QuranPassage[];
+    change: 'add' | 'remove' | 'move' | 'title';
+  }): Promise<WorkDetail>;
 
   /** Phase 9: the administrative directory of one aggregate, any state. */
   scholarlyRecords(

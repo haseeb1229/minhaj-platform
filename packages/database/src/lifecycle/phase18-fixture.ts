@@ -440,6 +440,8 @@ const PHASE18_TABLES = [
   'QuranWordByWord',
   'QuranWordByWordContributor',
   'QuranWordByWordGloss',
+  'QuranRecitationAlignment',
+  'QuranRecitationTranslationSpan',
 ] as const;
 
 const PROCEDURES = [
@@ -631,13 +633,17 @@ export async function verifyRestoredPhase18(
   // language and source, its contributors' work and Person, and the gloss's
   // work and Ayah) and 31 triggers (Part 5: the stream rules, the streamed
   // segment and the timing's shape; Part 6: the note's shape; Part 7: a
-  // published work keeps a gloss, twice), exactly as the migrations create
-  // them: a restore that silently lost one would otherwise read as "none
-  // untrusted".
+  // published work keeps a gloss, twice), and Quran translation audio's span
+  // bounds, four keys (the alignment's segment, source and reference
+  // recitation; the span's alignment) and four triggers (the alignment's
+  // rules, the span's shape, an aligned segment keeping its timing and its
+  // file) — 49 CHECKs, 54 foreign keys and 35 triggers, exactly as the
+  // migrations create them: a restore that silently lost one would otherwise
+  // read as "none untrusted".
   if (
-    Number(counts?.checks ?? 0) !== 48 ||
-    Number(counts?.keys ?? 0) !== 50 ||
-    Number(counts?.triggers ?? 0) !== 31 ||
+    Number(counts?.checks ?? 0) !== 49 ||
+    Number(counts?.keys ?? 0) !== 54 ||
+    Number(counts?.triggers ?? 0) !== 35 ||
     Number(counts?.procedures ?? 0) !== PROCEDURES.length ||
     Number(counts?.bundled ?? 0) !== 3
   ) {

@@ -22,6 +22,7 @@ import type {
   PublicLayerCoverage,
   PublicLayerWork,
   PublicRecitation,
+  PublicRecitationAlignment,
   PublicRecitationSegment,
   PublicSurah,
   PublicTajweedRule,
@@ -32,6 +33,7 @@ import type {
   QuranRef,
   QuranSitemapRow,
   QuranSourceRecord,
+  RecitationAlignmentValue,
   RecitationDetail,
   RecitationSegmentAsset,
   RecitationSegmentValue,
@@ -45,9 +47,11 @@ import type {
   TafsirValue,
   TajweedRuleRecord,
   TajweedRuleValue,
+  PublicTafsirCoverage,
   PublicTranslationCoverage,
   TranslationLayerText,
   TranslationRecord,
+  PublicTranslationSpan,
   TranslationTextChange,
   TranslationValue,
   TransliterationRecord,
@@ -205,6 +209,12 @@ export interface QuranPublicReaderPort {
   ): Promise<readonly TafsirEntryRecord[]>;
   /** One bounded page of a public Tafsir's entries, in canonical order. */
   tafsirEntryPage(workId: string, offset: number): Promise<TafsirEntryPage>;
+  /**
+   * Entries and ayat covered per Surah, for each of these public Tafsirs
+   * (Quran Part 8, the Tafsir hub's Surah grid). ONE bounded read; a work not
+   * public now is absent.
+   */
+  tafsirCoverage(workIds: readonly string[]): Promise<readonly PublicTafsirCoverage[]>;
 
   recitations(): Promise<readonly PublicRecitation[]>;
   recitation(slug: string): Promise<PublicRecitation | null>;
@@ -222,6 +232,23 @@ export interface QuranPublicReaderPort {
     recitationId: string,
     surah: number,
   ): Promise<readonly PublicAyahTiming[]>;
+  /**
+   * Where each passage's translation is heard in a public narration's segments
+   * in ONE Surah, in canonical order (Quran translation audio) — ONE read,
+   * bounded by the Surah's ayat.
+   */
+  recitationTranslationSpans(
+    recitationId: string,
+    surah: number,
+  ): Promise<readonly PublicTranslationSpan[]>;
+  /**
+   * What a public narration's aligned segments were matched against: each
+   * PUBLIC reference recitation and how many Surahs. A reference that is not
+   * public now is absent.
+   */
+  recitationAlignments(
+    recitationId: string,
+  ): Promise<readonly PublicRecitationAlignment[]>;
 
   tajweedRules(): Promise<readonly PublicTajweedRule[]>;
   tajweedRule(slug: string): Promise<PublicTajweedRule | null>;
@@ -422,6 +449,15 @@ export interface QuranPersistencePort {
   ): Promise<RecitationDetail>;
   removeRecitationSegment(
     input: Versioned & { readonly segmentId: string },
+  ): Promise<RecitationDetail>;
+  /**
+   * Records an untimed first-party narration segment's ALIGNMENT — its per-Ayah
+   * timing, its alignment provenance and its translation spans — in ONE
+   * transaction under the Recitation's expected version; the database refuses
+   * anything partial, overlapping or out of order, and never edits one (51405).
+   */
+  alignRecitationSegment(
+    input: Versioned & { readonly value: RecitationAlignmentValue },
   ): Promise<RecitationDetail>;
   /**
    * Records `assetId` as a segment's audio — ONLY if the Recitation is still at

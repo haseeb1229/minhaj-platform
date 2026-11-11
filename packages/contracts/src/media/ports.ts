@@ -42,7 +42,13 @@ import type {
   VideoRecord,
   VideoSearchRecord,
   VideoValue,
+  QuranPassageVideo,
 } from './values.ts';
+import type {
+  PassageQuery,
+  PassageSurahCount,
+  TimedQuranPassage,
+} from '../passage/index.ts';
 
 /**
  * The ports between the Media context and what it depends on
@@ -155,6 +161,17 @@ export interface MediaPublicReaderPort {
   videoReferences(ids: readonly string[]): Promise<readonly VideoReference[]>;
   /** Published Videos an editor may choose, narrowed by title text. Bounded. */
   videoChoices(text: string | null, limit: number): Promise<readonly VideoReference[]>;
+
+  /**
+   * QURAN PART 8 — WHICH PUBLISHED VIDEOS EXPLAIN A PASSAGE. Every published
+   * Video one of whose Quran passages overlaps the query's range of its Surah
+   * — or, with no Surah, every published Video carrying a passage — ordered by
+   * its earliest passage, then newest. Bounded by the query's limit; one read.
+   * Media answers by citation value: it reads nothing of Quran.
+   */
+  quranPassageVideos(query: PassageQuery): Promise<readonly QuranPassageVideo[]>;
+  /** How many published Videos carry a passage in each Surah. ONE grouped read. */
+  quranPassageCounts(): Promise<readonly PassageSurahCount[]>;
 
   /* ---- Phase 11 — AudioTrack and AudioSeries --------------------------- */
 
@@ -302,6 +319,19 @@ export interface MediaPersistencePort {
     readonly videoIds: readonly string[];
     readonly change: 'add' | 'remove' | 'move';
   }): Promise<PlaylistDetail>;
+  /**
+   * Quran Part 8. Replaces a Video's ordered Quran passages with `passages` —
+   * ONLY while the Video is still at `expectedVersion`, which it advances —
+   * and audits the named change: an editor's `add`, `remove` or `move`, or
+   * `title`, a set the operator command proposed from the Video's title.
+   */
+  setVideoQuranPassages(input: {
+    readonly actorId: string;
+    readonly videoId: string;
+    readonly expectedVersion: number;
+    readonly passages: readonly TimedQuranPassage[];
+    readonly change: 'add' | 'remove' | 'move' | 'title';
+  }): Promise<VideoRecord>;
 
   /* ---- Phase 11 — AudioTrack and AudioSeries --------------------------- */
 

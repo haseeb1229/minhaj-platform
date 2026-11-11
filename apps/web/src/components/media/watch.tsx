@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
@@ -5,6 +6,7 @@ import type { Locale } from '@minhaj/contracts';
 import {
   MEDIA_FACET_PAGE,
   MEDIA_PAGE,
+  formatDuration,
   providerWatchUrl,
   type PlaylistRecord,
   type SeriesKind,
@@ -686,9 +688,19 @@ async function relatedVideos(
 export async function VideoDetailPage({
   locale,
   record,
+  start = null,
+  passages = null,
 }: {
   readonly locale: Locale;
   readonly record: VideoRecord;
+  /**
+   * Quran Part 8: where the Play press begins, in seconds — a lecture opened
+   * at the passage a visitor chose in the Tafsir hub (`?start=`). The page
+   * names it; nothing plays before the press.
+   */
+  readonly start?: number | null;
+  /** Quran Part 8: the Quran passages this lecture explains, composed at Layer 4. */
+  readonly passages?: ReactNode;
 }) {
   const t = await getTranslations({ locale, namespace: 'watch' });
   const trailParts = await watchTrail(locale);
@@ -788,6 +800,7 @@ export async function VideoDetailPage({
                 <VideoPlayer
                   provider={record.provider}
                   providerVideoId={record.providerVideoId}
+                  start={start}
                   backdrop={
                     poster === null ? null : (
                       <Poster
@@ -845,6 +858,11 @@ export async function VideoDetailPage({
                         {formatDate(record.publishedOn, locale)}
                       </time>
                     ),
+                    start === null || unavailable ? null : (
+                      <span className="font-semibold text-accent">
+                        {t('player.startsAt', { time: formatDuration(start) })}
+                      </span>
+                    ),
                   ]}
                 />
               </div>
@@ -867,6 +885,8 @@ export async function VideoDetailPage({
                 </p>
               )}
             </header>
+
+            {passages}
 
             {label.description === '' ? null : (
               <section className="flex flex-col gap-4" aria-labelledby="video-about">

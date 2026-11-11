@@ -8,6 +8,7 @@
 #   quran-reference.sh names --sha256 <metadata hex> --operator <accountId>
 #   quran-reference.sh recitations-mp3quran --operator <accountId>
 #   quran-reference.sh recitations-irfan-urdu --operator <accountId>
+#   quran-reference.sh recitations-narration-timing --sha256 <hex> --operator <accountId>
 #
 # Owner decision 2026-11-06 (OPEN_DECISIONS.md §1.1): staging may show the
 # Tanzil Uthmani 1.1 text, verbatim (CC BY 3.0), with Minhaj-ul-Quran's own
@@ -57,6 +58,18 @@
 # the provenance source, and stores each Surah's MP3 into Storage — scanned by
 # ClamAV, unaltered — as a first-party, untimed recitation. Same account; a
 # re-run keeps the downloaded archive and stores only what is missing.
+#
+# `recitations-narration-timing` (Quran translation audio; owner request
+# 2026-11-10) reads the narration's derived alignment file, which the operator
+# copies, readable by uid 1000, to
+#   /srv/minhaj/imports/quran-recitations/narration-timing.json
+# (mounted READ-ONLY into the operations image). It refuses unless the file's
+# SHA-256 is --sha256 AND the digest pinned in the release, and unless it
+# describes the archive the narration was stored from; it then records each
+# accepted Surah's Arabic timing and Urdu passage spans on the stored
+# narration — staging only, labelled as derived. It needs an account holding
+# quran.read and quran.administer, and both recitation imports above; a re-run
+# changes nothing.
 #
 # The last output line is the command's JSON summary: identifiers and counts.
 # =============================================================================
@@ -112,5 +125,17 @@ case "${1:-}" in
       packages/database/scripts/staging-quran-reference.ts "$@" --dir "$RECITATION_MOUNT" \
       | tail -n 1 | jq -c . || die "staging-quran-reference did not end with a JSON summary"
     ;;
-  *) die "usage: quran-reference.sh import --sha256 <hex> --operator <accountId> [--session <sessionId>] | translations --operator <accountId> | names --sha256 <metadata hex> --operator <accountId> | recitations-mp3quran --operator <accountId> | recitations-irfan-urdu --operator <accountId>" ;;
+  recitations-narration-timing)
+    case " $* " in
+      *' --file '*) die "the alignment file is read from $RECITATION_DIR, not named on the command line" ;;
+    esac
+    [ -r "$RECITATION_DIR/narration-timing.json" ] \
+      || die "place narration-timing.json in $RECITATION_DIR first"
+    release_compose "$(current_release_dir)" --profile ops run --rm --no-deps -T \
+      -v "$RECITATION_DIR:$RECITATION_MOUNT:ro" ops \
+      packages/database/scripts/staging-quran-reference.ts "$@" \
+      --file "$RECITATION_MOUNT/narration-timing.json" \
+      | tail -n 1 | jq -c . || die "staging-quran-reference did not end with a JSON summary"
+    ;;
+  *) die "usage: quran-reference.sh import --sha256 <hex> --operator <accountId> [--session <sessionId>] | translations --operator <accountId> | names --sha256 <metadata hex> --operator <accountId> | recitations-mp3quran --operator <accountId> | recitations-irfan-urdu --operator <accountId> | recitations-narration-timing --sha256 <hex> --operator <accountId>" ;;
 esac

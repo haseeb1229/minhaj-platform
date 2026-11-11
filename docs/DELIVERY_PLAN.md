@@ -3189,6 +3189,85 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > Urdu and Arabic, 320 px, axe, the two listings, the admin gloss editor). *CI and staging evidence
 > are recorded when they exist.*
 
+> **Quran Part 8 — the Tafsir hub (owner decision 2026-11-09, OPEN_DECISIONS.md §1.2 item 2; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (DOMAIN_MODEL.md §3.1, §8.8, §10.1,
+> §11; ROUTE_MAP.md §3.3, §3.7, §7; ARCHITECTURE.md operations image and staging operations;
+> SECURITY_BASELINE.md §5.1, §8.1). Staging only; the production gates are unchanged.
+>
+> - **Architecture (lead decision).** DOMAIN_MODEL.md §3.1 has no Library → Quran or Media → Quran
+>   edge, so the per-Ayah links are owned by the CONTENT that explains: a Library Work and a Media
+>   Video each carry an ordered list of Quran passages as **citation values** (Surah, inclusive ayah
+>   range; a lecture's start in seconds) — no key into Quran, no Quran import. The structure they
+>   are checked against (`SURAH_AYAH_COUNTS`) moves from `@minhaj/contracts/migration` (which
+>   re-exports it) to the neutral Layer-0 `@minhaj/contracts/passage`, which every context may
+>   import (the architecture tests refuse `contracts/quran` from Library and Media). Layer 4
+>   composes Quran's public reader with each owner's new bounded public passage read.
+> - **Data.** Migration `20261110150000_r2_quran_passages` (**40 migrations**, with its rollback):
+>   `WorkQuranPassage` and `VideoQuranPassage` (position 0..39 per owner, a unique citation per
+>   owner, Surah 1..114, a forward range from Ayah 1, a start 0..86399 or null — one CHECK each; the
+>   owner's key NO ACTION; indexes by Surah and range). No trigger, no refusal number. Grants:
+>   SELECT, INSERT, DELETE (UPDATE and ALTER denied), in the principal-authority inventory. The
+>   Quran restore-proof totals are unchanged (neither table is Quran's).
+> - **Services.** Library's `changeWorkQuranPassages` and Media's `changeVideoQuranPassages`
+>   (named add / move / remove, the Playlist pattern, under the owner's expected version and
+>   `library.administer` / `media.administer`; refusals `invalid`, `conflict`, `not-found`,
+>   `limit`, the new `duplicate-passage`; a range must end within its Surah, a start within the
+>   video's recorded duration), and `applyTitleQuranPassages` (a whole set, only onto an owner
+>   carrying none). Audits `library.work.passages-{add|move|remove|proposed}` and
+>   `media.video.passages.{changed|proposed}` with the citations before and after and the origin.
+> - **The hub.** `/quran/tafsir`: a header with counts and a find form (Surah and Ayah, no script
+>   needed), the public Tafsir text works with their coverage (absent while none is public), the
+>   Surah grid (114 cells, each counting its texts, books and lectures, linked only where something
+>   explains it), tafsir books (covers) and lectures (posters, running time, start) shelved by the
+>   first Surah they explain. `/quran/tafsir/surah/{n}`: the Surah's header, a sticky "In this
+>   Surah" navigation with a jump to an Ayah and a translation choice, whole-Surah resources first,
+>   then each group of overlapping passages with its ayat (Arabic and the chosen translation with
+>   its notes, each Ayah anchored) and its tafsir texts in the long-form reading column (Nastaliq
+>   for Urdu, in their own direction), books and lectures. `/quran/tafsir/{slug}` is unchanged;
+>   `surah` is reserved from Tafsir slugs.
+> - **The reader.** An Ayah something explains gains a Tafsir action (with its count) — a sheet of
+>   its texts (an excerpt), books and lectures (opened at their start), with script; a link to its
+>   place in the hub without — and an Ayah nothing explains has none. The Ayah page lists the same
+>   in the open; `?tafsir=` still shows a chosen work's text under each Ayah. A lecture opens at
+>   `/watch/videos/{slug}?start=`; a book's and a lecture's page lists the passages they explain.
+> - **Search (decision).** Passages are not indexed: a range would need every Ayah of it as a
+>   token, and the citation search already resolves "18:10" or "Surah Kahf" to the place; its card
+>   now links to that Ayah's or Surah's tafsir when something explains it.
+> - **Administration.** `/admin/library/works/{id}` and `/admin/media/videos/{id}` gain a "Quran
+>   passages" field set: the passages in order, Move earlier / Move later / Remove, and a form to
+>   add one (Surah; from and to — empty for the whole Surah or one Ayah; a lecture's start as
+>   seconds, 12:34 or 1:02:03), read-only without the administer key.
+> - **Staging data.** `docker/staging/bin/tafsir-passages.sh propose|apply --operator <accountId>
+>   [--confirm-count <n> --confirm-fingerprint <hex>]` proposes passages for the published Works
+>   and Videos whose title names a Surah (the strict reader in `scripts/quran/title-passages.ts`:
+>   a marker word, the reader's canonical names folded plus a documented spelling table, ayat only
+>   after "verse/ayat/ayah" with one Surah named, "Ayat al-Kursi" as 2:255, anything ambiguous
+>   refused) and applies the confirmed set. The staging survey of 2026-11-10 (615 books and 2,020
+>   videos, every title Latin-script) expects **14 Works and 49 Videos, 66 passages**; 5 titles are
+>   refused (two "Surat-e-Hal", two "Alinfaal", one epithet of al-Fatiha) for an editor to add by
+>   hand.
+>
+> **Operator steps on staging** (after deploying the release that carries the migration):
+> `tafsir-passages.sh propose --operator <adminId>`, check its counts, then `tafsir-passages.sh apply
+> --operator <adminId> --confirm-count <count> --confirm-fingerprint <fingerprint>` with the two
+> values it printed (the account needs quran.read, library.read, library.administer, media.read and
+> media.administer).
+>
+> **Proof:** `tests/quran/passages.test.ts` (the citation value, named changes, the start reader,
+> the query rule), `tests/quran/title-passages.test.ts` (real staging titles: 31 named, a range,
+> Ayat al-Kursi, 33 negatives, 4 refusals, the plan and its fingerprint),
+> `tests/quran/tafsir-layout.test.ts` (per-Ayah resources, grouping, the grid, shelves,
+> addresses), `tests/quran/passages-service.test.ts` (both owners' authority, versions, refusals,
+> never overwriting; the editors' form reader); on SQL Server `tests/quran/passages.integration.test.ts`
+> (both owners end to end: changes, conflicts, audit, title sets, public reads and counts) and
+> `tests/quran/persistence.integration.test.ts` (`tafsirCoverage`); the migration rehearsal
+> (`db:migrate:test`: tables, CHECKs as behaviour, rollback), `db:test:permissions` and the populated
+> restore proof; the browser journey (`tests/browser/quran.spec.ts`): the hub (never a draft, the
+> find form without script), a Surah's tafsir (groups, jumps, refusals, 404), the reader's action
+> only where something explains an Ayah (sheet, no-script link, the Ayah page), a lecture opened at
+> its start, the "On the Quran" links and the search card, both editors adding, moving and removing,
+> Urdu and Arabic, 320 px and axe. *CI and staging evidence are recorded when they exist.*
+
 > **Quran — more recitations and QuranEnc translations (owner direction 2026-11-10: "add recitation
 > of Shaykh Mishary Rashid Al Afasy and some other famous qari's too. and add urdu translation of
 > famous translators too. and also english translation."; on
@@ -3262,6 +3341,76 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > Part 6's CHECK; the restated staged-revision CHECK exactly, a 300,000-character payload staged and
 > a 400,001 one refused, the ceiling's rollback refused over the longer revision and, once rolled
 > back, Phase 30-RD's CHECK restored). *CI and staging evidence are recorded when they exist.*
+
+> **Quran — translation audio (owner request 2026-11-10: "qari tilawat was working but translation
+> is not added of qaris" — the owner chose translation AUDIO; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Staging only, DERIVED and labelled so,
+> pending a qari's and an editor's review (OPEN_DECISIONS.md §1.2 item 1; DOMAIN_MODEL.md §8.5.1;
+> ROUTE_MAP.md §3.3, §7):
+>
+> - **Source.** The Irfan-ul-Quran Urdu narration already stored (Part 5) plays passage by passage —
+>   Arabic, then its Urdu. An offline alignment (`narration-timing.json`, SHA-256
+>   `7340502bfb3f07cca8d22f7a74d238addd7e3828173e490636b8014f45e4a1e3`, pinned as
+>   `NARRATION_TIMING_SHA256`) matched the narration's Arabic, by spectral correlation and not by
+>   listening, to Abdulrahman Al-Sudais's murattal as mp3quran.net publishes it (read 54) in **67
+>   Surahs** (2,306 ayat, 2,052 passages); **47 Surahs were rejected** and carry nothing.
+> - **Data.** Migration `20261111000000_r2_quran_translation_audio` (with its rollback; **41
+>   migrations** with Quran Part 8's): `QuranRecitationAlignment` (segment, `reference` provenance
+>   source, the matched Arabic recitation — typed keys, no credit) and
+>   `QuranRecitationTranslationSpan` (each passage's `[startMs, endMs)`, partitioning the segment,
+>   between its Arabic and the next Ayah's; `QuranRecitationTranslationSpan_ck`); the narration's
+>   per-Ayah Arabic timing goes into the existing `QuranRecitationTiming`. Refusal 51405 (four
+>   triggers: the alignment's rules, the spans' shape, and an aligned segment keeping its timing and
+>   its file). Grants: SELECT, INSERT, DELETE on both tables, UPDATE and ALTER denied. Restore proof:
+>   49 CHECKs, 54 foreign keys, 35 triggers on the Quran tables. One pure rule,
+>   `translationSpanProblem`; one write, `alignRecitationSegment` (`quran.administer`, one
+>   transaction).
+> - **Import.** `quran-reference.sh recitations-narration-timing --sha256 <hex> --operator <id>`
+>   (`quran.read`, `quran.administer`; run in the operations image, no network) reads
+>   `/srv/minhaj/imports/quran-recitations/narration-timing.json` (read-only mount): refused unless
+>   its digest is the pinned one and its `source` is the attested archive the narration was stored
+>   from (url, 687,598,353 bytes, SHA-256 `d96ea753…8e4a`, checked against the narration's recorded
+>   provenance); the whole file is refused unless every Surah is accepted or rejected exactly once and
+>   every accepted Surah's ayat are each timed once in order, its passages partition it and each Urdu
+>   span sits only on a passage's last Ayah, between its Arabic and the next Ayah's
+>   (`scripts/quran/narration-timing.ts`). It registers the provenance source
+>   `irfan-ul-quran-ur-narration-alignment` as the owner, then records each accepted Surah's timing,
+>   alignment and spans on the stored narration; a Surah without its stored segment is skipped and
+>   reported; a re-run keeps everything; counts only. Needs both recitation imports first.
+> - **The player.** "Urdu translation after each passage" in the dock's settings (en/ur/ar),
+>   remembered in this browser: any timed qari recites a passage, the narration's span for it plays
+>   from a second, preloaded audio element (one element switching files would reload both at every
+>   passage), and the qari resumes where the passage ended; the passage's ayat stay marked, the
+>   dock's polite status line and the lock screen say "Urdu translation · ayat n–m". Repeats come
+>   first, each translation once; a range translates only passages wholly inside it; a span past the
+>   narration file's duration, a failure to load it, or a Surah without passages leaves the qari
+>   alone. The setting says when it is unavailable for the Surah (and in how many Surahs it is),
+>   and that the narration itself already reads the translation. The press that turns it on, or
+>   Play, permits the second element; nothing autoplays. The plan stays pure in
+>   `components/quran/recitation-plan.ts`; the data route sends a segment's passages as
+>   `translation`.
+> - **Pages.** A narration's card and reciter page show "Translation by passage: N Surahs" and
+>   "Arabic recitation: {reciter} — identified by audio comparison in N Surahs; not confirmed by
+>   Minhaj-ul-Quran", naming the matched recitation's reciter only while it is public; the
+>   whole-Surah note is no longer shown for a narration that is partly timed.
+>
+> **Proof:** `tests/quran/narration-timing.test.ts` (a verbatim excerpt of the real file — Surahs
+> 103, 112, 114 — read exactly, and every refusal: source, reference, accounting, coverage, order,
+> partition, a span off a passage end, a translation inside its Arabic or over the next Ayah, bad
+> numbers, another corpus; `translationSpanProblem`), `tests/quran/recitation-plan.test.ts` (reading
+> passages fail-closed; qari → translation → qari; once after repeats; ranges; a passage the segment
+> holds only in part; the end of a file; the duration check; the offer), `tests/quran/service.test.ts`
+> (authority, and a timing or partition that does not fit the stored segment refused before the
+> store); on SQL Server
+> `tests/quran/persistence.integration.test.ts` (alignment written once, refused with a stale
+> version, a fixture source, itself or a partial partition; the file fixed; public spans and
+> alignments only while public; removal) and `tests/quran/narration-timing.integration.test.ts` (the
+> runtime import end to end on the excerpt, its refusals and idempotency, and the owner side
+> refusing any file but the pinned one); the migration rehearsal (`db:migrate:test`: every 51405
+> rule and the rollback), `db:test:permissions`, the populated restore proof; the browser journey
+> (`tests/browser/quran.spec.ts`): qari, then the passage's translation with its ayat marked, then
+> the qari; the unavailable Surah; the narration chosen; Urdu and Arabic at 320 px; axe. *CI and
+> staging evidence are recorded when they exist.*
 
 ---
 

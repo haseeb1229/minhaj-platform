@@ -193,6 +193,54 @@ interface NoteView {
   readonly dir: 'ltr' | 'rtl';
 }
 
+/**
+ * One Ayah's Tafsir panel as the page rendered it (Quran Part 8): its groups'
+ * headings and items as plain text and the server's own first-party addresses,
+ * copied out of the hidden panel in the Ayah's row — never markup.
+ */
+interface TafsirView {
+  readonly title: string;
+  readonly groups: readonly {
+    readonly heading: string;
+    readonly items: readonly {
+      readonly href: string;
+      readonly title: string;
+      readonly titleLang: string;
+      readonly meta: string;
+      readonly excerpt: string;
+      readonly excerptLang: string;
+    }[];
+  }[];
+  readonly all: { readonly href: string; readonly text: string } | null;
+}
+
+/** The view of a rendered Tafsir panel, read as plain text and addresses. */
+function tafsirViewOf(panel: HTMLElement): TafsirView {
+  const text = (element: Element | null) => element?.textContent?.trim() ?? '';
+  const all = panel.querySelector<HTMLAnchorElement>('a[data-tafsir-all]');
+  return {
+    title: panel.dataset['title'] ?? '',
+    groups: [...panel.querySelectorAll('[data-tafsir-group]')].map((group) => ({
+      heading: text(group.querySelector('[data-tafsir-heading]')),
+      items: [...group.querySelectorAll<HTMLAnchorElement>('a[data-tafsir-item]')].map(
+        (item) => {
+          const title = item.querySelector<HTMLElement>('[data-tafsir-title]');
+          const excerpt = item.querySelector<HTMLElement>('[data-tafsir-excerpt]');
+          return {
+            href: item.getAttribute('href') ?? '',
+            title: text(title),
+            titleLang: title?.lang ?? '',
+            meta: text(item.querySelector('[data-tafsir-meta]')),
+            excerpt: text(excerpt),
+            excerptLang: excerpt?.lang ?? '',
+          };
+        },
+      ),
+    })),
+    all: all === null ? null : { href: all.getAttribute('href') ?? '', text: text(all) },
+  };
+}
+
 /** An Ayah's text as the page rendered it, for a sheet and for Copy. */
 interface AyahView {
   readonly ref: { readonly surah: number; readonly ayah: number };
@@ -237,6 +285,7 @@ export function QuranReaderControls({
   const [ayahSheet, setAyahSheet] = useState<AyahView | null>(null);
   const [saving, setSaving] = useState<AyahView['ref'] | null>(null);
   const [noteView, setNoteView] = useState<NoteView | null>(null);
+  const [tafsirView, setTafsirView] = useState<TafsirView | null>(null);
   const statusTimer = useRef<number | null>(null);
   const base = useId();
 
@@ -455,6 +504,15 @@ export function QuranReaderControls({
         case 'open':
           setAyahSheet(view);
           break;
+        case 'tafsir': {
+          // Quran Part 8: the Ayah's panel, rendered hidden in its row; without
+          // it (or without script) the link goes to the Surah's tafsir page.
+          const panel = document.getElementById(control.dataset['tafsirPanelRef'] ?? '');
+          if (panel === null) return;
+          event.preventDefault();
+          setTafsirView(tafsirViewOf(panel));
+          break;
+        }
         case 'save':
           if (personal === null) return;
           event.preventDefault();
@@ -751,6 +809,70 @@ export function QuranReaderControls({
           </div>
         )}
       </Dialog>
+
+      <Sheet
+        title={tafsirView?.title ?? ''}
+        closeLabel={labels.close}
+        open={tafsirView !== null}
+        onOpenChange={(next) => {
+          if (!next) setTafsirView(null);
+        }}
+      >
+        {tafsirView === null ? null : (
+          <div className="flex flex-col gap-5">
+            {tafsirView.groups.map((group) => (
+              <section key={group.heading} className="flex flex-col gap-2">
+                <h3 className="text-sm font-semibold">{group.heading}</h3>
+                <ul className="flex flex-col gap-2">
+                  {group.items.map((item) => (
+                    <li key={item.href + item.title}>
+                      <a
+                        href={item.href}
+                        className="flex min-h-11 min-w-0 flex-col gap-1 rounded-control border border-border bg-surface-raised px-3 py-2.5 text-foreground no-underline hover:border-accent hover:bg-accent-surface"
+                      >
+                        <span
+                          className="font-semibold wrap-anywhere"
+                          {...(item.titleLang === ''
+                            ? { dir: 'auto' }
+                            : { lang: item.titleLang, dir: 'auto' })}
+                        >
+                          {item.title}
+                        </span>
+                        {item.meta === '' ? null : (
+                          <span className="text-caption text-foreground-muted">
+                            <bdi>{item.meta}</bdi>
+                          </span>
+                        )}
+                        {item.excerpt === '' ? null : (
+                          <span
+                            className="reading-face text-sm wrap-anywhere"
+                            dir="auto"
+                            {...(item.excerptLang === ''
+                              ? {}
+                              : { lang: item.excerptLang })}
+                          >
+                            {item.excerpt}
+                          </span>
+                        )}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+            {tafsirView.all === null ? null : (
+              <p>
+                <a
+                  href={tafsirView.all.href}
+                  className="inline-flex min-h-11 items-center font-semibold text-action underline-offset-4 hover:underline"
+                >
+                  {tafsirView.all.text}
+                </a>
+              </p>
+            )}
+          </div>
+        )}
+      </Sheet>
 
       {personal === null ? null : (
         <Sheet

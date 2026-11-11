@@ -153,6 +153,7 @@ function fakeLibrary(failures: Failures = {}) {
           updatedAt: NOW,
           editions: [],
           salePoints: [],
+          quranPassages: [],
         };
         works.set(work.id, work);
         return work;

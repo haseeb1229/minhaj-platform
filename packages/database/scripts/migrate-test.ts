@@ -349,6 +349,25 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // a longer payload by `assertPayloadCeilingRules`, its rollback by
   // `assertPayloadCeilingRemoved`.
   '20261110140000_r2_migration_payload_ceiling': [],
+  // QURAN PART 8 CREATES TWO TABLES, OWNED BY LIBRARY AND MEDIA: the Quran
+  // passages a Work and a Video explain — CITATION VALUES (Surah, ayah range;
+  // a Video's optional start offset) keyed to their owner only (NO ACTION), no
+  // key into Quran; position 0..39 per owner, never a repeated citation, one
+  // CHECK each. Proved as behaviour by `assertQuranPassageRules`, its rollback
+  // by `assertQuranPassagesRemoved`.
+  '20261110150000_r2_quran_passages': ['WorkQuranPassage', 'VideoQuranPassage'],
+  // QURAN TRANSLATION AUDIO CREATES TWO TABLES: a first-party narration
+  // segment's alignment (its `reference` provenance source and the Arabic
+  // recitation it was matched against, typed keys, NO ACTION) and the spans
+  // where each passage's translation is heard, partitioning the segment; one
+  // CHECK and four triggers (51405) — two of them new triggers on the existing
+  // timing and segment tables, so an aligned segment keeps its timing and its
+  // file. Asserted by `assertQuranFoundation`, proved as behaviour inside
+  // `assertQuranCanonicalRules`, its rollback by `assertTranslationAudioRemoved`.
+  '20261111000000_r2_quran_translation_audio': [
+    'QuranRecitationAlignment',
+    'QuranRecitationTranslationSpan',
+  ],
   // THE DONATIONS CONTEXT: a campaign with its words per locale and its
   // per-currency policy, the owner's fail-closed provider activation (one
   // immutable row the runtime can only read), the donation — one payment
@@ -1987,6 +2006,25 @@ const QURAN_PART7_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, str
 };
 
 /**
+ * Quran translation audio's two tables and four triggers (51405, after Part
+ * 7's): an alignment or span edited, partial, overlapping or out of order, an
+ * alignment beside a non-reference source or against anything but another
+ * Arabic recitation, and an aligned segment's timing or file changed.
+ */
+const QURAN_TRANSLATION_AUDIO_TABLES = [
+  'QuranRecitationAlignment',
+  'QuranRecitationTranslationSpan',
+] as const;
+const QURAN_TRANSLATION_AUDIO_TRIGGER_NUMBERS: Readonly<
+  Record<string, readonly [string, string]>
+> = {
+  QuranRecitationAlignmentRules: ['QuranRecitationAlignment', '51405'],
+  QuranRecitationTranslationSpanShape: ['QuranRecitationTranslationSpan', '51405'],
+  QuranRecitationTimingAligned: ['QuranRecitationTiming', '51405'],
+  QuranRecitationSegmentAlignedAudio: ['QuranRecitationSegment', '51405'],
+};
+
+/**
  * Each Quran trigger, the table it guards and the refusal numbers its body
  * raises: 51180 an immutable registered source, 51181 immutable canonical
  * structure, 51182 a canonical change that is a recorded, one-step correction,
@@ -2133,6 +2171,8 @@ const EXPECTED_TRIGGERS = [
   ...Object.keys(QURAN_PART6_TRIGGER_NUMBERS),
   // Quran Part 7: a published word-by-word work keeps a gloss.
   ...Object.keys(QURAN_PART7_TRIGGER_NUMBERS),
+  // Quran translation audio: the alignment, its spans, and what they rely on.
+  ...Object.keys(QURAN_TRANSLATION_AUDIO_TRIGGER_NUMBERS),
   // Phase 19: every Hadith invariant no constraint can express — each listed,
   // with the refusal it raises, in `HADITH_TRIGGER_NUMBERS`.
   ...Object.keys(HADITH_TRIGGER_NUMBERS),
@@ -2421,6 +2461,15 @@ const EXPECTED_CHECK_CONSTRAINTS = [
   { table: 'QuranWordByWord', constraint: 'QuranWordByWord_slug_ck' },
   { table: 'QuranWordByWordContributor', constraint: 'QuranWordByWordContributor_ck' },
   { table: 'QuranWordByWordGloss', constraint: 'QuranWordByWordGloss_ck' },
+  // Quran Part 8: a passage's place (0..39), Surah (1..114) and forward range
+  // from Ayah 1; a lecture's start within a day.
+  { table: 'WorkQuranPassage', constraint: 'WorkQuranPassage_ck' },
+  { table: 'VideoQuranPassage', constraint: 'VideoQuranPassage_ck' },
+  // Quran translation audio: a forward passage and a non-empty, bounded span.
+  {
+    table: 'QuranRecitationTranslationSpan',
+    constraint: 'QuranRecitationTranslationSpan_ck',
+  },
   ...[
     'QuranTranslation',
     'QuranTransliteration',
@@ -4898,6 +4947,7 @@ async function assertQuranFoundation(
           ...QURAN_PART5_TABLES,
           ...QURAN_PART6_TABLES,
           ...QURAN_PART7_TABLES,
+          ...QURAN_TRANSLATION_AUDIO_TABLES,
         ]
       : QURAN_TABLES;
   const tables = all.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',');
@@ -4913,7 +4963,7 @@ async function assertQuranFoundation(
       .join(' UNION ALL ') + ';',
   );
   const seeded = counts.filter((row) => Number(row.total) !== 0);
-  const tableCount = stage === 'reference' ? 28 : 23;
+  const tableCount = stage === 'reference' ? 30 : 23;
   if (QURAN_TABLES.length !== 23 || counts.length !== tableCount || seeded.length > 0)
     fail(
       `The Quran migrations must create ${String(tableCount)} empty tables and seed no content; ` +
@@ -5021,6 +5071,14 @@ async function assertQuranFoundation(
   // two-column citation proved above, each refusing deletion of the Ayah it
   // names. `assertPersonalisationFoundation` proves their exact columns.
   const personalOwn = PERSONALISATION_TABLES.map((table) => `N'${table}'`).join(',');
+  // Quran Part 8: the Quran passages a Library Work and a Media Video explain
+  // are CITATION VALUES owned by Library and Media (a Surah number and an ayah
+  // range, DOMAIN_MODEL.md §3.1, §10.1, §11) — their columns name a Surah and
+  // ayat, but they hold no key into Quran (`inbound` above stays exactly
+  // Personalisation's). Exactly these two tables, by name.
+  const citationOwners = ['WorkQuranPassage', 'VideoQuranPassage']
+    .map((table) => `N'${table}'`)
+    .join(',');
   const [ownership] = await session.query<{
     inbound: string | null;
     columns: string | null;
@@ -5033,6 +5091,7 @@ async function assertQuranFoundation(
                OR c.[name] LIKE N'%quran%' OR c.[name] LIKE N'%tafsir%' OR c.[name] LIKE N'%tajweed%')
           AND OBJECT_NAME(c.[object_id]) NOT IN (${names})
           AND OBJECT_NAME(c.[object_id]) NOT IN (${personalOwn})
+          AND OBJECT_NAME(c.[object_id]) NOT IN (${citationOwners})
           AND OBJECTPROPERTY(c.[object_id], 'IsUserTable') = 1) AS [columns];
   `);
   if (
@@ -5108,6 +5167,7 @@ async function assertQuranFoundation(
           ...QURAN_PART5_TRIGGER_NUMBERS,
           ...QURAN_PART6_TRIGGER_NUMBERS,
           ...QURAN_PART7_TRIGGER_NUMBERS,
+          ...QURAN_TRANSLATION_AUDIO_TRIGGER_NUMBERS,
         }
       : QURAN_TRIGGER_NUMBERS;
   const expectedTriggers = Object.entries(triggerNumbers)
@@ -6724,6 +6784,231 @@ async function assertQuranCanonicalRules(session: SqlSession): Promise<void> {
     [51188],
     NEEDS_AUDIO,
   );
+
+  // ---- Quran translation audio: a narration segment's alignment ------------------
+  //
+  // An alignment belongs to an untimed-then-timed segment WITH its file, of a
+  // first-party recitation heard in a translation's language; it names a
+  // `reference` source and ANOTHER recitation, of the Arabic. Its spans
+  // partition the segment's range, each after its passage's Arabic and before
+  // the next Ayah's; nothing is ever edited, and while aligned the segment
+  // keeps its timing and its file. Surah 1 has three ayat here.
+  const arabic = randomUUID();
+  const narration = randomUUID();
+  const narrationSegment = randomUUID();
+  const unfiledSegment = randomUUID();
+  const narrationAsset = randomUUID();
+  const otherAsset = randomUUID();
+  const firstPartyRecitation = (id: string, language: string): string =>
+    `INSERT INTO [dbo].[QuranRecitation] ([id],[slug],[personId],[name],[languageCode],[state],[version],[updatedAt]) VALUES (N'${id}',N'proof-quran-aligned-${id.slice(0, 8)}-${run}',N'${reciter}',N'NON_QURAN_FIXTURE recitation',N'${language}',N'draft',1,SYSUTCDATETIME());`;
+  const alignment = (segmentId: string, source: string, against: string): string =>
+    `INSERT INTO [dbo].[QuranRecitationAlignment] ([segmentId],[sourceId],[referenceRecitationId]) VALUES (N'${segmentId}',N'${source}',N'${against}');`;
+  const spans = (rows: readonly (readonly [number, number, number, number])[]) =>
+    `INSERT INTO [dbo].[QuranRecitationTranslationSpan] ([segmentId],[startAyah],[endAyah],[startMs],[endMs]) VALUES ${rows
+      .map(
+        ([start, end, from, to]) =>
+          `(N'${narrationSegment}',${String(start)},${String(end)},${String(from)},${String(to)})`,
+      )
+      .join(',')};`;
+  const spansHeld = () =>
+    count(
+      `SELECT COUNT_BIG(*) AS [total] FROM [dbo].[QuranRecitationTranslationSpan] WHERE [segmentId]=N'${narrationSegment}';`,
+    );
+  await expectAccepted(
+    session,
+    'An Arabic recitation, and a narration with a filed and an unfiled segment',
+    `${firstPartyRecitation(arabic, 'ar')}
+     ${firstPartyRecitation(narration, 'en')}
+     INSERT INTO [dbo].[Asset] ([id],[storageKey],[state],[updatedAt]) VALUES (N'${narrationAsset}',N'proof/quran/${run}/narration',N'uploading',SYSUTCDATETIME()),(N'${otherAsset}',N'proof/quran/${run}/other',N'uploading',SYSUTCDATETIME());
+     INSERT INTO [dbo].[QuranRecitationSegment] ([id],[recitationId],[surahNumber],[startAyah],[endAyah],[assetId]) VALUES (N'${narrationSegment}',N'${narration}',1,1,3,N'${narrationAsset}'),(N'${unfiledSegment}',N'${narration}',2,1,2,NULL);`,
+  );
+  const ALIGNED_TIMING = 'An aligned segment is timed for every Ayah.';
+  await refuse(
+    'An untimed segment is never aligned',
+    alignment(narrationSegment, referenceSource, arabic),
+    [51405],
+    ALIGNED_TIMING,
+  );
+  await expectAccepted(
+    session,
+    "The narration segment's Arabic timed — a gap after ayat 2 and 3 for their translation",
+    timing(narrationSegment, [
+      [1, 0, 1000],
+      [2, 1000, 4000],
+      [3, 6000, 7000],
+    ]),
+  );
+  const NARRATION_ONLY =
+    'belongs to a first-party narration of a translation, with its file.';
+  const AGAINST_ARABIC = 'is made against another recitation of the Arabic.';
+  for (const [label, statement, numbers, ruleName] of [
+    [
+      'An alignment names a reference source, never a fixture',
+      alignment(narrationSegment, fixture, arabic),
+      [51405],
+      'names a reference source only.',
+    ],
+    [
+      'A narration is never aligned against itself',
+      alignment(narrationSegment, referenceSource, narration),
+      [51405],
+      AGAINST_ARABIC,
+    ],
+    [
+      'A narration is aligned against a recitation of the Arabic only',
+      alignment(narrationSegment, referenceSource, streamed),
+      [51405],
+      AGAINST_ARABIC,
+    ],
+    [
+      'A recitation of no stated language is never aligned',
+      alignment(firstSegment, referenceSource, arabic),
+      [51405],
+      NARRATION_ONLY,
+    ],
+    [
+      'A streamed segment is never aligned',
+      alignment(streamedSegment, referenceSource, arabic),
+      [51405],
+      NARRATION_ONLY,
+    ],
+    [
+      'A segment without its file is never aligned',
+      alignment(unfiledSegment, referenceSource, arabic),
+      [51405],
+      NARRATION_ONLY,
+    ],
+    [
+      'An alignment names a real segment',
+      alignment(randomUUID(), referenceSource, arabic),
+      [547],
+      'QuranRecitationAlignment_segmentId_fkey',
+    ],
+    [
+      'A translation span belongs to an alignment',
+      spans([[1, 3, 7000, 9000]]),
+      [547],
+      'QuranRecitationTranslationSpan_segmentId_fkey',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, ruleName);
+  await expectAccepted(
+    session,
+    'The timed narration segment aligned against the Arabic, beside a reference source',
+    alignment(narrationSegment, referenceSource, arabic),
+  );
+  const PASSAGE_ORDER = 'is heard after its Arabic and before the next Ayah.';
+  for (const [label, statement, numbers, ruleName] of [
+    [
+      'An alignment is never edited',
+      `UPDATE [dbo].[QuranRecitationAlignment] SET [referenceRecitationId]=N'${arabic}' WHERE [segmentId]=N'${narrationSegment}';`,
+      [51405],
+      'alignment is written once, never edited.',
+    ],
+    [
+      'The passages cover every Ayah, never only some',
+      spans([[1, 2, 4000, 6000]]),
+      [51405],
+      'covers every Ayah or none.',
+    ],
+    [
+      'Passages never overlap',
+      spans([
+        [1, 2, 4000, 5000],
+        [2, 2, 5000, 6000],
+      ]),
+      [51405],
+      'overlaps the one before it.',
+    ],
+    [
+      'A passage lies within its segment',
+      spans([[1, 4, 7000, 9000]]),
+      [51405],
+      'lies outside its segment.',
+    ],
+    [
+      "A translation never begins inside its passage's Arabic",
+      spans([
+        [1, 2, 3500, 6000],
+        [3, 3, 7000, 9000],
+      ]),
+      [51405],
+      PASSAGE_ORDER,
+    ],
+    [
+      "A translation never runs into the next Ayah's Arabic",
+      spans([
+        [1, 2, 4000, 6500],
+        [3, 3, 7000, 9000],
+      ]),
+      [51405],
+      PASSAGE_ORDER,
+    ],
+    [
+      'A translation is heard for some time',
+      spans([
+        [1, 2, 4000, 4000],
+        [3, 3, 7000, 9000],
+      ]),
+      [547],
+      'QuranRecitationTranslationSpan_ck',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, ruleName);
+  if ((await spansHeld()) !== 0) fail('A refused translation span left rows behind.');
+  await expectAccepted(
+    session,
+    'Two passages, each translation between its Arabic and the next, in one statement',
+    spans([
+      [1, 2, 4000, 6000],
+      [3, 3, 7000, 9000],
+    ]),
+  );
+  for (const [label, statement, numbers, ruleName] of [
+    [
+      'A translation span is never edited',
+      `UPDATE [dbo].[QuranRecitationTranslationSpan] SET [endMs]=5900 WHERE [segmentId]=N'${narrationSegment}' AND [startAyah]=1;`,
+      [51405],
+      'span is written once, never edited.',
+    ],
+    [
+      'A translation span is never removed in part',
+      `DELETE FROM [dbo].[QuranRecitationTranslationSpan] WHERE [segmentId]=N'${narrationSegment}' AND [startAyah]=3;`,
+      [51405],
+      'covers every Ayah or none.',
+    ],
+    [
+      'An alignment is never removed from under its spans',
+      `DELETE FROM [dbo].[QuranRecitationAlignment] WHERE [segmentId]=N'${narrationSegment}';`,
+      [547],
+      'QuranRecitationTranslationSpan_segmentId_fkey',
+    ],
+    [
+      'An aligned segment keeps its timing',
+      `DELETE FROM [dbo].[QuranRecitationTiming] WHERE [segmentId]=N'${narrationSegment}';`,
+      [51405],
+      'An aligned segment keeps its timing.',
+    ],
+    [
+      'An aligned segment keeps its file',
+      `UPDATE [dbo].[QuranRecitationSegment] SET [assetId]=N'${otherAsset}' WHERE [id]=N'${narrationSegment}';`,
+      [51405],
+      'An aligned segment keeps its file.',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, ruleName);
+  if ((await spansHeld()) !== 2 || (await timedAyat(narrationSegment)) !== 3)
+    fail('A refused change altered an alignment.');
+  await expectAccepted(
+    session,
+    'An alignment removed whole — spans, alignment, timing, then the segment',
+    `DELETE FROM [dbo].[QuranRecitationTranslationSpan] WHERE [segmentId]=N'${narrationSegment}';
+     DELETE FROM [dbo].[QuranRecitationAlignment] WHERE [segmentId]=N'${narrationSegment}';
+     DELETE FROM [dbo].[QuranRecitationTiming] WHERE [segmentId]=N'${narrationSegment}';
+     DELETE FROM [dbo].[QuranRecitationSegment] WHERE [id] IN (N'${narrationSegment}',N'${unfiledSegment}');`,
+  );
+  if ((await spansHeld()) !== 0 || (await timedAyat(narrationSegment)) !== 0)
+    fail('A removed alignment left rows behind.');
 
   // ---- a published work keeps its text against a MOVE as well as a delete -------
   //
@@ -19096,6 +19381,169 @@ async function assertWordByWordRemoved(session: SqlSession): Promise<void> {
   );
 }
 
+/** Quran translation audio: a narration segment's alignment and translation spans. */
+const TRANSLATION_AUDIO_MIGRATION = '20261111000000_r2_quran_translation_audio';
+
+/**
+ * After its rollback: no alignment or span table, CHECK, key, index or
+ * trigger — and the timing and segment tables carrying exactly the triggers
+ * Quran Part 5 and Phase 18 gave them.
+ */
+async function assertTranslationAudioRemoved(session: SqlSession): Promise<void> {
+  const [row] = await session.query<{
+    tables: number;
+    added: number;
+    timing: string | null;
+    segment: string | null;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables WHERE [name] IN (N'QuranRecitationAlignment',
+        N'QuranRecitationTranslationSpan')) AS [tables],
+      (SELECT COUNT(*) FROM sys.objects WHERE [name] LIKE N'QuranRecitationAlignment%'
+        OR [name] LIKE N'QuranRecitationTranslationSpan%'
+        OR [name] IN (N'QuranRecitationTimingAligned', N'QuranRecitationSegmentAlignedAudio')) AS [added],
+      (SELECT STRING_AGG([name], N',') WITHIN GROUP (ORDER BY [name]) FROM sys.triggers
+        WHERE [parent_id] = OBJECT_ID(N'[dbo].[QuranRecitationTiming]')) AS [timing],
+      (SELECT STRING_AGG([name], N',') WITHIN GROUP (ORDER BY [name]) FROM sys.triggers
+        WHERE [parent_id] = OBJECT_ID(N'[dbo].[QuranRecitationSegment]')) AS [segment];
+  `);
+  if (
+    Number(row?.tables) !== 0 ||
+    Number(row?.added) !== 0 ||
+    row?.timing !== 'QuranRecitationTimingShape' ||
+    (row.segment ?? '').includes('Aligned')
+  )
+    fail(
+      `The translation audio rollback must remove every alignment object and leave the ` +
+        `timing and segment triggers as Quran Part 5 left them; found ${JSON.stringify(row ?? null)}.`,
+    );
+  report(
+    'translation audio rollback',
+    'two tables, their CHECK, keys, index and four triggers removed',
+  );
+}
+
+/** Quran Part 8: the Quran passages a Work and a Video explain. */
+const QURAN_PASSAGES_MIGRATION = '20261110150000_r2_quran_passages';
+
+/**
+ * After the Quran Part 8 rollback: no passage table, CHECK, key or index — and
+ * Work and Video referenced by exactly the keys they had before.
+ */
+async function assertQuranPassagesRemoved(session: SqlSession): Promise<void> {
+  const [row] = await session.query<{ tables: number; objects: number }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables WHERE [name] IN (N'WorkQuranPassage',
+        N'VideoQuranPassage')) AS [tables],
+      (SELECT COUNT(*) FROM sys.objects WHERE [name] LIKE N'WorkQuranPassage%'
+        OR [name] LIKE N'VideoQuranPassage%') AS [objects];
+  `);
+  if (Number(row?.tables) !== 0 || Number(row?.objects) !== 0)
+    fail(
+      `The Quran Part 8 rollback must remove every passage object; found ${JSON.stringify(row ?? null)}.`,
+    );
+  report('quran passages rollback', 'two tables, their CHECKs and keys removed');
+}
+
+/**
+ * Quran Part 8 — THE PASSAGE RULES AS BEHAVIOUR, with synthetic owners only:
+ * a forward passage in Surah 1..114 is accepted at places 0 and 39; place 40,
+ * Surah 0 and 115, Ayah 0, a backward range, a repeated citation, a repeated
+ * place and an owner that does not exist are each refused by their own rule;
+ * a lecture's start is 0..86399 or null. Nothing names an Ayah: the structure
+ * check (a range within its Surah) is the owning service's.
+ */
+async function assertQuranPassageRules(session: SqlSession): Promise<void> {
+  const run = randomUUID().replaceAll('-', '').slice(0, 16);
+  const work = randomUUID();
+  const video = randomUUID();
+  await expectAccepted(
+    session,
+    'A synthetic Work for passages',
+    `INSERT INTO [dbo].[Work] ([id],[slug],[primaryLocale],[state]) VALUES (N'${work}',N'proof-passage-work-${run}',N'en',N'draft');`,
+  );
+  await expectAccepted(
+    session,
+    'A synthetic Video for passages',
+    `INSERT INTO [dbo].[Video] ([id],[slug],[primaryLocale],[state],[provider],[providerVideoId],[availability],[languageCode]) VALUES (N'${video}',N'proof-passage-video-${run}',N'en',N'draft',N'youtube','pas${run.slice(0, 8)}',N'available',N'en');`,
+  );
+  const workPassage = (position: number, surah: number, from: number, to: number) =>
+    `INSERT INTO [dbo].[WorkQuranPassage] ([workId],[position],[surahNumber],[ayahFrom],[ayahTo]) VALUES (N'${work}',${String(position)},${String(surah)},${String(from)},${String(to)});`;
+  const videoPassage = (position: number, start: string) =>
+    `INSERT INTO [dbo].[VideoQuranPassage] ([videoId],[position],[surahNumber],[ayahFrom],[ayahTo],[startSeconds]) VALUES (N'${video}',${String(position)},2,${String(position + 1)},${String(position + 1)},${start});`;
+
+  await expectAccepted(session, 'A passage at the first place', workPassage(0, 1, 1, 7));
+  await expectAccepted(
+    session,
+    'A passage at the last place',
+    workPassage(39, 114, 1, 6),
+  );
+  await expectAccepted(
+    session,
+    'A lecture passage with no start',
+    videoPassage(0, 'NULL'),
+  );
+  await expectAccepted(
+    session,
+    'A lecture passage starting late',
+    videoPassage(1, '86399'),
+  );
+  for (const [label, statement, numbers, rule] of [
+    [
+      'A passage place is below 40',
+      workPassage(40, 2, 1, 5),
+      [547],
+      'WorkQuranPassage_ck',
+    ],
+    ['A Surah is at least 1', workPassage(1, 0, 1, 1), [547], 'WorkQuranPassage_ck'],
+    ['A Surah is at most 114', workPassage(1, 115, 1, 1), [547], 'WorkQuranPassage_ck'],
+    [
+      'A range begins at Ayah 1 or later',
+      workPassage(1, 2, 0, 3),
+      [547],
+      'WorkQuranPassage_ck',
+    ],
+    ['A range runs forwards', workPassage(1, 2, 5, 4), [547], 'WorkQuranPassage_ck'],
+    [
+      'An owner never repeats a citation',
+      workPassage(2, 1, 1, 7),
+      [2627, 2601],
+      'WorkQuranPassage_citation_key',
+    ],
+    [
+      'A place holds one passage',
+      workPassage(0, 3, 1, 1),
+      [2627, 2601],
+      'WorkQuranPassage_pkey',
+    ],
+    [
+      'A passage names a real Work',
+      `INSERT INTO [dbo].[WorkQuranPassage] ([workId],[position],[surahNumber],[ayahFrom],[ayahTo]) VALUES (N'${randomUUID()}',0,1,1,7);`,
+      [547],
+      'WorkQuranPassage_workId_fkey',
+    ],
+    ['A start is never negative', videoPassage(2, '-1'), [547], 'VideoQuranPassage_ck'],
+    ['A start is within a day', videoPassage(3, '86400'), [547], 'VideoQuranPassage_ck'],
+    [
+      'A passage names a real Video',
+      `INSERT INTO [dbo].[VideoQuranPassage] ([videoId],[position],[surahNumber],[ayahFrom],[ayahTo]) VALUES (N'${randomUUID()}',0,1,1,7);`,
+      [547],
+      'VideoQuranPassage_videoId_fkey',
+    ],
+  ] as const)
+    await expectRefusal(session, label, statement, numbers, rule);
+
+  // The proof's passages are removed; its draft owners die with this database.
+  await session.query(`
+    DELETE FROM [dbo].[WorkQuranPassage] WHERE [workId]=N'${work}';
+    DELETE FROM [dbo].[VideoQuranPassage] WHERE [videoId]=N'${video}';
+  `);
+  report(
+    'quran passages',
+    'places 0..39, Surah 1..114, forward ranges, no repeated citation, owners keyed, start within a day',
+  );
+}
+
 /** The external reference translations: the bracketed footnote mark. */
 const BRACKETED_MARKS_MIGRATION = '20261110130000_r2_quran_bracketed_note_marks';
 
@@ -25349,12 +25797,18 @@ try {
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
     }
+    if (migration.id === TRANSLATION_AUDIO_MIGRATION)
+      // Translation audio is gone without a trace on the recitation tables.
+      await assertTranslationAudioRemoved(session);
     if (migration.id === PAYLOAD_CEILING_MIGRATION)
       // The staged-revision CHECK is Phase 30-RD's again, to the character.
       await assertPayloadCeilingRemoved(session, migrations);
     if (migration.id === BRACKETED_MARKS_MIGRATION)
       // The bracketed footnote mark is refused again, as Quran Part 6 made it.
       await assertBracketedMarksRemoved(session);
+    if (migration.id === QURAN_PASSAGES_MIGRATION)
+      // Quran Part 8 is gone without a trace on Work and Video.
+      await assertQuranPassagesRemoved(session);
     if (migration.id === WORD_BY_WORD_MIGRATION)
       // Quran Part 7 is gone without a trace on the Ayah and the other works.
       await assertWordByWordRemoved(session);
@@ -25671,6 +26125,8 @@ try {
   // The membership rules as BEHAVIOUR, on the re-deployed schema: what was
   // rolled back and re-applied enforces exactly what the first deploy did.
   await assertCollectionMembership(session);
+  // And the Quran passages a Work and a Video explain (Quran Part 8).
+  await assertQuranPassageRules(session);
   // And the canonical Quran rules, with sentinel text only. The rows they write
   // are never removed — canonical history cannot be — and die with this
   // disposable database.

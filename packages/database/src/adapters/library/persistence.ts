@@ -12,7 +12,15 @@ import {
   type LibraryQuery,
   type LibraryFacetPage,
   type LibraryCover,
+  type QuranPassageWork,
 } from '@minhaj/contracts/library';
+import {
+  canonicalPassageOrder,
+  passageKey,
+  passageMatchesQuery,
+  type PassageQuery,
+  type QuranPassage,
+} from '@minhaj/contracts/passage';
 import { getDatabaseClient } from '../../client.ts';
 import { auditRow } from '../../audit-row.ts';
 import { requestSearchIndexing } from '../../search-intent.ts';
@@ -242,7 +250,7 @@ async function detail(id: string, publicOnly: boolean): Promise<WorkDetail | nul
     include: workInclude,
   });
   if (!row) return null;
-  const [editions, sales] = await Promise.all([
+  const [editions, sales, passages] = await Promise.all([
     db.edition.findMany({
       where: { workId: id, ...(publicOnly ? { state: 'published' } : {}) },
       orderBy: { id: 'asc' },
@@ -256,6 +264,11 @@ async function detail(id: string, publicOnly: boolean): Promise<WorkDetail | nul
       },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
       take: 24,
+    }),
+    db.workQuranPassage.findMany({
+      where: { workId: id },
+      orderBy: { position: 'asc' },
+      select: PASSAGE_SELECT,
     }),
   ]);
   const visibleIds = new Set(editions.map((e) => e.id));
@@ -272,7 +285,30 @@ async function detail(id: string, publicOnly: boolean): Promise<WorkDetail | nul
       return dto;
     }),
     salePoints: sales.map(sale),
+    quranPassages: passages.map(passageOf),
   };
+}
+
+/* ---- Quran Part 8: the Quran passages a Work explains --------------------- */
+
+const PASSAGE_SELECT = {
+  surahNumber: true,
+  ayahFrom: true,
+  ayahTo: true,
+} as const;
+
+/** A stored passage as the citation value it is. */
+function passageOf(row: {
+  readonly surahNumber: number;
+  readonly ayahFrom: number;
+  readonly ayahTo: number;
+}): QuranPassage {
+  return { surah: row.surahNumber, ayahFrom: row.ayahFrom, ayahTo: row.ayahTo };
+}
+
+/** The citations an audit entry names — never more than its payload holds. */
+function citations(passages: readonly QuranPassage[]): string {
+  return passages.map(passageKey).join(' ').slice(0, 1_000);
 }
 /**
  * A version no row can hold (`CHECK ([version] > 0)`).
@@ -573,6 +609,59 @@ export function createLibraryPersistence(): LibraryPersistencePort {
         refuse(error);
       }
     },
+    async setWorkQuranPassages({ actorId, workId, expectedVersion, passages, change }) {
+      try {
+        await db.$transaction(async (tx) => {
+          const previous = await tx.workQuranPassage.findMany({
+            where: { workId },
+            orderBy: { position: 'asc' },
+            select: PASSAGE_SELECT,
+          });
+          // The version the operator saw, claimed atomically: a change made in
+          // between is a conflict, never something this one silently reorders.
+          const claimed = await tx.work.updateMany({
+            where: { id: workId, version: expectedVersion },
+            data: { updatedAt: new Date(), version: { increment: 1 } },
+          });
+          if (claimed.count !== 1) throw new LibraryDataError('conflict');
+          await tx.workQuranPassage.deleteMany({ where: { workId } });
+          if (passages.length > 0)
+            await tx.workQuranPassage.createMany({
+              data: passages.map((passage, position) => ({
+                workId,
+                position,
+                surahNumber: passage.surah,
+                ayahFrom: passage.ayahFrom,
+                ayahTo: passage.ayahTo,
+              })),
+            });
+          await requestSearchIndexing(tx, 'work', workId);
+          await audit(
+            tx,
+            actorId,
+            'work',
+            workId,
+            change === 'title' ? 'passages-proposed' : `passages-${change}`,
+            {
+              version: String(expectedVersion),
+              passages: citations(previous.map(passageOf)),
+            },
+            {
+              version: String(expectedVersion + 1),
+              passages: citations(passages),
+              // Where the set came from: the editor, or the operator command
+              // that proposed it from the Work's title (Quran Part 8).
+              origin: change === 'title' ? 'operator:tafsir-passages' : 'editor',
+            },
+          );
+        });
+      } catch (error) {
+        refuse(error);
+      }
+      const saved = await detail(workId, false);
+      if (saved === null) throw new LibraryDataError('not-found');
+      return saved;
+    },
     async saveSalePoint({ actorId, id, expectedVersion, value }) {
       try {
         return await db.$transaction(async (tx) => {
@@ -756,6 +845,23 @@ function facetPage(
 
 /** How many facet rows one browse page shows. */
 const FACET_PAGE = 50;
+
+/**
+ * Quran Part 8: the most public Works one passage read considers before it
+ * orders them by passage. A ceiling, not a page: the Tafsir hub and a Surah's
+ * page ask for a bounded `limit` of these.
+ */
+const PASSAGE_WORKS_CEILING = 500;
+
+/** The stored passages a passage query admits: its Surah, overlapping its range. */
+function passageWhere(query: PassageQuery): Prisma.WorkQuranPassageWhereInput {
+  if (query.surah === null) return {};
+  return {
+    surahNumber: query.surah,
+    ...(query.ayahTo === null ? {} : { ayahFrom: { lte: query.ayahTo } }),
+    ...(query.ayahFrom === null ? {} : { ayahTo: { gte: query.ayahFrom } }),
+  };
+}
 
 /** At most one Collection's worth of Works is described in one read. */
 const REFERENCE_BATCH = 100;
@@ -950,6 +1056,100 @@ export function createLibraryPublicReader(): LibraryPublicReaderPort {
         select: REFERENCE_SELECT,
         orderBy: { id: 'asc' },
       });
+    },
+    async quranPassageWorks(query) {
+      const rows = await db.work.findMany({
+        where: { ...PUBLIC_WORK, quranPassages: { some: passageWhere(query) } },
+        select: {
+          id: true,
+          slug: true,
+          primaryLocale: true,
+          labels: {
+            select: { locale: true, title: true },
+            orderBy: { locale: 'asc' as const },
+          },
+          contributors: {
+            select: { personId: true, role: true },
+            orderBy: [{ position: 'asc' as const }, { personId: 'asc' as const }],
+          },
+          editions: {
+            where: { state: 'published' },
+            select: {
+              id: true,
+              publicationYear: true,
+              coverAssetId: true,
+              coverWidth: true,
+              coverHeight: true,
+            },
+            orderBy: { id: 'asc' as const },
+            take: 50,
+          },
+          quranPassages: {
+            select: PASSAGE_SELECT,
+            orderBy: { position: 'asc' as const },
+          },
+        },
+        orderBy: [{ slug: 'asc' }, { id: 'asc' }],
+        take: PASSAGE_WORKS_CEILING,
+      });
+      const works: (QuranPassageWork & { readonly first: QuranPassage })[] = rows.flatMap(
+        (row) => {
+          const passages = row.quranPassages.map(passageOf);
+          const [first] = canonicalPassageOrder(
+            passages.filter((passage) => passageMatchesQuery(passage, query)),
+          );
+          if (first === undefined) return [];
+          const coverEdition = row.editions.find((entry) => coverOf(entry) !== null);
+          const cover = coverEdition === undefined ? null : coverOf(coverEdition);
+          const years = row.editions.flatMap((entry) =>
+            entry.publicationYear === null ? [] : [entry.publicationYear],
+          );
+          return [
+            {
+              id: row.id,
+              slug: row.slug,
+              primaryLocale: row.primaryLocale as WorkRecord['primaryLocale'],
+              labels: row.labels.map((label) => ({
+                locale: label.locale as WorkRecord['primaryLocale'],
+                title: label.title,
+              })),
+              cover:
+                cover === null || coverEdition === undefined
+                  ? null
+                  : { ...cover, editionId: coverEdition.id },
+              contributors: row.contributors,
+              year: years.length === 0 ? null : Math.max(...years),
+              passages,
+              first,
+            },
+          ];
+        },
+      );
+      return works
+        .sort(
+          (a, b) =>
+            a.first.surah - b.first.surah ||
+            a.first.ayahFrom - b.first.ayahFrom ||
+            a.first.ayahTo - b.first.ayahTo ||
+            a.slug.localeCompare(b.slug),
+        )
+        .slice(0, query.limit)
+        .map(({ first: _first, ...work }) => work);
+    },
+    async quranPassageCounts() {
+      const rows = await db.$queryRaw<{ surah: number; owners: number }[]>`
+        SELECT p.[surahNumber] AS [surah], COUNT(DISTINCT p.[workId]) AS [owners]
+        FROM [dbo].[WorkQuranPassage] p
+        INNER JOIN [dbo].[Work] w ON w.[id] = p.[workId]
+        WHERE w.[state] = N'published'
+          AND EXISTS (SELECT 1 FROM [dbo].[Edition] e
+                      WHERE e.[workId] = w.[id] AND e.[state] = N'published')
+        GROUP BY p.[surahNumber]
+        ORDER BY p.[surahNumber];`;
+      return rows.map((row) => ({
+        surah: Number(row.surah),
+        owners: Number(row.owners),
+      }));
     },
     async workChoices(text, limit) {
       return db.work.findMany({

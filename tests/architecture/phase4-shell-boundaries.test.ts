@@ -225,6 +225,9 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/quran/translations/compare/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/tafsir/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/tafsir/[slug]/page.tsx',
+  // Quran Part 8: one Surah's tafsir — Quran's texts and ayat beside Library's
+  // books and Media's lectures, each through its owner's PUBLIC read.
+  'apps/web/src/app/[locale]/(public)/quran/tafsir/surah/[surahNumber]/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/transliteration/page.tsx',
   // Quran Part 7: every public word-by-word work — a 404 while none is.
   'apps/web/src/app/[locale]/(public)/quran/word-by-word/page.tsx',
@@ -1164,18 +1167,30 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     }
   });
 
-  it('gives the Quran recitation player ONE audio element, made by a press, with no download and no autoplay', async () => {
+  it('gives the Quran recitation player TWO audio elements, each made by a press, with no download and no autoplay', async () => {
     const read = async (file: string) =>
       code(await readFile(path.join(repoRoot, file), 'utf8'));
     const store = await read('apps/web/src/components/quran/recitation-store.ts');
     const dock = await read('apps/web/src/components/quran/recitation-dock.tsx');
     const listen = await read('apps/web/src/components/quran/recitation-listen.tsx');
 
-    // One element, never in the document, created by the first command (Quran
-    // Part 5): no page carries a second `<audio>` beside its native fallback.
-    expect(store.match(/new Audio\(\)/g) ?? []).toHaveLength(1);
-    // Its only source is the derivation pinned above.
-    expect(store.match(/\.src = /g) ?? []).toEqual(['.src = ']);
+    // Two elements, never in the document, each made lazily by its own factory
+    // and first sounded inside the listener's own press: the recitation's
+    // (Quran Part 5) and the narration's, which plays a passage's translation
+    // (Quran translation audio). No page carries an `<audio>` beside its
+    // native fallback.
+    expect(store.match(/new Audio\(\)/g) ?? []).toHaveLength(2);
+    expect(store).toMatch(
+      /function audioElement\(\): HTMLAudioElement \{\s*if \(element !== null\) return element;\s*const audio = new Audio\(\);/,
+    );
+    expect(store).toMatch(
+      /function narratorElement\(\): HTMLAudioElement \{\s*if \(narrator !== null\) return narrator;\s*const audio = new Audio\(\);/,
+    );
+    // Every source either element is given is the derivation pinned above.
+    const sources = [...store.matchAll(/\.src = (\w+);/g)].map((match) => match[1]);
+    expect(sources.length).toBeGreaterThan(0);
+    for (const name of sources)
+      expect(store).toContain(`const ${name ?? ''} = audioSource(`);
     expect(store).toContain('const source = audioSource(segment.audio);');
     // The islands drive commands; only the store's own command paths call play.
     for (const island of [dock, listen]) expect(island).not.toContain('.play(');
@@ -1206,7 +1221,11 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     // Exactly one frame source, and it is the contract's derivation — the
     // privacy-enhanced embed the visitor's own Play press asks for (R2, F08).
     expect(source.match(/src=/g) ?? []).toHaveLength(1);
-    expect(source).toContain('src={providerPlaybackUrl(provider, providerVideoId)}');
+    // Quran Part 8: a lecture may be opened at a passage's start — still the
+    // contract's derivation, which ignores any offset outside a day.
+    expect(source).toContain(
+      'src={providerPlaybackUrl(provider, providerVideoId, start)}',
+    );
     // The frame exists only in the state the visitor's click sets.
     expect(source).toMatch(/\{playing \? \(/);
     expect(source).toContain('onClick={() => setPlaying(true)}');

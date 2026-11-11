@@ -68,6 +68,12 @@ import { recitationGroups } from './recitation-plan';
  * reciter's page lists the browser's own `<audio controls>`, and each Surah
  * opens with the recitation chosen. No autoplay, nothing fetched until asked,
  * and no download link.
+ *
+ * AN ALIGNED NARRATION SAYS WHAT ITS ARABIC WAS MATCHED AGAINST (translation
+ * audio). Where a narration's Arabic was aligned against a public timed
+ * recitation, its card names that recitation's reciter as the IDENTIFIED
+ * Arabic, by audio comparison and not confirmed — evidence about a recording,
+ * never a credit: the reciter is not added as the narration's contributor.
  */
 
 type QuranTranslator = Awaited<ReturnType<typeof getTranslations<'quran'>>>;
@@ -141,7 +147,55 @@ function RecitationFacts({
       <Badge kind="status">
         {t('recitations.surahs', { count: recitation.surahCount })}
       </Badge>
+      {recitation.translatedSurahs.length === 0 ? null : (
+        <Badge kind="status" tone="positive">
+          {t('recitations.byPassage', { count: recitation.translatedSurahs.length })}
+        </Badge>
+      )}
     </p>
+  );
+}
+
+/**
+ * An aligned narration's Arabic, as identified: the reciter of each PUBLIC
+ * timed recitation it was matched against, and in how many Surahs. Nothing is
+ * said for a recitation that was not aligned, or whose reference is not
+ * public now.
+ */
+async function ArabicIdentified({
+  locale,
+  recitation,
+  t,
+}: {
+  readonly locale: Locale;
+  readonly recitation: PublicRecitation;
+  readonly t: QuranTranslator;
+}) {
+  if (recitation.translatedSurahs.length === 0) return null;
+  const [alignments, all] = await Promise.all([
+    quranReadRuntime().reader.recitationAlignments(recitation.id),
+    readRecitations(),
+  ]);
+  const matched = alignments.flatMap((alignment) => {
+    const reference = all.find((entry) => entry.id === alignment.referenceRecitationId);
+    return reference === undefined ? [] : [{ reference, count: alignment.surahCount }];
+  });
+  if (matched.length === 0) return null;
+  const names = await referenceNames(
+    { personIds: matched.map((entry) => entry.reference.reciterId), topicIds: [] },
+    locale,
+  );
+  return (
+    <>
+      {matched.map(({ reference, count }) => (
+        <p key={reference.id} className="text-sm break-words" dir="auto">
+          {t('recitations.arabicIdentified', {
+            reciter: names.people.get(reference.reciterId)?.name ?? reference.name,
+            count,
+          })}
+        </p>
+      ))}
+    </>
   );
 }
 
@@ -209,6 +263,7 @@ function RecitationCard({
           </p>
         )}
         <RecitationFacts recitation={recitation} languages={languages} t={t} />
+        <ArabicIdentified locale={locale} recitation={recitation} t={t} />
         {recitation.attribution === null ? null : (
           <p className="text-xs break-words text-foreground-muted" dir="auto">
             {recitation.attribution}
@@ -697,7 +752,8 @@ export async function ReciterPage({
                   {recitation.name}
                 </h2>
                 <RecitationFacts recitation={recitation} languages={languages} t={t} />
-                {recitation.timed ? null : (
+                <ArabicIdentified locale={locale} recitation={recitation} t={t} />
+                {recitation.timed || recitation.translatedSurahs.length > 0 ? null : (
                   <p className="text-sm text-foreground-muted">{t('listen.untimed')}</p>
                 )}
                 {recitation.attribution === null ? null : (

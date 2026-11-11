@@ -43,7 +43,7 @@ export class QuranDataError extends Error {
  * ========================================================================= */
 
 /**
- * The migration's own refusals (`THROW 51180`–`51199`, and Quran Parts 5–7's `51400`–`51404`), by number, as the
+ * The migration's own refusals (`THROW 51180`–`51199`, and Quran Parts 5–7's and translation audio's `51400`–`51405`), by number, as the
  * context's vocabulary. Read from the STRUCTURED fields the driver populates —
  * never from message text, which a stored value could otherwise imitate.
  */
@@ -81,6 +81,10 @@ const THROW_REASONS: ReadonlyMap<number, string> = new Map([
   // Quran Part 7: a published word-by-word work without, or left without, a
   // gloss — the same answer a published work without text gets.
   [51404, 'text-required'],
+  // Quran translation audio: a narration's alignment or translation span that
+  // is edited, partial, out of order or beside a non-reference source, or an
+  // aligned segment's timing or file changed under it.
+  [51405, 'invalid'],
 ]);
 
 /**

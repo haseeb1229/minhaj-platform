@@ -319,6 +319,8 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[worklabel]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[workcontributor]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[worktopic]': ['SELECT', 'INSERT', 'DELETE'],
+  // Quran Part 8: a Work's Quran passages, a set replaced under its version.
+  '[dbo].[workquranpassage]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[worksalepoint]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[booktranslator]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[booktranslation]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
@@ -364,6 +366,8 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[videolabel]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[videospeaker]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[videotopic]': ['SELECT', 'INSERT', 'DELETE'],
+  // Quran Part 8: a Video's Quran passages, a set replaced under its version.
+  '[dbo].[videoquranpassage]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[serieslabel]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[playlistlabel]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[playlistvideo]': ['SELECT', 'INSERT', 'DELETE'],
@@ -505,6 +509,10 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[qurantopic]': ['SELECT', 'INSERT', 'DELETE'],
   // Quran Part 5: a segment's per-Ayah timing, inserted and removed whole.
   '[dbo].[quranrecitationtiming]': ['SELECT', 'INSERT', 'DELETE'],
+  // Quran translation audio: a narration segment's alignment and translation
+  // spans, inserted once with its timing and removed only with the segment.
+  '[dbo].[quranrecitationalignment]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[quranrecitationtranslationspan]': ['SELECT', 'INSERT', 'DELETE'],
   // Quran Part 6: a translation text's translator's notes, replaced whole.
   '[dbo].[qurantranslationnote]': ['SELECT', 'INSERT', 'DELETE'],
   // Quran Part 7: a word-by-word work (never deleted, its slug fixed), its

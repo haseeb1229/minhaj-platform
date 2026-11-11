@@ -1365,3 +1365,85 @@ describe('recitation serving policies', () => {
     expect(await policy(null, ['quran.read']).decide(asset())).toBe('deny');
   });
 });
+
+describe('a narration segment is aligned only whole, by an administrator (translation audio)', () => {
+  const segment = {
+    id: ID(2),
+    surah: 2,
+    startAyah: 1,
+    endAyah: 3,
+    assetId: ID(3),
+    timedAyat: 0,
+    translationSpans: 0,
+  };
+  const detail = { ...layerRecord({ textCount: undefined }), segments: [segment] };
+  const timings = [
+    { ayah: 1, startMs: 0, endMs: 1000 },
+    { ayah: 2, startMs: 1000, endMs: 4000 },
+    { ayah: 3, startMs: 6000, endMs: 7000 },
+  ];
+  const spans = [
+    { startAyah: 1, endAyah: 2, startMs: 4000, endMs: 6000 },
+    { startAyah: 3, endAyah: 3, startMs: 7000, endMs: 9000 },
+  ];
+  const input = (overrides: Record<string, unknown> = {}) => ({
+    id: ID(1),
+    expectedVersion: 3,
+    value: {
+      segmentId: ID(2),
+      sourceId: ID(7),
+      referenceRecitationId: ID(9),
+      timings,
+      spans,
+      ...overrides,
+    },
+  });
+  const aligned = (calls: readonly { readonly method: string }[]) =>
+    calls.filter((call) => call.method === 'alignRecitationSegment');
+
+  it('refuses without quran.administer, reading nothing', async () => {
+    const { service, calls } = harness({ permissions: ['quran.read'] });
+    expect(await failure(service.alignRecitationSegment(actor, input()))).toBe('denied');
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a timing or passages that do not fit the stored segment, writing nothing', async () => {
+    const { service, calls } = harness({ records: { recitation: detail } });
+    for (const value of [
+      { timings: timings.slice(0, 2) },
+      { spans: spans.slice(0, 1) },
+      { spans: [{ ...spans[0], startMs: 3999 }, spans[1]] },
+      { spans: [{ ...spans[0], endMs: 6001 }, spans[1]] },
+    ])
+      expect(await failure(service.alignRecitationSegment(actor, input(value)))).toBe(
+        'invalid',
+      );
+    expect(aligned(calls)).toEqual([]);
+  });
+
+  it('refuses a stale version and a segment the recitation does not hold', async () => {
+    const { service, calls } = harness({ records: { recitation: detail } });
+    expect(
+      await failure(
+        service.alignRecitationSegment(actor, { ...input(), expectedVersion: 2 }),
+      ),
+    ).toBe('conflict');
+    expect(
+      await failure(service.alignRecitationSegment(actor, input({ segmentId: ID(5) }))),
+    ).toBe('not-found');
+    expect(aligned(calls)).toEqual([]);
+  });
+
+  it('passes a whole alignment to the store, attributed', async () => {
+    const { service, calls } = harness({ records: { recitation: detail } });
+    expect(await failure(service.alignRecitationSegment(actor, input()))).toBe(
+      'accepted',
+    );
+    expect(aligned(calls)).toEqual([
+      {
+        method: 'alignRecitationSegment',
+        args: [{ actorId: actor.accountId, ...input() }],
+      },
+    ]);
+  });
+});

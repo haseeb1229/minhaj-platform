@@ -366,6 +366,17 @@ export const MIGRATION_REVIEW_TOOL_ENTRY = path.join(
 );
 
 /**
+ * Quran Part 8's tafsir-passages tool: Quran passages proposed from Library
+ * Works' and Media Videos' titles and applied through their owners' services,
+ * run as the RUNTIME principal by `scripts/staging-tafsir-passages.ts`.
+ */
+export const TAFSIR_PASSAGES_TOOL_ENTRY = path.join(
+  'scripts',
+  'quran',
+  'tafsir-passages-runtime.ts',
+);
+
+/**
  * Runs one migration tool — the fixture proof, an authorised-source
  * registration or run, the Quran reference-preview tool, the staging demo
  * tool, the staging host step-up or the staging host review — as the RUNTIME principal against
@@ -391,6 +402,7 @@ export async function runMigrationTool(input: {
     input.entry !== DEMO_TOOL_ENTRY &&
     input.entry !== HOST_STEP_UP_TOOL_ENTRY &&
     input.entry !== MIGRATION_REVIEW_TOOL_ENTRY &&
+    input.entry !== TAFSIR_PASSAGES_TOOL_ENTRY &&
     !Object.values(MIGRATION_TOOL_ENTRIES).includes(input.entry)
   )
     throw new Error('Not a migration tool this runner starts.');

@@ -169,16 +169,46 @@ export function providerEmbedUrl(provider: VideoProvider, id: string): string {
  * player's routes delegate `autoplay` to exactly the two embed origins
  * (`next.config.ts`), and playback starts with the visitor's own activation.
  */
-export function providerPlaybackUrl(provider: VideoProvider, id: string): string {
-  return `${providerEmbedUrl(provider, id)}&autoplay=1`;
+export function providerPlaybackUrl(
+  provider: VideoProvider,
+  id: string,
+  start: number | null = null,
+): string {
+  const at = startOffset(start);
+  const played = `${providerEmbedUrl(provider, id)}&autoplay=1`;
+  if (at === null) return played;
+  return provider === 'youtube'
+    ? `${played}&start=${String(at)}`
+    : `${played}#t=${String(at)}s`;
+}
+
+/**
+ * Quran Part 8: where a lecture begins the passage a visitor came for — a whole
+ * number of seconds within a day, or nothing. Anything else is ignored rather
+ * than passed to the provider, so an address can only ever move the start.
+ */
+function startOffset(start: number | null): number | null {
+  return start !== null && Number.isInteger(start) && start > 0 && start <= 86_399
+    ? start
+    : null;
 }
 
 /** The provider's own page for the video — the described fallback link. */
-export function providerWatchUrl(provider: VideoProvider, id: string): string {
+export function providerWatchUrl(
+  provider: VideoProvider,
+  id: string,
+  start: number | null = null,
+): string {
   const safe = encodeURIComponent(id);
+  const at = startOffset(start);
+  const watched =
+    provider === 'youtube'
+      ? `https://www.youtube.com/watch?v=${safe}`
+      : `https://vimeo.com/${safe}`;
+  if (at === null) return watched;
   return provider === 'youtube'
-    ? `https://www.youtube.com/watch?v=${safe}`
-    : `https://vimeo.com/${safe}`;
+    ? `${watched}&t=${String(at)}s`
+    : `${watched}#t=${String(at)}s`;
 }
 
 /**

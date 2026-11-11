@@ -201,6 +201,10 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'QuranWordByWord',
       'QuranWordByWordContributor',
       'QuranWordByWordGloss',
+      // Quran translation audio — a narration segment's alignment and the
+      // spans where each passage's translation is heard.
+      'QuranRecitationAlignment',
+      'QuranRecitationTranslationSpan',
       // Phase 19 — Hadith's source systems, editions and activations, canonical
       // structure, records and evidence, layered works and typed topic
       // assignment.

@@ -16,6 +16,8 @@ import {
 } from '@/components/ui';
 import { queryValue } from '../../../shared';
 import { libraryCopy, WorkForm } from '../../forms';
+import { changeWorkPassages } from '../../actions';
+import { QuranPassagesEditor } from '../../../quran-passages';
 import { adminPageMetadata } from '../../../metadata';
 
 /**
@@ -33,6 +35,10 @@ import { adminPageMetadata } from '../../../metadata';
  * 301s to the new one from the next request onwards — natively, in this phase, and
  * without Migration (DOMAIN_MODEL.md §19.7, §19). The reservation is made by the
  * database, so it cannot be skipped by any writer.
+ *
+ * THE QURAN PASSAGES (Quran Part 8) are the Work's own — the passages of the
+ * Quran it explains — changed one named step at a time under the Work's
+ * version, like a Playlist's order (`../../../quran-passages`).
  *
  * THE EDITIONS ARE LISTED BUT NOT EDITED HERE. An Edition is a separate aggregate
  * with its own version and its own availability decisions; editing one inside the
@@ -114,6 +120,16 @@ export default async function WorkEditor({
           </TextLink>
         </p>
       </section>
+
+      <QuranPassagesEditor
+        locale={locale}
+        action={changeWorkPassages}
+        owner={{ name: 'workId', id: record.id, version: record.version }}
+        passages={record.quranPassages}
+        timed={false}
+        messages={copy.messages}
+        canEdit={context.authorization.can('library.administer')}
+      />
 
       <Panel>
         <div className="flex flex-col gap-4">

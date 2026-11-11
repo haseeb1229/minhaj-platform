@@ -23,6 +23,13 @@ import {
   type ScholarlyRecordOf,
   type ScholarlyValue,
 } from '@minhaj/contracts/library';
+import {
+  QURAN_PASSAGES_MAX,
+  applyPassageChange,
+  distinctPassages,
+  quranPassageSchema,
+  workPassageChangeSchema,
+} from '@minhaj/contracts/passage';
 
 /** A declared field, not a parameter property: plain Node loads this module too. */
 class LibraryRefusal extends Error {
@@ -45,6 +52,8 @@ export function libraryFailure(error: unknown): string {
       'duplicate-slug',
       'duplicate-number',
       'limit',
+      // Quran Part 8: a Work never names one passage twice.
+      'duplicate-passage',
     ].includes(reason)
     ? reason
     : 'unavailable';
@@ -175,6 +184,74 @@ export function createLibraryService(deps: {
         actorId: actor.accountId,
         editionId: libraryIdSchema.parse(editionId),
         expectedVersion: libraryVersionSchema.parse(expectedVersion),
+      });
+    },
+    /**
+     * QURAN PART 8 — one named change to the Quran passages a Work explains,
+     * applied to the passages the operator was shown.
+     *
+     * THE SAME AUTHORITY AND THE SAME VERSION AS THE REST OF THE WORK. The
+     * change is computed from current state only if that state is the version
+     * the operator saw; the adapter then claims that same version atomically,
+     * so a change made in between is a conflict. A passage is a citation VALUE
+     * validated against the Quran's structure (`@minhaj/contracts/passage`):
+     * Library asks Quran nothing.
+     */
+    async changeWorkQuranPassages(
+      actor: LibraryActor,
+      workId: string,
+      expectedVersion: number,
+      raw: unknown,
+    ) {
+      await permit(actor, 'library.administer');
+      const id = libraryIdSchema.parse(workId);
+      const version = libraryVersionSchema.parse(expectedVersion);
+      const change = workPassageChangeSchema.parse(raw);
+      const current = await store.work(id);
+      if (current === null) throw new LibraryRefusal('not-found');
+      if (current.version !== version) throw new LibraryRefusal('conflict');
+      const outcome = applyPassageChange(current.quranPassages, change);
+      if ('refusal' in outcome) throw new LibraryRefusal(outcome.refusal);
+      return store.setWorkQuranPassages({
+        actorId: actor.accountId,
+        workId: id,
+        expectedVersion: version,
+        passages: outcome.passages,
+        change: change.op,
+      });
+    },
+
+    /**
+     * Quran Part 8 — the passages the staging operator command proposed from
+     * this Work's TITLE, applied as a whole set. It never overwrites: a Work
+     * that already carries a passage (an editor's, or an earlier run's) is a
+     * conflict, so an editor's correction is never undone by a re-run.
+     */
+    async applyTitleQuranPassages(
+      actor: LibraryActor,
+      workId: string,
+      expectedVersion: number,
+      raw: unknown,
+    ) {
+      await permit(actor, 'library.administer');
+      const id = libraryIdSchema.parse(workId);
+      const version = libraryVersionSchema.parse(expectedVersion);
+      const passages = z
+        .array(quranPassageSchema)
+        .min(1)
+        .max(QURAN_PASSAGES_MAX)
+        .parse(raw);
+      if (!distinctPassages(passages)) throw new LibraryRefusal('duplicate-passage');
+      const current = await store.work(id);
+      if (current === null) throw new LibraryRefusal('not-found');
+      if (current.version !== version || current.quranPassages.length > 0)
+        throw new LibraryRefusal('conflict');
+      return store.setWorkQuranPassages({
+        actorId: actor.accountId,
+        workId: id,
+        expectedVersion: version,
+        passages,
+        change: 'title',
       });
     },
     async saveSalePoint(

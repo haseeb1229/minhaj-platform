@@ -6,7 +6,9 @@ import { readSurahSegment } from '@/components/quran/presentation';
  * `GET /api/quran/recitations/{recitation}/{surah}` — what the recitation
  * player needs to play ONE public recitation's audio for ONE Surah (Quran
  * Part 5): each playable segment's range, how its audio is addressed, and the
- * timing of every Ayah where the recitation is timed.
+ * timing of every Ayah where the recitation is timed — and, for an aligned
+ * narration, where each passage's translation is heard (Quran translation
+ * audio), so the player can follow any timed qari's passage with it.
  *
  * PUBLIC DATA ONLY, AND THE SAME FOR EVERYONE. It imports no Identity — the
  * public Quran root and the asset root reach Quran's public reader and
@@ -55,15 +57,25 @@ export async function GET(
   const recitation = await reader.recitation(slug);
   if (recitation === null) return notFound();
 
-  const [segments, timings] = await Promise.all([
+  const [segments, timings, spans] = await Promise.all([
     reader.recitationSegments(recitation.id, surah).then(playableSegments),
     reader.recitationTimings(recitation.id, surah),
+    // Only a recitation that carries translation spans has any to read.
+    recitation.translatedSurahs.includes(surah)
+      ? reader.recitationTranslationSpans(recitation.id, surah)
+      : [],
   ]);
   const bySegment = new Map<string, [number, number, number][]>();
   for (const timing of timings) {
     const list = bySegment.get(timing.segmentId) ?? [];
     list.push([timing.ayah, timing.startMs, timing.endMs]);
     bySegment.set(timing.segmentId, list);
+  }
+  const spansBySegment = new Map<string, [number, number, number, number][]>();
+  for (const span of spans) {
+    const list = spansBySegment.get(span.segmentId) ?? [];
+    list.push([span.startAyah, span.endAyah, span.startMs, span.endMs]);
+    spansBySegment.set(span.segmentId, list);
   }
 
   return new Response(
@@ -84,6 +96,8 @@ export async function GET(
               }
             : { kind: 'stream', stream: recitation.stream, surah },
         timings: segment.timed ? (bySegment.get(segment.id) ?? null) : null,
+        // `[startAyah, endAyah, startMs, endMs]` per passage, or null.
+        translation: segment.timed ? (spansBySegment.get(segment.id) ?? null) : null,
       })),
     }),
     { status: 200, headers: HEADERS },

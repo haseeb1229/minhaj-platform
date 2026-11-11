@@ -234,6 +234,13 @@ describe('the render and routing tree stays statically renderable', () => {
     // Quran Part 7: the Transliteration and word-by-word listings, shown
     // only while a work of each is public.
     'apps/web/src/components/quran/study-works.tsx',
+    // Quran Part 8: the Tafsir hub, a Surah's tafsir, an Ayah's panel and the
+    // 'On the Quran' links, their request-cached reads and their pure layout.
+    'apps/web/src/components/quran/tafsir.tsx',
+    'apps/web/src/components/quran/tafsir-layout.ts',
+    'apps/web/src/components/quran/tafsir-links.tsx',
+    'apps/web/src/components/quran/tafsir-panel.tsx',
+    'apps/web/src/components/quran/tafsir-read.ts',
     // Phase 19. The public Hadith surfaces, their pure presentation decisions
     // and their request-cached reads, and the one batched current-text read
     // and pure labels the search pages use for Hadith results. The ROUTES that

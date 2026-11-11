@@ -2792,6 +2792,193 @@ test.describe('a fixture corpus', () => {
     await expect(page.locator('audio[autoplay]')).toHaveCount(0);
   });
 
+  /* -----------------------------------------------------------------------
+   * Translation audio — a passage's Urdu translation between the qari's
+   * ----------------------------------------------------------------------- */
+
+  test('Translation audio: the qari, then each passage’s translation, then the qari — the passage marked, offered only where it exists, RTL, 320px, axe', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(420_000);
+    // SEEDED HERE AND REMOVED AFTER, so no earlier proof sees it: the
+    // narration's Surah 1 in a second stored file of silence, its Arabic timed
+    // and aligned against the fixture recitation, with two passages — ayat
+    // 1–2, then 3 — each with its "translation" in that silence; and the
+    // qari's own Surah 2, timed, where the narration has no passage.
+    const narrationSegment = randomUUID();
+    const narrationAudio = randomUUID();
+    const qariSegment = randomUUID();
+    const qariAudio = randomUUID();
+    const alignmentSource = randomUUID();
+    await seedAsset(narrationAudio);
+    await seedAsset(qariAudio);
+    await sql.query(`
+      INSERT INTO [dbo].[QuranSource] ([id],[code],[authority],[title],[version],[encoding],[reference]) VALUES
+        (N'${alignmentSource}', N'NON_QURAN_FIXTURE_ALIGNMENT_${run}', N'reference', N'NON_QURAN_FIXTURE alignment', N'fixture-1', N'utf-8', N'NON_QURAN_FIXTURE alignment evidence');
+      INSERT INTO [dbo].[QuranRecitationSegment] ([id],[recitationId],[surahNumber],[startAyah],[endAyah],[assetId],[createdAt]) VALUES
+        (N'${narrationSegment}', N'${ids.narration}', 1, 1, 3, N'${narrationAudio}', SYSUTCDATETIME()),
+        (N'${qariSegment}', N'${ids.recitation}', 2, 1, 4, N'${qariAudio}', SYSUTCDATETIME());
+      INSERT INTO [dbo].[QuranRecitationTiming] ([segmentId],[ayahNumber],[startMs],[endMs]) VALUES
+        (N'${narrationSegment}', 1, 500, 1500), (N'${narrationSegment}', 2, 1500, 2500), (N'${narrationSegment}', 3, 4500, 5500);
+      INSERT INTO [dbo].[QuranRecitationTiming] ([segmentId],[ayahNumber],[startMs],[endMs]) VALUES
+        (N'${qariSegment}', 1, 500, 2500), (N'${qariSegment}', 2, 2500, 4500), (N'${qariSegment}', 3, 4500, 6500), (N'${qariSegment}', 4, 6500, 8500);
+      INSERT INTO [dbo].[QuranRecitationAlignment] ([segmentId],[sourceId],[referenceRecitationId]) VALUES
+        (N'${narrationSegment}', N'${alignmentSource}', N'${ids.recitation}');
+      INSERT INTO [dbo].[QuranRecitationTranslationSpan] ([segmentId],[startAyah],[endAyah],[startMs],[endMs]) VALUES
+        (N'${narrationSegment}', 1, 2, 2500, 4500), (N'${narrationSegment}', 3, 3, 5500, 8000);
+    `);
+    const SWITCH = {
+      en: 'Urdu translation after each passage',
+      ur: 'ہر حصے کے بعد اردو ترجمہ',
+      ar: 'الترجمة الأردية بعد كل مقطع',
+    } as const;
+    try {
+      const narrationFile = `/assets/quran/recitations/${ids.narration}/${narrationSegment}/${narrationAudio}`;
+      const fetched: string[] = [];
+      page.on('request', (request) => {
+        if (request.url().includes(narrationFile)) fetched.push(request.url());
+      });
+      await visitFixture(page, '/quran/surah/1');
+      await readerReady(page);
+      const playAt = (ayah: number) =>
+        page
+          .getByRole('article', { name: `Surah 1, Ayah ${String(ayah)}` })
+          .getByRole('button', { name: 'Play from this Ayah' });
+      await playAt(3).click();
+      await expect(dock(page)).toHaveAttribute('data-status', 'playing', {
+        timeout: 30_000,
+      });
+      // The setting, offered here: this Surah has passages and the qari is timed.
+      await dock(page).getByRole('button', { name: 'Player settings' }).click();
+      const toggle = dock(page).getByRole('switch', { name: SWITCH.en });
+      await expect(toggle).not.toBeChecked();
+      await expect(toggle).toBeEnabled();
+      await expect(dock(page)).toContainText('found by audio comparison');
+      await toggle.check();
+      // The settings closed again, so the dock no longer covers the page.
+      await dock(page).getByRole('button', { name: 'Player settings' }).click();
+      await playAt(1).click();
+      await hearing(page, 1);
+
+      // Ayah 2 ends the passage 1–2: its translation plays with both ayat marked.
+      await expect(dock(page)).toHaveAttribute('data-translating', '1-2', {
+        timeout: 30_000,
+      });
+      await expect(page.locator('#ayah-1-1')).toHaveAttribute('data-recited', '');
+      await expect(page.locator('#ayah-1-2')).toHaveAttribute('data-recited', '');
+      await expect(dock(page).getByRole('status')).toHaveText(
+        'Urdu translation · ayat 1–2',
+      );
+      expect(
+        await page.evaluate(() => navigator.mediaSession.metadata?.title ?? ''),
+      ).toContain('Urdu translation');
+      expect(fetched.length).toBeGreaterThan(0);
+
+      // Then the qari carries on with Ayah 3, alone marked again.
+      await hearing(page, 3);
+      await expect(dock(page)).not.toHaveAttribute('data-translating', /.+/, {
+        timeout: 30_000,
+      });
+      await expect(page.locator('#ayah-1-1')).not.toHaveAttribute('data-recited', '');
+      // And Ayah 3, a passage of its own, is followed by its translation.
+      await expect(dock(page)).toHaveAttribute('data-translating', '3-3', {
+        timeout: 30_000,
+      });
+      await expect(dock(page)).toContainText('Urdu translation · Ayah 3');
+      await expect(dock(page)).not.toHaveAttribute('data-translating', /.+/, {
+        timeout: 30_000,
+      });
+
+      // Surah 2 has no passage: the qari plays alone, and the setting says why.
+      await visitFixture(page, '/quran/surah/2');
+      await readerReady(page);
+      await page
+        .getByRole('article', { name: 'Surah 2, Ayah 1' })
+        .getByRole('button', { name: 'Play from this Ayah' })
+        .click();
+      await expect(dock(page)).toHaveAttribute('data-status', 'playing', {
+        timeout: 30_000,
+      });
+      await dock(page).getByRole('button', { name: 'Player settings' }).click();
+      await expect(dock(page).getByRole('switch', { name: SWITCH.en })).toBeChecked();
+      await expect(dock(page)).toContainText(
+        'Not available for this Surah. Surahs that have it: 1.',
+      );
+      await hearing(page, 3);
+      await expect(dock(page)).not.toHaveAttribute('data-translating', /.+/);
+
+      // The narration chosen already reads the translation: nothing to add.
+      await dock(page)
+        .getByRole('combobox', { name: /^Recitation/ })
+        .selectOption(slug.narration);
+      await expect(dock(page).getByRole('switch', { name: SWITCH.en })).toBeDisabled();
+      await expect(dock(page)).toContainText(
+        'The narration chosen already reads the Urdu translation.',
+      );
+      await dock(page)
+        .getByRole('combobox', { name: /^Recitation/ })
+        .selectOption(slug.recitation);
+
+      // Right to left in Urdu and Arabic, at 320px, the setting in the language.
+      for (const locale of ['ur', 'ar'] as const) {
+        await page.setViewportSize({ width: 320, height: 800 });
+        await visitFixture(page, `/${locale}/quran/surah/1`, locale);
+        await readerReady(page);
+        await page.locator('#ayah-1-1 .quran-ayah-play').click();
+        const region = page.locator('[data-quran-dock]');
+        await expect(region).toHaveAttribute('data-status', 'playing', {
+          timeout: 30_000,
+        });
+        await region.locator('button[aria-controls]').click();
+        const localToggle = region.getByRole('switch', { name: SWITCH[locale] });
+        await expect(localToggle).toBeChecked();
+        expect(
+          await localToggle.evaluate((element) => getComputedStyle(element).direction),
+        ).toBe('rtl');
+        await expect(region).toHaveAttribute('data-translating', '1-2', {
+          timeout: 30_000,
+        });
+        const { overflow, offenders } = await overflowOf(page);
+        expect(
+          overflow,
+          `${locale} 320px — beyond the viewport: ${offenders.join(', ')}`,
+        ).toBeLessThanOrEqual(0);
+      }
+
+      // No serious accessibility finding with the setting open, mid-translation.
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await visitFixture(page, '/quran/surah/1');
+      await readerReady(page);
+      await playAt(1).click();
+      await dock(page).getByRole('button', { name: 'Player settings' }).click();
+      await expect(dock(page)).toHaveAttribute('data-translating', '1-2', {
+        timeout: 30_000,
+      });
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      const blocking = results.violations.filter(
+        (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+      );
+      for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+        testInfo.annotations.push({
+          type: 'axe',
+          description: `translation audio: ${finding.id} (${String(finding.impact)})`,
+        });
+      expect(
+        blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+      ).toEqual([]);
+      await dock(page).getByRole('button', { name: 'Close the player' }).click();
+    } finally {
+      await sql.query(`
+        DELETE FROM [dbo].[QuranRecitationTranslationSpan] WHERE [segmentId]=N'${narrationSegment}';
+        DELETE FROM [dbo].[QuranRecitationAlignment] WHERE [segmentId]=N'${narrationSegment}';
+        DELETE FROM [dbo].[QuranRecitationTiming] WHERE [segmentId] IN (N'${narrationSegment}', N'${qariSegment}');
+        DELETE FROM [dbo].[QuranRecitationSegment] WHERE [id] IN (N'${narrationSegment}', N'${qariSegment}');
+      `);
+    }
+  });
+
   test('search finds the citation — on a page that is never indexed', async ({
     page,
   }) => {
@@ -3718,5 +3905,445 @@ test.describe('Quran administration', () => {
     // The public citation reads the corrected text.
     await visitFixture(page, '/quran/surah/1/1');
     await expect(page.locator('[aria-labelledby="ayah-arabic"] p')).toHaveText(CORRECTED);
+  });
+});
+
+/* ===========================================================================
+ * Quran Part 8 — the Tafsir hub
+ * ========================================================================= */
+
+/**
+ * THE TAFSIR HUB, over the fixture corpus: the fixture Tafsir's one entry
+ * (1:1–3, Urdu), two public Library Works and a published Media Video that
+ * carry Quran passages, and a DRAFT Video that carries one too (and must
+ * never appear). Each owner's passages are seeded as that owner's own rows —
+ * citation values, no key into Quran.
+ *
+ *   - the hub: the texts, the Surah grid (linked where something explains a
+ *     Surah, quiet where nothing does), the books and the lectures, the find
+ *     form without script, Urdu and Arabic right to left, 320px, axe;
+ *   - a Surah's tafsir: whole-Surah resources first, each group with its ayat
+ *     and its resources, a lecture opened at its start, the jump to an Ayah
+ *     (placed, or said to have nothing yet), 404 outside the Quran;
+ *   - the reader: a Tafsir action ONLY on an Ayah something explains, its
+ *     sheet with script and a link without, the Ayah page's open section;
+ *   - the lecture opened at its start, the book's and lecture's "On the
+ *     Quran" links, and the search card's way to an Ayah's tafsir;
+ *   - each editor adds, moves and removes a passage under its version.
+ */
+test.describe('Quran Part 8: the Tafsir hub', () => {
+  const part8 = {
+    wholeBook: randomUUID(),
+    wholeEdition: randomUUID(),
+    rangeBook: randomUUID(),
+    rangeEdition: randomUUID(),
+    lecture: randomUUID(),
+    draftLecture: randomUUID(),
+  };
+  const part8Slug = {
+    wholeBook: `fixture-tafsir-book-${run}`,
+    rangeBook: `fixture-range-book-${run}`,
+    lecture: `fixture-tafsir-lecture-${run}`,
+    draftLecture: `fixture-draft-lecture-${run}`,
+  };
+  const TITLE = {
+    wholeBook: `NON_QURAN_FIXTURE tafsir book ${run}`,
+    rangeBook: `NON_QURAN_FIXTURE range book ${run}`,
+    lecture: `NON_QURAN_FIXTURE tafsir lecture ${run}`,
+    draftLecture: `NON_QURAN_FIXTURE draft lecture ${run}`,
+  };
+  let editor: Page;
+
+  async function axe(page: Page, target: string, testInfo: TestInfo): Promise<void> {
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    const blocking = results.violations.filter(
+      (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+    );
+    for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+      testInfo.annotations.push({
+        type: 'axe',
+        description: `${target}: ${finding.id} (${String(finding.impact)})`,
+      });
+    expect(
+      blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+      target,
+    ).toEqual([]);
+  }
+
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(180_000);
+    const work = (id: string, slugValue: string, title: string, edition: string) => `
+      INSERT INTO [dbo].[Work] ([id],[slug],[primaryLocale],[state]) VALUES (N'${id}', N'${slugValue}', N'en', N'published');
+      INSERT INTO [dbo].[WorkLabel] ([workId],[locale],[title],[description]) VALUES (N'${id}', N'en', ${n(title)}, N'');
+      INSERT INTO [dbo].[WorkContributor] ([workId],[personId],[role],[position]) VALUES (N'${id}', N'${ids.reciter}', N'author', 0);
+      INSERT INTO [dbo].[Edition] ([id],[workId],[languageCode],[label],[state],[publicationYear],[reading],[download],[version],[updatedAt]) VALUES
+        (N'${edition}', N'${id}', N'ur', N'NON_QURAN_FIXTURE edition', N'published', 2020, N'unavailable', N'denied', 1, SYSUTCDATETIME());`;
+    const video = (
+      id: string,
+      slugValue: string,
+      title: string,
+      state: string,
+      key: string,
+    ) => `
+      INSERT INTO [dbo].[Video] ([id],[slug],[primaryLocale],[state],[provider],[providerVideoId],[availability],[languageCode],[durationSeconds]) VALUES
+        (N'${id}', N'${slugValue}', N'en', N'${state}', N'youtube', '${key}', N'available', N'ur', 3600);
+      INSERT INTO [dbo].[VideoLabel] ([videoId],[locale],[title],[description]) VALUES (N'${id}', N'en', ${n(title)}, N'');
+      INSERT INTO [dbo].[VideoSpeaker] ([videoId],[personId],[position]) VALUES (N'${id}', N'${ids.reciter}', 0);`;
+    await sql.query(`
+      ${work(part8.wholeBook, part8Slug.wholeBook, TITLE.wholeBook, part8.wholeEdition)}
+      ${work(part8.rangeBook, part8Slug.rangeBook, TITLE.rangeBook, part8.rangeEdition)}
+      ${video(part8.lecture, part8Slug.lecture, TITLE.lecture, 'published', `L${run}`)}
+      ${video(part8.draftLecture, part8Slug.draftLecture, TITLE.draftLecture, 'draft', `D${run}`)}
+      INSERT INTO [dbo].[WorkQuranPassage] ([workId],[position],[surahNumber],[ayahFrom],[ayahTo]) VALUES
+        (N'${part8.wholeBook}', 0, 1, 1, 7),
+        (N'${part8.rangeBook}', 0, 2, 2, 3);
+      INSERT INTO [dbo].[VideoQuranPassage] ([videoId],[position],[surahNumber],[ayahFrom],[ayahTo],[startSeconds]) VALUES
+        (N'${part8.lecture}', 0, 2, 2, 2, 754),
+        (N'${part8.draftLecture}', 0, 2, 2, 2, NULL);
+    `);
+
+    const context = await browser.newContext({
+      baseURL: baseUrl(),
+      extraHTTPHeaders: { 'x-forwarded-for': '100.64.249.1' },
+    });
+    contexts.push(context);
+    editor = await context.newPage();
+    const { email } = await registerAndSignIn(editor, 'quran-tafsir-editor');
+    await grantRole(
+      sql,
+      await accountIdFor(sql, email),
+      ['library.read', 'library.administer', 'media.read', 'media.administer'],
+      'Quran Part 8 browser proof',
+    );
+  });
+
+  test('the hub: texts, the Surah grid, books and lectures — never a draft — and the find form without script', async ({
+    browser,
+    page,
+  }, testInfo) => {
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await visitFixture(page, '/quran/tafsir');
+    const main = page.getByRole('main');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tafsir');
+
+    // The public Tafsir text work, with what it covers.
+    const texts = page.locator('section[aria-labelledby="tafsir-texts"]');
+    await expect(texts.getByRole('link', { name: NAME.tafsir })).toHaveAttribute(
+      'href',
+      `/quran/tafsir/${slug.tafsir}`,
+    );
+    await expect(texts).toContainText('1 Surah · 1 entry');
+
+    // The grid: Surahs 1 and 2 lead to their tafsir; Surah 3 has nothing yet.
+    const grid = page.locator('ol[aria-labelledby="tafsir-surahs"]');
+    await expect(grid.locator('li')).toHaveCount(114);
+    await expect(grid.locator('a[href="/quran/tafsir/surah/1"]')).toContainText('1 text');
+    await expect(grid.locator('a[href="/quran/tafsir/surah/1"]')).toContainText('1 book');
+    await expect(grid.locator('a[href="/quran/tafsir/surah/2"]')).toContainText(
+      '1 lecture',
+    );
+    await expect(grid.locator('a[href="/quran/tafsir/surah/3"]')).toHaveCount(0);
+    await expect(grid.locator('li').nth(2)).toContainText('Nothing linked yet');
+
+    // Books and lectures, shelved by Surah; the draft lecture is nowhere.
+    const books = page.locator('section[aria-labelledby="tafsir-books"]');
+    await expect(books.getByRole('link', { name: TITLE.wholeBook })).toHaveAttribute(
+      'href',
+      `/library/books/${part8Slug.wholeBook}`,
+    );
+    await expect(books).toContainText('1:1–7');
+    const lectures = page.locator('section[aria-labelledby="tafsir-lectures"]');
+    await expect(lectures.getByRole('link', { name: TITLE.lecture })).toHaveAttribute(
+      'href',
+      `/watch/videos/${part8Slug.lecture}?start=754`,
+    );
+    await expect(lectures).toContainText('from 12:34');
+    await expect(main).not.toContainText(TITLE.draftLecture);
+    await axe(page, '/quran/tafsir', testInfo);
+
+    // Without script, the find form lands on the Ayah's place in its Surah.
+    const plain = await browser.newContext({
+      baseURL: baseUrl(),
+      javaScriptEnabled: false,
+    });
+    contexts.push(plain);
+    const noScript = await plain.newPage();
+    await noScript.goto('/quran/tafsir');
+    await noScript.locator('select[name="surah"]').selectOption('2');
+    await noScript.locator('input[name="ayah"]').first().fill('3');
+    await noScript.getByRole('button', { name: 'Show tafsir' }).click();
+    await noScript.waitForURL('**/quran/tafsir/surah/2#tafsir-2-3');
+  });
+
+  test('the hub and a Surah’s tafsir read right to left in Urdu and Arabic and fit 320px', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(180_000);
+    for (const locale of ['ur', 'ar'] as const) {
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await visitFixture(page, localizedPath(locale, '/quran/tafsir'), locale);
+      await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+      await axe(page, `/${locale}/quran/tafsir`, testInfo);
+      await visitFixture(page, localizedPath(locale, '/quran/tafsir/surah/1'), locale);
+      // The Urdu tafsir entry keeps its own language and direction.
+      await expect(page.locator('div.tafsir-text[lang="ur"]')).toHaveAttribute(
+        'dir',
+        'rtl',
+      );
+      await axe(page, `/${locale}/quran/tafsir/surah/1`, testInfo);
+    }
+    for (const target of [
+      '/quran/tafsir',
+      '/ur/quran/tafsir',
+      '/quran/tafsir/surah/2',
+      '/ur/quran/tafsir/surah/1',
+    ]) {
+      await page.setViewportSize({ width: 320, height: 800 });
+      await page.goto(target);
+      const { overflow, offenders } = await overflowOf(page);
+      expect(overflow, `${target}: ${offenders.join(', ')}`).toBeLessThanOrEqual(0);
+    }
+  });
+
+  test('a Surah’s tafsir: the whole Surah first, each group with its ayat and resources, jumps and refusals', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await visitFixture(page, '/quran/tafsir/surah/1');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      'Tafsir of NON_QURAN_FIXTURE Surah One',
+    );
+    // The whole-Surah book first; the entry over 1:1–3 is a group with its ayat.
+    const whole = page.locator('#tafsir-whole');
+    await expect(whole.getByRole('link', { name: TITLE.wholeBook })).toBeVisible();
+    const group = page.locator('section[aria-labelledby="tafsir-group-1"]');
+    await expect(group.getByRole('heading', { level: 2 })).toHaveText('Ayat 1–3');
+    await expect(group.locator('#tafsir-1-2 p[lang="ar"]')).toHaveText(
+      canonicalText(1, 2),
+    );
+    await expect(group.locator('div.tafsir-text[lang="ur"]')).toContainText(
+      'NON_QURAN_FIXTURE_TAFSIR_1_1',
+    );
+    // The mini-navigation names the whole Surah and the group.
+    const nav = page.getByRole('navigation', { name: 'In this Surah' });
+    await expect(nav.getByRole('link', { name: 'Whole Surah' })).toHaveAttribute(
+      'href',
+      '#tafsir-whole',
+    );
+    await expect(nav.getByRole('link', { name: '1–3' })).toHaveAttribute(
+      'href',
+      '#tafsir-1-1',
+    );
+    await axe(page, '/quran/tafsir/surah/1', testInfo);
+
+    // Surah 2: the range book and the lecture, opened at its start.
+    await visitFixture(page, '/quran/tafsir/surah/2');
+    const range = page.locator('section[aria-labelledby="tafsir-group-2"]');
+    await expect(range.getByRole('heading', { level: 2 })).toHaveText('Ayat 2–3');
+    await expect(range.getByRole('link', { name: TITLE.rangeBook })).toBeVisible();
+    await expect(range.getByRole('link', { name: TITLE.lecture })).toHaveAttribute(
+      'href',
+      `/watch/videos/${part8Slug.lecture}?start=754`,
+    );
+    await expect(page.getByRole('main')).not.toContainText(TITLE.draftLecture);
+
+    // A jump to an Ayah something explains lands on it; one nothing explains says so.
+    await page.goto('/quran/tafsir/surah/2?ayah=3');
+    await page.waitForURL('**/quran/tafsir/surah/2#tafsir-2-3');
+    await page.goto('/quran/tafsir/surah/2?ayah=4');
+    await expect(page.getByRole('main')).toContainText(
+      'Nothing is linked to Ayah 4 yet.',
+    );
+    await expect(page.getByRole('link', { name: 'Read Ayah 4' })).toHaveAttribute(
+      'href',
+      '/quran/surah/2/4',
+    );
+    // A Surah with nothing linked says so; outside the Quran is a 404.
+    await visitFixture(page, '/quran/tafsir/surah/3');
+    await expect(page.getByRole('main')).toContainText(
+      'No tafsir is linked to this Surah yet.',
+    );
+    expect((await page.goto('/quran/tafsir/surah/115'))?.status()).toBe(404);
+    expect((await page.goto('/quran/tafsir/surah/0'))?.status()).toBe(404);
+  });
+
+  test('the reader offers Tafsir only where something explains an Ayah — a sheet with script, a link without', async ({
+    browser,
+    page,
+  }, testInfo) => {
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await visitFixture(page, '/quran/surah/2');
+    await readerReady(page);
+    const action = (ayah: number) =>
+      page.locator(`#ayah-2-${String(ayah)} [data-ayah-action="tafsir"]`);
+    await expect(action(1)).toHaveCount(0);
+    await expect(action(3)).toHaveAttribute('aria-label', 'Tafsir (1)');
+    await expect(action(4)).toHaveCount(0);
+    await expect(action(2)).toHaveAttribute('aria-label', 'Tafsir (2)');
+    await action(2).click();
+    const sheet = page.getByRole('dialog', { name: 'Tafsir of 2:2' });
+    await expect(sheet).toBeVisible();
+    await expect(
+      sheet.getByRole('link', { name: new RegExp(TITLE.rangeBook) }),
+    ).toHaveAttribute('href', `/library/books/${part8Slug.rangeBook}`);
+    await expect(
+      sheet.getByRole('link', { name: new RegExp(TITLE.lecture) }),
+    ).toHaveAttribute('href', `/watch/videos/${part8Slug.lecture}?start=754`);
+    await expect(sheet).not.toContainText(TITLE.draftLecture);
+    await axe(page, '/quran/surah/2 (Tafsir sheet)', testInfo);
+    await page.keyboard.press('Escape');
+    await expect(sheet).toBeHidden();
+
+    // Surah 1: the Tafsir entry and the whole-Surah book explain each of its ayat.
+    await visitFixture(page, '/quran/surah/1');
+    await expect(page.locator('#ayah-1-1 [data-ayah-action="tafsir"]')).toHaveAttribute(
+      'aria-label',
+      'Tafsir (2)',
+    );
+
+    // Without script the action is a link to the Ayah's place in the hub.
+    const plain = await browser.newContext({
+      baseURL: baseUrl(),
+      javaScriptEnabled: false,
+    });
+    contexts.push(plain);
+    const noScript = await plain.newPage();
+    await noScript.goto('/quran/surah/2');
+    await noScript.locator('#ayah-2-2 [data-ayah-action="tafsir"]').click();
+    await noScript.waitForURL('**/quran/tafsir/surah/2#tafsir-2-2');
+
+    // The Ayah's own page lists it in the open.
+    await visitFixture(page, '/quran/surah/2/2');
+    const open = page.locator('#ayah-explained');
+    await expect(open.getByRole('heading', { name: 'Tafsir of 2:2' })).toBeVisible();
+    await expect(
+      open.getByRole('link', { name: new RegExp(TITLE.lecture) }),
+    ).toBeVisible();
+
+    // In Urdu the action and its sheet read right to left, and fit 320px.
+    await page.setViewportSize({ width: 320, height: 800 });
+    await visitFixture(page, '/ur/quran/surah/2', 'ur');
+    await readerReady(page);
+    await page.locator('#ayah-2-2 [data-ayah-action="tafsir"]').click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    const { overflow, offenders } = await overflowOf(page);
+    expect(overflow, offenders.join(', ')).toBeLessThanOrEqual(0);
+    await axe(page, '/ur/quran/surah/2 (Tafsir sheet)', testInfo);
+  });
+
+  test('a lecture opens at its passage, a book and a lecture name the Quran they explain, and search leads to an Ayah’s tafsir', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.goto(`/watch/videos/${part8Slug.lecture}?start=754`);
+    await expect(page.getByRole('main')).toContainText('Opens at 12:34');
+    const onQuran = page.locator('section[aria-labelledby="quran-passages"]');
+    await expect(onQuran.getByRole('link', { name: /2:2/ })).toHaveAttribute(
+      'href',
+      '/quran/tafsir/surah/2?ayah=2',
+    );
+    // A start beyond the video is ignored, never passed on.
+    await page.goto(`/watch/videos/${part8Slug.lecture}?start=4000`);
+    await expect(page.getByRole('main')).not.toContainText('Opens at');
+
+    await page.goto(`/library/books/${part8Slug.wholeBook}`);
+    await expect(
+      page
+        .locator('section[aria-labelledby="quran-passages"]')
+        .getByRole('link', { name: /1:1–7/ }),
+    ).toHaveAttribute('href', '/quran/tafsir/surah/1?ayah=1');
+
+    await page.goto(`/quran/search?q=${encodeURIComponent('surah 2:2')}`);
+    await expect(
+      page.getByRole('link', { name: 'Tafsir and lectures on this Ayah (2)' }),
+    ).toHaveAttribute('href', '/quran/tafsir/surah/2?ayah=2');
+  });
+
+  test('each editor adds, moves and removes a passage under its version, refusing what is not a passage', async () => {
+    test.setTimeout(180_000);
+    const page = editor;
+    // Library: the range book gains 2:4 alone, then moves it first.
+    await page.goto(`/admin/library/works/${part8.rangeBook}`);
+    const section = page.locator(
+      `section[aria-labelledby="quran-passages-${part8.rangeBook}"]`,
+    );
+    await expect(section.getByText('2:2–3')).toBeVisible();
+    await section.locator('select[name="surah"]').selectOption('2');
+    await section.locator('input[name="ayahFrom"]').fill('4');
+    await section.getByRole('button', { name: 'Add passage' }).click();
+    const passages = section.locator('ol > li');
+    await expect(passages).toHaveCount(2);
+    await expect(passages.nth(1)).toContainText('2:4');
+    await passages.nth(1).getByRole('button', { name: 'Move earlier' }).click();
+    await expect(passages.nth(0)).toContainText('2:4');
+    // A range beyond its Surah is refused with words, and nothing is added.
+    await section.locator('select[name="surah"]').selectOption('1');
+    await section.locator('input[name="ayahFrom"]').fill('1');
+    await section.locator('input[name="ayahTo"]').fill('8');
+    await section.getByRole('button', { name: 'Add passage' }).click();
+    await expect(section).toContainText('Check the fields and try again.');
+    await expect(passages).toHaveCount(2);
+    const [work] = await sql.query<{ total: number }>(
+      `SELECT COUNT_BIG(*) AS [total] FROM [dbo].[AuditLog] WHERE [targetId]=N'${part8.rangeBook}' AND [action] LIKE N'library.work.passages-%';`,
+    );
+    expect(Number(work?.total)).toBe(2);
+
+    // Media: the lecture gains the whole of Surah 1 starting at 1:00, then loses it.
+    await page.goto(`/admin/media/videos/${part8.lecture}`);
+    const lecture = page.locator(
+      `section[aria-labelledby="quran-passages-${part8.lecture}"]`,
+    );
+    await expect(lecture).toContainText('starts at 12:34');
+    await lecture.locator('select[name="surah"]').selectOption('1');
+    await lecture.locator('input[name="start"]').fill('1:00');
+    await lecture.getByRole('button', { name: 'Add passage' }).click();
+    const items = lecture.locator('ol > li');
+    await expect(items).toHaveCount(2);
+    await expect(items.nth(1)).toContainText('1:1–7');
+    await expect(items.nth(1)).toContainText('starts at 1:00');
+    await items.nth(1).getByRole('button', { name: 'Remove' }).click();
+    await expect(items).toHaveCount(1);
+    const [video] = await sql.query<{ total: number }>(
+      `SELECT COUNT_BIG(*) AS [total] FROM [dbo].[AuditLog] WHERE [targetId]=N'${part8.lecture}' AND [action]=N'media.video.passages.changed';`,
+    );
+    expect(Number(video?.total)).toBe(2);
+  });
+
+  // TEMPORARY-PART8-SCREENSHOTS (removed after the evidence run)
+  test('part 8 evidence screenshots', async ({ page }) => {
+    const dir = process.env['PART8_SHOTS'];
+    test.skip(dir === undefined, 'evidence only');
+    test.setTimeout(240_000);
+    for (const [width, height] of [
+      [1440, 1000],
+      [390, 844],
+    ] as const)
+      for (const locale of ['en', 'ur'] as const) {
+        await page.setViewportSize({ width, height });
+        const tag = `${locale}-${String(width)}`;
+        await page.goto(localizedPath(locale, '/quran/tafsir'));
+        await page.screenshot({ path: `${String(dir)}/hub-${tag}.png`, fullPage: true });
+        await page.goto(localizedPath(locale, '/quran/tafsir/surah/2'));
+        await page.screenshot({
+          path: `${String(dir)}/surah-2-${tag}.png`,
+          fullPage: true,
+        });
+        await page.goto(localizedPath(locale, '/quran/tafsir/surah/1'));
+        await page.screenshot({
+          path: `${String(dir)}/surah-1-${tag}.png`,
+          fullPage: true,
+        });
+        await page.goto(localizedPath(locale, '/quran/surah/2'));
+        await readerReady(page);
+        await page.locator('#ayah-2-2 [data-ayah-action="tafsir"]').click();
+        await expect(page.getByRole('dialog')).toBeVisible();
+        await page.waitForTimeout(400);
+        await page.screenshot({ path: `${String(dir)}/reader-panel-${tag}.png` });
+      }
   });
 });

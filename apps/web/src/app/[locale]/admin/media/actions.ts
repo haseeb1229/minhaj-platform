@@ -12,6 +12,7 @@ import { mediaRuntime } from '@/composition/media';
 import { indexAfterResponse } from '@/composition/search';
 import { mediaFailure } from '@/contexts/media';
 import type { FormActionState } from '../../(identity)/form-state';
+import { passageChangeOf } from '../quran-passage-form';
 import { MEDIA_FORM_ROWS } from './rows';
 
 /**
@@ -295,6 +296,40 @@ export async function saveAudioSeries(
  * One named change to a Playlist's order — add, remove, or move one Video one
  * place — against the version the operator was looking at.
  */
+/**
+ * Quran Part 8 — one named change to the Quran passages a Video explains (add,
+ * move one step, remove), against the version the operator was looking at.
+ */
+export async function changeVideoPassages(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  let destination: string;
+
+  try {
+    const { locale, permitted } = await authorise(form);
+    if (permitted.state === 'denied') return { status: 'error', failure: 'denied' };
+
+    const videoId = String(form.get('videoId') ?? '');
+    await mediaRuntime().media.changeVideoQuranPassages(
+      { accountId: permitted.session.account.id },
+      videoId,
+      integer(form, 'version') ?? Number.NaN,
+      passageChangeOf(form, true),
+    );
+
+    destination = localizedPath(
+      locale,
+      `/admin/media/videos/${encodeURIComponent(videoId)}`,
+    );
+    revalidatePath(localizedPath(locale, '/admin/media'), 'layout');
+  } catch (error) {
+    return rejected(error, 'media-change-video-passages');
+  }
+
+  redirect(destination);
+}
+
 export async function changePlaylist(
   _state: FormActionState,
   form: FormData,

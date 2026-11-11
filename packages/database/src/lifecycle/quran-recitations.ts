@@ -1,6 +1,7 @@
 import 'server-only';
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -35,6 +36,12 @@ import type { SqlServerConnection, SqlSession } from './sql-connection.ts';
  * source, which the database enforces). This is not Minhaj's approval of any
  * reciter; production never runs it.
  *
+ * QURAN TRANSLATION AUDIO (owner request 2026-11-10). The narration's
+ * ALIGNMENT — when each Ayah's Arabic is heard in it, and where each passage's
+ * Urdu is — derived offline against a timed mp3quran recitation, is a third
+ * provenance source (`alignment`) whose evidence records the alignment
+ * file's pinned digest and method; the runtime child records it per Surah.
+ *
  * Everything printed is identifiers and counts.
  */
 
@@ -57,7 +64,37 @@ export const RECITATION_PROVENANCE = Object.freeze({
     title: 'Irfan-ul-Quran Urdu narration (Tasleem Ahmed Sabri)',
     version: 'Quran_mp3.zip (Last-Modified 2017-11-04)',
   },
+  alignment: {
+    code: 'irfan-ul-quran-ur-narration-alignment',
+    title:
+      'Irfan-ul-Quran Urdu narration - Arabic timing and translation passages (derived)',
+    version: 'narration-timing.json (alignment 2026-11-10)',
+  },
 } as const);
+
+/**
+ * THE ONE ALIGNMENT FILE THE PLATFORM ACCEPTS: the SHA-256 of
+ * `narration-timing.json` as the alignment produced it on 2026-11-10. Any
+ * other file — a re-run of the alignment included — is refused until its
+ * digest is reviewed and recorded here.
+ */
+export const NARRATION_TIMING_SHA256 =
+  '7340502bfb3f07cca8d22f7a74d238addd7e3828173e490636b8014f45e4a1e3';
+
+/**
+ * The alignment's evidence: the file and its digest, how it was derived, what
+ * it identified and what it did not establish. Fixed text, so a re-run finds
+ * the same source.
+ */
+export function narrationAlignmentEvidence(sha256: string): string {
+  if (!SHA256.test(sha256)) throw new Error('The alignment digest is not a SHA-256.');
+  return [
+    `Derived alignment of the Irfan-ul-Quran Urdu narration: narration-timing.json, SHA-256 ${sha256}; times are relative to each Surah's MP3 in the attested archive.`,
+    'Method (2026-11-10): spectral correlation of each narration file against the Abdulrahman Al-Sudais murattal on mp3quran.net (read 54) and its published per-Ayah timings, per-Surah tempo 0.9175-1.08, fail-closed acceptance; 67 Surahs accepted (2,306 ayat, 2,052 passages), 47 rejected and not used.',
+    'Identification: the Arabic in the accepted Surahs matches read 54 (Surah 112: 0.90/0.84/0.92/0.91 against at most 0.65 for every other of 115 timed reads). Not listened to and not confirmed by Minhaj-ul-Quran; the rights in that Arabic audio are a question for Minhaj-ul-Quran.',
+    `${QURAN_RECITATIONS_DECISION}: staging only, pending qari and editor review; production gates unchanged.`,
+  ].join('\n');
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ACCOUNT = /^[A-Za-z0-9_-]{8,36}$/;
@@ -159,6 +196,77 @@ export async function registerRecitationProvenance(
     VALUES (${n(id)}, ${n(code)}, N'reference', ${n(title)}, ${n(version)}, N'utf-8', NULL, ${n(evidence)});
   `);
   return { id, state: 'registered' };
+}
+
+/**
+ * `recitations-narration-timing`: the alignment file proved to be the pinned
+ * one and to describe the archive the narration was stored from, its
+ * provenance registered as the owner, then the runtime child records it.
+ */
+export async function importNarrationAlignment(input: {
+  readonly owner: SqlSession;
+  readonly runtime: SqlServerConnection;
+  readonly operator: string;
+  /** The alignment file, as the operations container sees it. */
+  readonly file: string;
+  /** The digest the operator confirms; it must be the pinned one. */
+  readonly sha256: string;
+  readonly environment: Record<string, string | undefined>;
+}): Promise<Record<string, unknown>> {
+  if (!ACCOUNT.test(input.operator))
+    throw new Error('The operator must be an account identifier.');
+  if (!path.isAbsolute(input.file))
+    throw new Error('The alignment file must be an absolute path.');
+  if (input.sha256 !== NARRATION_TIMING_SHA256)
+    throw new Error(
+      'That is not the recorded alignment file digest; nothing was changed.',
+    );
+  const bytes = await readFile(input.file);
+  if (createHash('sha256').update(bytes).digest('hex') !== NARRATION_TIMING_SHA256)
+    throw new Error('The alignment file is not the recorded one; nothing was changed.');
+  let archive: unknown;
+  try {
+    archive = (JSON.parse(bytes.toString('utf8')) as { source?: { sha256?: unknown } })
+      .source?.sha256;
+  } catch {
+    throw new Error('The alignment file is not JSON; nothing was changed.');
+  }
+  if (typeof archive !== 'string' || !SHA256.test(archive))
+    throw new Error('The alignment file names no archive digest; nothing was changed.');
+  await assertConnectedDatabase(input.owner);
+  await assertReferenceCorpus(input.owner, ['ar', 'ur']);
+  // The narration was stored from exactly the archive these times describe.
+  const [narration] = await input.owner.query<{ reference: string | null }>(
+    `SELECT [reference] FROM [dbo].[QuranSource] WHERE [code] = ${n(RECITATION_PROVENANCE.irfan.code)} AND [authority] = N'reference';`,
+  );
+  if (narration?.reference !== irfanNarrationEvidence(archive))
+    throw new Error(
+      'The narration was not stored from the archive the alignment describes; nothing was changed.',
+    );
+  const source = await registerRecitationProvenance(
+    input.owner,
+    'alignment',
+    narrationAlignmentEvidence(NARRATION_TIMING_SHA256),
+  );
+  if (!UUID.test(source.id)) throw new Error('The provenance source is malformed.');
+  const result = await runMigrationTool({
+    runtime: input.runtime,
+    entry: QURAN_RECITATIONS_TOOL_ENTRY,
+    args: [
+      'narration-timing',
+      '--operator',
+      input.operator,
+      '--source',
+      source.id,
+      '--file',
+      input.file,
+      '--sha256',
+      NARRATION_TIMING_SHA256,
+    ],
+    environment: input.environment,
+    label: 'Irfan-ul-Quran narration alignment import',
+  });
+  return { source: source.state, sourceId: source.id, ...result };
 }
 
 /** `recitations-mp3quran`: provenance as the owner, then the runtime import. */

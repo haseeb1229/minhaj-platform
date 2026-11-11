@@ -14,6 +14,7 @@ import {
   type ContentLanguage,
 } from '@/composition/library-read';
 import { directionOf } from '@/config/locale';
+import { QuranPassageLinks } from '@/components/quran/tafsir-links';
 import { requireLocale } from '@/config/route-locale';
 import {
   ActionLink,
@@ -327,6 +328,9 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
       )}
 
       <SalePoints record={record} t={t} />
+
+      {/* Quran Part 8: the Quran passages this book explains, into the Tafsir hub. */}
+      <QuranPassageLinks locale={locale} passages={record.quranPassages} />
 
       <RelatedWorks
         locale={locale}

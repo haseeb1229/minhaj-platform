@@ -87,6 +87,7 @@ type LibraryCopy = Awaited<ReturnType<typeof libraryCopy>>;
  */
 export async function libraryCopy(locale: Locale) {
   const t = await getTranslations({ locale, namespace: 'library' });
+  const passages = await getTranslations({ locale, namespace: 'quranPassages' });
 
   return {
     t,
@@ -99,6 +100,7 @@ export async function libraryCopy(locale: Locale) {
       'not-found': t('notFound'),
       'duplicate-slug': t('duplicateSlug'),
       'duplicate-number': t('scholarlyAdmin.duplicateNumber'),
+      'duplicate-passage': passages('duplicate'),
       limit: t('limitReached'),
       'not-cleared': t('notCleared'),
       'rate-limited': t('rateLimited'),

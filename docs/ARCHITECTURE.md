@@ -1067,7 +1067,19 @@ Model A surface:
   `sharp` arrives with `npm ci` as `@minhaj/storage`'s dependency, its linux-x64 prebuilt binary
   included. Since 2026-11-09 it also carries the staging host review's root
   (`composition/staging-review-runner.ts`, over `migration-runner.ts` and Editorial's service) and
-  its tool `scripts/review` (§10.6; MIGRATION_STRATEGY.md §19.2).
+  its tool `scripts/review` (§10.6; MIGRATION_STRATEGY.md §19.2). Since Quran Part 8 it also
+  carries the tafsir-passages root (`composition/tafsir-passages-runner.ts`: Quran's,
+  Library's and Media's administrative services under live authority, no references accepted) and
+  its tool `scripts/quran/tafsir-passages-runtime.ts` (§10.6).
+- **Quran Part 8 — the Tafsir hub's composition reads (DOMAIN_MODEL.md §3.1, §8.8).** A Library
+  Work and a Media Video each own their Quran passages as citation values
+  (`@minhaj/contracts/passage`, a Layer-0 value module every context may import — never
+  `contracts/quran`), so no context edge is added. Library's and Media's public readers each gain
+  one bounded passage read (`quranPassageWorks` / `quranPassageVideos`: public owners whose
+  passages overlap a range of a Surah, at most 200, from a 500-row ceiling) and one grouped count
+  (`quranPassageCounts`); Quran's public reader gains `tafsirCoverage` (entries and ayat covered
+  per Surah). `apps/web/src/components/quran/tafsir-read.ts` composes them for the hub, a Surah's
+  tafsir, the reader's Tafsir action, the Ayah page and the search card — request-cached, anonymous.
 
 ---
 
@@ -1728,6 +1740,17 @@ refuses any size but 687,598,353 bytes, records its SHA-256 in the provenance, r
 `node:zlib` (no dependency; `scripts/quran/zip-archive.ts`, each member's size and CRC-32 checked
 before Storage sees it) and stores each Surah's MP3 unaltered through Storage (ClamAV) as a
 first-party, untimed recitation narrated by Tasleem Ahmed Sabri. Both print counts only.
+`recitations-narration-timing --sha256 <hex> --operator <id>` (Quran translation audio, 2026-11-10;
+`quran.read`, `quran.administer`) runs in the `ops` profile — no network — with
+`/srv/minhaj/imports/quran-recitations/` mounted READ-ONLY, where the operator first copies
+`narration-timing.json` (readable by uid 1000; the file is never named on the command line). The
+owner side refuses unless the file's SHA-256 is `--sha256` AND the release's pinned
+`NARRATION_TIMING_SHA256`, and unless its `source` digest is the archive the narration's recorded
+provenance names; it then registers the `irfan-ul-quran-ur-narration-alignment` provenance source
+and starts the runtime child's `narration-timing` mode, which re-checks the digest, reads the whole
+file fail-closed (`scripts/quran/narration-timing.ts`) and records each accepted Surah's Arabic
+timing, alignment and translation spans through Quran's `alignRecitationSegment`. Run after both
+recitation imports; idempotent; counts only.
 
 **Demonstration data (Rebaseline R2; OPEN_DECISIONS.md §4.2).** `bin/demo.sh seed|status|reset`
 runs `staging-demo` in the operations image after the staging host proof and a check that the
@@ -1761,6 +1784,17 @@ acts through the screens' own services as the named administrators. A confirmed 
 session is read as the runtime principal (the owner principal is not opened). Editorial search
 requests are indexed by the web service's own sweep; no second search processor runs
 (MIGRATION_STRATEGY.md §19.2).
+
+**Quran passages from titles (Quran Part 8).** `bin/tafsir-passages.sh propose|apply --operator
+<accountId> [--confirm-count <n> --confirm-fingerprint <hex>]` runs `staging-tafsir-passages` in
+the `ops` service after the staging host proof and the host lock, then the whole staging database
+guard; a runtime child (`scripts/quran/tafsir-passages-runtime.ts`, root
+`composition/tafsir-passages-runner.ts`) reads every Work and Video and the Surahs' canonical names
+through the owners' services as the named operator, proposes passages for the published records
+whose titles name a Surah by the strict reader in `scripts/quran/title-passages.ts`, and — only when
+the rebuilt plan's size and SHA-256 fingerprint equal the confirmed ones — applies each record's set
+through its owner's service under the version it read, never over a passage an editor recorded.
+Counts only in its output (DOMAIN_MODEL.md §8.8).
 
 **Image derivatives (Rebaseline R2).** `bin/derivatives-backfill.sh [--limit <n>]` runs
 `staging-storage-derivatives` in the `ops` service (staging storage root mounted, scanner on the

@@ -147,6 +147,8 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'WorkLabel',
       'WorkSlugHistory',
       'WorkContributor',
+      // Quran Part 8 — the Quran passages a Work explains (citation values).
+      'WorkQuranPassage',
       'WorkTopic',
       'Edition',
       'BookTranslation',
@@ -193,6 +195,8 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'VideoLabel',
       'VideoSlugHistory',
       'VideoSpeaker',
+      // Quran Part 8 — the Quran passages a Video explains, with its start.
+      'VideoQuranPassage',
       'VideoTopic',
       'Series',
       'SeriesLabel',
@@ -296,6 +300,10 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'QuranRecitationSegment',
       // Quran Part 5 — a recitation segment's per-Ayah timing.
       'QuranRecitationTiming',
+      // Quran translation audio — a narration segment's alignment and the
+      // spans where each passage's translation is heard.
+      'QuranRecitationAlignment',
+      'QuranRecitationTranslationSpan',
       'QuranTajweedRule',
       'QuranTajweedRuleText',
       'QuranTopic',

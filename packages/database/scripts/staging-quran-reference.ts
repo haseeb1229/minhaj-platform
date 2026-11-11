@@ -11,6 +11,7 @@ import {
 import {
   importIrfanNarrationRecitation,
   importMp3QuranRecitations,
+  importNarrationAlignment,
 } from '../src/lifecycle/quran-recitations.ts';
 import { STAGING_DATABASE } from '../src/lifecycle/staging-target.ts';
 import {
@@ -80,6 +81,15 @@ import {
  *     into Storage — scanned, unaltered — as a first-party, untimed recitation
  *     (quran.read + quran.administer + people.administer). Resumable.
  *
+ *   recitations-narration-timing  --operator <accountId> --file <json> --sha256 <hex>
+ *     (Quran translation audio) Refuses unless the alignment file is the one
+ *     whose digest is pinned (`NARRATION_TIMING_SHA256`) and describes the
+ *     archive the narration was stored from; registers its provenance as the
+ *     OWNER, then, as the RUNTIME principal (quran.read + quran.administer),
+ *     records each accepted Surah's Arabic timing, alignment and translation
+ *     spans on the stored narration. Needs both earlier recitation imports;
+ *     resumable, and a re-run changes nothing.
+ *
  * THE WHOLE STAGING GUARD FIRST — declared environment and instance, internal
  * host and port, `MinhajStaging`, distinct principals, TLS posture, the SQL
  * container's machine name and the database's fingerprint — then the
@@ -97,7 +107,8 @@ const USAGE =
   'translations --operator <accountId> | ' +
   'names --meta <file> --sha256 <metadata hex> --operator <accountId> | ' +
   'recitations-mp3quran --operator <accountId> | ' +
-  'recitations-irfan-urdu --operator <accountId> --dir <directory>';
+  'recitations-irfan-urdu --operator <accountId> --dir <directory> | ' +
+  'recitations-narration-timing --operator <accountId> --file <json> --sha256 <hex>';
 
 function required(flag: string): string {
   const value = argumentValue(flag);
@@ -120,7 +131,8 @@ await runStagingCommand('staging:quran:reference', async () => {
     mode !== 'translations' &&
     mode !== 'names' &&
     mode !== 'recitations-mp3quran' &&
-    mode !== 'recitations-irfan-urdu'
+    mode !== 'recitations-irfan-urdu' &&
+    mode !== 'recitations-narration-timing'
   )
     throw new Error(`usage: ${USAGE}`);
   const operator = account('--operator');
@@ -170,6 +182,15 @@ await runStagingCommand('staging:quran:reference', async () => {
       result = await importSurahNames({ owner, runtime, names, operator, environment });
     else if (mode === 'recitations-mp3quran')
       result = await importMp3QuranRecitations({ owner, runtime, operator, environment });
+    else if (mode === 'recitations-narration-timing')
+      result = await importNarrationAlignment({
+        owner,
+        runtime,
+        operator,
+        file: required('--file'),
+        sha256: required('--sha256'),
+        environment,
+      });
     else if (mode === 'recitations-irfan-urdu')
       result = await importIrfanNarrationRecitation({
         owner,

@@ -25,7 +25,15 @@ import {
   type VideoProvider,
   type VideoRecord,
   type VideoValue,
+  type QuranPassageVideo,
 } from '@minhaj/contracts/media';
+import {
+  canonicalPassageOrder,
+  passageKey,
+  passageMatchesQuery,
+  type PassageQuery,
+  type TimedQuranPassage,
+} from '@minhaj/contracts/passage';
 
 import { auditRow } from '../../audit-row.ts';
 import { getDatabaseClient } from '../../client.ts';
@@ -104,9 +112,16 @@ const LISTING_SELECT = {
   speakers: SPEAKERS,
 } satisfies Prisma.VideoSelect;
 
+/** Quran Part 8: a Video's passages, in its editor's order. */
+const PASSAGES = {
+  select: { surahNumber: true, ayahFrom: true, ayahTo: true, startSeconds: true },
+  orderBy: { position: 'asc' },
+} satisfies Prisma.Video$quranPassagesArgs;
+
 const DETAIL_INCLUDE = {
   labels: LABELS,
   speakers: SPEAKERS,
+  quranPassages: PASSAGES,
   topics: { select: { topicId: true }, orderBy: { topicId: 'asc' } },
   series: {
     select: {
@@ -180,8 +195,38 @@ interface ListingRow {
   readonly speakers: readonly { readonly personId: string }[];
 }
 
+interface PassageRow {
+  readonly surahNumber: number;
+  readonly ayahFrom: number;
+  readonly ayahTo: number;
+  readonly startSeconds: number | null;
+}
+
+/** A stored passage as the citation value it is (Quran Part 8). */
+function passageOf(row: PassageRow): TimedQuranPassage {
+  return {
+    surah: row.surahNumber,
+    ayahFrom: row.ayahFrom,
+    ayahTo: row.ayahTo,
+    startSeconds: row.startSeconds,
+  };
+}
+
+/** The citations an audit entry names — never more than its payload holds. */
+function citations(passages: readonly TimedQuranPassage[]): string {
+  return passages
+    .map((passage) =>
+      passage.startSeconds === null
+        ? passageKey(passage)
+        : `${passageKey(passage)}@${String(passage.startSeconds)}`,
+    )
+    .join(' ')
+    .slice(0, 1_000);
+}
+
 interface DetailRow extends ListingRow {
   readonly providerVideoId: string;
+  readonly quranPassages: readonly PassageRow[];
   readonly thumbnailUrl: string | null;
   readonly captions: boolean;
   readonly transcript: string | null;
@@ -276,6 +321,7 @@ function toRecord(row: DetailRow, publicOnly: boolean): VideoRecord {
     series,
     speakerIds: listing.speakerIds,
     topicIds: row.topics.map((entry) => entry.topicId),
+    quranPassages: row.quranPassages.map(passageOf),
     version: listing.version,
     updatedAt: listing.updatedAt,
   };
@@ -739,6 +785,74 @@ export function createMediaPersistence(): MediaPersistencePort {
      * exactly one succeeds and the other is told it changed. Positions are
      * rewritten densely from zero, which the unique key and the CHECK bound hold.
      */
+    async setVideoQuranPassages({ actorId, videoId, expectedVersion, passages, change }) {
+      try {
+        return await db.$transaction(async (tx) => {
+          const previous = await tx.videoQuranPassage.findMany({
+            where: { videoId },
+            ...PASSAGES,
+          });
+          // The version the operator saw, claimed atomically (the Playlist rule).
+          const claimed = await tx.video.updateMany({
+            where: { id: videoId, version: expectedVersion },
+            data: { version: { increment: 1 }, updatedAt: new Date() },
+          });
+          if (claimed.count !== 1) throw new MediaDataError('conflict');
+
+          await tx.videoQuranPassage.deleteMany({ where: { videoId } });
+          if (passages.length > 0)
+            await tx.videoQuranPassage.createMany({
+              data: passages.map((passage, position) => ({
+                videoId,
+                position,
+                surahNumber: passage.surah,
+                ayahFrom: passage.ayahFrom,
+                ayahTo: passage.ayahTo,
+                startSeconds: passage.startSeconds,
+              })),
+            });
+          // `Video.version` is the search stamp: keep the index's intent with it.
+          await requestSearchIndexing(tx, 'video', videoId);
+
+          const row = await tx.video.findFirst({
+            where: { id: videoId },
+            include: DETAIL_INCLUDE,
+          });
+          if (row === null) throw new MediaDataError('conflict');
+          const record = toRecord(row, false);
+
+          await tx.auditLog.create({
+            data: auditRow({
+              actorType: 'user',
+              actorId,
+              action:
+                change === 'title'
+                  ? 'media.video.passages.proposed'
+                  : 'media.video.passages.changed',
+              targetType: 'video',
+              targetId: videoId,
+              before: {
+                version: String(expectedVersion),
+                passages: citations(previous.map(passageOf)),
+              },
+              after: {
+                version: String(record.version),
+                change,
+                passages: citations(passages),
+                // Where the set came from: the editor, or the operator command
+                // that proposed it from the Video's title (Quran Part 8).
+                origin: change === 'title' ? 'operator:tafsir-passages' : 'editor',
+              },
+              authorisingSource: 'media.administer',
+            }),
+          });
+          return record;
+        });
+      } catch (error) {
+        refuse(error);
+      }
+    },
+
     async setPlaylistVideos({ actorId, playlistId, expectedVersion, videoIds, change }) {
       try {
         return await db.$transaction(async (tx) => {
@@ -791,6 +905,23 @@ export function createMediaPersistence(): MediaPersistencePort {
 /* ===========================================================================
  * Public reads
  * ========================================================================= */
+
+/**
+ * Quran Part 8: the most published Videos one passage read considers before it
+ * orders them by passage — a ceiling; the hub and a Surah's page ask for a
+ * bounded `limit` of these.
+ */
+const PASSAGE_VIDEOS_CEILING = 500;
+
+/** The stored passages a passage query admits: its Surah, overlapping its range. */
+function passageWhere(query: PassageQuery): Prisma.VideoQuranPassageWhereInput {
+  if (query.surah === null) return {};
+  return {
+    surahNumber: query.surah,
+    ...(query.ayahTo === null ? {} : { ayahFrom: { lte: query.ayahTo } }),
+    ...(query.ayahFrom === null ? {} : { ayahTo: { gte: query.ayahFrom } }),
+  };
+}
 
 /** At most one Collection's worth of Videos is described in one read. */
 const REFERENCE_BATCH = 100;
@@ -1048,6 +1179,83 @@ export function createMediaPublicReader(): MediaPublicReaderPort {
         select: REFERENCE_SELECT,
         orderBy: { id: 'asc' },
       });
+    },
+
+    async quranPassageVideos(query) {
+      const rows = await db.video.findMany({
+        where: { ...PUBLISHED, quranPassages: { some: passageWhere(query) } },
+        select: {
+          id: true,
+          slug: true,
+          primaryLocale: true,
+          languageCode: true,
+          durationSeconds: true,
+          publishedOn: true,
+          posterAssetId: true,
+          posterWidth: true,
+          posterHeight: true,
+          labels: LABELS,
+          speakers: SPEAKERS,
+          quranPassages: PASSAGES,
+        },
+        orderBy: [{ publishedOn: 'desc' }, { slug: 'asc' }, { id: 'asc' }],
+        take: PASSAGE_VIDEOS_CEILING,
+      });
+      const found = rows.flatMap((row) => {
+        const passages = row.quranPassages.map(passageOf);
+        const [first] = canonicalPassageOrder(
+          passages.filter((passage) => passageMatchesQuery(passage, query)),
+        );
+        if (first === undefined) return [];
+        const poster =
+          row.posterAssetId === null ||
+          row.posterWidth === null ||
+          row.posterHeight === null
+            ? null
+            : {
+                assetId: row.posterAssetId,
+                width: row.posterWidth,
+                height: row.posterHeight,
+              };
+        const video: QuranPassageVideo = {
+          id: row.id,
+          slug: row.slug,
+          primaryLocale: row.primaryLocale as Locale,
+          languageCode: row.languageCode,
+          labels: labelsOf(row.labels),
+          durationSeconds: row.durationSeconds,
+          publishedOn: isoDate(row.publishedOn),
+          poster,
+          speakerIds: row.speakers.map((entry) => entry.personId),
+          passages,
+        };
+        return [{ video, first }];
+      });
+      // By the earliest passage the query found it by; newest first within one
+      // (the read's own order, which a stable sort keeps).
+      return found
+        .sort(
+          (a, b) =>
+            a.first.surah - b.first.surah ||
+            a.first.ayahFrom - b.first.ayahFrom ||
+            a.first.ayahTo - b.first.ayahTo,
+        )
+        .slice(0, query.limit)
+        .map((entry) => entry.video);
+    },
+
+    async quranPassageCounts() {
+      const rows = await db.$queryRaw<{ surah: number; owners: number }[]>`
+        SELECT p.[surahNumber] AS [surah], COUNT(DISTINCT p.[videoId]) AS [owners]
+        FROM [dbo].[VideoQuranPassage] p
+        INNER JOIN [dbo].[Video] v ON v.[id] = p.[videoId]
+        WHERE v.[state] = N'published'
+        GROUP BY p.[surahNumber]
+        ORDER BY p.[surahNumber];`;
+      return rows.map((row) => ({
+        surah: Number(row.surah),
+        owners: Number(row.owners),
+      }));
     },
 
     async videoChoices(text, limit) {

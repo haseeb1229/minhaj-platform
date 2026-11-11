@@ -301,6 +301,8 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'BookTranslator',
         'SalePoint',
         'WorkSalePoint',
+        // Quran Part 8 — the Quran passages a Work explains (citation values).
+        'WorkQuranPassage',
         // Phase 17 — the DERIVED search projection and its indexing intent.
         'SearchIndexRequest',
         'SearchIndexScope',
@@ -345,6 +347,8 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'VideoSlugHistory',
         'VideoSpeaker',
         'VideoTopic',
+        // Quran Part 8 — the Quran passages a Video explains, with its start.
+        'VideoQuranPassage',
         'Series',
         'SeriesLabel',
         'SeriesSlugHistory',
@@ -465,6 +469,10 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'QuranWordByWord',
         'QuranWordByWordContributor',
         'QuranWordByWordGloss',
+        // Quran translation audio — a narration segment's alignment and the
+        // spans where each passage's translation is heard.
+        'QuranRecitationAlignment',
+        'QuranRecitationTranslationSpan',
         // Phase 19 — Hadith: registered source systems, editions and
         // activations; the canonical structure and source-qualified records with
         // immutable history, gradings, verification, citation mapping and

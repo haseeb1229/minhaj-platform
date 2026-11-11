@@ -12,6 +12,7 @@ import {
   type SeriesKind,
   type SeriesRecord,
 } from '@minhaj/contracts/media';
+import { passageQuerySchema } from '@minhaj/contracts/passage';
 
 /**
  * The PUBLIC Media reads — what every Watch, Listen and photograph page is
@@ -223,6 +224,20 @@ export function createMediaReadService(reader: MediaPublicReaderPort) {
     videoChoices(text: string | null) {
       const query = z.string().trim().min(1).max(120).safeParse(text);
       return reader.videoChoices(query.success ? query.data : null, 25);
+    },
+
+    /**
+     * Quran Part 8 — the published Videos that explain a Quran passage, for
+     * the Tafsir hub and the reader composed at Layer 4. A malformed query is
+     * refused here, before any read; Media answers by citation value only.
+     */
+    async quranPassageVideos(raw: unknown) {
+      return reader.quranPassageVideos(passageQuerySchema.parse(raw));
+    },
+
+    /** How many published Videos carry a passage in each Surah. */
+    quranPassageCounts() {
+      return reader.quranPassageCounts();
     },
 
     gallerySitemap(offset: number, limit: number) {

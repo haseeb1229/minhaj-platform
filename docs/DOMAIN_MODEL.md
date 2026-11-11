@@ -160,6 +160,17 @@ interpretation. **An edge not listed here does not exist.**
   allows Quran and Hadith to carry provenance without depending on Editorial.
 - **Personalisation references content but does not depend on content contexts.** It stores
   typed references and resolves them at Layer 4 (§11.3).
+- **A Library Work or a Media Video may say which Quran passages it explains, and that adds NO
+  edge** (Quran Part 8, the Tafsir hub, §8.8). The association is owned by Library (§10.1) and by
+  Media (§11), never by Quran, and it holds a passage as a **citation value** — a Surah number and
+  an inclusive ayah range, like a reference printed in a book — with **no foreign key into Quran's
+  tables and no import of Quran's contracts**. It is validated against the Quran's fixed STRUCTURE
+  (how many ayat each Surah has), which lives in the neutral Layer-0 value module
+  `@minhaj/contracts/passage`, not in `@minhaj/contracts/quran`: the architecture tests refuse any
+  `contracts/quran` import from Library or Media, and `passage` is admitted to every context
+  exactly as `@minhaj/contracts` itself is. Quran imports neither owner. "Which books and lectures
+  explain this Ayah?" is answered at Layer 4 by composing Quran's public reader with each owner's
+  own bounded public read — the same pattern as Personalisation's typed references.
 - **Messaging depends on Learning** because relationship authorisation must ask whether an
   enrolment or teaching assignment is *currently* valid (§15.3). This is an explicitly
   allowlisted same-level edge (§3.2), **not** an implicit lateral import.
@@ -1148,6 +1159,46 @@ per Surah. Each import's provenance is a `reference` source with no ayat (`mp3qu
 surface that offers it says that verse highlighting is unavailable; no Ayah button pretends to start
 at an Ayah it cannot find.
 
+#### 8.5.1 Translation audio — a narration's passages (2026-11-10)
+
+**Owner request 2026-11-10, staging only, derived** (OPEN_DECISIONS.md §1.2 item 1). A first-party
+NARRATION (a recitation whose language heard is a translation's) plays, Surah by Surah, an Arabic
+passage of one or more contiguous ayat and then its translation. Once its audio is ALIGNED against
+a timed recitation of the Arabic, migration `20261111000000_r2_quran_translation_audio` records,
+for a segment, the smallest shapes that hold what was learned — all Quran's:
+
+| Fact | Shape | Rule |
+|---|---|---|
+| When each Ayah's Arabic is heard in the narration | the existing `QuranRecitationTiming` | inserted ONCE for the untimed segment (every Ayah or none, 51402 unchanged); while aligned, never deleted (trigger `QuranRecitationTimingAligned`, 51405) |
+| Where the alignment came from | `QuranRecitationAlignment (segmentId, sourceId, referenceRecitationId)` — typed keys to the segment, a `QuranSource` and the matched `QuranRecitation` (NO ACTION) | one per segment; only for a first-party segment WITH its file, of a recitation heard in a language other than `ar`; its source `reference` authority only; its reference ANOTHER recitation, of `ar`; the segment already timed for every Ayah (trigger `QuranRecitationAlignmentRules`, 51405); never edited; while aligned the segment's file never changes (trigger `QuranRecitationSegmentAlignedAudio`, 51405) |
+| Where each passage's translation is heard | `QuranRecitationTranslationSpan (segmentId, startAyah, endAyah, startMs, endMs)`, keyed to the alignment | `QuranRecitationTranslationSpan_ck`: a forward passage and a non-empty span within the 12-hour ceiling; the passages PARTITION the segment's range — every Ayah in exactly one, or none at all — in order without overlap, and each translation lies after its passage's last Ayah's Arabic ends and before the next Ayah's Arabic begins (trigger `QuranRecitationTranslationSpanShape`, 51405); never edited |
+
+The reference recitation is **evidence about a recording, never a credit**: it names no Person and
+adds no contributor; a public narration's card says its Arabic was "identified by audio comparison
+… not confirmed by Minhaj-ul-Quran", naming the reference's reciter only while that recitation is
+itself public. The provenance source records, once, the alignment file's pinned SHA-256, its method
+and what it identified (`irfan-ul-quran-ur-narration-alignment`). The one pure rule is
+`translationSpanProblem` (`@minhaj/contracts/quran`: coverage, empty span, order), applied by the
+service with `timingProblem` against the stored segment, and again by the database. Written only by
+`alignRecitationSegment` (`quran.administer`, one transaction under the Recitation's version, the
+timing, alignment and spans each inserted in one statement), which only the operator's import
+calls; removing the segment removes spans, alignment and timing, in that order. Runtime SELECT,
+INSERT and DELETE only on both tables.
+
+**Read.** The public reader adds `translatedSurahs` per recitation (the Surahs whose audio carries
+passages), `recitationTranslationSpans(id, surah)` (one bounded read) and `recitationAlignments(id)`
+(each public reference and its Surah count); the recitation data route sends a segment's passages
+as `translation`, only for a public recitation's timed segment with audio.
+
+**Played.** With "Urdu translation after each passage" on, the player follows ANY timed qari's
+passage with the narration's span for it — the passages are the narration's, the Arabic the qari's —
+then resumes the qari where the passage's last Ayah ended; each passage's translation is heard once,
+after the last repeat of its last Ayah. A range translates only passages WHOLLY inside it (a
+passage the range cuts plays recited only); a segment holding only part of a passage never
+translates it. Where the Surah has no passages, the qari's segment is untimed, the narration itself
+is chosen, or the span runs past the narration file's loaded duration (the same 1.5-second
+tolerance as timing), the qari plays alone and the setting says why.
+
 ### 8.6 Translator's notes (Quran Part 6)
 
 **A translation's own notes are part of that translation, held beside its text — never inside it,
@@ -1256,6 +1307,44 @@ a word or two, so indexing them would make ordinary words match thousands of aya
 translations a reader searches, and a gloss means something only beside the word it explains. A
 search result's layer label now names its kind ("Translation · English", "Transliteration ·
 English"), so a transliteration never passes for a translation.
+
+### 8.8 The Tafsir hub (Quran Part 8)
+
+**Owner decision (OPEN_DECISIONS.md §1.2 item 2):** a Minhaj-ul-Quran hub — Shaykh-ul-Islam's
+tafsir books and Minhaj TV lectures linked per Ayah, with per-Ayah text slots for tafsir text
+Minhaj-ul-Quran supplies; no external tafsir. Staging only; the production gates are unchanged.
+
+**Three owners, one composition, no new edge.** The per-Ayah text slots are Quran's own Tafsir
+works (§8.3: `QuranTafsir` + `QuranTafsirText`, unchanged — none is public on staging yet, and
+the hub shows nothing for them rather than an empty promise). The BOOKS are Library Works and the
+LECTURES Media Videos, each carrying its own Quran passages as citation values (§10.1, §11). Layer 4
+composes them (`apps/web/src/components/quran/tafsir-read.ts`): Quran's public reader for the
+Surahs, ayat, translations, the public Tafsir works and their entries (and, new, `tafsirCoverage`:
+entries and ayat covered per Surah, one bounded read of entry ranges, never their text), and each
+owner's public passage read. One pure layout (`tafsir-layout.ts`) decides what explains an Ayah,
+how a Surah's tafsir groups (whole-Surah resources first; then overlapping passages and entries
+merged into groups, adjoining ones kept apart) and the hub's grid and shelves.
+
+**Where it shows.** `/quran/tafsir` (the hub), `/quran/tafsir/surah/{n}` (a Surah's tafsir —
+`surah` is reserved from Tafsir slugs, `TAFSIR_RESERVED_SLUGS`), `/quran/tafsir/{slug}`
+(unchanged), the reader's Tafsir action and panel on every Ayah something explains (and on no
+other), the Ayah page's open section, the Quran search card's link to an Ayah's or a Surah's
+tafsir, and an "On the Quran" list on a book's and a lecture's own page. Where the address asked for a
+Tafsir (`?tafsir=`) that is not public, the panel shows no tafsir text — never another work's in
+its place — while books and lectures still show.
+
+**Staging data.** `docker/staging/bin/tafsir-passages.sh` proposes passages for published Works and
+Videos whose TITLE names a Surah (and, where stated, an ayah range) by a strict, documented reader
+(`scripts/quran/title-passages.ts`; the Surah names are the Quran reader's canonical ones, folded,
+plus a short documented table of common spellings), and applies a set only after its size and
+fingerprint are confirmed — through each owner's service, never over a passage an editor
+recorded, each audited with the command as its origin.
+
+**Search.** Passages are **not indexed**. A passage is a range, so making "18:10" find a book on
+18:1–110 would mean indexing up to 286 citation tokens per passage and re-indexing on every edit;
+and the citation search already resolves "18:10", "Surah Kahf" or "Al-Kahf 10" to its place
+(Quran Part 4). The search card now offers that place's tafsir — the same exact overlap answer the
+hub gives — and a title that names a Surah is already found by its words.
 
 ---
 
@@ -1418,6 +1507,18 @@ Owns published works. Corrects the prior revision's conflation of *localized met
   by Library's own routes only while the Edition and its Work (or the issue and its Magazine)
   are published. A Work shows the cover of its first published Edition that has one; a
   Magazine its newest public issue's.
+- **Quran passages (Quran Part 8).** A Work may carry an ordered list of the Quran passages it
+  explains (`WorkQuranPassage`: `workId`, `position` 0..39, `surahNumber`, `ayahFrom`,
+  `ayahTo`) — CITATION VALUES owned by Library, keyed to the Work only (NO ACTION), never to Surah
+  or Ayah (§3.1). The database holds the shape (Surah 1..114, a forward range from Ayah 1, one place
+  per position, no repeated citation); the service holds the structure (a range ends within its
+  Surah, `SURAH_AYAH_COUNTS` in `@minhaj/contracts/passage`) and changes them only by named
+  steps — add, move one place, remove — under the Work's expected version, which each advances
+  (`library.administer`, audited `library.work.passages-{add|move|remove}` with the citations
+  before and after). A Work save never touches its passages. The staging operator command's set
+  (`library.work.passages-proposed`, origin `operator:tafsir-passages`) applies only to a Work
+  that carries none. Public reads: `quranPassageWorks` (public Works whose passages overlap a
+  range of a Surah, ordered by passage; bounded) and `quranPassageCounts` (public Works per Surah).
 - **Listing order (Rebaseline R2).** A public listing of Works is ordered by `sort`: absent, the
   stable catalogue order (by slug), unchanged for every caller that does not ask; `title`, A–Z by
   the title a reader of `titleLocale` is shown (the label in that locale, else the Work's
@@ -1492,6 +1593,17 @@ from the source page's own image, never from the provider), served by Media's ow
 Video is published, so a card or the click-to-load gate shows a real picture with **no provider
 request** before the visitor's click. The provider `thumbnailUrl` stays structured-data metadata
 only.
+
+**Quran passages (Quran Part 8).** A Video may carry an ordered list of the Quran passages its
+lecture explains (`VideoQuranPassage`: `videoId`, `position` 0..39, `surahNumber`, `ayahFrom`,
+`ayahTo`, and `startSeconds` — where in the video the lecture begins the passage, 0..86399, or
+null) — citation values owned by Media, keyed to the Video only, never to Quran (§3.1), under the
+same rules as a Work's (§10.1): shape in SQL, structure in the service, named changes under the
+Video's version (`media.administer`, audited `media.video.passages.changed` / `.proposed`), and a
+start within the video's recorded duration. The watch page opens a lecture at a passage
+(`?start=`): the contract's derivation passes the offset to the provider's player and the
+described link, and ignores any value outside a day. Public reads: `quranPassageVideos` and
+`quranPassageCounts`, published Videos only.
 
 As delivered (Phase 11) — AudioTrack and AudioSeries, **non-Quran audio only**:
 

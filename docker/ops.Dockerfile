@@ -98,7 +98,10 @@ COPY packages/storage/src ./packages/storage/src
 # with its own node-runnable root, composing the Identity context already here.
 # And the staging host review (`scripts/review`, owner command
 # `staging-migration-review`) with its own node-runnable root over the migration
-# tooling's root and the Editorial context already here.
+# tooling's root and the Editorial context already here. And Quran Part 8's
+# tafsir-passages tool (`scripts/quran`, owner command `staging-tafsir-passages`)
+# with its own node-runnable root over the Library, Media and Quran contexts
+# already here.
 COPY packages/server-core/src ./packages/server-core/src
 COPY apps/web/src/composition/migration-runner.ts \
      apps/web/src/composition/migration-wiring.ts \
@@ -117,6 +120,7 @@ COPY apps/web/src/composition/migration-runner.ts \
      apps/web/src/composition/staging-demo-runner.ts \
      apps/web/src/composition/staging-step-up-runner.ts \
      apps/web/src/composition/staging-review-runner.ts \
+     apps/web/src/composition/tafsir-passages-runner.ts \
      ./apps/web/src/composition/
 COPY apps/web/src/contexts/migration-provenance ./apps/web/src/contexts/migration-provenance
 COPY apps/web/src/contexts/media ./apps/web/src/contexts/media

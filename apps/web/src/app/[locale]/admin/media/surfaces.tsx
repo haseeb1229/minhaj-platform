@@ -49,7 +49,14 @@ import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
 import { AdminPager } from '../pager';
 import { pageOffset, queryValue } from '../shared';
-import { changePlaylist, savePlaylist, saveSeries, saveVideo } from './actions';
+import {
+  changePlaylist,
+  changeVideoPassages,
+  savePlaylist,
+  saveSeries,
+  saveVideo,
+} from './actions';
+import { QuranPassagesEditor } from '../quran-passages';
 import { MEDIA_FORM_ROWS } from './rows';
 
 /**
@@ -87,6 +94,7 @@ export interface EditorParams {
 /** The copy every Media screen needs, and a message for every failure. */
 export async function mediaCopy(locale: Locale) {
   const t = await getTranslations({ locale, namespace: 'media' });
+  const passages = await getTranslations({ locale, namespace: 'quranPassages' });
   return {
     t,
     messages: {
@@ -99,6 +107,7 @@ export async function mediaCopy(locale: Locale) {
       'duplicate-video': t('duplicateVideo'),
       'duplicate-position': t('duplicatePosition'),
       'duplicate-member': t('duplicateMember'),
+      'duplicate-passage': passages('duplicate'),
       limit: t('limit'),
       'no-audio': t('audio.noAudio'),
       'too-large': t('audio.tooLarge'),
@@ -609,6 +618,17 @@ export async function VideoEditor({ params, searchParams }: EditorParams) {
           <EmptyState>{watch('player.unavailable', { provider })}</EmptyState>
         )}
       </section>
+
+      {/* Quran Part 8: the passages this lecture explains, each with where it begins. */}
+      <QuranPassagesEditor
+        locale={locale}
+        action={changeVideoPassages}
+        owner={{ name: 'videoId', id: record.id, version: record.version }}
+        passages={record.quranPassages}
+        timed
+        messages={copy.messages}
+        canEdit={context.authorization.can('media.administer')}
+      />
 
       <Panel>
         <div className="flex flex-col gap-4">

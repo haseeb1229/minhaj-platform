@@ -149,6 +149,14 @@ const PUBLIC_TAJWEED = {
 /** A canonical citation as one sortable number: an Ayah number never reaches it. */
 const CITATION_KEY = 1000;
 
+/**
+ * Quran Part 8: the most entry ranges one coverage read takes. A Tafsir's
+ * entries never overlap, so one work holds at most an entry per Ayah (6,236);
+ * the hub names its few public works at once, and this ceiling keeps that
+ * read bounded however many there are.
+ */
+const TAFSIR_COVERAGE_ROWS = 25_000;
+
 /* ===========================================================================
  * Mapping
  * ========================================================================= */
@@ -240,14 +248,23 @@ function toWork(
   };
 }
 
-/** What a recitation's audio covers: its Surahs, and whether all of it is timed. */
+/**
+ * What a recitation's audio covers: its Surahs, whether all of it is timed,
+ * and the Surahs whose audio carries a translation span per passage.
+ */
 interface RecitationCoverage {
   readonly surahCount: number;
   readonly firstSurah: number | null;
   readonly timed: boolean;
+  readonly translatedSurahs: readonly number[];
 }
 
-const NO_COVERAGE: RecitationCoverage = { surahCount: 0, firstSurah: null, timed: false };
+const NO_COVERAGE: RecitationCoverage = {
+  surahCount: 0,
+  firstSurah: null,
+  timed: false,
+  translatedSurahs: [],
+};
 
 function toRecitation(
   row: {
@@ -276,6 +293,7 @@ function toRecitation(
     surahCount: coverage.surahCount,
     firstSurah: coverage.firstSurah,
     timed: coverage.timed,
+    translatedSurahs: coverage.translatedSurahs,
     publishedAt: publishedOn(row),
   };
 }
@@ -343,6 +361,22 @@ export function createQuranPublicReader(
       WHERE s.[recitationId] IN (${Prisma.join([...ids])})
         AND (s.[assetId] IS NOT NULL OR r.[streamProvider] IS NOT NULL)
       GROUP BY s.[recitationId]`;
+    // The aligned Surahs of segments with audio: a translation span exists
+    // only as a partition of an aligned segment (51405), so one is enough.
+    const translated = await db.$queryRaw<{ recitationId: string; surah: number }[]>`
+      SELECT DISTINCT s.[recitationId] AS [recitationId], s.[surahNumber] AS [surah]
+      FROM [dbo].[QuranRecitationAlignment] a
+      JOIN [dbo].[QuranRecitationSegment] s ON s.[id] = a.[segmentId]
+      WHERE s.[recitationId] IN (${Prisma.join([...ids])})
+        AND s.[assetId] IS NOT NULL
+        AND EXISTS (SELECT 1 FROM [dbo].[QuranRecitationTranslationSpan] x
+                    WHERE x.[segmentId] = a.[segmentId])`;
+    const surahsOf = new Map<string, number[]>();
+    for (const row of translated)
+      surahsOf.set(row.recitationId, [
+        ...(surahsOf.get(row.recitationId) ?? []),
+        Number(row.surah),
+      ]);
     return new Map(
       rows.map((row) => [
         row.recitationId,
@@ -350,6 +384,7 @@ export function createQuranPublicReader(
           surahCount: Number(row.surahs),
           firstSurah: Number(row.first),
           timed: Number(row.segments) > 0 && Number(row.timed) === Number(row.segments),
+          translatedSurahs: (surahsOf.get(row.recitationId) ?? []).sort((a, b) => a - b),
         },
       ]),
     );
@@ -1016,6 +1051,39 @@ export function createQuranPublicReader(
       return { items: rows.map(toEntry), total, offset: skip };
     },
 
+    /**
+     * Quran Part 8: entries and ayat covered per Surah for each named public
+     * Tafsir — ONE read of the entries' ranges (never their text). Entries of
+     * one work never overlap (51186), so summing their spans counts ayat once.
+     */
+    async tafsirCoverage(workIds) {
+      const mode = await activeMode(db, admission);
+      if (mode === null) return [];
+      const ids = [...new Set(workIds)].slice(0, WORK_LIST);
+      if (ids.length === 0) return [];
+      const rows = await db.quranTafsirText.findMany({
+        where: { tafsirId: { in: ids }, tafsir: publicWork(mode) },
+        select: { tafsirId: true, surahNumber: true, startAyah: true, endAyah: true },
+        orderBy: [{ tafsirId: 'asc' }, { surahNumber: 'asc' }, { startAyah: 'asc' }],
+        take: TAFSIR_COVERAGE_ROWS,
+      });
+      return ids.flatMap((workId) => {
+        const bySurah = new Map<number, { entries: number; ayat: number }>();
+        for (const row of rows) {
+          if (row.tafsirId !== workId) continue;
+          const seen = bySurah.get(row.surahNumber) ?? { entries: 0, ayat: 0 };
+          bySurah.set(row.surahNumber, {
+            entries: seen.entries + 1,
+            ayat: seen.ayat + (row.endAyah - row.startAyah + 1),
+          });
+        }
+        const surahs = [...bySurah.entries()]
+          .map(([surah, counted]) => ({ surah, ...counted }))
+          .sort((a, b) => a.surah - b.surah);
+        return surahs.length === 0 ? [] : [{ workId, surahs }];
+      });
+    },
+
     /* ---- Recitations ------------------------------------------------------- */
 
     async recitations() {
@@ -1109,6 +1177,62 @@ export function createQuranPublicReader(
         ayah: row.ayahNumber,
         startMs: row.startMs,
         endMs: row.endMs,
+      }));
+    },
+
+    async recitationTranslationSpans(recitationId, surah) {
+      const mode = await activeMode(db, admission);
+      if (mode === null) return [];
+      const rows = await db.quranRecitationTranslationSpan.findMany({
+        where: {
+          alignment: {
+            segment: {
+              recitationId,
+              surahNumber: surah,
+              ...WITH_AUDIO,
+              recitation: publicWork(mode),
+            },
+          },
+        },
+        select: {
+          segmentId: true,
+          startAyah: true,
+          endAyah: true,
+          startMs: true,
+          endMs: true,
+        },
+        orderBy: [{ startAyah: 'asc' }, { segmentId: 'asc' }],
+        take: QURAN_AYAH_NUMBER_MAX,
+      });
+      return rows.map((row) => ({ ...row }));
+    },
+
+    async recitationAlignments(recitationId) {
+      const mode = await activeMode(db, admission);
+      if (mode === null) return [];
+      // Each aligned segment with audio of THIS public recitation, grouped by
+      // a reference that is itself public now — at most one row per Surah.
+      const rows = await db.quranRecitationAlignment.findMany({
+        where: {
+          segment: { recitationId, ...WITH_AUDIO, recitation: publicWork(mode) },
+          reference: publicWork(mode),
+        },
+        select: {
+          referenceRecitationId: true,
+          segment: { select: { surahNumber: true } },
+        },
+        orderBy: [{ referenceRecitationId: 'asc' }, { segmentId: 'asc' }],
+        take: QURAN_LIMITS.segmentsPerRecitation,
+      });
+      const surahs = new Map<string, Set<number>>();
+      for (const row of rows) {
+        const held = surahs.get(row.referenceRecitationId) ?? new Set<number>();
+        held.add(row.segment.surahNumber);
+        surahs.set(row.referenceRecitationId, held);
+      }
+      return [...surahs.entries()].map(([referenceRecitationId, held]) => ({
+        referenceRecitationId,
+        surahCount: held.size,
       }));
     },
 

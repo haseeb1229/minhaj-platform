@@ -206,9 +206,55 @@ its own later part of the Quran programme, not by Part 1 (the reading experience
    told apart by mp3quran's own moshaf names ("… - Murattal", "… - Almusshaf Al Mojawwad"). The
    operator re-runs `quran-reference.sh recitations-mp3quran`, which keeps what is held. **Production
    gates of §1.1/§1.2/§2.4 unchanged; question (a) above applies to every added read.**
+
+   **Translation audio, and question (b) answered in part (owner request 2026-11-10: "qari tilawat
+   was working but translation is not added of qaris" — the owner chose translation AUDIO: a qari
+   recites a passage, then the listener hears that passage's Urdu translation).** The only Minhaj
+   source is the Irfan-ul-Quran Urdu narration above. Each of its files is an Arabic Bismillah and
+   its Urdu, then repeated *[the Arabic of one or more contiguous ayat][the Urdu of exactly that
+   passage]*. An offline alignment (2026-11-10; `narration-timing.json`, SHA-256
+   `7340502bfb3f07cca8d22f7a74d238addd7e3828173e490636b8014f45e4a1e3`, pinned in the release)
+   established, by spectral correlation and **not by listening**:
+   - **Whose Arabic it is, where it could be proved.** In **67 Surahs** (4, 11, 13, 15, 16, 21–24,
+     31, 32, 34, 36, 44, 45, 49, 54, 56, 59–68, 72, 73, 75–85, 87–93, 95–108, 110–114 — 2,306 ayat
+     in 2,052 passages) the narration's Arabic is **Abdulrahman Al-Sudais's murattal as mp3quran.net
+     publishes it (read 54)**, cut from that recording and in some Surahs time-stretched by a constant
+     factor (0.9175–1.08) with pitch kept. Evidence: on Surah 112 the narration's four Arabic segments
+     score 0.90/0.84/0.92/0.91 against read 54, at positions monotonic with its published Ayah starts
+     to within 0.2 s, while the best of the other 114 timed reads scores at most 0.65 (median 0.29);
+     in every accepted Surah every Ayah was found again, piece by piece, at whole-Ayah correlation
+     ≥ 0.72 under fail-closed thresholds (locator ≥ 0.60 and unambiguous, drift ≤ max(0.3 s, 3%),
+     each Urdu span speech-like and free of the reference Arabic). The thresholds are engineering
+     choices, not a religious review.
+   - **What it could not establish.** **47 Surahs** were rejected and carry nothing: some use another
+     recording that matches no timed read with clear evidence (Al-Fatihah's best match 0.59; Surah 10
+     and Surah 8 unidentified), and several switch recording part-way (e.g. Surah 3 from Ayah 171,
+     Surah 12 after Ayah 10).
+   - **Still open for Minhaj-ul-Quran:** confirmation of the identification, and **the rights in the
+     Sudais audio inside MQI's own narration** (question (a)'s question for mp3quran's audio, now also
+     asked of the archive).
+
+   **Implementation (2026-11-10; DELIVERY_PLAN.md, the Quran translation audio record;
+   DOMAIN_MODEL.md §8.5).** Staging only, derived and labelled so. `quran-reference.sh
+   recitations-narration-timing` records, for each accepted Surah, the narration's own per-Ayah
+   timing and where each passage's Urdu is heard, with a provenance source
+   (`irfan-ul-quran-ur-narration-alignment`) whose evidence states the file's digest, method and
+   identification. The player then offers "Urdu translation after each passage" for **any timed
+   qari** in those 67 Surahs (the passages are the narration's; the Arabic is the qari's), says it is
+   unavailable elsewhere, and the narration's card names the Arabic as "identified by audio
+   comparison … not confirmed by Minhaj-ul-Quran" — a reference to the matched recording, not a
+   credit: Al-Sudais is not added as the narration's contributor. **Pending a qari's and an editor's
+   review of the passages; production gates of §1.1/§1.2/§2.4 unchanged.**
 2. **Tafsir.** A **Minhaj-ul-Quran hub**: Shaykh-ul-Islam's tafsir books and Minhaj TV lectures
    linked per Ayah, with per-Ayah text slots for tafsir text Minhaj-ul-Quran supplies — **no external
    tafsir**. *Staging only; production gates of §1.1/§1.2/§2.4 unchanged.*
+   *Built in Quran Part 8 (DOMAIN_MODEL.md §8.8, ROUTE_MAP.md §3.3):* the hub `/quran/tafsir`, a
+   Surah's tafsir `/quran/tafsir/surah/{n}` and the reader's per-Ayah Tafsir panel. The books and
+   lectures are Library Works and Media Videos, each carrying the Quran passages it explains as
+   citation values (no Quran dependency); the text slots are Quran's own Tafsir works, of which none
+   is public until Minhaj-ul-Quran supplies one. On staging, `tafsir-passages.sh` proposes passages
+   from titles that name a Surah, applied only after the operator confirms the set; editors correct
+   any passage in the Work and Video editors. Nothing external is shown.
 3. **Transliteration and word-by-word.** Built, but **hidden until a lawful source** is recorded; no
    source is assumed. *Staging only; production gates of §1.1/§1.2/§2.4 unchanged.*
    *Built in Quran Part 7 (DOMAIN_MODEL.md §8.7, ROUTE_MAP.md §3.3):* both layers are complete —

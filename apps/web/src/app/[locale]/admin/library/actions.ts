@@ -19,6 +19,7 @@ import { appLogger } from '@/composition/logging';
 import { storageRuntime } from '@/composition/storage';
 import { libraryFailure } from '@/contexts/library';
 import type { FormActionState } from '../../(identity)/form-state';
+import { passageChangeOf } from '../quran-passage-form';
 
 /**
  * The Library administrative mutations (ROUTE_MAP.md §7, and this phase's §17).
@@ -143,6 +144,42 @@ export async function saveWork(
     indexAfterResponse();
   } catch (error) {
     return rejected(error, 'library-save-work');
+  }
+
+  redirect(destination);
+}
+
+/**
+ * Quran Part 8 — one named change to the Quran passages a Work explains (add,
+ * move one step, remove), against the version the operator was looking at.
+ * The Work's own authority, re-checked here and in the service.
+ */
+export async function changeWorkPassages(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  let destination: string;
+
+  try {
+    const locale = localeSchema.parse(form.get('locale'));
+    const permitted = await requirePermittedAction(locale, 'library.administer');
+    if (permitted.state === 'denied') return { status: 'error', failure: 'denied' };
+
+    const workId = String(form.get('workId') ?? '');
+    await libraryRuntime().library.changeWorkQuranPassages(
+      { accountId: permitted.session.account.id },
+      workId,
+      integer(form, 'version') ?? Number.NaN,
+      passageChangeOf(form, false),
+    );
+
+    destination = localizedPath(
+      locale,
+      `/admin/library/works/${encodeURIComponent(workId)}`,
+    );
+    revalidatePath(localizedPath(locale, '/admin/library'), 'layout');
+  } catch (error) {
+    return rejected(error, 'library-change-work-passages');
   }
 
   redirect(destination);

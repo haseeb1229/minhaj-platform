@@ -60,6 +60,7 @@ export async function RecitationHost({ locale }: { readonly locale: Locale }) {
         style: recitation.style,
         languageCode: recitation.languageCode,
         timed: recitation.timed,
+        translatedSurahs: recitation.translatedSurahs,
       })),
     locale,
   ).flatMap((group) => group.entries);
@@ -98,6 +99,12 @@ export async function RecitationHost({ locale }: { readonly locale: Locale }) {
     rangeActive: t.raw('dock.rangeActive') as string,
     follow: t('dock.follow'),
     continuous: t('dock.continuous'),
+    translation: t('dock.translation'),
+    translationAbout: t('dock.translationAbout'),
+    translationNotHere: t.raw('dock.translationNotHere') as string,
+    translationNarration: t('dock.translationNarration'),
+    translating: t.raw('dock.translating') as string,
+    translatingOne: t.raw('dock.translatingOne') as string,
     shortcuts: t('dock.shortcuts'),
     surahFallback: t.raw('dock.surahFallback') as string,
     surahs: Object.fromEntries(

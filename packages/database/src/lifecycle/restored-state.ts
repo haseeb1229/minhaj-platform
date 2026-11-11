@@ -567,6 +567,32 @@ export async function verifyRestoredSchema(
       );
   }
 
+  // Quran Part 8. Its history row without the passage tables would report an
+  // applied migration over a database that has lost which ayat every tafsir
+  // book and lecture explains.
+  if (expectedMigrationIds.some((id) => id.includes('r2_quran_passages'))) {
+    const missing = ['WorkQuranPassage', 'VideoQuranPassage'].filter(
+      (table) => !tables.includes(table),
+    );
+    if (missing.length > 0)
+      throw new Error(
+        `Restored database is missing Quran Part 8 tables: ${missing.join(', ')}`,
+      );
+  }
+
+  // Quran translation audio. Its history row without the alignment tables
+  // would report an applied migration over a database that has lost every
+  // narration's translation passages.
+  if (expectedMigrationIds.some((id) => id.includes('r2_quran_translation_audio'))) {
+    const missing = ['QuranRecitationAlignment', 'QuranRecitationTranslationSpan'].filter(
+      (table) => !tables.includes(table),
+    );
+    if (missing.length > 0)
+      throw new Error(
+        `Restored database is missing Quran translation audio tables: ${missing.join(', ')}`,
+      );
+  }
+
   // Phase 19. A restore that carried the Hadith migration's history row but not
   // its source-qualified records, their evidence or the citation mapping would
   // report an applied migration over a database that has lost the identity

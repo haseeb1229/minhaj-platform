@@ -52,6 +52,11 @@ import {
  * per-Ayah timing is inserted in the SAME statement batch as the segment — one
  * statement, so the database checks the whole timing at once (51402) — and is
  * deleted with it, never edited.
+ *
+ * QURAN TRANSLATION AUDIO. An untimed first-party narration segment may be
+ * ALIGNED once: its timing, its alignment (provenance source and reference
+ * recitation) and its translation spans, inserted together; they leave only
+ * with the segment, and its file is then fixed (51405).
  */
 
 const SEGMENTS = {
@@ -62,6 +67,7 @@ const SEGMENTS = {
     endAyah: true,
     assetId: true,
     _count: { select: { timings: true } },
+    alignment: { select: { _count: { select: { spans: true } } } },
   },
   orderBy: [{ surahNumber: 'asc' }, { startAyah: 'asc' }, { id: 'asc' }],
   take: QURAN_LIMITS.segmentsPerRecitation,
@@ -119,6 +125,7 @@ interface SegmentRow {
   readonly endAyah: number;
   readonly assetId: string | null;
   readonly _count: { readonly timings: number };
+  readonly alignment: { readonly _count: { readonly spans: number } } | null;
 }
 
 function toRecitation(row: RecitationRow): RecitationRecord {
@@ -154,6 +161,7 @@ function toDetail(
       endAyah: segment.endAyah,
       assetId: segment.assetId,
       timedAyat: segment._count.timings,
+      translationSpans: segment.alignment?._count.spans ?? 0,
     })),
   };
 }
@@ -187,6 +195,7 @@ type RecitationPersistence = Pick<
   | 'setRecitationState'
   | 'addRecitationSegment'
   | 'removeRecitationSegment'
+  | 'alignRecitationSegment'
   | 'attachSegmentAsset'
   | 'segmentAssetForPreview'
 >;
@@ -400,15 +409,66 @@ export function recitationPersistence(): RecitationPersistence {
       try {
         return await db.$transaction(async (tx) => {
           const previous = await claim(tx, 'recitation', id, expectedVersion);
-          await tx.quranRecitationTiming.deleteMany({
-            where: { segment: { id: segmentId, recitationId: id } },
+          // An alignment's spans, then the alignment, then the timing it
+          // relies on — the order the database's keys and 51405 require.
+          const owned = { segment: { id: segmentId, recitationId: id } };
+          await tx.quranRecitationTranslationSpan.deleteMany({
+            where: { alignment: owned },
           });
+          await tx.quranRecitationAlignment.deleteMany({ where: owned });
+          await tx.quranRecitationTiming.deleteMany({ where: owned });
           const removed = await tx.quranRecitationSegment.deleteMany({
             where: { id: segmentId, recitationId: id },
           });
           if (removed.count !== 1) throw new QuranDataError('not-found');
           await segmentAudit(tx, { actorId, id }, previous.version, 'segment-removed', {
             segment: segmentId,
+          });
+          return detailOf(tx, id);
+        });
+      } catch (error) {
+        refuse(error);
+      }
+    },
+
+    /**
+     * A NARRATION SEGMENT ALIGNED (Quran translation audio): its per-Ayah
+     * timing, the alignment's provenance and reference recitation, and each
+     * passage's translation span — three statements in ONE transaction under
+     * the Recitation's expected version, each set inserted in one statement so
+     * the database judges it whole (51402, 51405). A segment already timed is
+     * refused by the timing's own rule; nothing is ever edited.
+     */
+    async alignRecitationSegment({ actorId, id, expectedVersion, value }) {
+      try {
+        return await db.$transaction(async (tx) => {
+          const previous = await claim(tx, 'recitation', id, expectedVersion);
+          const segment = await tx.quranRecitationSegment.findFirst({
+            where: { id: value.segmentId, recitationId: id },
+            select: { id: true },
+          });
+          if (segment === null) throw new QuranDataError('not-found');
+          await tx.$executeRaw`INSERT INTO [dbo].[QuranRecitationTiming] ([segmentId],[ayahNumber],[startMs],[endMs])
+            SELECT ${value.segmentId}, [ayah], [startMs], [endMs]
+            FROM OPENJSON(${JSON.stringify(value.timings)})
+            WITH ([ayah] INT '$.ayah', [startMs] INT '$.startMs', [endMs] INT '$.endMs');`;
+          await tx.quranRecitationAlignment.create({
+            data: {
+              segmentId: value.segmentId,
+              sourceId: value.sourceId,
+              referenceRecitationId: value.referenceRecitationId,
+            },
+          });
+          await tx.$executeRaw`INSERT INTO [dbo].[QuranRecitationTranslationSpan] ([segmentId],[startAyah],[endAyah],[startMs],[endMs])
+            SELECT ${value.segmentId}, [startAyah], [endAyah], [startMs], [endMs]
+            FROM OPENJSON(${JSON.stringify(value.spans)})
+            WITH ([startAyah] INT '$.startAyah', [endAyah] INT '$.endAyah', [startMs] INT '$.startMs', [endMs] INT '$.endMs');`;
+          await segmentAudit(tx, { actorId, id }, previous.version, 'segment-aligned', {
+            segment: value.segmentId,
+            source: value.sourceId,
+            reference: value.referenceRecitationId,
+            timedAyat: String(value.timings.length),
+            translationSpans: String(value.spans.length),
           });
           return detailOf(tx, id);
         });

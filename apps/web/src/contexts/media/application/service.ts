@@ -23,6 +23,14 @@ import {
   type MediaPersistencePort,
   type MediaReferencesPort,
 } from '@minhaj/contracts/media';
+import {
+  QURAN_PASSAGES_MAX,
+  applyPassageChange,
+  distinctPassages,
+  timedQuranPassageSchema,
+  videoPassageChangeSchema,
+  type TimedQuranPassage,
+} from '@minhaj/contracts/passage';
 
 import { MediaRefusal } from './refusal.ts';
 
@@ -56,6 +64,13 @@ import { MediaRefusal } from './refusal.ts';
  * through its upload (`./photo-upload.ts`); a Gallery's membership changes only
  * by named changes applied to the version the operator was shown.
  */
+
+/** A lecture's start offset lies within its video, where the duration is recorded. */
+function withinVideo(passage: TimedQuranPassage, duration: number | null): boolean {
+  return (
+    passage.startSeconds === null || duration === null || passage.startSeconds < duration
+  );
+}
 
 export function createMediaService(deps: {
   readonly persistence: MediaPersistencePort;
@@ -228,6 +243,75 @@ export function createMediaService(deps: {
         expectedVersion: version,
         videoIds: outcome.videoIds,
         change: change.op,
+      });
+    },
+
+    /**
+     * QURAN PART 8 — one named change to the Quran passages a Video's lecture
+     * explains, applied to the passages the operator was shown, under the same
+     * authority and expected version as the rest of the Video. A passage is a
+     * citation VALUE (`@minhaj/contracts/passage`): Media asks Quran nothing.
+     * A start offset must fall within the video where its duration is known.
+     */
+    async changeVideoQuranPassages(
+      actor: MediaActor,
+      videoId: string,
+      expectedVersion: number,
+      raw: unknown,
+    ) {
+      await permit(actor, 'media.administer');
+      const id = mediaIdSchema.parse(videoId);
+      const version = mediaVersionSchema.parse(expectedVersion);
+      const change = videoPassageChangeSchema.parse(raw);
+      const current = await store.video(id);
+      if (current === null) throw new MediaRefusal('not-found');
+      if (current.version !== version) throw new MediaRefusal('conflict');
+      if (change.op === 'add' && !withinVideo(change.passage, current.durationSeconds))
+        throw new MediaRefusal('invalid');
+      const outcome = applyPassageChange(current.quranPassages, change);
+      if ('refusal' in outcome) throw new MediaRefusal(outcome.refusal);
+      return store.setVideoQuranPassages({
+        actorId: actor.accountId,
+        videoId: id,
+        expectedVersion: version,
+        passages: outcome.passages,
+        change: change.op,
+      });
+    },
+
+    /**
+     * Quran Part 8 — the passages the staging operator command proposed from
+     * this Video's TITLE, applied as a whole set. It never overwrites: a Video
+     * already carrying a passage is a conflict, so an editor's correction is
+     * never undone by a re-run.
+     */
+    async applyTitleQuranPassages(
+      actor: MediaActor,
+      videoId: string,
+      expectedVersion: number,
+      raw: unknown,
+    ) {
+      await permit(actor, 'media.administer');
+      const id = mediaIdSchema.parse(videoId);
+      const version = mediaVersionSchema.parse(expectedVersion);
+      const passages = z
+        .array(timedQuranPassageSchema)
+        .min(1)
+        .max(QURAN_PASSAGES_MAX)
+        .parse(raw);
+      if (!distinctPassages(passages)) throw new MediaRefusal('duplicate-passage');
+      const current = await store.video(id);
+      if (current === null) throw new MediaRefusal('not-found');
+      if (current.version !== version || current.quranPassages.length > 0)
+        throw new MediaRefusal('conflict');
+      if (!passages.every((passage) => withinVideo(passage, current.durationSeconds)))
+        throw new MediaRefusal('invalid');
+      return store.setVideoQuranPassages({
+        actorId: actor.accountId,
+        videoId: id,
+        expectedVersion: version,
+        passages,
+        change: 'title',
       });
     },
 

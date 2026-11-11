@@ -8,6 +8,8 @@ import {
   audioSource,
   ayahAt,
   neighbourAyah,
+  passageFits,
+  passagesOf,
   playbackRate,
   readSurahAudio,
   repeatCount,
@@ -17,12 +19,14 @@ import {
   tick,
   ticksOf,
   timingFits,
+  translationOffer,
   untimed,
   type Cursor,
   type PlayPlan,
   type PlaybackRate,
   type PlayableSegment,
   type SurahAudio,
+  type TranslationPassage,
 } from './recitation-plan';
 
 /**
@@ -32,12 +36,21 @@ import {
  * dock and each page's listen controls read and drive the same state, and a
  * client navigation between Quran pages leaves the audio playing.
  *
- * ONE ELEMENT, NEVER IN THE DOCUMENT. The element is created by the
- * listener's first press of Play — never on load — and is not attached to the
- * page, so no page carries a second `<audio>` beside its own native fallback.
- * That first press also calls `play()` inside the gesture, which is what a
- * browser requires before later tracks may begin by themselves (the next Ayah,
- * the next Surah); nothing plays until then.
+ * ONE ELEMENT FOR THE RECITATION, NEVER IN THE DOCUMENT. The element is
+ * created by the listener's first press of Play — never on load — and is not
+ * attached to the page, so no page carries a second `<audio>` beside its own
+ * native fallback. That first press also calls `play()` inside the gesture,
+ * which is what a browser requires before later tracks may begin by themselves
+ * (the next Ayah, the next Surah); nothing plays until then.
+ *
+ * AND ONE FOR THE TRANSLATION (translation audio, 2026-11-10). With
+ * "translation after each passage" on, the narration's file is a SECOND
+ * element, created and permitted in the same press. One element switching
+ * between the qari's stream and the narration's file would drop each file's
+ * buffer and position at every passage — a reload, and a gap, twice per
+ * passage; two elements keep both, so the qari pauses exactly where the
+ * passage ends, the narration (already preloaded) plays its span, and the qari
+ * resumes. Only one of them ever plays at a time.
  *
  * WHAT IS DECIDED IS DECIDED IN `./recitation-plan.ts`. This module moves the
  * audio and records where it is; the plan says what to do at each position.
@@ -55,6 +68,8 @@ export interface CatalogueEntry {
   readonly style: string | null;
   readonly languageCode: string | null;
   readonly timed: boolean;
+  /** Surahs whose audio says where each passage's translation is heard. */
+  readonly translatedSurahs: readonly number[];
 }
 
 export type PlayerStatus =
@@ -81,6 +96,8 @@ export interface PlayerState {
   readonly rate: PlaybackRate;
   readonly follow: boolean;
   readonly plan: PlayPlan;
+  /** The passage whose translation is being heard now, or null. */
+  readonly translating: { readonly from: number; readonly to: number } | null;
 }
 
 const PREFERENCES_KEY = 'minhaj.quran.player';
@@ -101,6 +118,7 @@ const INITIAL: PlayerState = {
   rate: 1,
   follow: true,
   plan: DEFAULT_PLAN,
+  translating: null,
 };
 
 let state: PlayerState = INITIAL;
@@ -142,6 +160,7 @@ interface Preferences {
   readonly rate: PlaybackRate;
   readonly follow: boolean;
   readonly continuous: boolean;
+  readonly translation: boolean;
 }
 
 function readPreferences(): Partial<Preferences> {
@@ -154,6 +173,7 @@ function readPreferences(): Partial<Preferences> {
       rate: playbackRate(value['rate']),
       follow: value['follow'] !== false,
       continuous: value['continuous'] !== false,
+      translation: value['translation'] === true,
     };
   } catch {
     return {};
@@ -169,6 +189,7 @@ function keepPreferences(): void {
         rate: state.rate,
         follow: state.follow,
         continuous: state.plan.continuous,
+        translation: state.plan.translation,
       }),
     );
   } catch {
@@ -207,8 +228,21 @@ export function initialisePlayer(
     follow: state.ready ? state.follow : (kept.follow ?? true),
     plan: state.ready
       ? state.plan
-      : { ...state.plan, continuous: kept.continuous ?? true },
+      : {
+          ...state.plan,
+          continuous: kept.continuous ?? true,
+          translation: kept.translation ?? false,
+        },
   });
+}
+
+/** The narration that can follow a passage with its translation, if one is public. */
+export function translationSource(
+  catalogue: readonly CatalogueEntry[] = state.catalogue,
+): CatalogueEntry | undefined {
+  return catalogue.find(
+    (entry) => entry.languageCode === 'ur' && entry.translatedSurahs.length > 0,
+  );
 }
 
 /* ===========================================================================
@@ -259,6 +293,19 @@ let frame = 0;
 /** Bumped by every new request, so a slow load cannot start an older one. */
 let generation = 0;
 
+/** The translation's element, its passages for one Surah, and the one playing. */
+let narrator: HTMLAudioElement | null = null;
+let passages: readonly TranslationPassage[] = [];
+let passagesFor: string | null = null;
+let translatingNow: {
+  readonly passage: TranslationPassage;
+  readonly resumeMs: number;
+  /** The passage ended the recitation's file: carry on as its end does. */
+  readonly afterEnd: boolean;
+} | null = null;
+/** Where the narration starts once its file's metadata has loaded. */
+let narratorPendingMs: number | null = null;
+
 function segmentNow(): PlayableSegment | null {
   return current === null ? null : (current.audio.segments[current.index] ?? null);
 }
@@ -273,6 +320,8 @@ function audioElement(): HTMLAudioElement {
     startFrames();
   });
   audio.addEventListener('pause', () => {
+    // Paused for a passage's translation: the translation is playing.
+    if (translatingNow !== null) return;
     if (state.status === 'playing' || state.status === 'buffering')
       set({ status: 'paused' });
   });
@@ -332,11 +381,171 @@ function startFrames(): void {
   if (frame !== 0 || typeof requestAnimationFrame !== 'function') return;
   const step = () => {
     frame = 0;
-    if (element === null || element.paused) return;
-    onPosition();
+    if (translatingNow !== null) {
+      if (narrator === null || narrator.paused) return;
+      onNarrationPosition();
+    } else {
+      if (element === null || element.paused) return;
+      onPosition();
+    }
     frame = requestAnimationFrame(step);
   };
   frame = requestAnimationFrame(step);
+}
+
+/* ===========================================================================
+ * The translation
+ * ========================================================================= */
+
+function narratorElement(): HTMLAudioElement {
+  if (narrator !== null) return narrator;
+  const audio = new Audio();
+  audio.preload = 'auto';
+  audio.addEventListener('timeupdate', onNarrationPosition);
+  audio.addEventListener('playing', () => {
+    if (translatingNow === null) return;
+    set({ status: 'playing', problem: null });
+    startFrames();
+  });
+  audio.addEventListener('pause', () => {
+    // The listener's own pause during a translation; its end is not a pause.
+    if (translatingNow !== null && state.status !== 'ended') set({ status: 'paused' });
+  });
+  audio.addEventListener('waiting', () => {
+    if (translatingNow !== null && !audio.paused) set({ status: 'buffering' });
+  });
+  audio.addEventListener('loadedmetadata', () => {
+    const durationMs = Number.isFinite(audio.duration) ? audio.duration * 1000 : 0;
+    // A span that runs past the narration's file is not this file's: this
+    // Surah's translation is set aside and the recitation carries on.
+    if (translatingNow !== null && !passageFits(translatingNow.passage, durationMs)) {
+      abandonTranslation();
+      return;
+    }
+    if (narratorPendingMs !== null) {
+      audio.currentTime = narratorPendingMs / 1000;
+      narratorPendingMs = null;
+    }
+  });
+  audio.addEventListener('ended', () => finishTranslation());
+  audio.addEventListener('error', () => {
+    if (audio.getAttribute('src') === null) return;
+    // The translation could not be heard: the recitation goes on without it.
+    abandonTranslation();
+  });
+  narrator = audio;
+  return audio;
+}
+
+/**
+ * This Surah's passages from the narration, when the plan asks for them and
+ * they are offered for the recitation about to play; the narration's file is
+ * then preloaded. A failure is not the recitation's: it plays without them.
+ */
+async function preparePassages(recitation: string, surah: number): Promise<void> {
+  const key = `${recitation}:${String(surah)}`;
+  if (passagesFor === key) return;
+  const chosen = state.catalogue.find((entry) => entry.slug === recitation);
+  const source = translationSource();
+  passages = [];
+  passagesFor = key;
+  if (
+    !state.plan.translation ||
+    source === undefined ||
+    translationOffer(chosen, source, surah) !== 'offered'
+  )
+    return;
+  const found = await load(source.slug, surah)
+    .then((audio) => (audio === null ? [] : passagesOf(audio)))
+    .catch(() => []);
+  if (passagesFor !== key) return;
+  passages = found;
+  const first = found[0];
+  if (first === undefined) return;
+  const media = narratorElement();
+  const address = audioSource(first.audio);
+  if (media.getAttribute('src') !== address) {
+    narratorPendingMs = null;
+    media.src = address;
+  }
+}
+
+/** The passages that belong to what is loaded now. */
+function passagesNow(): readonly TranslationPassage[] {
+  return current !== null &&
+    state.playing !== null &&
+    passagesFor === `${state.playing}:${String(current.audio.surah)}`
+    ? passages
+    : [];
+}
+
+function startTranslation(
+  passage: TranslationPassage,
+  resumeMs: number,
+  afterEnd: boolean,
+): void {
+  const media = narratorElement();
+  translatingNow = { passage, resumeMs, afterEnd };
+  element?.pause();
+  set({ translating: { from: passage.from, to: passage.to } });
+  const address = audioSource(passage.audio);
+  if (media.getAttribute('src') !== address) {
+    narratorPendingMs = passage.startMs;
+    media.src = address;
+  } else if (media.readyState >= HTMLMediaElement.HAVE_METADATA) {
+    const durationMs = Number.isFinite(media.duration) ? media.duration * 1000 : 0;
+    if (!passageFits(passage, durationMs)) {
+      abandonTranslation();
+      return;
+    }
+    media.currentTime = passage.startMs / 1000;
+  } else {
+    narratorPendingMs = passage.startMs;
+  }
+  media.playbackRate = state.rate;
+  void media.play().catch(() => {
+    if (translatingNow?.passage === passage) abandonTranslation();
+  });
+}
+
+function onNarrationPosition(): void {
+  const passage = translatingNow?.passage;
+  if (passage === undefined || narrator === null || narratorPendingMs !== null) return;
+  if (narrator.currentTime * 1000 >= passage.endMs) finishTranslation();
+}
+
+/** The passage's translation is over: the recitation carries on after it. */
+function finishTranslation(): void {
+  const done = translatingNow;
+  if (done === null) return;
+  translatingNow = null;
+  narratorPendingMs = null;
+  narrator?.pause();
+  set({ translating: null });
+  if (done.afterEnd) {
+    void onEnded();
+    return;
+  }
+  const media = element;
+  if (media === null) return;
+  if (Math.abs(media.currentTime * 1000 - done.resumeMs) > 50) seekOwn(done.resumeMs);
+  media.playbackRate = state.rate;
+  void media.play().catch(() => set({ status: 'paused', problem: 'failed' }));
+}
+
+/** This Surah's translation cannot be heard: set it aside and carry on. */
+function abandonTranslation(): void {
+  passages = [];
+  finishTranslation();
+}
+
+/** The listener moved elsewhere: whatever translation was playing stops. */
+function cancelTranslation(): void {
+  if (translatingNow === null) return;
+  translatingNow = null;
+  narratorPendingMs = null;
+  narrator?.pause();
+  set({ translating: null });
 }
 
 function stopFrames(): void {
@@ -349,8 +558,9 @@ function onPosition(): void {
   const audio = element;
   const segment = segmentNow();
   if (audio === null || segment === null || cursor === null) return;
+  if (translatingNow !== null) return;
   const ms = audio.currentTime * 1000;
-  const decision = tick(state.plan, segment, cursor, ms);
+  const decision = tick(state.plan, segment, cursor, ms, passagesNow());
   cursor = decision.cursor;
   if (decision.kind === 'seek') seekOwn(decision.ms);
   if (decision.kind === 'stop') {
@@ -360,16 +570,29 @@ function onPosition(): void {
   }
   if (state.ayah !== cursor.ayah || Math.abs(state.positionMs - ms) >= 200)
     set({ ayah: cursor.ayah, positionMs: ms });
+  if (decision.kind === 'translate')
+    startTranslation(decision.passage, decision.resumeMs, false);
 }
 
 async function onEnded(): Promise<void> {
   const audio = element;
   const segment = segmentNow();
   if (audio === null || segment === null || current === null || cursor === null) return;
-  // The file's end is a position too: a repeat of its last Ayah, or a range
-  // ending with it, is decided exactly as any other end of an Ayah.
-  const decision = tick(state.plan, segment, cursor, Number.MAX_SAFE_INTEGER);
+  // The file's end is a position too: a repeat of its last Ayah, a range
+  // ending with it or its passage's translation, is decided exactly as any
+  // other end of an Ayah.
+  const decision = tick(
+    state.plan,
+    segment,
+    cursor,
+    Number.MAX_SAFE_INTEGER,
+    passagesNow(),
+  );
   cursor = decision.cursor;
+  if (decision.kind === 'translate') {
+    startTranslation(decision.passage, decision.resumeMs, true);
+    return;
+  }
   if (decision.kind === 'seek') {
     seekOwn(decision.ms);
     await audio.play().catch(() => set({ status: 'paused', problem: 'failed' }));
@@ -388,9 +611,13 @@ async function onEnded(): Promise<void> {
   }
   if (next.kind === 'surah' && state.playing !== null) {
     const ticket = ++generation;
+    const playing = state.playing;
     set({ status: 'loading' });
     try {
-      const audioData = await load(state.playing, next.surah);
+      const [audioData] = await Promise.all([
+        load(playing, next.surah),
+        preparePassages(playing, next.surah),
+      ]);
       if (ticket !== generation) return;
       const first = audioData?.segments[0];
       if (audioData === null || first === undefined) {
@@ -416,6 +643,7 @@ async function begin(
 ): Promise<void> {
   const segment = audio.segments[index];
   if (segment === undefined || ticket !== generation) return;
+  cancelTranslation();
   const media = audioElement();
   const source = audioSource(segment.audio);
   const startMs = startMsOf(segment, ayah);
@@ -425,6 +653,7 @@ async function begin(
     ayah: segment.timings === null || startMs === 0 ? null : ayah,
     heard: 0,
     passes: 0,
+    translated: false,
   };
   set({
     playing: audio.recitation,
@@ -463,6 +692,13 @@ async function begin(
 function unlock(): void {
   const media = audioElement();
   if (media.getAttribute('src') === null) void media.play().catch(() => undefined);
+  // The translation's element is permitted in the same press, so a passage's
+  // translation may begin later without one.
+  if (state.plan.translation) {
+    const translation = narratorElement();
+    if (translation.getAttribute('src') === null)
+      void translation.play().catch(() => undefined);
+  }
 }
 
 /* ===========================================================================
@@ -474,10 +710,11 @@ export function playFrom(ref: { readonly surah: number; readonly ayah: number })
   const choice = state.choice;
   if (choice === null) return;
   unlock();
+  cancelTranslation();
   const ticket = ++generation;
   set({ status: 'loading', problem: null, surah: ref.surah });
-  void load(choice, ref.surah)
-    .then(async (audio) => {
+  void Promise.all([load(choice, ref.surah), preparePassages(choice, ref.surah)])
+    .then(async ([audio]) => {
       if (ticket !== generation) return;
       const found = audio === null ? null : segmentFor(audio, ref.ayah);
       if (audio === null || found === null) {
@@ -502,6 +739,14 @@ export function playSurah(surah: number): void {
 export function togglePlay(): void {
   const media = element;
   if (media === null || state.playing === null) return;
+  // During a passage's translation, Play and Pause are the translation's.
+  if (translatingNow !== null && narrator !== null) {
+    if (narrator.paused) {
+      narrator.playbackRate = state.rate;
+      void narrator.play().catch(() => abandonTranslation());
+    } else narrator.pause();
+    return;
+  }
   if (media.paused) {
     if (state.status === 'ended' && cursor !== null && current !== null) {
       // After the plan ended, Play starts it again from where it began.
@@ -510,7 +755,7 @@ export function togglePlay(): void {
       if (segment !== null && range !== null && range.surah === segment.surah)
         seekOwn(spanOf(segment, range.from)?.startMs ?? 0);
       else if (media.ended) seekOwn(0);
-      cursor = { ...cursor, heard: 0, passes: 0 };
+      cursor = { ...cursor, heard: 0, passes: 0, translated: false };
     }
     media.playbackRate = state.rate;
     void media.play().catch(() => set({ status: 'paused', problem: 'failed' }));
@@ -520,7 +765,8 @@ export function togglePlay(): void {
 }
 
 export function pause(): void {
-  element?.pause();
+  if (translatingNow !== null) narrator?.pause();
+  else element?.pause();
 }
 
 /** The previous or next Ayah this audio holds (timed audio only). */
@@ -538,10 +784,17 @@ export function stepAyah(step: -1 | 1): void {
   const found = segmentFor(current.audio, target);
   if (found === null) return;
   const ticket = ++generation;
+  cancelTranslation();
   if (found.index === current.index) {
     const span = spanOf(found.segment, target);
     if (span === null) return;
-    cursor = { surah: current.audio.surah, ayah: target, heard: 0, passes: 0 };
+    cursor = {
+      surah: current.audio.surah,
+      ayah: target,
+      heard: 0,
+      passes: 0,
+      translated: false,
+    };
     seekOwn(span.startMs);
     set({ ayah: target });
     if (element?.paused === true) void element.play().catch(() => undefined);
@@ -554,7 +807,11 @@ export function stepAyah(step: -1 | 1): void {
 export function seekTo(ms: number): void {
   const media = element;
   if (media === null || !(state.durationMs > 0)) return;
+  // Seeking the recitation leaves any translation where it is: back to the qari.
+  const resume = translatingNow !== null;
+  cancelTranslation();
   media.currentTime = Math.min(Math.max(0, ms), state.durationMs) / 1000;
+  if (resume) void media.play().catch(() => undefined);
 }
 
 export function chooseRecitation(slug: string): void {
@@ -577,6 +834,28 @@ export function setFollow(follow: boolean): void {
 export function setContinuous(continuous: boolean): void {
   set({ plan: { ...state.plan, continuous } });
   keepPreferences();
+}
+
+/**
+ * Hear each passage's translation after it. Turned on while playing, this
+ * Surah's passages are fetched now (the press that turns it on also permits
+ * the translation's element); turned off, a translation playing ends and the
+ * recitation carries on.
+ */
+export function setTranslation(translation: boolean): void {
+  set({ plan: { ...state.plan, translation } });
+  keepPreferences();
+  if (!translation) {
+    finishTranslation();
+    return;
+  }
+  const translationElement = narratorElement();
+  if (translationElement.getAttribute('src') === null)
+    void translationElement.play().catch(() => undefined);
+  if (state.playing !== null && current !== null) {
+    passagesFor = null;
+    void preparePassages(state.playing, current.audio.surah);
+  }
 }
 
 /** How many times each Ayah is heard (1 = once). */
@@ -605,18 +884,25 @@ export function setRange(
       },
     },
   });
-  if (cursor !== null) cursor = { ...cursor, passes: 0 };
+  if (cursor !== null) cursor = { ...cursor, passes: 0, translated: false };
 }
 
 /** Stops and forgets what was playing; the dock closes. */
 export function closePlayer(): void {
   generation += 1;
+  cancelTranslation();
   stopFrames();
   if (element !== null) {
     element.pause();
     element.removeAttribute('src');
     element.load();
   }
+  if (narrator !== null) {
+    narrator.removeAttribute('src');
+    narrator.load();
+  }
+  passages = [];
+  passagesFor = null;
   current = null;
   cursor = null;
   pendingStartMs = null;
@@ -630,6 +916,11 @@ export function closePlayer(): void {
     positionMs: 0,
     durationMs: 0,
     ticks: [],
-    plan: { ...DEFAULT_PLAN, continuous: state.plan.continuous },
+    plan: {
+      ...DEFAULT_PLAN,
+      continuous: state.plan.continuous,
+      translation: state.plan.translation,
+    },
+    translating: null,
   });
 }

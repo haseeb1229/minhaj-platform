@@ -86,6 +86,7 @@ function record(overrides: Partial<VideoRecord> = {}): VideoRecord {
     series: null,
     speakerIds: [],
     topicIds: [TOPIC],
+    quranPassages: [],
     poster: null,
     version: 1,
     updatedAt: new Date('2026-10-23T00:00:00Z'),

@@ -394,6 +394,60 @@ export function timingProblem(
   return null;
 }
 
+/**
+ * Where ONE passage's translation is heard in an aligned narration segment's
+ * audio (Quran translation audio): the passage `startAyah`–`endAyah`, and its
+ * translation `[startMs, endMs)` in the same file.
+ */
+export const translationSpanSchema = z.strictObject({
+  startAyah: ayahNumberSchema,
+  endAyah: ayahNumberSchema,
+  startMs: z.number().int().min(0).max(RECITATION_TIMING_MAX_MS),
+  endMs: z.number().int().min(1).max(RECITATION_TIMING_MAX_MS),
+});
+export type TranslationSpan = z.output<typeof translationSpanSchema>;
+
+/**
+ * Why a segment's translation spans cannot be recorded — a category:
+ *
+ *   coverage    the passages do not partition the range, Ayah 1 to the last
+ *   empty-span  a translation ends at or before it starts
+ *   order       a translation begins before its passage's Arabic ends, or
+ *               ends after the next Ayah's Arabic begins
+ */
+export type TranslationSpanProblem = 'coverage' | 'empty-span' | 'order';
+
+/**
+ * THE TRANSLATION SPAN RULE, ONE PURE FUNCTION (the database enforces it
+ * again, 51405), over a segment whose timing already holds (`timingProblem`):
+ * the passages are contiguous, in order and cover EVERY Ayah of the range
+ * exactly once; each translation is non-empty and lies between its passage's
+ * last Ayah's Arabic and the next Ayah's. Monotonic follows from the timing.
+ */
+export function translationSpanProblem(
+  range: { readonly startAyah: number; readonly endAyah: number },
+  timings: readonly AyahTiming[],
+  spans: readonly TranslationSpan[],
+): TranslationSpanProblem | null {
+  const ordered = [...spans].sort((a, b) => a.startAyah - b.startAyah);
+  let next = range.startAyah;
+  for (const span of ordered) {
+    if (span.startAyah !== next || span.endAyah < span.startAyah) return 'coverage';
+    next = span.endAyah + 1;
+  }
+  if (next !== range.endAyah + 1) return 'coverage';
+  const byAyah = new Map(timings.map((timing) => [timing.ayah, timing]));
+  for (const span of ordered) {
+    if (span.endMs <= span.startMs) return 'empty-span';
+    const last = byAyah.get(span.endAyah);
+    const following = byAyah.get(span.endAyah + 1);
+    if (last === undefined) return 'coverage';
+    if (span.startMs < last.endMs) return 'order';
+    if (following !== undefined && span.endMs > following.startMs) return 'order';
+  }
+  return null;
+}
+
 /* ===========================================================================
  * Text — exact, never normalised
  * ========================================================================= */
@@ -471,8 +525,18 @@ export const transliterationInputSchema = z.strictObject({
 });
 export type TransliterationValue = z.output<typeof transliterationInputSchema>;
 
+/**
+ * Addresses beneath `/quran/tafsir/` the platform itself serves (Quran Part 8:
+ * a Surah's tafsir, `/quran/tafsir/surah/{n}`), which no Tafsir may take.
+ */
+export const TAFSIR_RESERVED_SLUGS: readonly string[] = Object.freeze(['surah']);
+
 export const tafsirInputSchema = z.strictObject({
   ...layerWorkFields,
+  slug: quranSlugSchema.refine(
+    (slug) => !TAFSIR_RESERVED_SLUGS.includes(slug),
+    'This address is the platform’s own.',
+  ),
   contributors: contributors(TAFSIR_CONTRIBUTOR_ROLES),
 });
 export type TafsirValue = z.output<typeof tafsirInputSchema>;
@@ -900,6 +964,23 @@ export const recitationSegmentInputSchema = z
 export type RecitationSegmentValue = z.output<typeof recitationSegmentInputSchema>;
 
 /**
+ * A narration segment's ALIGNMENT (Quran translation audio): the timing of
+ * every Ayah's Arabic in the segment's file, where each passage's translation
+ * is heard, the `reference` provenance source recording how they were derived,
+ * and the timed Arabic recitation they were matched against. Whether the
+ * timing and spans fit the segment's range is decided against the stored
+ * segment (`timingProblem`, `translationSpanProblem`).
+ */
+export const recitationAlignmentInputSchema = z.strictObject({
+  segmentId: quranIdSchema,
+  sourceId: quranIdSchema,
+  referenceRecitationId: quranIdSchema,
+  timings: z.array(ayahTimingSchema).min(1).max(QURAN_AYAH_NUMBER_MAX),
+  spans: z.array(translationSpanSchema).min(1).max(QURAN_AYAH_NUMBER_MAX),
+});
+export type RecitationAlignmentValue = z.output<typeof recitationAlignmentInputSchema>;
+
+/**
  * A Surah's display names, one per interface locale, each with the meaning of
  * the name in that locale where one is recorded ("The Opening") — presentation,
  * never identity (DOMAIN_MODEL.md §8.3). An absent meaning is `null`.
@@ -1169,6 +1250,11 @@ export interface RecitationSegmentRecord {
   readonly assetId: string | null;
   /** How many of its ayat are timed: none, or every one (`timingProblem`). */
   readonly timedAyat: number;
+  /**
+   * How many passages carry a translation span: none, or a partition of the
+   * range (Quran translation audio; `translationSpanProblem`).
+   */
+  readonly translationSpans: number;
 }
 
 export interface RecitationDetail extends RecitationRecord {
@@ -1418,6 +1504,20 @@ export interface PublicLayerCoverage {
   }[];
 }
 
+/**
+ * How much of the Quran one public Tafsir explains (Quran Part 8): for each
+ * Surah it has any entry in, how many entries it holds and how many of the
+ * Surah's ayat those entries cover. Counted, never claimed.
+ */
+export interface PublicTafsirCoverage {
+  readonly workId: string;
+  readonly surahs: readonly {
+    readonly surah: number;
+    readonly entries: number;
+    readonly ayat: number;
+  }[];
+}
+
 export interface PublicRecitation {
   readonly id: string;
   readonly slug: string;
@@ -1434,6 +1534,12 @@ export interface PublicRecitation {
   readonly firstSurah: number | null;
   /** Whether EVERY segment with audio carries per-Ayah timing. */
   readonly timed: boolean;
+  /**
+   * The Surahs, ascending, whose audio carries where each passage's
+   * translation is heard (Quran translation audio) — empty for a recitation
+   * of the Arabic, and for a narration not aligned.
+   */
+  readonly translatedSurahs: readonly number[];
   readonly publishedAt: Date;
 }
 
@@ -1450,6 +1556,25 @@ export interface PublicRecitationSegment {
   readonly assetId: string | null;
   /** Whether every Ayah of the segment is timed. */
   readonly timed: boolean;
+}
+
+/** Where one passage's translation is heard in one public segment's audio. */
+export interface PublicTranslationSpan {
+  readonly segmentId: string;
+  readonly startAyah: number;
+  readonly endAyah: number;
+  readonly startMs: number;
+  readonly endMs: number;
+}
+
+/**
+ * What a public narration's alignment was matched against: a timed Arabic
+ * recitation, and in how many of the narration's Surahs. Evidence about a
+ * recording, never a credit.
+ */
+export interface PublicRecitationAlignment {
+  readonly referenceRecitationId: string;
+  readonly surahCount: number;
 }
 
 /** Where one Ayah is heard in one public segment's audio. */

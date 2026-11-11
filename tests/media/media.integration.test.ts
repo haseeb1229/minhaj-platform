@@ -45,6 +45,9 @@ function editableVideo(record: Record<string, unknown>): Record<string, unknown>
     updatedAt: _updatedAt,
     series,
     providerVideoId,
+    // Quran Part 8: a Video's passages change by their own named steps, never
+    // through a Video save.
+    quranPassages: _quranPassages,
     ...rest
   } = record;
   const ref = series as { id: string; position: number } | null;

@@ -28,6 +28,8 @@ const FAILURES: ReadonlySet<string> = new Set([
   'duplicate-position',
   'duplicate-member',
   'limit',
+  // Quran Part 8 — a Video never names one passage twice.
+  'duplicate-passage',
   // Phase 11 — audio.
   'no-audio',
   'too-large',

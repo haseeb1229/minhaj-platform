@@ -404,6 +404,37 @@ from the Arabic.
   glosses with UPDATE of their key columns denied; ALTER is denied on all three. Trigger 51404 keeps
   a published work's last gloss.
 
+**Quran translation audio (2026-11-10; DOMAIN_MODEL.md §8.5.1).** Nothing reaches or changes
+Quranic text or audio: an aligned narration's per-Ayah timing and passage spans are numbers copied
+verbatim from one reviewed alignment file whose SHA-256 is pinned in the release, imported only by
+the operator's command, refused whole if anything does not hold, and labelled derived and not
+confirmed. The runtime principal holds SELECT, INSERT and DELETE on `QuranRecitationAlignment` and
+`QuranRecitationTranslationSpan` (UPDATE and ALTER denied); trigger 51405 refuses an edit, a
+partial or out-of-order partition, a source other than `reference`, a reference that is not
+another Arabic recitation, and any change to an aligned segment's timing or file. The data route
+sends spans only for a public recitation's timed segment with audio, as numbers the player checks
+again before use (a span past its file's duration is not played); the narration's audio is
+first-party, so the Quran routes' media policy is unchanged. The second audio element is created
+and permitted only by the listener's own press; nothing autoplays.
+
+**Quran Part 8 — the Tafsir hub (DOMAIN_MODEL.md §8.8).** Rules 1–5 hold: nothing reaches or
+changes Quranic text, and no tafsir is generated or imported — the hub shows Minhaj-ul-Quran's own
+books and lectures and the public Tafsir works an operator registered.
+
+- **A passage is a citation, owned by the book or lecture.** `WorkQuranPassage` and
+  `VideoQuranPassage` hold a Surah number, an ayah range (and a lecture's start), keyed to their
+  owner only — no key into Quran and no Quran import (DOMAIN_MODEL.md §3.1). They are changed only
+  through Library's and Media's administrative services under `library.administer` /
+  `media.administer` (re-read live), each change one named step under the owner's expected version
+  in one transaction with its audit entry (the citations before and after, never a title). The
+  runtime principal holds SELECT, INSERT and DELETE on both (a set is replaced under the owner's
+  version), UPDATE and ALTER denied; a CHECK holds the shape and the service the structure.
+- **Public reads only what is public.** A passage is shown only on a published Work with a
+  published Edition, or a published Video — the owners' one public predicate, in the query.
+- **A start offset cannot redirect anything.** `?start=` on a Video page is read only as whole
+  seconds within the video; the provider address is still derived by the contract, which ignores
+  any offset outside a day, so the parameter can only move where an already-allowed player starts.
+
 ### 5.2 Hadith
 
 1. **Text, reference numbers, narrator chains and gradings are sourced data — never inferred,
@@ -709,6 +740,13 @@ gates re-check the grant live (the Quran reference import, migration publication
   every act is first previewed and then runs only over the exact set confirmed by count and
   fingerprint (or a manifest's version); pictures are decided public only on first-party Minhaj
   hosts, with the licence, evidence and holder always stated (MIGRATION_STRATEGY.md §19.2).
+- **Quran passages from titles (Quran Part 8; staging only).** `bin/tafsir-passages.sh` keeps the
+  same host posture (root, host proof, host lock, the full database guard, the runtime principal).
+  It acts as the named operator through Library's and Media's own services, so
+  `library.administer` and `media.administer` are re-read live; it is previewed first and applies
+  only the exact set confirmed by count and fingerprint; it never overwrites a passage an editor
+  recorded; each record's change is audited with `origin: operator:tafsir-passages`; and its
+  output is counts — never a title.
 
 ### 8.2 Privileged multi-factor authentication — a V1 production requirement, precisely scoped
 

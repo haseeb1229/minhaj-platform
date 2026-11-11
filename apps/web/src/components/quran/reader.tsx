@@ -104,6 +104,19 @@ import {
   WordByWordText,
 } from './scripture';
 import { juzSpans, type SurahIndexQuery, type SurahIndexRow } from './surah-index';
+import { TafsirPanel } from './tafsir-panel';
+import {
+  resourceCount,
+  resourcesForAyah,
+  tafsirSurahPath,
+  type AyahResources,
+} from './tafsir-layout';
+import {
+  readTafsirResources,
+  readTafsirWorks,
+  type HubBook,
+  type HubLecture,
+} from './tafsir-read';
 import { SurahIndex, type SurahIndexLabels } from './surah-index-island';
 import {
   corpusNotice,
@@ -629,6 +642,13 @@ interface AyahLayers {
     readonly language: ReturnType<typeof languageOf>;
     readonly placed: ReadonlyMap<number, readonly TafsirEntryRecord[]>;
   } | null;
+  /**
+   * Quran Part 8: what explains each Ayah of the range — public Tafsir
+   * entries, books and lectures (`./tafsir-layout`) — for the Tafsir action
+   * and its panel. An Ayah nothing explains is absent: it has no action.
+   */
+  readonly explained: ReadonlyMap<number, AyahResources<HubBook, HubLecture>>;
+  readonly tafsirWorks: ReadonlyMap<string, PublicLayerWork>;
 }
 
 /** The works of one layer a page renders, and whether the address chose them. */
@@ -721,23 +741,42 @@ async function layersFor(
 ): Promise<AyahLayers> {
   const reader = quranReadRuntime().reader;
   const { tafsir } = context.chosen;
-  const [translationTexts, transliterationTexts, glosses, tafsirEntries] =
-    await Promise.all([
-      Promise.all(
-        set.works.map((work) => reader.translationTexts(work.id, surah, from, to)),
+  const [
+    translationTexts,
+    transliterationTexts,
+    glosses,
+    tafsirEntries,
+    resources,
+    works,
+  ] = await Promise.all([
+    Promise.all(
+      set.works.map((work) => reader.translationTexts(work.id, surah, from, to)),
+    ),
+    Promise.all(
+      set.transliterations.works.map((work) =>
+        reader.transliterationTexts(work.id, surah, from, to),
       ),
-      Promise.all(
-        set.transliterations.works.map((work) =>
-          reader.transliterationTexts(work.id, surah, from, to),
-        ),
-      ),
-      Promise.all(
-        set.words.works.map((work) => reader.wordByWordGlosses(work.id, surah, from, to)),
-      ),
-      tafsir === null
-        ? Promise.resolve([])
-        : reader.tafsirEntries(tafsir.id, surah, from, to),
-    ]);
+    ),
+    Promise.all(
+      set.words.works.map((work) => reader.wordByWordGlosses(work.id, surah, from, to)),
+    ),
+    tafsir === null
+      ? Promise.resolve([])
+      : reader.tafsirEntries(tafsir.id, surah, from, to),
+    readTafsirResources(surah, from, to),
+    readTafsirWorks(),
+  ]);
+  // A tafsir the address asked for that is not public shows NO tafsir text —
+  // never another work's in its place (the layer rule); books and lectures
+  // are not a tafsir choice and still show.
+  const shownResources = context.unavailable.includes('tafsir')
+    ? { ...resources, texts: [] }
+    : resources;
+  const explained = new Map<number, AyahResources<HubBook, HubLecture>>();
+  for (let ayah = from; ayah <= to; ayah += 1) {
+    const found = resourcesForAyah(shownResources, surah, ayah);
+    if (resourceCount(found) > 0) explained.set(ayah, found);
+  }
   return {
     translations: set.works.map((work, index) => ({
       work,
@@ -768,6 +807,8 @@ async function layersFor(
             language: languageOf(languages, tafsir.languageCode),
             placed: tafsirPlacement(tafsirEntries, shown),
           },
+    explained,
+    tafsirWorks: new Map(works.map((work) => [work.id, work])),
   };
 }
 
@@ -776,6 +817,8 @@ const NO_LAYERS: AyahLayers = {
   transliterations: [],
   words: [],
   tafsir: null,
+  explained: new Map(),
+  tafsirWorks: new Map(),
 };
 
 /* ===========================================================================
@@ -846,9 +889,20 @@ export const PERSONAL_ANCHOR = 'personal';
 function AyahTools({
   t,
   save,
+  tafsir = null,
 }: {
   readonly t: QuranTranslator;
   readonly save: string | null;
+  /**
+   * Quran Part 8: the Tafsir action — ONLY where something explains this
+   * Ayah. Without script it is a link to the Ayah's place on its Surah's
+   * tafsir page; the reader island opens the Ayah's panel in a sheet instead.
+   */
+  readonly tafsir?: {
+    readonly href: string;
+    readonly panel: string;
+    readonly count: number;
+  } | null;
 }) {
   return (
     <div
@@ -880,6 +934,17 @@ function AyahTools({
       >
         <Icon name="share" size={20} />
       </button>
+      {tafsir === null ? null : (
+        <a
+          href={tafsir.href}
+          data-ayah-action="tafsir"
+          data-tafsir-panel-ref={tafsir.panel}
+          aria-label={t('reader.actions.tafsir', { count: tafsir.count })}
+          className={`quran-ayah-tafsir ${TOOL}`}
+        >
+          <Icon name="book" size={20} />
+        </a>
+      )}
       {save === null ? null : (
         <a
           href={save}
@@ -1143,6 +1208,8 @@ function AyahItem({
   const canonical = ayahPath(locale, ref);
   const tafsirLayer = layers.tafsir;
   const tafsir = tafsirLayer?.placed.get(ayah.ayah) ?? [];
+  const explained = layers.explained.get(ayah.ayah) ?? null;
+  const panelId = `tafsir-panel-${key}`;
   const translations = layers.translations.flatMap((layer) => {
     const text = layer.texts.get(ayah.ayah);
     return text === undefined
@@ -1184,7 +1251,19 @@ function AyahItem({
               <StatusBadge tone="neutral">{t(`sajdah.${ayah.sajdah}`)}</StatusBadge>
             )}
           </div>
-          <AyahTools t={t} save={`${canonical}#${PERSONAL_ANCHOR}`} />
+          <AyahTools
+            t={t}
+            save={`${canonical}#${PERSONAL_ANCHOR}`}
+            tafsir={
+              explained === null
+                ? null
+                : {
+                    href: `${tafsirSurahPath(locale, ayah.surah)}?ayah=${String(ayah.ayah)}`,
+                    panel: panelId,
+                    count: resourceCount(explained),
+                  }
+            }
+          />
         </div>
         <ArabicText
           id={`arabic-${key}`}
@@ -1240,6 +1319,17 @@ function AyahItem({
           </div>
         )}
       </article>
+      {explained === null ? null : (
+        <TafsirPanel
+          id={panelId}
+          locale={locale}
+          surah={ayah.surah}
+          ayah={ayah.ayah}
+          found={explained}
+          works={layers.tafsirWorks}
+          t={t}
+        />
+      )}
     </li>
   );
 }
@@ -2338,6 +2428,7 @@ export async function AyahPage({
           .then(playableSegments),
   ]);
   const { choice } = context;
+  const explained = layers.explained.get(ref.ayah) ?? null;
   const segment = segmentCovering(segments, ref);
   const before = previousAyah(ref, previousSurah?.ayahCount ?? null);
   const after = nextAyah(ref, surah.ayahCount, nextSurah !== null);
@@ -2510,6 +2601,20 @@ export async function AyahPage({
               ))
             )}
           </section>
+        )}
+
+        {/* Quran Part 8: everything that explains this Ayah, in the open. */}
+        {explained === null ? null : (
+          <TafsirPanel
+            id="ayah-explained"
+            locale={locale}
+            surah={ref.surah}
+            ayah={ref.ayah}
+            found={explained}
+            works={layers.tafsirWorks}
+            t={t}
+            visible
+          />
         )}
 
         <ListenSection

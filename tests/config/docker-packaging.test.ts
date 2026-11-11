@@ -809,6 +809,8 @@ describe('Phase 28 — the operations image is a tool, never a service', () => {
       'scripts/identity/host-step-up.ts',
       // The staging host review of a completed run (Rebaseline R2).
       'scripts/review/review-runtime.ts',
+      // Quran Part 8: Quran passages proposed from titles (tafsir-passages.sh).
+      'scripts/quran/tafsir-passages-runtime.ts',
     ];
     while (queue.length > 0) {
       const file = queue.pop()!;
@@ -842,7 +844,7 @@ describe('Phase 28 — the operations image is a tool, never a service', () => {
         ).toBe(true);
     for (const entry of copied)
       expect(entry, 'the operations image copies only what the tooling loads').toMatch(
-        /^apps\/web\/src\/(?:composition\/migration-(?:runner|wiring|targets|target-router|target-support|library-targets|editorial-targets|global-targets|people-targets|collection-targets)\.ts|composition\/collection-member-owners\.ts|composition\/storage\.ts|composition\/quran-reference-runner\.ts|composition\/storage-derivatives-backfill\.ts|composition\/staging-demo-runner\.ts|composition\/staging-step-up-runner\.ts|composition\/staging-review-runner\.ts|contexts\/[a-z-]+|composition\/)$/u,
+        /^apps\/web\/src\/(?:composition\/migration-(?:runner|wiring|targets|target-router|target-support|library-targets|editorial-targets|global-targets|people-targets|collection-targets)\.ts|composition\/collection-member-owners\.ts|composition\/storage\.ts|composition\/quran-reference-runner\.ts|composition\/storage-derivatives-backfill\.ts|composition\/staging-demo-runner\.ts|composition\/staging-step-up-runner\.ts|composition\/staging-review-runner\.ts|composition\/tafsir-passages-runner\.ts|contexts\/[a-z-]+|composition\/)$/u,
       );
     expect(ops).not.toMatch(/apps\/web\/src\/(?:app|components|i18n|config)\b/u);
   });

@@ -102,9 +102,16 @@ export function VideoPlayer({
   labels,
   backdrop = null,
   badge = null,
+  start = null,
 }: {
   readonly provider: VideoProvider;
   readonly providerVideoId: string;
+  /**
+   * Quran Part 8: where the press begins playback, in seconds — a lecture
+   * opened at the passage a visitor chose. The contract derives the address;
+   * an out-of-range value is ignored there.
+   */
+  readonly start?: number | null;
   readonly labels: VideoPlayerLabels;
   /**
    * The stage's picture — the Video's FIRST-PARTY poster, rendered by the
@@ -135,7 +142,7 @@ export function VideoPlayer({
         {playing ? (
           <iframe
             ref={frame}
-            src={providerPlaybackUrl(provider, providerVideoId)}
+            src={providerPlaybackUrl(provider, providerVideoId, start)}
             title={labels.frameTitle}
             className="absolute inset-0 size-full"
             allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
@@ -174,7 +181,7 @@ export function VideoPlayer({
       <p className="text-caption flex flex-wrap items-baseline gap-x-3 gap-y-1 text-foreground-muted">
         <span>{labels.disclosure}</span>
         <a
-          href={providerWatchUrl(provider, providerVideoId)}
+          href={providerWatchUrl(provider, providerVideoId, start)}
           rel="noopener noreferrer"
           className="inline-flex min-h-11 items-center gap-1 font-semibold text-action underline-offset-4 hover:underline sm:min-h-0"
         >

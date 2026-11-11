@@ -1,4 +1,4 @@
-import { open, stat } from 'node:fs/promises';
+import { open, readFile, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import path from 'node:path';
@@ -38,6 +38,12 @@ import {
   type ReadSkip,
   type TimingSkip,
 } from './mp3quran.ts';
+import {
+  NARRATION_ALIGNMENT_REFERENCE,
+  NarrationTimingRefusal,
+  readNarrationTiming,
+  type NarrationTiming,
+} from './narration-timing.ts';
 import { memberBytes, verifyMember, zipMembers, type ZipMember } from './zip-archive.ts';
 
 /**
@@ -76,6 +82,17 @@ import { memberBytes, verifyMember, zipMembers, type ZipMember } from './zip-arc
  *     Surah, untimed. The narrator, Tasleem Ahmed Sabri, is a People Person
  *     with no invented biography. The audio is never altered.
  *
+ *   narration-timing --operator <id> --source <sourceId> --file <json> --sha256 <hex>
+ *     (Quran translation audio) Re-checks the alignment file's digest, reads
+ *     it whole against the corpus (`./narration-timing.ts`: every accepted
+ *     Surah's every Ayah, passages partitioning it, an Urdu span on each
+ *     passage's end — or the whole file is refused), and records, for each
+ *     accepted Surah's stored narration segment, its per-Ayah timing, its
+ *     alignment (the provenance source handed in, and the timed recitation the
+ *     Arabic matched) and its translation spans, in one transaction per Surah.
+ *     Nothing is adjusted; a Surah already aligned is kept, one without its
+ *     stored file is skipped and reported. People is not touched.
+ *
  * The final stdout line is one JSON object of identifiers and counts: no text,
  * no URL, no credential.
  */
@@ -83,7 +100,8 @@ import { memberBytes, verifyMember, zipMembers, type ZipMember } from './zip-arc
 const USAGE =
   'recitations-runtime mp3quran --operator <id> --source <id> | ' +
   'irfan-download --dir <directory> | ' +
-  'irfan-urdu --operator <id> --source <id> --zip <file> --sha256 <hex>';
+  'irfan-urdu --operator <id> --source <id> --zip <file> --sha256 <hex> | ' +
+  'narration-timing --operator <id> --source <id> --file <json> --sha256 <hex>';
 
 const SOURCE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ACCOUNT_ID = /^[A-Za-z0-9_-]{8,36}$/;
@@ -487,6 +505,8 @@ export const IRFAN_NARRATION = Object.freeze({
   host: 'minhaj.net',
   bytes: 687_598_353,
   file: 'Quran_mp3.zip',
+  /** The owner-attested digest of that archive (2026-11-06). */
+  sha256: 'd96ea7531a32489870c5db00f463d95b2d95c080884d5b50577f9b3ca0fb8e4a',
   slug: 'irfan-ul-quran-urdu-narration',
   name: 'Irfan-ul-Quran, Urdu narration',
   attribution: 'Irfan-ul-Quran, Urdu narration — Minhaj-ul-Quran International',
@@ -680,6 +700,142 @@ export async function importIrfanNarration(
 }
 
 /* ===========================================================================
+ * The narration's alignment — Quran translation audio
+ * ========================================================================= */
+
+type AlignmentSkip = 'no-segment' | 'no-audio' | 'timed-otherwise' | 'refused';
+
+export async function importNarrationTiming(
+  runner: QuranReferenceRunner,
+  input: {
+    readonly operator: string;
+    readonly source: string;
+    readonly file: string;
+    readonly sha256: string;
+  },
+): Promise<Record<string, unknown>> {
+  const actor = { accountId: input.operator };
+  await requireAuthority(runner, input.operator, false);
+  const bytes = await readFile(input.file);
+  if (createHash('sha256').update(bytes).digest('hex') !== input.sha256)
+    throw new CommandError(
+      'the alignment file is not the one recorded; nothing was changed',
+    );
+  let body: unknown;
+  try {
+    body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+  } catch {
+    throw new CommandError('the alignment file is not JSON; nothing was changed');
+  }
+  const surahs = await corpusSurahs(runner, actor);
+  let timing: NarrationTiming;
+  try {
+    timing = readNarrationTiming(
+      body,
+      new Map([...surahs].map(([number, surah]) => [number, surah.ayahCount])),
+      IRFAN_NARRATION,
+    );
+  } catch (error) {
+    if (error instanceof NarrationTimingRefusal)
+      throw new CommandError(`${error.message}; nothing was changed`);
+    throw error;
+  }
+
+  // The narration as the Irfan import stored it, and the timed recording its
+  // Arabic was matched against as the mp3quran import recorded it — each
+  // exactly that one, or nothing is changed.
+  const narration = await recitationBySlug(runner, actor, IRFAN_NARRATION.slug);
+  if (narration === null || narration.stream !== null || narration.languageCode !== 'ur')
+    throw new CommandError(
+      'the narration is not recorded; import it first. Nothing was changed',
+    );
+  const reference = await recitationBySlug(
+    runner,
+    actor,
+    NARRATION_ALIGNMENT_REFERENCE.slug,
+  );
+  if (
+    reference === null ||
+    reference.stream?.path !== NARRATION_ALIGNMENT_REFERENCE.folder ||
+    reference.languageCode !== 'ar'
+  )
+    throw new CommandError(
+      'the reference recitation is not recorded; import the mp3quran recitations first. Nothing was changed',
+    );
+
+  let detail = await quran(runner.quran.recitation(actor, narration.id));
+  if (detail === null) throw new CommandError('the recitation vanished mid-import');
+  const report = {
+    aligned: 0,
+    kept: 0,
+    skipped: [] as { surah: number; reason: AlignmentSkip }[],
+  };
+  for (const entry of timing.surahs) {
+    const ayahCount = surahs.get(entry.surah)?.ayahCount ?? 0;
+    const segment = detail.segments.find((held) => held.surah === entry.surah);
+    if (
+      segment === undefined ||
+      segment.startAyah !== 1 ||
+      segment.endAyah !== ayahCount
+    ) {
+      report.skipped.push({ surah: entry.surah, reason: 'no-segment' });
+      continue;
+    }
+    if (
+      segment.timedAyat === ayahCount &&
+      segment.translationSpans === entry.spans.length
+    ) {
+      report.kept += 1;
+      continue;
+    }
+    if (segment.timedAyat !== 0 || segment.translationSpans !== 0) {
+      report.skipped.push({ surah: entry.surah, reason: 'timed-otherwise' });
+      continue;
+    }
+    if (segment.assetId === null) {
+      report.skipped.push({ surah: entry.surah, reason: 'no-audio' });
+      continue;
+    }
+    try {
+      detail = await runner.quran.alignRecitationSegment(actor, {
+        id: detail.id,
+        expectedVersion: detail.version,
+        value: {
+          segmentId: segment.id,
+          sourceId: input.source,
+          referenceRecitationId: reference.id,
+          timings: [...entry.timings],
+          spans: [...entry.spans],
+        },
+      });
+      report.aligned += 1;
+    } catch (error) {
+      const reason = refusalOf(error);
+      if (reason === null) throw error;
+      if (reason === 'denied')
+        throw new CommandError('the operator does not hold quran.administer');
+      report.skipped.push({ surah: entry.surah, reason: 'refused' });
+      const refreshed: RecitationDetail | null = await quran(
+        runner.quran.recitation(actor, detail.id),
+      );
+      if (refreshed === null)
+        throw new CommandError('the recitation vanished mid-import');
+      detail = refreshed;
+    }
+  }
+  return {
+    mode: 'narration-timing',
+    recitationId: detail.id,
+    referenceId: reference.id,
+    surahs: timing.surahs.length,
+    rejected: timing.rejected.length,
+    ayat: timing.surahs.reduce((total, entry) => total + entry.timings.length, 0),
+    passages: timing.surahs.reduce((total, entry) => total + entry.spans.length, 0),
+    ...report,
+  };
+}
+
+/* ===========================================================================
  * Entry
  * ========================================================================= */
 
@@ -704,6 +860,13 @@ if (
         operator: identifier('--operator', ACCOUNT_ID),
         source: identifier('--source', SOURCE_ID),
         zip: required('--zip', USAGE),
+        sha256: identifier('--sha256', SHA256),
+      });
+    if (mode === 'narration-timing')
+      return importNarrationTiming(runner, {
+        operator: identifier('--operator', ACCOUNT_ID),
+        source: identifier('--source', SOURCE_ID),
+        file: required('--file', USAGE),
         sha256: identifier('--sha256', SHA256),
       });
     throw new CommandError(`usage: ${USAGE}`);

@@ -1216,10 +1216,25 @@ try {
     'a Work is linked to where it can be bought',
   );
 
+  // Quran Part 8: a Work's Quran passages are a set like its topics —
+  // written by the runtime, never re-pointed.
+  await expectAllowed(
+    app,
+    'WorkQuranPassage INSERT',
+    `INSERT INTO [dbo].[WorkQuranPassage] ([workId],[position],[surahNumber],[ayahFrom],[ayahTo]) VALUES (N'${libraryWorkId}',0,18,1,10);`,
+    'a Work records the Quran passages it explains',
+  );
+  await expectDenied(
+    app,
+    'WorkQuranPassage UPDATE denied',
+    'UPDATE [dbo].[WorkQuranPassage] SET [ayahTo]=[ayahTo];',
+  );
+
   // The replacement half of "replaced wholesale": each set must be removable,
   // in dependency order, so the save path is not relying on an UPDATE it does
   // not hold.
   for (const [table, where] of [
+    ['WorkQuranPassage', `[workId]=N'${libraryWorkId}'`],
     ['BookTranslator', `[editionId]=N'${libraryEditionId}'`],
     ['BookTranslation', `[editionId]=N'${libraryEditionId}'`],
     ['WorkSalePoint', `[workId]=N'${libraryWorkId}'`],
@@ -1564,11 +1579,17 @@ try {
       'SearchIndexRequest INSERT (video scope)',
       `INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'video',N'${firstVideoId}');`,
     ],
+    // Quran Part 8: a lecture's Quran passages, with where it begins one.
+    [
+      'VideoQuranPassage INSERT',
+      `INSERT INTO [dbo].[VideoQuranPassage] ([videoId],[position],[surahNumber],[ayahFrom],[ayahTo],[startSeconds]) VALUES (N'${firstVideoId}',0,2,255,255,754);`,
+    ],
   ] as const) {
     await expectAllowed(app, label, statement, 'the save path writes its own rows');
   }
 
   for (const [table, where] of [
+    ['VideoQuranPassage', `[videoId]=N'${firstVideoId}'`],
     ['PlaylistVideo', `[playlistId]=N'${playlistId}'`],
     ['VideoTopic', `[videoId]=N'${firstVideoId}'`],
     ['VideoSpeaker', `[videoId]=N'${firstVideoId}'`],
@@ -1607,7 +1628,12 @@ try {
       `ALTER TABLE [dbo].[${table}] DROP CONSTRAINT [${table}_state_ck];`,
     );
   }
-  for (const table of ['VideoSpeaker', 'VideoTopic', 'PlaylistVideo']) {
+  for (const table of [
+    'VideoSpeaker',
+    'VideoTopic',
+    'PlaylistVideo',
+    'VideoQuranPassage',
+  ]) {
     await expectDenied(
       app,
       `${table} UPDATE denied`,
@@ -3802,6 +3828,15 @@ try {
       'QuranTranslationNote UPDATE denied',
       'UPDATE [dbo].[QuranTranslationNote] SET [text]=[text];',
     ],
+    // Quran translation audio: an alignment and its spans are written once.
+    [
+      'QuranRecitationAlignment UPDATE denied',
+      'UPDATE [dbo].[QuranRecitationAlignment] SET [sourceId]=[sourceId];',
+    ],
+    [
+      'QuranRecitationTranslationSpan UPDATE denied',
+      'UPDATE [dbo].[QuranRecitationTranslationSpan] SET [endMs]=[endMs];',
+    ],
     // A text is never re-parented: moving a published work's last text to
     // another work would empty it as surely as deleting it.
     [
@@ -3866,6 +3901,8 @@ try {
     'QuranRecitation',
     'QuranRecitationSegment',
     'QuranRecitationTiming',
+    'QuranRecitationAlignment',
+    'QuranRecitationTranslationSpan',
     'QuranTajweedRule',
     'QuranTajweedRuleText',
     'QuranTopic',
@@ -3912,6 +3949,9 @@ try {
     QuranTafsirContributor: ['DELETE,INSERT,SELECT', ''],
     QuranRecitationSegment: ['DELETE,INSERT,SELECT', 'assetId'],
     QuranRecitationTiming: ['DELETE,INSERT,SELECT', ''],
+    // Quran translation audio: inserted with the segment's timing, removed whole.
+    QuranRecitationAlignment: ['DELETE,INSERT,SELECT', ''],
+    QuranRecitationTranslationSpan: ['DELETE,INSERT,SELECT', ''],
     QuranTranslationNote: ['DELETE,INSERT,SELECT', ''],
     QuranTopic: ['DELETE,INSERT,SELECT', ''],
     // Quran Part 7: a gloss's identity — its work, Ayah and word — is fixed.

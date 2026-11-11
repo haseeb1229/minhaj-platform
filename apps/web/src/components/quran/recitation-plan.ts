@@ -18,6 +18,13 @@ import { recitationAssetPath } from './presentation';
  * route's three identifiers, or an allowlisted stream and its Surah
  * (`recitationStreamUrl` refuses any other) — so no response field can point
  * the player anywhere else.
+ *
+ * TRANSLATION AUDIO (owner request 2026-11-10). An aligned narration's segments
+ * also say where each PASSAGE's translation is heard. With "translation after
+ * each passage" on, the chosen qari recites a passage's ayat, the narration's
+ * span for that passage plays, and the qari carries on — the passages are the
+ * narration's, the Arabic the qari's, so any timed qari can be followed by it.
+ * The rules for when a translation plays are here, with every other rule.
  */
 
 /**
@@ -50,6 +57,9 @@ export function audioSource(audio: SegmentAudio): string {
 /** `[ayah, startMs, endMs]` — one Ayah's span, as the data route sends it. */
 export type TimingTuple = readonly [number, number, number];
 
+/** `[startAyah, endAyah, startMs, endMs]` — one passage's translation, as the data route sends it. */
+export type SpanTuple = readonly [number, number, number, number];
+
 /** One segment as the player holds it: its range, audio and timing, if any. */
 export interface PlayableSegment {
   readonly id: string;
@@ -59,6 +69,11 @@ export interface PlayableSegment {
   readonly audio: SegmentAudio;
   /** Every Ayah of the range in order, or `null` when the segment is untimed. */
   readonly timings: readonly TimingTuple[] | null;
+  /**
+   * An aligned narration's passages, partitioning the range, each with where
+   * its translation is heard in this segment's audio — or `null`.
+   */
+  readonly translation: readonly SpanTuple[] | null;
 }
 
 /** One recitation's audio for one Surah. */
@@ -126,7 +141,64 @@ function readSegment(entry: unknown, surah: number): PlayableSegment | null {
   }
   const readTimings = readTimingList(timings, startAyah, endAyah);
   if (readTimings === undefined) return null;
-  return { id, surah, startAyah, endAyah, audio: readAudio, timings: readTimings };
+  // A translation that does not hold together is set aside, never half-used:
+  // the segment still plays, as recited.
+  const translation =
+    readTimings === null
+      ? null
+      : (readSpanList(value['translation'], startAyah, endAyah, readTimings) ?? null);
+  return {
+    id,
+    surah,
+    startAyah,
+    endAyah,
+    audio: readAudio,
+    timings: readTimings,
+    translation,
+  };
+}
+
+/**
+ * The passages as tuples partitioning the range in order, each translation
+ * after its passage's last Ayah's Arabic and before the next Ayah's — `null`
+ * when none is sent, `undefined` when what is sent does not hold together.
+ */
+function readSpanList(
+  value: unknown,
+  startAyah: number,
+  endAyah: number,
+  timings: readonly TimingTuple[],
+): readonly SpanTuple[] | null | undefined {
+  if (value === null || value === undefined) return null;
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.length > endAyah - startAyah + 1
+  )
+    return undefined;
+  const out: SpanTuple[] = [];
+  let next = startAyah;
+  for (const tuple of value) {
+    if (!Array.isArray(tuple) || tuple.length !== 4) return undefined;
+    const [from, to, start, end] = tuple as unknown[];
+    if (
+      from !== next ||
+      !count(to, 999) ||
+      to < from ||
+      to > endAyah ||
+      !count(start, 43_200_000) ||
+      !count(end, 43_200_000) ||
+      end <= start
+    )
+      return undefined;
+    const last = timings[to - startAyah];
+    const following = timings[to + 1 - startAyah];
+    if (last === undefined || start < last[2]) return undefined;
+    if (following !== undefined && end > following[1]) return undefined;
+    out.push([from, to, start, end]);
+    next = to + 1;
+  }
+  return next === endAyah + 1 ? out : undefined;
 }
 
 function readSegmentAudio(value: unknown, surah: number): SegmentAudio | null {
@@ -269,7 +341,86 @@ export function timingFits(segment: PlayableSegment, durationMs: number): boolea
 
 /** The segment with its timing set aside — what plays when the timing does not fit. */
 export function untimed(segment: PlayableSegment): PlayableSegment {
-  return { ...segment, timings: null };
+  return { ...segment, timings: null, translation: null };
+}
+
+/* ===========================================================================
+ * Translation audio
+ * ========================================================================= */
+
+/** One passage's translation, and the audio it is heard in. */
+export interface TranslationPassage {
+  readonly from: number;
+  readonly to: number;
+  readonly startMs: number;
+  readonly endMs: number;
+  readonly audio: SegmentAudio;
+}
+
+/** A narration's passages for one Surah, in order, from its aligned segments. */
+export function passagesOf(audio: SurahAudio): readonly TranslationPassage[] {
+  return audio.segments.flatMap((segment) =>
+    (segment.translation ?? []).map(([from, to, startMs, endMs]) => ({
+      from,
+      to,
+      startMs,
+      endMs,
+      audio: segment.audio,
+    })),
+  );
+}
+
+/**
+ * DOES THE TRANSLATION FIT ITS FILE? As with a timing: one that runs past the
+ * narration file's duration describes some other recording, and is not played.
+ */
+export function passageFits(passage: TranslationPassage, durationMs: number): boolean {
+  return !(durationMs > 0) || passage.endMs <= durationMs + DURATION_TOLERANCE_MS;
+}
+
+/**
+ * The passage whose translation follows `ayah` in this segment, or null. A
+ * passage is translated only when it lies WHOLLY in the segment being heard
+ * and, while a range of this Surah is set, wholly inside that range: a range
+ * that cuts a passage plays its ayat recited, without that passage's
+ * translation (DOMAIN_MODEL.md §8.5).
+ */
+export function passageEndingAt(
+  plan: PlayPlan,
+  segment: PlayableSegment,
+  passages: readonly TranslationPassage[],
+  ayah: number,
+): TranslationPassage | null {
+  if (!plan.translation) return null;
+  const passage = passages.find((entry) => entry.to === ayah);
+  if (passage === undefined) return null;
+  if (passage.from < segment.startAyah || passage.to > segment.endAyah) return null;
+  const range = plan.range;
+  if (
+    range !== null &&
+    range.surah === segment.surah &&
+    (passage.from < range.from || passage.to > range.to)
+  )
+    return null;
+  return passage;
+}
+
+/**
+ * Whether the translation can be offered for a Surah: a recitation of the
+ * Arabic is chosen, a narration with translation spans exists, and it covers
+ * this Surah. The narration itself already speaks its translation.
+ */
+export type TranslationOffer = 'offered' | 'not-this-surah' | 'narration-chosen' | 'none';
+
+export function translationOffer(
+  chosen: { readonly languageCode: string | null } | undefined,
+  source: { readonly translatedSurahs: readonly number[] } | undefined,
+  surah: number | null,
+): TranslationOffer {
+  if (source === undefined || chosen === undefined) return 'none';
+  if (chosen.languageCode !== 'ar') return 'narration-chosen';
+  if (surah !== null && !source.translatedSurahs.includes(surah)) return 'not-this-surah';
+  return 'offered';
 }
 
 /** Each timed Ayah's start as a fraction of the duration, for the seek bar's ticks. */
@@ -300,7 +451,8 @@ export const REPEAT_MAX = 10;
 /**
  * What the listener asked for. `repeat` is how many times EACH Ayah is heard
  * (1 = once). A `range` loops `from`–`to` of one Surah `times` times (`0` =
- * until stopped), then stops.
+ * until stopped), then stops. `translation` plays each passage's translation
+ * after its last Ayah has been heard (its repeats included), once.
  */
 export interface PlayPlan {
   readonly repeat: number;
@@ -312,9 +464,16 @@ export interface PlayPlan {
   } | null;
   /** Carry on into the next segment and the next Surah. */
   readonly continuous: boolean;
+  /** Hear each passage's translation after it, where one is offered. */
+  readonly translation: boolean;
 }
 
-export const DEFAULT_PLAN: PlayPlan = { repeat: 1, range: null, continuous: true };
+export const DEFAULT_PLAN: PlayPlan = {
+  repeat: 1,
+  range: null,
+  continuous: true,
+  translation: false,
+};
 
 /** Where playback is, in plan terms. */
 export interface Cursor {
@@ -325,6 +484,8 @@ export interface Cursor {
   readonly heard: number;
   /** How many passes of the range are complete. */
   readonly passes: number;
+  /** The current Ayah's passage translation has been heard in this pass. */
+  readonly translated: boolean;
 }
 
 export type Decision =
@@ -333,7 +494,17 @@ export type Decision =
   /** Jump within the segment (a repeat, or the range again). */
   | { readonly kind: 'seek'; readonly ms: number; readonly cursor: Cursor }
   /** The plan is complete: pause where it ended. */
-  | { readonly kind: 'stop'; readonly cursor: Cursor };
+  | { readonly kind: 'stop'; readonly cursor: Cursor }
+  /**
+   * Hear this passage's translation, then carry on from `resumeMs` in this
+   * segment — the end of the passage's last Ayah.
+   */
+  | {
+      readonly kind: 'translate';
+      readonly passage: TranslationPassage;
+      readonly resumeMs: number;
+      readonly cursor: Cursor;
+    };
 
 /**
  * A TICK: the audio reports its position; this answers what to do. Only a
@@ -341,14 +512,17 @@ export type Decision =
  * end, where `afterSegment` decides.
  *
  * An Ayah is HEARD IN FULL when the position reaches its end. Then, in order:
- * a pending repeat goes back to its start; the end of a range either loops the
- * range or stops; otherwise the next Ayah becomes current when it begins.
+ * a pending repeat goes back to its start; a passage ending here has its
+ * translation heard (`passageEndingAt`), once; the end of a range either
+ * loops the range or stops; otherwise the next Ayah becomes current when it
+ * begins.
  */
 export function tick(
   plan: PlayPlan,
   segment: PlayableSegment,
   cursor: Cursor,
   ms: number,
+  passages: readonly TranslationPassage[] = [],
 ): Decision {
   const heardNow = ayahAt(segment, ms);
   if (segment.timings === null)
@@ -374,7 +548,7 @@ export function tick(
   ) {
     return {
       kind: 'continue',
-      cursor: { ...cursor, ayah: heardNow, heard: 0 },
+      cursor: { ...cursor, ayah: heardNow, heard: 0, translated: false },
     };
   }
 
@@ -386,24 +560,39 @@ export function tick(
   if (heard < repeat)
     return { kind: 'seek', ms: span.startMs, cursor: { ...cursor, heard } };
 
+  // A passage ends here: its translation, once, before anything moves on.
+  if (!cursor.translated) {
+    const passage = passageEndingAt(plan, segment, passages, current);
+    if (passage !== null)
+      return {
+        kind: 'translate',
+        passage,
+        resumeMs: span.endMs,
+        cursor: { ...cursor, heard: heard - 1, translated: true },
+      };
+  }
+
   const range = plan.range;
   if (range !== null && range.surah === segment.surah && current === range.to) {
     const passes = cursor.passes + 1;
     if (range.times !== 0 && passes >= range.times)
-      return { kind: 'stop', cursor: { ...cursor, heard: 0, passes } };
+      return { kind: 'stop', cursor: { ...cursor, heard: 0, passes, translated: false } };
     const from = spanOf(segment, range.from);
     if (from !== null)
       return {
         kind: 'seek',
         ms: from.startMs,
-        cursor: { ...cursor, ayah: range.from, heard: 0, passes },
+        cursor: { ...cursor, ayah: range.from, heard: 0, passes, translated: false },
       };
   }
 
   // On to the next Ayah once it has begun; a pause between them keeps the
   // highlight on the one just heard.
   if (heardNow !== current)
-    return { kind: 'continue', cursor: { ...cursor, ayah: heardNow, heard: 0 } };
+    return {
+      kind: 'continue',
+      cursor: { ...cursor, ayah: heardNow, heard: 0, translated: false },
+    };
   return { kind: 'continue', cursor: { ...cursor, heard: heard - 1 } };
 }
 

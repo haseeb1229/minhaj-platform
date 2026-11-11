@@ -10,6 +10,7 @@ import {
   quranLayerStateSchema,
   quranRefSchema,
   quranVersionSchema,
+  recitationAlignmentInputSchema,
   recitationInputSchema,
   recitationSegmentInputSchema,
   recitationStreamSchema,
@@ -19,7 +20,9 @@ import {
   tafsirInputSchema,
   tajweedRuleInputSchema,
   tieTranslationNotes,
+  timingProblem,
   translationInputSchema,
+  translationSpanProblem,
   translationTextSaveSchema,
   transliterationInputSchema,
   wordByWordInputSchema,
@@ -146,6 +149,7 @@ const streamedRecitationCreate = z.strictObject({
 });
 const recitationEdit = versioned(recitationInputSchema);
 const segmentAddition = versioned(recitationSegmentInputSchema);
+const segmentAlignment = versioned(recitationAlignmentInputSchema);
 const tajweedCreate = creation(tajweedRuleInputSchema);
 const tajweedEdit = versioned(tajweedRuleInputSchema);
 
@@ -664,6 +668,40 @@ export function createQuranService(deps: {
       await administer(actor);
       const removal = parse(segmentRemoval, input);
       return run(store.removeRecitationSegment({ actorId: actor.accountId, ...removal }));
+    },
+
+    /**
+     * A NARRATION SEGMENT ALIGNED (Quran translation audio) — only by the
+     * operator's import, under `quran.administer`. The timing must cover the
+     * stored segment's range exactly (`timingProblem`) and the translation
+     * spans must partition it, each after its passage's Arabic and before the
+     * next Ayah's (`translationSpanProblem`); the database judges the same
+     * again, with what only it can see — a first-party narration with its
+     * file, an untimed segment, a reference source, an Arabic reference.
+     */
+    async alignRecitationSegment(actor: QuranActor, input: In<typeof segmentAlignment>) {
+      await administer(actor);
+      const alignment = parse(segmentAlignment, input);
+      const detail = await run(store.recitation(alignment.id));
+      if (detail === null) throw new QuranRefusal('not-found');
+      if (detail.version !== alignment.expectedVersion)
+        throw new QuranRefusal('conflict');
+      const segment = detail.segments.find(
+        (entry) => entry.id === alignment.value.segmentId,
+      );
+      if (segment === undefined) throw new QuranRefusal('not-found');
+      if (
+        timingProblem(segment, alignment.value.timings) !== null ||
+        translationSpanProblem(
+          segment,
+          alignment.value.timings,
+          alignment.value.spans,
+        ) !== null
+      )
+        throw new QuranRefusal('invalid');
+      return run(
+        store.alignRecitationSegment({ actorId: actor.accountId, ...alignment }),
+      );
     },
 
     /* ---- Tajweed ---------------------------------------------------------- */

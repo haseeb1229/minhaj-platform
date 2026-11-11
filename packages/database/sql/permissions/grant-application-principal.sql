@@ -487,6 +487,8 @@ IF OBJECT_ID(N'[dbo].[SalePoint]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, 
 IF OBJECT_ID(N'[dbo].[WorkLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[WorkLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[WorkLabel] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[WorkContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[WorkContributor] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[WorkContributor] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[WorkTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[WorkTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[WorkTopic] TO [$(app_login)]; END;
+-- Quran Part 8: a Work's Quran passages, replaced as a set under the Work's version.
+IF OBJECT_ID(N'[dbo].[WorkQuranPassage]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[WorkQuranPassage] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[WorkQuranPassage] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[WorkSalePoint]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[WorkSalePoint] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[WorkSalePoint] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[BookTranslator]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[BookTranslator] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[BookTranslator] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[BookTranslation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[BookTranslation] TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[BookTranslation] TO [$(app_login)]; END;
@@ -544,6 +546,8 @@ IF OBJECT_ID(N'[dbo].[Playlist]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, U
 IF OBJECT_ID(N'[dbo].[VideoLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[VideoLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[VideoLabel] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[VideoSpeaker]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[VideoSpeaker] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[VideoSpeaker] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[VideoTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[VideoTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[VideoTopic] TO [$(app_login)]; END;
+-- Quran Part 8: a Video's Quran passages, replaced as a set under the Video's version.
+IF OBJECT_ID(N'[dbo].[VideoQuranPassage]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[VideoQuranPassage] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[VideoQuranPassage] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[SeriesLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[SeriesLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[SeriesLabel] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[PlaylistLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[PlaylistLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[PlaylistLabel] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[PlaylistVideo]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[PlaylistVideo] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[PlaylistVideo] TO [$(app_login)]; END;
@@ -708,6 +712,10 @@ IF OBJECT_ID(N'[dbo].[QuranTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT,
 -- never edited.
 IF COL_LENGTH(N'dbo.QuranRecitation', N'streamPath') IS NOT NULL DENY UPDATE ON OBJECT::[dbo].[QuranRecitation] ([streamProvider], [streamPath]) TO [$(app_login)];
 IF OBJECT_ID(N'[dbo].[QuranRecitationTiming]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranRecitationTiming] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[QuranRecitationTiming] TO [$(app_login)]; END;
+-- Quran translation audio. A narration segment's alignment and translation
+-- spans are inserted once with its timing and removed only with the segment.
+IF OBJECT_ID(N'[dbo].[QuranRecitationAlignment]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranRecitationAlignment] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[QuranRecitationAlignment] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranRecitationTranslationSpan]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranRecitationTranslationSpan] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[QuranRecitationTranslationSpan] TO [$(app_login)]; END;
 -- Quran Part 6. A translation's translator's notes are inserted with its
 -- text's save and replaced whole — never edited in place.
 IF OBJECT_ID(N'[dbo].[QuranTranslationNote]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranTranslationNote] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[QuranTranslationNote] TO [$(app_login)]; END;

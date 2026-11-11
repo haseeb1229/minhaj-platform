@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { localeSchema, type Locale } from '../env/shared.ts';
+import type { TimedQuranPassage } from '../passage/index.ts';
 import {
   isProviderThumbnail,
   parseProviderReference,
@@ -393,8 +394,33 @@ export interface VideoRecord {
   readonly series: VideoSeriesRef | null;
   readonly speakerIds: readonly string[];
   readonly topicIds: readonly string[];
+  /**
+   * Quran Part 8: the Quran passages this lecture explains, in its editor's
+   * order, each with where in the video it begins the passage when recorded —
+   * citation VALUES (`@minhaj/contracts/passage`) owned by Media, with no
+   * reference into Quran (DOMAIN_MODEL.md §11).
+   */
+  readonly quranPassages: readonly TimedQuranPassage[];
   readonly version: number;
   readonly updatedAt: Date;
+}
+
+/**
+ * Quran Part 8: one PUBLISHED Video that explains a Quran passage, as the
+ * Tafsir hub composes it at Layer 4 — identity, address, titles, poster,
+ * duration, speakers and every passage it carries. No provider detail.
+ */
+export interface QuranPassageVideo {
+  readonly id: string;
+  readonly slug: string;
+  readonly primaryLocale: Locale;
+  readonly languageCode: string;
+  readonly labels: readonly MediaLabel[];
+  readonly durationSeconds: number | null;
+  readonly publishedOn: string | null;
+  readonly poster: VideoPoster | null;
+  readonly speakerIds: readonly string[];
+  readonly passages: readonly TimedQuranPassage[];
 }
 
 /**

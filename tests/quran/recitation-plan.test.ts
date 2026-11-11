@@ -11,6 +11,9 @@ import {
   audioSource,
   ayahAt,
   neighbourAyah,
+  passageEndingAt,
+  passageFits,
+  passagesOf,
   playbackRate,
   readSurahAudio,
   recitationGroups,
@@ -21,12 +24,14 @@ import {
   tick,
   ticksOf,
   timingFits,
+  translationOffer,
   untimed,
   type Cursor,
   type PlayPlan,
   type PlayableSegment,
   type SurahAudio,
   type TimingTuple,
+  type TranslationPassage,
 } from '../../apps/web/src/components/quran/recitation-plan.ts';
 
 /**
@@ -68,14 +73,21 @@ function segment(
     endAyah,
     audio: { kind: 'stream', stream: STREAM, surah },
     timings,
+    translation: null,
   };
 }
 
-const cursorAt = (ayah: number | null, heard = 0, passes = 0): Cursor => ({
+const cursorAt = (
+  ayah: number | null,
+  heard = 0,
+  passes = 0,
+  translated = false,
+): Cursor => ({
   surah: 2,
   ayah,
   heard,
   passes,
+  translated,
 });
 
 /* ===========================================================================
@@ -564,5 +576,220 @@ describe('the catalogue is grouped by style and ordered by reciter', () => {
     expect(groups.map((group) => group.style)).toEqual(['a-style', 'b-style']);
     expect(groups[1]?.entries.map((each) => each.name)).toEqual(['First', 'Second']);
     expect(recitationGroups([], 'ur')).toEqual([]);
+  });
+});
+
+/* ===========================================================================
+ * Translation audio: a passage's translation between the qari's passages
+ * ========================================================================= */
+
+describe('a narration’s passages are read with its segment, and set aside when they do not hold', () => {
+  const narration = {
+    id: randomUUID(),
+    startAyah: 1,
+    endAyah: 3,
+    audio: {
+      kind: 'asset',
+      recitationId: randomUUID(),
+      segmentId: randomUUID(),
+      assetId: randomUUID(),
+    },
+    timings: [
+      [1, 0, 1000],
+      [2, 1000, 4000],
+      [3, 6000, 7000],
+    ],
+    translation: [
+      [1, 2, 4000, 6000],
+      [3, 3, 7000, 9000],
+    ],
+  };
+  const body = (segment: unknown) => ({
+    recitation: RECITATION,
+    surah: 2,
+    segments: [segment],
+  });
+  const expected = { recitation: RECITATION, surah: 2 };
+
+  it('reads the passages, and makes each a translation in that segment’s audio', () => {
+    const read = readSurahAudio(body(narration), expected);
+    expect(read?.segments[0]?.translation).toEqual(narration.translation);
+    const passages = read === null ? [] : passagesOf(read);
+    expect(
+      passages.map((each) => [each.from, each.to, each.startMs, each.endMs]),
+    ).toEqual(narration.translation);
+    expect(passages[0]?.audio).toEqual(narration.audio);
+  });
+
+  it.each([
+    ['passages that leave an Ayah out', [[1, 2, 4000, 6000]]],
+    [
+      'passages that overlap',
+      [
+        [1, 2, 4000, 6000],
+        [2, 3, 7000, 9000],
+      ],
+    ],
+    [
+      'a translation inside its passage’s Arabic',
+      [
+        [1, 2, 3999, 6000],
+        [3, 3, 7000, 9000],
+      ],
+    ],
+    [
+      'a translation over the next Ayah',
+      [
+        [1, 2, 4000, 6001],
+        [3, 3, 7000, 9000],
+      ],
+    ],
+    [
+      'an empty translation',
+      [
+        [1, 2, 4000, 4000],
+        [3, 3, 7000, 9000],
+      ],
+    ],
+    ['a malformed list', 'every Ayah'],
+  ])('keeps the segment but sets aside %s', (_label, translation) => {
+    const read = readSurahAudio(body({ ...narration, translation }), expected);
+    expect(read?.segments).toHaveLength(1);
+    expect(read?.segments[0]?.timings).toEqual(narration.timings);
+    expect(read?.segments[0]?.translation).toBeNull();
+  });
+
+  it('reads no translation for an untimed segment, and drops it with a timing set aside', () => {
+    const read = readSurahAudio(body({ ...narration, timings: null }), expected);
+    expect(read?.segments[0]?.translation).toBeNull();
+    const timed = readSurahAudio(body(narration), expected)?.segments[0];
+    expect(timed === undefined ? null : untimed(timed).translation).toBeNull();
+  });
+});
+
+describe('a passage’s translation is heard after its last Ayah', () => {
+  // The qari's Surah 2, ayat 1–4, each a second long after a 2 s opening.
+  const qari = segment(2, 1, 4);
+  const audio = { kind: 'stream', stream: STREAM, surah: 2 } as const;
+  const passage = (from: number, to: number, startMs: number): TranslationPassage => ({
+    from,
+    to,
+    startMs,
+    endMs: startMs + 5000,
+    audio,
+  });
+  // The narration's passages: 1–2, 3 and 4.
+  const passages = [passage(1, 2, 10_000), passage(3, 3, 20_000), passage(4, 4, 30_000)];
+  const on = (overrides: Partial<PlayPlan> = {}): PlayPlan => ({
+    ...DEFAULT_PLAN,
+    translation: true,
+    ...overrides,
+  });
+
+  it('plays the qari through a passage, then its translation, then carries on', () => {
+    // Inside the passage 1–2: Ayah 1 ends, no translation yet.
+    let decision = tick(on(), qari, cursorAt(1), 3000, passages);
+    expect(decision.kind).toBe('continue');
+    decision = tick(on(), qari, decision.cursor, 3010, passages);
+    expect(decision.cursor.ayah).toBe(2);
+    // Ayah 2 ends the passage: its translation, then resume where Ayah 2 ended.
+    decision = tick(on(), qari, decision.cursor, 4000, passages);
+    expect(decision).toEqual({
+      kind: 'translate',
+      passage: passages[0],
+      resumeMs: 4000,
+      cursor: cursorAt(2, 0, 0, true),
+    });
+    // Resumed at the end of Ayah 2: the translation is not heard twice, and the
+    // qari carries on into Ayah 3, whose own passage is translated after it.
+    decision = tick(on(), qari, decision.cursor, 4000, passages);
+    expect(decision.kind).toBe('continue');
+    decision = tick(on(), qari, decision.cursor, 4010, passages);
+    expect(decision.cursor).toEqual(cursorAt(3));
+    decision = tick(on(), qari, decision.cursor, 5000, passages);
+    expect(decision.kind).toBe('translate');
+    expect(decision.kind === 'translate' ? decision.passage.from : null).toBe(3);
+  });
+
+  it('is never heard with the setting off, or with no passages for the Surah', () => {
+    expect(tick(DEFAULT_PLAN, qari, cursorAt(2), 4000, passages).kind).toBe('continue');
+    expect(tick(on(), qari, cursorAt(2), 4000, []).kind).toBe('continue');
+  });
+
+  it('follows the last Ayah of the file as any other end', () => {
+    expect(
+      tick(on(), qari, cursorAt(4), Number.MAX_SAFE_INTEGER, passages),
+    ).toMatchObject({
+      kind: 'translate',
+      passage: passages[2],
+      resumeMs: 6000,
+    });
+    // After it, the end of the file is the end: on to `afterSegment`.
+    expect(
+      tick(on(), qari, cursorAt(4, 0, 0, true), Number.MAX_SAFE_INTEGER, passages).kind,
+    ).toBe('continue');
+  });
+
+  it('comes after every repeat of the passage’s last Ayah, once', () => {
+    const twice = on({ repeat: 2 });
+    let decision = tick(twice, qari, cursorAt(3), 5000, passages);
+    expect(decision).toEqual({ kind: 'seek', ms: 4000, cursor: cursorAt(3, 1) });
+    decision = tick(twice, qari, decision.cursor, 5000, passages);
+    expect(decision).toMatchObject({
+      kind: 'translate',
+      cursor: cursorAt(3, 1, 0, true),
+    });
+    decision = tick(twice, qari, decision.cursor, 5000, passages);
+    expect(decision.kind).toBe('continue');
+  });
+
+  it('within a range, translates only passages wholly inside it — then loops', () => {
+    // Range 2–3 cuts the passage 1–2: Ayah 2 ends with no translation.
+    const range = on({ range: { surah: 2, from: 2, to: 3, times: 2 } });
+    expect(tick(range, qari, cursorAt(2), 4000, passages).kind).toBe('continue');
+    // Ayah 3 is a whole passage inside the range: translated, then the loop.
+    let decision = tick(range, qari, cursorAt(3), 5000, passages);
+    expect(decision).toMatchObject({ kind: 'translate', passage: passages[1] });
+    decision = tick(range, qari, decision.cursor, 5000, passages);
+    expect(decision).toEqual({ kind: 'seek', ms: 3000, cursor: cursorAt(2, 0, 1) });
+    // The second pass translates Ayah 3 again, then the range stops.
+    decision = tick(range, qari, cursorAt(3, 0, 1), 5000, passages);
+    expect(decision.kind).toBe('translate');
+    decision = tick(range, qari, decision.cursor, 5000, passages);
+    expect(decision).toEqual({ kind: 'stop', cursor: cursorAt(3, 0, 2) });
+  });
+
+  it('is not heard for a passage the segment holds only part of', () => {
+    const half = segment(2, 2, 4);
+    expect(passageEndingAt(on(), half, passages, 2)).toBeNull();
+    expect(passageEndingAt(on(), half, passages, 3)).toEqual(passages[1]);
+  });
+
+  it('starts again after the listener moves to another Ayah', () => {
+    const decision = tick(on(), qari, cursorAt(3, 0, 0, true), 2500, passages);
+    expect(decision.cursor).toEqual(cursorAt(1));
+  });
+
+  it('is never played past its file’s end', () => {
+    const tail = passage(1, 2, 10_000);
+    expect(passageFits(tail, 15_000)).toBe(true);
+    expect(passageFits(tail, 15_000 - DURATION_TOLERANCE_MS)).toBe(true);
+    expect(passageFits(tail, 15_000 - DURATION_TOLERANCE_MS - 1)).toBe(false);
+    expect(passageFits(tail, Number.NaN)).toBe(true);
+  });
+});
+
+describe('the translation is offered where it can be heard', () => {
+  const source = { translatedSurahs: [103, 112, 114] };
+  it('for a recitation of the Arabic, in a Surah the narration covers', () => {
+    expect(translationOffer({ languageCode: 'ar' }, source, 112)).toBe('offered');
+    expect(translationOffer({ languageCode: 'ar' }, source, null)).toBe('offered');
+    expect(translationOffer({ languageCode: 'ar' }, source, 2)).toBe('not-this-surah');
+  });
+  it('never for the narration itself, or without a narration', () => {
+    expect(translationOffer({ languageCode: 'ur' }, source, 112)).toBe(
+      'narration-chosen',
+    );
+    expect(translationOffer({ languageCode: 'ar' }, undefined, 112)).toBe('none');
   });
 });

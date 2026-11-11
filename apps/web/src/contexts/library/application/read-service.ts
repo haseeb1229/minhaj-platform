@@ -12,6 +12,7 @@ import {
   type ScholarlyRecordOf,
   type StandaloneScholarlyKind,
 } from '@minhaj/contracts/library';
+import { passageQuerySchema } from '@minhaj/contracts/passage';
 
 /**
  * The PUBLIC Library reads.
@@ -176,6 +177,20 @@ export function createLibraryReadService(reader: LibraryPublicReaderPort) {
     workChoices(text: string | null) {
       const query = z.string().trim().min(1).max(120).safeParse(text);
       return reader.workChoices(query.success ? query.data : null, 25);
+    },
+
+    /**
+     * Quran Part 8 — the public Works that explain a Quran passage, for the
+     * Tafsir hub and the reader composed at Layer 4. A malformed query is
+     * refused here, before any read; Library answers by citation value only.
+     */
+    async quranPassageWorks(raw: unknown) {
+      return reader.quranPassageWorks(passageQuerySchema.parse(raw));
+    },
+
+    /** How many public Works carry a passage in each Surah. */
+    quranPassageCounts() {
+      return reader.quranPassageCounts();
     },
   };
 }
