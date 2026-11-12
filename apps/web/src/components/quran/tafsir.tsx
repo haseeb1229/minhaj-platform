@@ -125,6 +125,14 @@ function SurahTitle({
   );
 }
 
+/**
+ * How many books and lectures each Surah's shelf shows on the hub — one row
+ * at the widest layout; a longer shelf links to that Surah's own Tafsir page,
+ * which lists everything that explains it.
+ */
+const HUB_SHELF_BOOKS = 5;
+const HUB_SHELF_LECTURES = 3;
+
 /** The People credited on a book or lecture, as one plain line. */
 function creditLine(ids: readonly string[], names: Names): string {
   return ids
@@ -615,7 +623,7 @@ export async function TafsirHubPage({
                 </TextLink>
               </h3>
               <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-                {shelf.items.map((book) => (
+                {shelf.items.slice(0, HUB_SHELF_BOOKS).map((book) => (
                   <BookCard
                     key={book.id}
                     locale={locale}
@@ -627,6 +635,13 @@ export async function TafsirHubPage({
                   />
                 ))}
               </ul>
+              {shelf.items.length > HUB_SHELF_BOOKS ? (
+                <p className="text-sm">
+                  <TextLink href={tafsirSurahPath(locale, shelf.surah)}>
+                    {t('tafsirHub.shelfMore', { count: shelf.items.length })}
+                  </TextLink>
+                </p>
+              ) : null}
             </div>
           ))}
         </section>
@@ -655,7 +670,7 @@ export async function TafsirHubPage({
                 </TextLink>
               </h3>
               <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {shelf.items.map((lecture) => (
+                {shelf.items.slice(0, HUB_SHELF_LECTURES).map((lecture) => (
                   <LectureCard
                     key={lecture.id}
                     locale={locale}
@@ -667,6 +682,13 @@ export async function TafsirHubPage({
                   />
                 ))}
               </ul>
+              {shelf.items.length > HUB_SHELF_LECTURES ? (
+                <p className="text-sm">
+                  <TextLink href={tafsirSurahPath(locale, shelf.surah)}>
+                    {t('tafsirHub.shelfMore', { count: shelf.items.length })}
+                  </TextLink>
+                </p>
+              ) : null}
             </div>
           ))}
         </section>

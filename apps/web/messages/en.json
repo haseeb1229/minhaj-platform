@@ -3640,6 +3640,7 @@
       "booksHelp": "Books from the Library, shelved by the first Surah they explain, with the passages they cover.",
       "lecturesHeading": "Tafsir lectures",
       "lecturesHelp": "Minhaj TV lectures, by the first Surah they explain. A lecture opens where it begins the passage, when that is recorded.",
+      "shelfMore": "All {count} on this Surah's Tafsir page",
       "bookType": "Book",
       "lectureType": "Lecture",
       "startsAt": "from {time}",
