@@ -32,7 +32,13 @@ import {
   surahChips,
   type BooksQuery,
 } from './books-view';
-import { ActiveFilters, ExploreFilters, ExploreHero, PassageChips } from './explore';
+import {
+  ActiveFilters,
+  ExploreFilters,
+  ExploreHero,
+  PassageChips,
+  languageName,
+} from './explore';
 import { QuranFrame, quranTrail } from './parts';
 import { quranPath, surahName } from './presentation';
 import { readQuranTopic, readSurahs } from './read';
@@ -64,18 +70,6 @@ const FEATURED = 4;
 
 const LIST_ID = 'quran-books-list';
 const FEATURED_ID = 'quran-books-featured';
-
-/** A content language named in the interface language ("Urdu" on an English page). */
-function languageName(code: string, locale: Locale): string {
-  try {
-    return (
-      new Intl.DisplayNames([locale], { type: 'language', fallback: 'code' }).of(code) ??
-      code
-    );
-  } catch {
-    return code;
-  }
-}
 
 function isRole(role: string): role is ContributionRole {
   return (CONTRIBUTION_ROLES as readonly string[]).includes(role);

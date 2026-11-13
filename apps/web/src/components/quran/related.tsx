@@ -1,4 +1,3 @@
-import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -6,13 +5,11 @@ import { getTranslations } from 'next-intl/server';
 import type { Locale } from '@minhaj/contracts';
 import { LEARNING_PAGE } from '@minhaj/contracts/learning';
 import { SCHOLARLY_PAGE } from '@minhaj/contracts/library';
-import { MEDIA_PAGE } from '@minhaj/contracts/media';
 import type { QuranAvailability } from '@minhaj/contracts/quran';
 import type { TopicView } from '@minhaj/contracts/taxonomy';
 
 import { learningReadRuntime } from '@/composition/learning-read';
 import { libraryReadRuntime } from '@/composition/library-read';
-import { mediaReadRuntime } from '@/composition/media-read';
 import {
   courseBrowseHref,
   courseHref,
@@ -26,24 +23,25 @@ import {
   scholarlyQueryPath,
 } from '@/components/library/scholarly-presentation';
 import { Pagination } from '@/components/media/parts';
-import { mediaLabel, videoPath } from '@/components/media/presentation';
 import { EmptyState, PageHeading, Panel, TextLink } from '@/components/ui';
 import { directionOf } from '@/config/locale';
 import { QuranFrame, quranTrail } from './parts';
 import { offsetPathOf, quranPath } from './presentation';
 
 /**
- * Related material — `/quran/videos`, `/quran/research`, `/quran/courses`
- * (ROUTE_MAP.md §3.3: "related material, canonical to their domain
- * collections"). `/quran/books` was one of these until Quran Part 10 made it
- * the Quran Books hub (`./books.tsx`), canonical to itself.
+ * Related material — `/quran/research`, `/quran/courses` (ROUTE_MAP.md §3.3:
+ * "related material, canonical to their domain collections"). `/quran/books`
+ * and `/quran/videos` were among these until Quran Parts 10 and 11 made them
+ * the Quran Books and Quran Videos hubs (`./books.tsx`, `./videos.tsx`), each
+ * canonical to itself.
  *
  * LAYER-4 COMPOSITION OF THE OWNERS' OWN PUBLIC READS. Each view is ONE bounded,
  * topic-filtered page of the owner's public listing for Taxonomy's `quran`
- * Topic — Library's Research, Media's Videos and, since Phase 22, Learning's
- * published Courses — never the search index and never a Quran read. Quran itself imports none of them; only this presentation layer
- * composes them. Each item links to its owner's canonical address, and the
- * page canonicalises to the owner's collection.
+ * Topic — Library's Research and, since Phase 22, Learning's published Courses
+ * — never the search index and never a Quran read. Quran itself imports none
+ * of them; only this presentation layer composes them. Each item links to its
+ * owner's canonical address, and the page canonicalises to the owner's
+ * collection.
  *
  * WHAT IS ABSENT IS ABSENT. `/quran/articles` has no view because Editorial
  * exposes no public by-topic Article read, and `/quran/teachers` has no
@@ -52,12 +50,10 @@ import { offsetPathOf, quranPath } from './presentation';
  * (ROUTE_MAP.md §5.2).
  */
 
-export const RELATED_KINDS = Object.freeze(['videos', 'research', 'courses'] as const);
-export type RelatedKind = (typeof RELATED_KINDS)[number];
+export type RelatedKind = 'research' | 'courses';
 
 /** The LOCALE-FREE owner collection each related view canonicalises to. */
 export const RELATED_CANONICAL: Readonly<Record<RelatedKind, string>> = Object.freeze({
-  videos: '/watch/videos',
   research: '/library/research',
   courses: '/learn/courses',
 });
@@ -82,23 +78,6 @@ async function relatedPage(
   readonly owner: string;
 }> {
   switch (kind) {
-    case 'videos': {
-      const page = await mediaReadRuntime().videos({ topic: topic.id, offset });
-      return {
-        rows: page.items.map((video) => {
-          const label = mediaLabel(video, locale);
-          return {
-            key: video.id,
-            href: videoPath(locale, video.slug),
-            title: label.title,
-            locale: label.locale,
-          };
-        }),
-        hasMore: page.hasMore,
-        size: MEDIA_PAGE,
-        owner: localizedPath(locale, `/watch/topics/${encodeURIComponent(topic.slug)}`),
-      };
-    }
     case 'research': {
       const page = await libraryReadRuntime().scholarlyList('research', {
         topic: topic.id,

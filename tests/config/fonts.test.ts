@@ -161,6 +161,9 @@ describe('the shipped typefaces', () => {
       'apps/web/src/components/quran/tafsir.tsx',
       // Quran Part 6: a Surah's Arabic name on the translations pages.
       'apps/web/src/components/quran/translations.tsx',
+      // Quran Part 11: a Surah's Arabic name in the Videos hub's "Lectures by
+      // Surah".
+      'apps/web/src/components/quran/videos.tsx',
     ]);
   });
 

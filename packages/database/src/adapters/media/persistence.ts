@@ -2,12 +2,13 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import type { Locale } from '@minhaj/contracts';
 import {
   MEDIA_FACET_PAGE,
   MEDIA_PAGE,
+  QURAN_VIDEO_LENGTHS,
   type MediaPersistencePort,
   type MediaPublicReaderPort,
   type MediaState,
@@ -26,6 +27,9 @@ import {
   type VideoRecord,
   type VideoValue,
   type QuranPassageVideo,
+  type QuranVideo,
+  type QuranVideoLength,
+  type QuranVideosQuery,
 } from '@minhaj/contracts/media';
 import {
   canonicalPassageOrder,
@@ -252,7 +256,9 @@ interface GroupRow {
 }
 
 /** The poster as a value, or null — the CHECK keeps the three columns together. */
-function posterOf(row: ListingRow): VideoPoster | null {
+function posterOf(
+  row: Pick<ListingRow, 'posterAssetId' | 'posterWidth' | 'posterHeight'>,
+): VideoPoster | null {
   if (row.posterAssetId === null || row.posterWidth === null || row.posterHeight === null)
     return null;
   return { assetId: row.posterAssetId, width: row.posterWidth, height: row.posterHeight };
@@ -933,12 +939,369 @@ const REFERENCE_SELECT = {
   labels: { select: { locale: true, title: true }, orderBy: { locale: 'asc' as const } },
 } satisfies Prisma.VideoSelect;
 
+/* ---- Quran Part 11: the Quran Videos hub ---------------------------------- */
+
+/** Which of the query's filters a statement applies. */
+interface QuranVideosFilters {
+  readonly scope: boolean;
+  readonly language: boolean;
+  readonly speaker: boolean;
+  readonly series: boolean;
+  readonly length: boolean;
+  readonly featured: boolean;
+}
+
+const ALL_QURAN_VIDEO_FILTERS: QuranVideosFilters = {
+  scope: true,
+  language: true,
+  speaker: true,
+  series: true,
+  length: true,
+  featured: true,
+};
+const NO_QURAN_VIDEO_FILTERS: QuranVideosFilters = {
+  scope: false,
+  language: false,
+  speaker: false,
+  series: false,
+  length: false,
+  featured: false,
+};
+
+/** "Explains a passage", as SQL over `[dbo].[Video] v`. */
+const CARRIES_PASSAGE = Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[VideoQuranPassage] m WHERE m.[videoId] = v.[id])`;
+
+/**
+ * THE QURAN VIDEOS SET, as SQL over `[dbo].[Video] v`: the ONE public predicate
+ * (published), membership (on the Topic, or carrying a passage), and whichever
+ * of the query's filters `use` names — a Series only while it is itself
+ * published, a length by the contract's bands. Every value is a bound
+ * parameter.
+ */
+function quranVideosWhere(q: QuranVideosQuery, use: QuranVideosFilters): Prisma.Sql {
+  const conditions = [
+    Prisma.sql`v.[state] = N'published'`,
+    q.topic === null
+      ? CARRIES_PASSAGE
+      : Prisma.sql`(EXISTS (SELECT 1 FROM [dbo].[VideoTopic] o WHERE o.[videoId] = v.[id] AND o.[topicId] = ${q.topic}) OR ${CARRIES_PASSAGE})`,
+  ];
+  if (use.scope) {
+    if (q.surah !== null)
+      conditions.push(
+        Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[VideoQuranPassage] s WHERE s.[videoId] = v.[id] AND s.[surahNumber] = ${q.surah})`,
+      );
+    else if (q.shelf === 'explains') conditions.push(CARRIES_PASSAGE);
+    else if (q.shelf === 'general') conditions.push(Prisma.sql`NOT ${CARRIES_PASSAGE}`);
+  }
+  if (use.language && q.language !== null)
+    conditions.push(Prisma.sql`v.[languageCode] = ${q.language}`);
+  if (use.speaker && q.speaker !== null)
+    conditions.push(
+      Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[VideoSpeaker] c WHERE c.[videoId] = v.[id] AND c.[personId] = ${q.speaker})`,
+    );
+  if (use.series && q.series !== null)
+    conditions.push(
+      Prisma.sql`v.[seriesId] = ${q.series} AND EXISTS (SELECT 1 FROM [dbo].[Series] r WHERE r.[id] = v.[seriesId] AND r.[state] = N'published')`,
+    );
+  if (use.length && q.length !== null) {
+    const band = QURAN_VIDEO_LENGTHS[q.length];
+    conditions.push(Prisma.sql`v.[durationSeconds] BETWEEN ${band.from} AND ${band.to}`);
+  }
+  if (use.featured && q.featured) conditions.push(Prisma.sql`v.[isFeatured] = 1`);
+  return Prisma.join(conditions, ' AND ');
+}
+
+/** The same membership as an ORM filter: the hydrating read re-applies it. */
+function quranVideosMembership(q: QuranVideosQuery): Prisma.VideoWhereInput {
+  return q.topic === null
+    ? { quranPassages: { some: {} } }
+    : {
+        OR: [{ topics: { some: { topicId: q.topic } } }, { quranPassages: { some: {} } }],
+      };
+}
+
+/** A recorded running time's band, as SQL — the contract's bounds, bound. */
+const LENGTH_BAND = Prisma.sql`CASE
+  WHEN v.[durationSeconds] BETWEEN ${QURAN_VIDEO_LENGTHS.short.from} AND ${QURAN_VIDEO_LENGTHS.short.to} THEN N'short'
+  WHEN v.[durationSeconds] BETWEEN ${QURAN_VIDEO_LENGTHS.medium.from} AND ${QURAN_VIDEO_LENGTHS.medium.to} THEN N'medium'
+  WHEN v.[durationSeconds] BETWEEN ${QURAN_VIDEO_LENGTHS.long.from} AND ${QURAN_VIDEO_LENGTHS.long.to} THEN N'long'
+END`;
+
+const LENGTH_ORDER = Object.keys(QURAN_VIDEO_LENGTHS) as QuranVideoLength[];
+
+const QURAN_VIDEO_SERIES_SELECT = {
+  id: true,
+  slug: true,
+  kind: true,
+  primaryLocale: true,
+  labels: LABELS,
+} satisfies Prisma.SeriesSelect;
+
+function quranVideosReader(): Pick<
+  MediaPublicReaderPort,
+  'quranVideos' | 'quranVideoFacets'
+> {
+  const db = getDatabaseClient();
+
+  /** Counts over a filtered set: every Video, those carrying a passage, the featured, the running time. */
+  async function counts(where: Prisma.Sql) {
+    const [row] = await db.$queryRaw<
+      {
+        videos: number;
+        explaining: number | null;
+        featured: number | null;
+        seconds: bigint | number | null;
+      }[]
+    >`
+      WITH s AS (
+        SELECT CASE WHEN ${CARRIES_PASSAGE} THEN 1 ELSE 0 END AS [explaining],
+               CASE WHEN v.[isFeatured] = 1 THEN 1 ELSE 0 END AS [featured],
+               CAST(v.[durationSeconds] AS BIGINT) AS [seconds]
+        FROM [dbo].[Video] v
+        WHERE ${where}
+      )
+      SELECT COUNT(*) AS [videos], SUM(s.[explaining]) AS [explaining],
+             SUM(s.[featured]) AS [featured], SUM(s.[seconds]) AS [seconds]
+      FROM s;`;
+    return {
+      videos: Number(row?.videos ?? 0),
+      explaining: Number(row?.explaining ?? 0),
+      featured: Number(row?.featured ?? 0),
+      seconds: Number(row?.seconds ?? 0),
+    };
+  }
+
+  return {
+    /**
+     * TWO READS, THE SECOND AUTHORITATIVE: one bounded SQL page of identifiers
+     * in the visitor's order (with the total the query admits), then those
+     * Videos loaded under the public predicate and the membership again, so an
+     * error in the ordering query could only drop a Video, never admit one.
+     */
+    async quranVideos(q) {
+      const where = quranVideosWhere(q, ALL_QURAN_VIDEO_FILTERS);
+      const undatedLast = Prisma.sql`CASE WHEN v.[publishedOn] IS NULL THEN 1 ELSE 0 END, v.[publishedOn] DESC`;
+      const order =
+        q.sort === 'quran'
+          ? Prisma.sql`CASE WHEN f.[surahNumber] IS NULL THEN 1 ELSE 0 END, f.[surahNumber] ASC, f.[ayahFrom] ASC, f.[ayahTo] ASC, ${undatedLast}, v.[id] ASC`
+          : q.sort === 'title'
+            ? Prisma.sql`t.[title] ASC, v.[id] ASC`
+            : Prisma.sql`${undatedLast}, t.[title] ASC, v.[id] ASC`;
+      // In Quran order a Surah filter orders by the passage in THAT Surah.
+      const first =
+        q.surah === null ? Prisma.empty : Prisma.sql`AND p.[surahNumber] = ${q.surah}`;
+      const page = await db.$queryRaw<{ id: string; total: number }[]>`
+        SELECT v.[id], COUNT(*) OVER () AS [total]
+        FROM [dbo].[Video] v
+        OUTER APPLY (
+          SELECT TOP (1) l.[title] FROM [dbo].[VideoLabel] l
+          WHERE l.[videoId] = v.[id]
+          ORDER BY CASE WHEN l.[locale] = ${q.titleLocale} THEN 0
+                        WHEN l.[locale] = v.[primaryLocale] THEN 1 ELSE 2 END, l.[locale]
+        ) t
+        OUTER APPLY (
+          SELECT TOP (1) p.[surahNumber], p.[ayahFrom], p.[ayahTo]
+          FROM [dbo].[VideoQuranPassage] p
+          WHERE p.[videoId] = v.[id] ${first}
+          ORDER BY p.[surahNumber], p.[ayahFrom], p.[ayahTo]
+        ) f
+        WHERE ${where}
+        ORDER BY ${order}
+        OFFSET ${boundedOffset(q.offset)} ROWS FETCH NEXT ${q.limit + 1} ROWS ONLY`;
+
+      // Past the end there is no row to carry the total; it is counted alone.
+      const total =
+        page[0] === undefined
+          ? q.offset === 0
+            ? 0
+            : (await counts(where)).videos
+          : Number(page[0].total);
+      const ids = page.slice(0, q.limit).map((row) => row.id);
+      if (ids.length === 0) return { items: [], total, hasMore: false };
+
+      const rows = await db.video.findMany({
+        where: { ...PUBLISHED, ...quranVideosMembership(q), id: { in: ids } },
+        select: {
+          id: true,
+          slug: true,
+          primaryLocale: true,
+          isFeatured: true,
+          availability: true,
+          format: true,
+          languageCode: true,
+          durationSeconds: true,
+          publishedOn: true,
+          seriesPosition: true,
+          posterAssetId: true,
+          posterWidth: true,
+          posterHeight: true,
+          labels: LABELS,
+          speakers: SPEAKERS,
+          quranPassages: PASSAGES,
+          series: { select: { ...QURAN_VIDEO_SERIES_SELECT, state: true } },
+        },
+      });
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      const items: QuranVideo[] = ids.flatMap((id) => {
+        const row = byId.get(id);
+        if (row === undefined) return [];
+        return [
+          {
+            id: row.id,
+            slug: row.slug,
+            primaryLocale: row.primaryLocale as Locale,
+            isFeatured: row.isFeatured,
+            availability: row.availability as VideoAvailability,
+            format: row.format as VideoFormat | null,
+            languageCode: row.languageCode,
+            labels: labelsOf(row.labels),
+            durationSeconds: row.durationSeconds,
+            publishedOn: isoDate(row.publishedOn),
+            poster: posterOf(row),
+            speakerIds: row.speakers.map((entry) => entry.personId),
+            // A Series is named only while it is itself published.
+            series:
+              row.series === null ||
+              row.seriesPosition === null ||
+              row.series.state !== 'published'
+                ? null
+                : {
+                    id: row.series.id,
+                    slug: row.series.slug,
+                    kind: row.series.kind as SeriesKind,
+                    primaryLocale: row.series.primaryLocale as Locale,
+                    labels: labelsOf(row.series.labels),
+                    position: row.seriesPosition,
+                  },
+            passages: row.quranPassages.map(passageOf),
+          },
+        ];
+      });
+      return { items, total, hasMore: page.length > q.limit };
+    },
+
+    /**
+     * GROUPED READS, each bounded: a facet's own filter is left out of its own
+     * counts, so every option says how many Videos choosing it would show.
+     */
+    async quranVideoFacets(q) {
+      const scoped = (use: Partial<QuranVideosFilters>) =>
+        quranVideosWhere(q, { ...NO_QURAN_VIDEO_FILTERS, ...use });
+      const others = { language: true, speaker: true, series: true, length: true };
+      const whole = scoped({});
+      const [hub, hubSpread, shelves, languages, speakers, series, lengths, surahs] =
+        await Promise.all([
+          counts(whole),
+          db.$queryRaw<{ languages: number; surahs: number }[]>`
+            SELECT
+              (SELECT COUNT(DISTINCT v.[languageCode]) FROM [dbo].[Video] v WHERE ${whole}) AS [languages],
+              (SELECT COUNT(DISTINCT p.[surahNumber]) FROM [dbo].[VideoQuranPassage] p
+                WHERE p.[videoId] IN (SELECT v.[id] FROM [dbo].[Video] v WHERE ${whole})) AS [surahs];`,
+          counts(scoped(others)),
+          db.$queryRaw<{ id: string; count: number }[]>`
+            SELECT TOP (${MEDIA_FACET_PAGE + 1}) v.[languageCode] AS [id], COUNT(*) AS [count]
+            FROM [dbo].[Video] v
+            WHERE ${scoped({ ...others, scope: true, language: false })}
+            GROUP BY v.[languageCode]
+            ORDER BY [count] DESC, [id] ASC;`,
+          db.$queryRaw<{ id: string; count: number }[]>`
+            SELECT TOP (${MEDIA_FACET_PAGE + 1}) c.[personId] AS [id], COUNT(DISTINCT c.[videoId]) AS [count]
+            FROM [dbo].[VideoSpeaker] c
+            WHERE c.[videoId] IN (SELECT v.[id] FROM [dbo].[Video] v
+                                  WHERE ${scoped({ ...others, scope: true, speaker: false })})
+            GROUP BY c.[personId]
+            ORDER BY [count] DESC, [id] ASC;`,
+          db.$queryRaw<{ id: string; count: number }[]>`
+            SELECT TOP (${MEDIA_FACET_PAGE + 1}) v.[seriesId] AS [id], COUNT(*) AS [count]
+            FROM [dbo].[Video] v
+            WHERE ${scoped({ ...others, scope: true, series: false })}
+              AND v.[seriesId] IS NOT NULL
+              AND EXISTS (SELECT 1 FROM [dbo].[Series] r WHERE r.[id] = v.[seriesId] AND r.[state] = N'published')
+            GROUP BY v.[seriesId]
+            ORDER BY [count] DESC, [id] ASC;`,
+          db.$queryRaw<{ length: string; count: number }[]>`
+            SELECT b.[length], COUNT(*) AS [count]
+            FROM (SELECT ${LENGTH_BAND} AS [length]
+                  FROM [dbo].[Video] v
+                  WHERE ${scoped({ ...others, scope: true, length: false })}) b
+            WHERE b.[length] IS NOT NULL
+            GROUP BY b.[length];`,
+          db.$queryRaw<{ surah: number; owners: number }[]>`
+            SELECT p.[surahNumber] AS [surah], COUNT(DISTINCT p.[videoId]) AS [owners]
+            FROM [dbo].[VideoQuranPassage] p
+            WHERE p.[videoId] IN (SELECT v.[id] FROM [dbo].[Video] v WHERE ${scoped(others)})
+            GROUP BY p.[surahNumber]
+            ORDER BY p.[surahNumber];`,
+        ]);
+
+      const facet = (rows: readonly { id: string; count: number }[]) => ({
+        items: rows
+          .slice(0, MEDIA_FACET_PAGE)
+          .map((row) => ({ id: row.id, videos: Number(row.count) })),
+        hasMore: rows.length > MEDIA_FACET_PAGE,
+      });
+      const seriesPage = facet(series);
+      // The Series' address and titles, under the public predicate again.
+      const seriesRows =
+        seriesPage.items.length === 0
+          ? []
+          : await db.series.findMany({
+              where: { ...PUBLISHED, id: { in: seriesPage.items.map((row) => row.id) } },
+              select: QURAN_VIDEO_SERIES_SELECT,
+            });
+      const seriesById = new Map(seriesRows.map((row) => [row.id, row]));
+      const byLength = new Map(lengths.map((row) => [row.length, Number(row.count)]));
+
+      return {
+        hub: {
+          videos: hub.videos,
+          explaining: hub.explaining,
+          featured: hub.featured,
+          languages: Number(hubSpread[0]?.languages ?? 0),
+          surahs: Number(hubSpread[0]?.surahs ?? 0),
+          seconds: hub.seconds,
+        },
+        shelves: { all: shelves.videos, explaining: shelves.explaining },
+        languages: facet(languages),
+        speakers: facet(speakers),
+        series: {
+          items: seriesPage.items.flatMap((row) => {
+            const found = seriesById.get(row.id);
+            return found === undefined
+              ? []
+              : [
+                  {
+                    id: found.id,
+                    slug: found.slug,
+                    kind: found.kind as SeriesKind,
+                    primaryLocale: found.primaryLocale as Locale,
+                    labels: labelsOf(found.labels),
+                    videos: row.videos,
+                  },
+                ];
+          }),
+          hasMore: seriesPage.hasMore,
+        },
+        lengths: LENGTH_ORDER.flatMap((length) => {
+          const videos = byLength.get(length) ?? 0;
+          return videos === 0 ? [] : [{ length, videos }];
+        }),
+        surahs: surahs.map((row) => ({
+          surah: Number(row.surah),
+          owners: Number(row.owners),
+        })),
+      };
+    },
+  };
+}
+
 export function createMediaPublicReader(): MediaPublicReaderPort {
   const db = getDatabaseClient();
 
   return {
     ...audioPublicReader(),
     ...photoPublicReader(),
+    ...quranVideosReader(),
 
     async videos(query) {
       const rows = await db.video.findMany({

@@ -10,9 +10,9 @@ import type { SurahChip } from './books-view';
 
 /**
  * THE QURAN SECTION'S EXPLORE HUBS (Quran Part 10) — the parts a hub of
- * material from another owner shares: Books now, Videos next. Each hub is
- * Layer-4 composition of its owner's public reads; these parts read nothing
- * and take only what a page resolved.
+ * material from another owner shares: Books (Part 10) and Videos (Part 11).
+ * Each hub is Layer-4 composition of its owner's public reads; these parts
+ * read nothing and take only what a page resolved.
  *
  *   ExploreHero      the hub's header: eyebrow, title, lede, the figures it
  *                    can truthfully state, and the ways onward;
@@ -20,11 +20,24 @@ import type { SurahChip } from './books-view';
  *                    usable without script;
  *   ActiveFilters    what narrows the view now, each removable by a link;
  *   PassageChips     the Surahs a book or a lecture explains, each a link to
- *                    that Surah's tafsir.
+ *                    that Surah's tafsir;
+ *   languageName     a content language named in the interface language.
  *
  * LOGICAL PROPERTIES ONLY, so the same markup is right in English, Urdu and
  * Arabic; every control is a 44-pixel target.
  */
+
+/** A content language named in the interface language ("Urdu" on an English page). */
+export function languageName(code: string, locale: Locale): string {
+  try {
+    return (
+      new Intl.DisplayNames([locale], { type: 'language', fallback: 'code' }).of(code) ??
+      code
+    );
+  } catch {
+    return code;
+  }
+}
 
 export function ExploreHero({
   eyebrow,

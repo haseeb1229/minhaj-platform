@@ -43,6 +43,9 @@ import type {
   VideoSearchRecord,
   VideoValue,
   QuranPassageVideo,
+  QuranVideoFacets,
+  QuranVideoPage,
+  QuranVideosQuery,
 } from './values.ts';
 import type {
   PassageQuery,
@@ -172,6 +175,18 @@ export interface MediaPublicReaderPort {
   quranPassageVideos(query: PassageQuery): Promise<readonly QuranPassageVideo[]>;
   /** How many published Videos carry a passage in each Surah. ONE grouped read. */
   quranPassageCounts(): Promise<readonly PassageSurahCount[]>;
+
+  /**
+   * QURAN PART 11 — THE QURAN VIDEOS HUB. One bounded, ordered page of the
+   * published Videos on the query's Topic or carrying a Quran passage
+   * (`quranVideosQuerySchema`), with the total the query admits; and the
+   * hub's aggregates (`QuranVideoFacets`). The ordinary public predicate
+   * throughout (a Series is named only while published); the Topic is an
+   * identifier Media holds, never a Taxonomy read, and the passages are
+   * Media's own citation values.
+   */
+  quranVideos(query: QuranVideosQuery): Promise<QuranVideoPage>;
+  quranVideoFacets(query: QuranVideosQuery): Promise<QuranVideoFacets>;
 
   /* ---- Phase 11 — AudioTrack and AudioSeries --------------------------- */
 

@@ -295,7 +295,8 @@ it reserves is unpublished. No route changes.
 | `/quran/recitations` · `/quran/recitations/{reciter}` | **Recitations — owned by Quran** (DOMAIN_MODEL.md §8.1) |
 | `/quran/topics/{slug}` | Filtered view, canonical → `/topics/{slug}` |
 | `/quran/books` | The **Quran Books hub** (Quran Part 10): Library's public Works on the `quran` Topic together with every public Work that explains a Quran passage — figures, featured books, shelves (`?shelf=explains\|general`), `?surah`, `?language`, `?contributor`, `?sort=newest\|quran`, `?page`; **canonical to itself**, every filtered or paged view canonical to the bare path |
-| `/quran/{videos\|articles\|research\|courses\|teachers}` | Related material, canonical to their domain collections |
+| `/quran/videos` | The **Quran Videos hub** (Quran Part 11): Media's published Videos on the `quran` Topic together with every published Video that explains a Quran passage — figures, featured videos, lectures by Surah, shelves (`?shelf=explains\|general`), `?surah`, `?language`, `?speaker`, `?series`, `?length=short\|medium\|long`, `?sort=quran\|title` (newest is the neutral order), `?page`; **canonical to itself**, every filtered or paged view canonical to the bare path |
+| `/quran/{articles\|research\|courses\|teachers}` | Related material, canonical to their domain collections |
 
 Translation, tafsir and reciter selections are **query parameters, not path segments**, so a
 citation remains valid regardless of reading preferences.
@@ -329,6 +330,21 @@ general shelf or another parameter order is answered with one redirect to the vi
 address, built from the parsed view and never from the typed text (so no parameter is a redirect
 target), never an error.
 
+**Quran Part 11 — the Quran Videos hub (DOMAIN_MODEL.md §11).** `/quran/videos` is no longer a
+related-material view canonical to `/watch/videos` (its form from Phase 18 to Quran Part 10,
+historical): like the Books hub it is a curated navigational view of its own (§2.3), so its
+canonical address is the bare `/quran/videos`, and every combination of `?shelf`, `?surah`,
+`?language`, `?speaker`, `?series`, `?length`, `?sort` and `?page` is a query filter canonical to
+it and never in a sitemap; while the corpus is not approved it claims no canonical at all. Its
+videos are Media's, composed at Layer 4 from Media's public `quranVideos` and `quranVideoFacets`
+reads: the Videos on the `quran` Topic and every Video carrying a Quran passage (with no `quran`
+Topic, the latter alone — an empty state, never a 404). Each video links to its canonical
+`/watch/videos/{slug}`; where its editor recorded where the lecture begins a passage, the card also
+opens it there at `/watch/videos/{slug}?start={seconds}` (§3.7, Quran Part 8 — no new parameter);
+each Surah it explains links to `/quran/tafsir/surah/{n}`, and each Surah under "Lectures by Surah"
+to `/quran/videos?surah={n}`. The same one-spelling rule as the Books hub applies; the former
+related view's `?offset` is not a view parameter and is ignored.
+
 **Delivered in Phase 18 (engineering — no authoritative corpus is supplied; DELIVERY_PLAN.md
 Phase-18 continuity).** Every route above except the three related views named below. Surah, Ayah
 and Juz addresses are numbers; `?translation`, `?transliteration` and `?tafsir` name a public work's
@@ -340,7 +356,8 @@ honest unavailable state and named resources answer 404; a fixture-mode corpus c
 non-authoritative notice on every page and is `noindex`; only an approved corpus is indexable.
 Related views: `/quran/books`, `/quran/videos` and `/quran/research` are delivered — each the
 owner's own public listing for the seeded `quran` topic, canonical to the owner's collection
-(`/quran/books` until Quran Part 10, which made it the Quran Books hub above — historical);
+(`/quran/books` until Quran Part 10 and `/quran/videos` until Quran Part 11, which made them the
+Quran Books and Quran Videos hubs above — historical);
 `/quran/articles` and `/quran/teachers` stay absent and unlinked until an owner exposes a
 deterministic by-topic read. **Phase 22:** `/quran/courses` is delivered — Learning's own public
 Course listing for the seeded `quran` topic, composed at Layer 4 and canonical to the Course catalogue

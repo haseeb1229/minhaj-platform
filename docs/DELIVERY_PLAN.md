@@ -3527,6 +3527,81 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > the shelf, a Surah, a language and Quran order without script, chips and *Clear filters*, no
 > results, past the end, malformed and re-ordered addresses redirected to their one address; Urdu at 390 px and Arabic right to left, no sideways
 > scroll at 320 and 390 px; axe. *CI and staging evidence are recorded when they exist.*
+>
+> **Quran Part 11 — the Quran Videos hub (owner direction: every Quran menu item built from A to Z,
+> one at a time; on `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (DOMAIN_MODEL.md
+> §11; ROUTE_MAP.md §3.3; INFORMATION_ARCHITECTURE.md). No schema change and no migration (the count
+> stays at its Part-9 value); staging only, the production gates unchanged.
+>
+> - **Which videos (decision).** Until now `/quran/videos` was the generic related view — one
+>   topic-filtered page of `/watch/videos`, canonical to it. As for books (Part 10), the honest set
+>   is Media's own: the published Videos on the `quran` Topic **together with** every published
+>   Video that explains a Quran passage (Part 8's citation values; its staging survey expects 49
+>   lectures). The shelves are derived from the data — *Explains a Surah* and *Other videos on the
+>   Quran* — and each filter is offered only where Media has something to choose: Surah, content
+>   language (only when more than one), speaker, Series and length (the Minhaj TV publisher records
+>   a source's duration but no speaker and no Series — `migration-targets.ts` — so on staging the
+>   speaker and Series filters stay absent until an editor records them). Newest is the neutral
+>   order (provider date); Quran order and title are the others.
+> - **Media reads (Model A).** `quranVideosQuerySchema`, `QURAN_VIDEO_LENGTHS` (one band
+>   definition the SQL filters and counts by) and the `QuranVideo`, `QuranVideoPage` and
+>   `QuranVideoFacets` shapes in `@minhaj/contracts/media`; `quranVideos` and `quranVideoFacets` on
+>   `MediaPublicReaderPort`, implemented in `packages/database/src/adapters/media/persistence.ts`
+>   under the ONE public predicate (published; a Series only while published) — a bounded SQL page
+>   of identifiers in the visitor's order with `COUNT(*) OVER ()` for the total, then those Videos
+>   hydrated with the public predicate and the membership applied again; grouped facet reads, each
+>   leaving its own filter out; every value a bound parameter; and Media's public read service
+>   parsing every field first (a Surah beside the general shelf, an unknown order or length band,
+>   an offset past 25,000 or a page over 24 refused before any read). A card carries no provider
+>   identifier, thumbnail, transcript or embed address. Quran imports nothing of Media: the hub
+>   composes the reads at Layer 4.
+> - **The hub** (`apps/web/src/components/quran/videos.tsx` and its pure address rules
+>   `videos-view.ts`, reusing Part 10's Explore parts and tolerant readers — `languageName` and the
+>   one-address rule `unlessCanonical` move into the shared modules rather than being copied): a
+>   header with the figures the data supports (videos, videos explaining a Surah, Surahs explained,
+>   whole hours of recorded lectures — rounded down, never more than recorded — and languages when
+>   more than one) and the ways to the Tafsir hub and the reader; on the first page of the
+>   unfiltered hub only, the featured videos (with descriptions), **Lectures by Surah** (every
+>   Surah a lecture explains, counted, each narrowing the hub to it) and a sideways shelf of the
+>   newest lectures that explain a Surah (only while both shelves hold videos); shelf tabs with
+>   counts; a GET filter form — Surah, language, speaker, Series, length, order — with removable
+>   chips and *Clear filters*; "1–24 of N videos"; poster cards (a drawn tile without a poster; no
+>   provider request to paint one) with the running time on the picture, *Unavailable* or the
+>   curated format on it, the title in its own language, a language badge when it is not the
+>   interface's, speakers, date, "Episode n · Series"; then, outside the card's one stretched link,
+>   **Watch from 18:1–10 (12:34)** — Media's canonical `/watch/videos/{slug}?start={seconds}`
+>   (Part 8's verified parameter; offered only where the editor recorded a start past 0:00, in the
+>   chosen Surah when one is chosen) — and up to three Surah chips linking to
+>   `/quran/tafsir/surah/{n}`; a numbered pager; honest empty states (no videos yet, nothing
+>   matches, past the last page). Every view is a GET address that works without script, at ONE
+>   spelling (`videosCanonicalRedirect`).
+> - **Canonical (decision).** `/quran/videos` is now canonical to itself (ROUTE_MAP.md §2.3, §3.3);
+>   every filtered or paged view is canonical to the bare path. While the corpus is not approved the
+>   page claims no canonical at all, like every Quran page.
+> - **The related view** (`related.tsx`) loses its `videos` kind and keeps Research and Courses;
+>   the Quran landing's directory now names Books, Videos and Research explicitly — Part 10's
+>   removal of the `books` kind had silently dropped Books from it (corrected here).
+>
+> **Proof:** `tests/quran/videos-view.test.ts` (the address a view reads and builds — tolerant,
+> round-tripping, the general shelf dropping a Surah, newest as the neutral order, the page bound
+> inside Media's offset bound; the one redirect for a form's submission, another order, a
+> malformed value, never for an address it built; ranges; where a card opens a lecture; whole
+> hours), `tests/media/quran-videos.test.ts` (the read service's defaults, seventeen refusals
+> before any read, the length bands covering every recordable running time once); on SQL Server
+> `tests/media/quran-videos.integration.test.ts` (the set — Topic or passage, no draft, no other
+> Topic; shelves, Surah, language, speaker, a published Series and never a draft one, length
+> bands, featured; the three orders; pages and the total past the end; each card's passages and
+> starts, speakers, Series, availability and format; every facet without its own filter, and the
+> hub's Surahs and running time); `tests/config/fonts.test.ts` and `tests/config/locale.test.ts`
+> (the new modules); the browser journey (`tests/browser/quran.spec.ts`, "Quran Part 11"): the
+> landing's directory, the figures, featured videos, Lectures by Surah, the opening shelf, a
+> card's running time, language, speaker, date, Series, *Unavailable*, *Watch from* (opening the
+> watch page at its start) and Surah chips (a chip opens the Surah's tafsir), a page of 24 and the
+> second page, never a draft; every filter — speaker, shelf, Series, length, Surah, language and
+> Quran order — without script, chips and *Clear filters*, no results, past the end, malformed and
+> re-ordered addresses redirected to their one address; Urdu at 390 px and Arabic right to left,
+> no sideways scroll at 320 and 390 px; axe. *CI and staging evidence are recorded when they
+> exist.*
 
 ---
 

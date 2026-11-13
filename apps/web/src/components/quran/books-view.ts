@@ -54,17 +54,22 @@ export const DEFAULT_BOOKS_QUERY: BooksQuery = Object.freeze({
   page: 1,
 });
 
-const UUID =
+/**
+ * THE TOLERANT READERS every Explore hub's address shares (Books here, Videos
+ * in `./videos-view`): one value of one parameter, a whole number in range,
+ * an identifier, a content-language code — anything else is absent.
+ */
+export const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 /** Taxonomy's language-code shape (`libraryLanguageCodeSchema`). */
-const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/u;
+export const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/u;
 
-function single(query: Query, key: string, max: number): string | null {
+export function single(query: Query, key: string, max: number): string | null {
   const raw = query[key];
   return typeof raw === 'string' && raw !== '' && raw.length <= max ? raw : null;
 }
 
-function whole(text: string | null, min: number, max: number): number | null {
+export function whole(text: string | null, min: number, max: number): number | null {
   if (text === null || !/^\d{1,5}$/u.test(text)) return null;
   const value = Number(text);
   return value >= min && value <= max ? value : null;
@@ -149,18 +154,36 @@ const VIEW_KEYS: ReadonlySet<string> = new Set([
  * unless a redirect happens anyway.
  */
 export function booksCanonicalRedirect(locale: string, query: Query): string | null {
-  const view = readBooksQuery(query);
-  const canonical = booksHref(locale, view);
-  // In the request's own order (the address's), so another order is caught.
+  return unlessCanonical(
+    locale,
+    BOOKS_PATH,
+    query,
+    VIEW_KEYS,
+    booksHref(locale, readBooksQuery(query)),
+  );
+}
+
+/**
+ * The canonical address, or `null` when the request already spells it: the
+ * hub's own parameters as the request carried them — in its own order, so
+ * another order is caught — against the address built from the parsed view.
+ */
+export function unlessCanonical(
+  locale: string,
+  path: string,
+  query: Query,
+  keys: ReadonlySet<string>,
+  canonical: string,
+): string | null {
   const requested = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
-    if (!VIEW_KEYS.has(key)) continue;
+    if (!keys.has(key)) continue;
     if (typeof value === 'string') requested.append(key, value);
     else if (Array.isArray(value))
       for (const entry of value) requested.append(key, entry);
   }
   const text = requested.toString();
-  const spelled = localizedPath(locale, `${BOOKS_PATH}${text === '' ? '' : `?${text}`}`);
+  const spelled = localizedPath(locale, `${path}${text === '' ? '' : `?${text}`}`);
   return spelled === canonical ? null : canonical;
 }
 
@@ -183,19 +206,31 @@ export function booksReadQuery(
   };
 }
 
-/** How many pages a total fills; at least one. */
-export function booksPageCount(total: number): number {
-  return Math.max(1, Math.ceil(total / QURAN_WORKS_PAGE));
+/** How many pages of `size` a total fills; at least one. */
+export function pageCount(total: number, size: number): number {
+  return Math.max(1, Math.ceil(total / size));
 }
 
-/** "25–48" of a page, or null when the page holds nothing. */
+/** "25–48" of a page of `size`, or null when the page holds nothing. */
+export function pageRange(
+  page: number,
+  shown: number,
+  size: number,
+): { readonly from: number; readonly to: number } | null {
+  if (shown === 0) return null;
+  const from = (page - 1) * size + 1;
+  return { from, to: from + shown - 1 };
+}
+
+export function booksPageCount(total: number): number {
+  return pageCount(total, QURAN_WORKS_PAGE);
+}
+
 export function booksRange(
   page: number,
   shown: number,
 ): { readonly from: number; readonly to: number } | null {
-  if (shown === 0) return null;
-  const from = (page - 1) * QURAN_WORKS_PAGE + 1;
-  return { from, to: from + shown - 1 };
+  return pageRange(page, shown, QURAN_WORKS_PAGE);
 }
 
 /** How many Surah chips a card shows before saying how many more. */

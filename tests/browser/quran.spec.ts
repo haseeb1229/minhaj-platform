@@ -5068,3 +5068,472 @@ test.describe('Quran Part 10: the Quran Books hub', () => {
       }
   });
 });
+
+test.describe('Quran Part 11: the Quran Videos hub', () => {
+  const part11 = {
+    speaker: randomUUID(),
+    series: randomUUID(),
+    featured: randomUUID(),
+    tafsir: randomUUID(),
+    unavailable: randomUUID(),
+    draft: randomUUID(),
+  };
+  const part11Slug = {
+    speaker: `fixture-videos-speaker-${run}`,
+    series: `fixture-videos-circle-${run}`,
+    featured: `fixture-videos-featured-${run}`,
+    tafsir: `fixture-videos-tafsir-${run}`,
+    unavailable: `fixture-videos-unavailable-${run}`,
+    draft: `fixture-videos-draft-${run}`,
+  };
+  const VIDEO = {
+    speaker: `Fixture Videos Speaker ${run}`,
+    series: `NON_QURAN_FIXTURE videos circle ${run}`,
+    featured: `NON_QURAN_FIXTURE videos featured ${run}`,
+    tafsir: `NON_QURAN_FIXTURE videos tafsir ${run}`,
+    unavailable: `NON_QURAN_FIXTURE videos unavailable ${run}`,
+    draft: `NON_QURAN_FIXTURE videos draft ${run}`,
+  };
+  /**
+   * Enough passage-carrying lectures for a second page (24 a page), dated
+   * long ago so they sort after the fixtures above, and titled to sort LAST
+   * by title. No Topic; each explains one Ayah of fixture Surah 3, with no
+   * recorded start.
+   */
+  const FILLERS = 22;
+  const LIST = 'Videos on the Quran';
+  /** A YouTube-shaped identifier, unique to this run. */
+  const key = (prefix: string) => `${prefix}${run}`.padEnd(11, '0').slice(0, 11);
+
+  async function axe(page: Page, target: string, testInfo: TestInfo): Promise<void> {
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    const blocking = results.violations.filter(
+      (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+    );
+    for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+      testInfo.annotations.push({
+        type: 'axe',
+        description: `${target}: ${finding.id} (${String(finding.impact)})`,
+      });
+    expect(
+      blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+      target,
+    ).toEqual([]);
+  }
+
+  /** The card of one video in the hub's listing. */
+  const card = (page: Page, title: string) =>
+    page
+      .getByRole('list', { name: LIST, exact: true })
+      .locator('li', { has: page.getByRole('link', { name: title, exact: true }) });
+
+  test.beforeAll(async () => {
+    test.setTimeout(180_000);
+    const [quran] = await sql.query<{ id: string }>(
+      `SELECT [id] FROM [dbo].[Topic] WHERE [slug] = N'quran';`,
+    );
+    if (quran === undefined) throw new Error('The seeded quran Topic is missing.');
+    const video = (
+      id: string,
+      slugValue: string,
+      title: string,
+      fields: {
+        readonly state?: string;
+        readonly featured?: boolean;
+        readonly provider: string;
+        readonly language: string;
+        readonly date: string;
+        readonly seconds: number | null;
+        readonly availability?: string;
+        readonly series?: string;
+      },
+    ) => `
+      INSERT INTO [dbo].[Video] ([id],[slug],[primaryLocale],[state],[isFeatured],[provider],[providerVideoId],[availability],[languageCode],[durationSeconds],[publishedOn],[seriesId],[seriesPosition]) VALUES
+        (N'${id}', N'${slugValue}', N'en', N'${fields.state ?? 'published'}', ${fields.featured === true ? 1 : 0}, N'youtube', '${fields.provider}',
+         N'${fields.availability ?? 'available'}', N'${fields.language}', ${fields.seconds === null ? 'NULL' : String(fields.seconds)}, '${fields.date}',
+         ${fields.series === undefined ? 'NULL, NULL' : `N'${fields.series}', 1`});
+      INSERT INTO [dbo].[VideoLabel] ([videoId],[locale],[title],[description]) VALUES (N'${id}', N'en', ${n(title)}, N'NON_QURAN_FIXTURE description of a video on the Quran.');`;
+    const fillers = Array.from({ length: FILLERS }, (_, index) => {
+      const id = randomUUID();
+      const number = String(index + 1).padStart(2, '0');
+      return `
+        ${video(
+          id,
+          `fixture-videos-filler-${run}-${number}`,
+          `Zz NON_QURAN_FIXTURE video filler ${run} ${number}`,
+          {
+            provider: key(`F${number}`),
+            language: 'en',
+            date: `2000-01-${number}`,
+            seconds: null,
+          },
+        )}
+        INSERT INTO [dbo].[VideoQuranPassage] ([videoId],[position],[surahNumber],[ayahFrom],[ayahTo]) VALUES (N'${id}', 0, 3, ${String(index + 10)}, ${String(index + 10)});`;
+    }).join('\n');
+    await sql.query(`
+      INSERT INTO [dbo].[Person] ([id],[slug],[primaryLocale],[status]) VALUES (N'${part11.speaker}', N'${part11Slug.speaker}', N'en', N'published');
+      INSERT INTO [dbo].[PersonTranslation] ([personId],[locale],[name],[biography]) VALUES (N'${part11.speaker}', N'en', ${n(VIDEO.speaker)}, NULL);
+      INSERT INTO [dbo].[Series] ([id],[slug],[kind],[primaryLocale],[state]) VALUES (N'${part11.series}', N'${part11Slug.series}', N'series', N'en', N'published');
+      INSERT INTO [dbo].[SeriesLabel] ([seriesId],[locale],[title],[description]) VALUES (N'${part11.series}', N'en', ${n(VIDEO.series)}, N'');
+
+      ${video(part11.featured, part11Slug.featured, VIDEO.featured, {
+        featured: true,
+        provider: key('VF'),
+        language: 'en',
+        date: '2026-01-05',
+        seconds: 1_500,
+        series: part11.series,
+      })}
+      INSERT INTO [dbo].[VideoTopic] ([videoId],[topicId]) VALUES (N'${part11.featured}', N'${quran.id}');
+      INSERT INTO [dbo].[VideoSpeaker] ([videoId],[personId],[position]) VALUES (N'${part11.featured}', N'${part11.speaker}', 0);
+
+      ${video(part11.tafsir, part11Slug.tafsir, VIDEO.tafsir, {
+        provider: key('VT'),
+        language: 'ar',
+        date: '2025-06-01',
+        seconds: 4_000,
+      })}
+      INSERT INTO [dbo].[VideoSpeaker] ([videoId],[personId],[position]) VALUES (N'${part11.tafsir}', N'${part11.speaker}', 0);
+      INSERT INTO [dbo].[VideoQuranPassage] ([videoId],[position],[surahNumber],[ayahFrom],[ayahTo],[startSeconds]) VALUES (N'${part11.tafsir}', 0, 3, 1, 5, 754);
+
+      ${video(part11.unavailable, part11Slug.unavailable, VIDEO.unavailable, {
+        provider: key('VU'),
+        language: 'ur',
+        date: '2024-03-03',
+        seconds: 600,
+        availability: 'unavailable',
+      })}
+      INSERT INTO [dbo].[VideoTopic] ([videoId],[topicId]) VALUES (N'${part11.unavailable}', N'${quran.id}');
+      INSERT INTO [dbo].[VideoQuranPassage] ([videoId],[position],[surahNumber],[ayahFrom],[ayahTo],[startSeconds]) VALUES (N'${part11.unavailable}', 0, 1, 1, 3, NULL);
+
+      ${video(part11.draft, part11Slug.draft, VIDEO.draft, {
+        state: 'draft',
+        featured: true,
+        provider: key('VD'),
+        language: 'en',
+        date: '2026-02-02',
+        seconds: 900,
+      })}
+      INSERT INTO [dbo].[VideoTopic] ([videoId],[topicId]) VALUES (N'${part11.draft}', N'${quran.id}');
+      INSERT INTO [dbo].[VideoQuranPassage] ([videoId],[position],[surahNumber],[ayahFrom],[ayahTo]) VALUES (N'${part11.draft}', 0, 2, 1, 1);
+
+      ${fillers}
+    `);
+  });
+
+  test('the hub: its figures, featured videos, Surahs, shelves, cards, starts and Surah chips — never a draft', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(240_000);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+
+    // The Quran landing names both Explore hubs again.
+    await visitFixture(page, '/quran');
+    const landing = page.getByRole('main');
+    await expect(landing.locator('a[href="/quran/videos"]').first()).toContainText(
+      'Videos on the Quran',
+    );
+    await expect(landing.locator('a[href="/quran/books"]').first()).toContainText(
+      'Books on the Quran',
+    );
+
+    await visitFixture(page, '/quran/videos');
+    const main = page.getByRole('main');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(LIST);
+    await expect(
+      main.getByRole('link', { name: /videos on the Quran$/ }),
+    ).toHaveAttribute('href', '#quran-videos-list');
+    await expect(main.getByRole('link', { name: /explain a Surah$/ })).toHaveAttribute(
+      'href',
+      '/quran/videos?shelf=explains',
+    );
+    await expect(main.getByRole('link', { name: /Surahs explained$/ })).toHaveAttribute(
+      'href',
+      '#quran-videos-surahs',
+    );
+    await expect(main.getByText(/^hours? of lectures$/)).toBeVisible();
+
+    // The editors' featured video, with its description, opens the hub; the
+    // featured DRAFT is nowhere.
+    const featured = page.locator('section[aria-labelledby="quran-videos-featured"]');
+    await expect(
+      featured.getByRole('link', { name: VIDEO.featured, exact: true }),
+    ).toHaveAttribute('href', `/watch/videos/${part11Slug.featured}`);
+    await expect(featured).toContainText('NON_QURAN_FIXTURE description');
+    await expect(main).not.toContainText(VIDEO.draft);
+
+    // Lectures by Surah: each Surah a lecture explains, counted, narrowing
+    // the hub to it.
+    const surahs = page.locator('section[aria-labelledby="quran-videos-surahs"]');
+    const third = surahs.locator('a[href="/quran/videos?surah=3"]');
+    await expect(third).toContainText(/\d+ lectures/);
+    await expect(surahs.locator('a[href="/quran/videos?surah=1"]')).toContainText(
+      '1 lecture',
+    );
+
+    // The opening shelf of lectures that explain a Surah, with the way to all.
+    const shelf = page.locator('section[aria-labelledby="quran-videos-explaining"]');
+    await expect(
+      shelf.getByRole('link', { name: VIDEO.tafsir, exact: true }),
+    ).toHaveCount(1);
+    await expect(shelf.getByRole('link', { name: /^See all \d+$/ })).toHaveAttribute(
+      'href',
+      '/quran/videos?shelf=explains',
+    );
+
+    // Three shelves, the current one marked.
+    const shelves = page.getByRole('navigation', { name: 'Shelves' });
+    await expect(shelves.getByRole('link', { name: /^All videos/ })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+
+    // A lecture's card: its running time, language, speaker, where it begins
+    // its passage — opened there — and each Surah it explains as its own link.
+    const tafsir = card(page, VIDEO.tafsir);
+    await expect(tafsir).toContainText('1:06:40');
+    await expect(tafsir).toContainText('Arabic');
+    await expect(tafsir).toContainText(VIDEO.speaker);
+    await expect(tafsir).toContainText('June 1, 2025');
+    const start = tafsir.getByRole('link', { name: 'Watch from 3:1–5 (12:34)' });
+    await expect(start).toHaveAttribute(
+      'href',
+      `/watch/videos/${part11Slug.tafsir}?start=754`,
+    );
+    await expect(tafsir.getByRole('link', { name: /3:1–5/ }).last()).toHaveAttribute(
+      'href',
+      '/quran/tafsir/surah/3',
+    );
+    // A video the provider no longer serves says so on its picture; with no
+    // recorded start it offers no "watch from".
+    const unavailable = card(page, VIDEO.unavailable);
+    await expect(unavailable).toContainText('Unavailable');
+    await expect(unavailable.getByRole('link', { name: /^Watch from/ })).toHaveCount(0);
+    // An episode names its Series; a video that explains no passage is one link.
+    const episode = card(page, VIDEO.featured);
+    await expect(episode).toContainText(`Episode 1 · ${VIDEO.series}`);
+    await expect(episode.getByRole('link')).toHaveCount(1);
+
+    // The chips and the start sit outside the card's stretched link.
+    await tafsir.getByRole('link', { name: /3:1–5/ }).last().click();
+    await page.waitForURL('**/quran/tafsir/surah/3');
+    await page.goBack();
+    await card(page, VIDEO.tafsir)
+      .getByRole('link', { name: 'Watch from 3:1–5 (12:34)' })
+      .click();
+    await page.waitForURL(`**/watch/videos/${part11Slug.tafsir}?start=754`);
+    await expect(page.getByRole('main')).toContainText('Opens at 12:34');
+    await page.goBack();
+
+    // A page of 24, said in words, and a second page.
+    const list = page.getByRole('list', { name: LIST, exact: true });
+    await expect(list.locator(':scope > li')).toHaveCount(24);
+    await expect(main.getByText(/^1–24 of \d+ videos$/)).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath('part11-hub-en-1440.png'),
+      fullPage: true,
+    });
+    await axe(page, '/quran/videos', testInfo);
+
+    await page
+      .getByRole('navigation', { name: 'Pages of videos' })
+      .getByRole('link', { name: 'Next page' })
+      .click();
+    await page.waitForURL('**/quran/videos?page=2');
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Pages of videos' })
+        .locator('[aria-current="page"]'),
+    ).toHaveAccessibleName('Page 2');
+    await expect(list.locator(':scope > li').first()).toBeVisible();
+    await expect(main.getByText(/^25–\d+ of \d+ videos$/)).toBeVisible();
+    // Featured videos, Surahs and the opening shelf belong to the first page
+    // of the whole hub only.
+    for (const section of ['featured', 'surahs', 'explaining'])
+      await expect(
+        page.locator(`section[aria-labelledby="quran-videos-${section}"]`),
+      ).toHaveCount(0);
+  });
+
+  test('filters, shelves and orders are addresses that work without script — chips, reset and honest empty states', async ({
+    browser,
+  }) => {
+    test.setTimeout(240_000);
+    const plain = await browser.newContext({
+      baseURL: baseUrl(),
+      javaScriptEnabled: false,
+    });
+    contexts.push(plain);
+    const page = await plain.newPage();
+    await page.goto('/quran/videos');
+    const form = page.getByRole('form', { name: 'Filter the videos' });
+
+    // By speaker: exactly this speaker's two videos, as a removable chip.
+    await form.getByLabel('Speaker', { exact: true }).selectOption(part11.speaker);
+    await form.getByRole('button', { name: 'Show videos' }).click();
+    await page.waitForURL(`**/quran/videos?speaker=${part11.speaker}`);
+    const list = page.getByRole('list', { name: LIST, exact: true });
+    await expect(list.locator(':scope > li')).toHaveCount(2);
+    await expect(card(page, VIDEO.featured)).toHaveCount(1);
+    await expect(card(page, VIDEO.tafsir)).toHaveCount(1);
+    await expect(page.getByLabel('Speaker', { exact: true })).toHaveValue(part11.speaker);
+    await expect(
+      page
+        .getByRole('list', { name: 'Filters in use' })
+        .getByRole('link', { name: `Remove filter: ${VIDEO.speaker}` }),
+    ).toHaveAttribute('href', '/quran/videos');
+
+    // The explaining shelf keeps the speaker; the general video leaves it.
+    await page
+      .getByRole('navigation', { name: 'Shelves' })
+      .getByRole('link', { name: /^Explains a Surah/ })
+      .click();
+    await page.waitForURL(`**/quran/videos?shelf=explains&speaker=${part11.speaker}`);
+    await expect(card(page, VIDEO.featured)).toHaveCount(0);
+    await expect(card(page, VIDEO.tafsir)).toHaveCount(1);
+
+    // A Series, and a length band, each as the form submits it.
+    await page.goto('/quran/videos');
+    await page.getByLabel('Series', { exact: true }).selectOption(part11.series);
+    await page.getByRole('button', { name: 'Show videos' }).click();
+    await page.waitForURL(`**/quran/videos?series=${part11.series}`);
+    await expect(list.locator(':scope > li')).toHaveCount(1);
+    await expect(card(page, VIDEO.featured)).toHaveCount(1);
+    await page.goto(`/quran/videos?speaker=${part11.speaker}`);
+    await page.getByLabel('Length', { exact: true }).selectOption('long');
+    await page.getByRole('button', { name: 'Show videos' }).click();
+    await page.waitForURL(`**/quran/videos?speaker=${part11.speaker}&length=long`);
+    await expect(list.locator(':scope > li')).toHaveCount(1);
+    await expect(card(page, VIDEO.tafsir)).toHaveCount(1);
+    await expect(
+      page
+        .getByRole('list', { name: 'Filters in use' })
+        .getByRole('link', { name: 'Remove filter: An hour or more' }),
+    ).toHaveAttribute('href', `/quran/videos?speaker=${part11.speaker}`);
+
+    // A Surah narrows the shelf; the form carries the shelf with it.
+    await page.goto('/quran/videos?shelf=explains');
+    await page.getByLabel('Surah', { exact: true }).selectOption('1');
+    await page.getByRole('button', { name: 'Show videos' }).click();
+    await page.waitForURL('**/quran/videos?shelf=explains&surah=1');
+    await expect(card(page, VIDEO.unavailable)).toHaveCount(1);
+    await expect(card(page, VIDEO.tafsir)).toHaveCount(0);
+
+    // A content language.
+    await page.goto('/quran/videos?language=ar');
+    await expect(card(page, VIDEO.tafsir)).toHaveCount(1);
+    await expect(card(page, VIDEO.featured)).toHaveCount(0);
+
+    // The general shelf: no Surah to choose, and a Surah in the address is
+    // dropped rather than contradicting the shelf.
+    await page.goto('/quran/videos?shelf=general&surah=3');
+    await page.waitForURL('**/quran/videos?shelf=general');
+    await expect(page.getByLabel('Surah', { exact: true })).toHaveCount(0);
+    await expect(card(page, VIDEO.featured)).toHaveCount(1);
+    await expect(card(page, VIDEO.tafsir)).toHaveCount(0);
+
+    // Quran order: Surah 1 before Surah 3.
+    await page.goto('/quran/videos?shelf=explains&sort=quran');
+    await expect(page.getByLabel('Order', { exact: true })).toHaveValue('quran');
+    const titles = await list
+      .locator(':scope > li h3')
+      .evaluateAll((nodes) => nodes.map((node) => node.textContent ?? ''));
+    expect(titles.indexOf(VIDEO.unavailable)).toBeGreaterThanOrEqual(0);
+    expect(titles.indexOf(VIDEO.unavailable)).toBeLessThan(titles.indexOf(VIDEO.tafsir));
+
+    // Nothing matches: said, with the way back, and no pager.
+    await page.goto(`/quran/videos?surah=2&speaker=${part11.speaker}`);
+    await expect(page.getByText('No videos match these filters')).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: 'Clear filters' }).first(),
+    ).toHaveAttribute('href', '/quran/videos');
+    await expect(page.getByRole('navigation', { name: 'Pages of videos' })).toHaveCount(
+      0,
+    );
+
+    // Past the last page: said, with the first page offered.
+    await page.goto('/quran/videos?page=900');
+    await expect(page.getByText('This page is empty')).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: 'Go to the first page' }),
+    ).toHaveAttribute('href', '/quran/videos');
+
+    // Anything malformed is ONE redirect to the plain hub, never an error;
+    // another spelling of a view, to that view's one address.
+    for (const target of [
+      '/quran/videos?surah=999',
+      '/quran/videos?speaker=nobody',
+      "/quran/videos?language=x'y",
+      '/quran/videos?length=forever&series=none',
+      '/quran/videos?sort=random&shelf=drafts&page=-1',
+    ]) {
+      const response = await page.goto(target);
+      expect(response?.status(), target).toBe(200);
+      expect(new URL(page.url()).pathname + new URL(page.url()).search, target).toBe(
+        '/quran/videos',
+      );
+      await expect(page.getByRole('heading', { level: 1 }), target).toHaveText(LIST);
+    }
+    await page.goto('/quran/videos?sort=title&shelf=general&surah=3');
+    expect(new URL(page.url()).search).toBe('?shelf=general&sort=title');
+  });
+
+  test('Urdu and Arabic read right to left, fit 320 and 390 px, and have no serious accessibility finding', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(240_000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await visitFixture(page, localizedPath('ur', '/quran/videos'), 'ur');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('قرآن پر ویڈیوز');
+    // A video's title keeps its own language inside the Urdu page, and a
+    // passage's citation reads left to right.
+    const tafsir = page
+      .getByRole('list', { name: 'قرآن پر ویڈیوز', exact: true })
+      .locator('li', {
+        has: page.getByRole('link', { name: VIDEO.tafsir, exact: true }),
+      });
+    await expect(
+      tafsir.getByRole('heading', { name: VIDEO.tafsir, exact: true }),
+    ).toHaveAttribute('lang', 'en');
+    await expect(
+      tafsir.locator('bdi[dir="ltr"]', { hasText: '3:1–5' }).first(),
+    ).toBeVisible();
+    const { overflow, offenders } = await overflowOf(page);
+    expect(overflow, offenders.join(', ')).toBeLessThanOrEqual(0);
+    await page.screenshot({
+      path: testInfo.outputPath('part11-hub-ur-390.png'),
+      fullPage: true,
+    });
+    await axe(page, '/ur/quran/videos', testInfo);
+
+    await visitFixture(page, localizedPath('ar', '/quran/videos?shelf=explains'), 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await axe(page, '/ar/quran/videos?shelf=explains', testInfo);
+
+    await visitFixture(page, '/quran/videos');
+    await page.screenshot({
+      path: testInfo.outputPath('part11-hub-en-390.png'),
+      fullPage: true,
+    });
+    for (const width of [320, 390])
+      for (const target of [
+        '/quran/videos',
+        '/ur/quran/videos',
+        '/ar/quran/videos?shelf=explains',
+        `/quran/videos?speaker=${part11.speaker}`,
+        '/quran/videos?surah=2&language=fr',
+        '/quran/videos?page=900',
+      ]) {
+        await page.setViewportSize({ width, height: 800 });
+        await page.goto(target);
+        const result = await overflowOf(page);
+        expect(
+          result.overflow,
+          `${target} @${String(width)}: ${result.offenders.join(', ')}`,
+        ).toBeLessThanOrEqual(0);
+      }
+  });
+});

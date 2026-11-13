@@ -1695,6 +1695,25 @@ start within the video's recorded duration. The watch page opens a lecture at a 
 described link, and ignores any value outside a day. Public reads: `quranPassageVideos` and
 `quranPassageCounts`, published Videos only.
 
+**Videos on the Quran (Quran Part 11).** Which Videos are "videos on the Quran" is Media's
+answer, as Library's is for books (§10.1): every published Video on a Topic the caller names by
+identifier (the `quran` Topic, resolved at Layer 4 — Media holds only the key) together with every
+published Video carrying a Quran passage; with no Topic, the passage-carrying Videos alone.
+`quranVideos` returns one bounded page (24) of them with the total the query admits — narrowed by
+shelf (`explains`: carrying a passage, in a named Surah when one is given; `general`: carrying
+none — a Surah beside `general` is refused), content language, a speaker, a **published** Series
+(a draft Series admits nothing and is never named), a recorded length band (`QURAN_VIDEO_LENGTHS`:
+under 20 minutes, 20 to under 60, an hour or more; a Video with no recorded length is in none) and
+the featured flag; ordered newest (provider date, undated last), in Quran order (earliest passage,
+newest within one) or by title (as `titleLocale` reads it), each total — and a card's worth per
+Video (titles and descriptions, poster, running time, date, content language, speakers,
+availability, format, its published Series and place, its passages with their starts; never the
+provider identifier, thumbnail, transcript or an embed address). `quranVideoFacets` returns the
+hub's figures unfiltered (Videos, those explaining a passage, featured, languages, distinct Surahs
+explained, recorded running time), the shelves under the other filters, and the languages,
+speakers, Series, length bands and Surahs, each counted without its own filter. Both are the
+ordinary public predicate, parameterised SQL, bounded; no schema change.
+
 As delivered (Phase 11) — AudioTrack and AudioSeries, **non-Quran audio only**:
 
 | Aggregate | Carries |

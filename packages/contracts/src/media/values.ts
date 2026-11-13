@@ -1,7 +1,11 @@
 import { z } from 'zod';
 
 import { localeSchema, type Locale } from '../env/shared.ts';
-import type { TimedQuranPassage } from '../passage/index.ts';
+import {
+  SURAH_TOTAL,
+  type PassageSurahCount,
+  type TimedQuranPassage,
+} from '../passage/index.ts';
 import {
   isProviderThumbnail,
   parseProviderReference,
@@ -343,6 +347,72 @@ export const videoQuerySchema = z
 
 export type VideoQuery = z.infer<typeof videoQuerySchema>;
 
+/**
+ * QURAN PART 11 — THE QURAN VIDEOS READ. Which published Videos are "videos on
+ * the Quran": every published Video on the Topic a caller names (Taxonomy's
+ * `quran` Topic, resolved at Layer 4 — Media holds only its identifier)
+ * TOGETHER WITH every published Video that explains a Quran passage (Part 8's
+ * citation values, which Media owns). A lecture that explains a Surah is a
+ * video on the Quran whether or not an editor also filed it under the Topic;
+ * with no Topic (`topic: null`) the set is the passage-carrying Videos alone.
+ *
+ *   `shelf`     `all`; `explains` — the Videos carrying a passage (in `surah`,
+ *               when one is named); `general` — the rest.
+ *   `language`  the Video's content language;
+ *   `speaker`   a named speaker (a People identifier);
+ *   `series`    a PUBLISHED Series the Video is an episode of;
+ *   `length`    its recorded running time's band (`QURAN_VIDEO_LENGTHS`) —
+ *               a Video whose length is not recorded is in no band;
+ *   `featured`  only the Videos an editor featured;
+ *   `sort`      `newest` (latest provider date first, undated last), `quran`
+ *               (by the earliest passage, in Quran order — in `surah` when one
+ *               is named — Videos with none last, newest first within one) or
+ *               `title` (A–Z by the title a reader of `titleLocale` is shown).
+ *               Every order ends on the identifier.
+ *
+ * A Surah is a filter of the `explains` shelf, so it is refused beside
+ * `general` rather than quietly answered with nothing.
+ */
+export const QURAN_VIDEOS_PAGE = MEDIA_PAGE;
+export const quranVideosShelfSchema = z.enum(['all', 'explains', 'general']);
+export type QuranVideosShelf = z.infer<typeof quranVideosShelfSchema>;
+export const quranVideosSortSchema = z.enum(['newest', 'quran', 'title']);
+export type QuranVideosSort = z.infer<typeof quranVideosSortSchema>;
+
+/**
+ * A recorded running time's band, in seconds, inclusive at both ends — ONE
+ * definition the read filters and counts by and the hub names: under twenty
+ * minutes, twenty minutes to under an hour, an hour or more.
+ */
+export const QURAN_VIDEO_LENGTHS = Object.freeze({
+  short: Object.freeze({ from: 1, to: 1_199 }),
+  medium: Object.freeze({ from: 1_200, to: 3_599 }),
+  long: Object.freeze({ from: 3_600, to: MEDIA_LIMITS.durationSeconds }),
+});
+export type QuranVideoLength = keyof typeof QURAN_VIDEO_LENGTHS;
+export const quranVideoLengthSchema = z.enum(['short', 'medium', 'long']);
+
+export const quranVideosQuerySchema = z
+  .object({
+    topic: mediaIdSchema.nullable().default(null),
+    shelf: quranVideosShelfSchema.default('all'),
+    surah: z.number().int().min(1).max(SURAH_TOTAL).nullable().default(null),
+    language: mediaLanguageCodeSchema.nullable().default(null),
+    speaker: mediaIdSchema.nullable().default(null),
+    series: mediaIdSchema.nullable().default(null),
+    length: quranVideoLengthSchema.nullable().default(null),
+    featured: z.boolean().default(false),
+    sort: quranVideosSortSchema.default('newest'),
+    titleLocale: localeSchema.nullable().default(null),
+    offset: z.number().int().min(0).max(25_000).default(0),
+    limit: z.number().int().min(1).max(QURAN_VIDEOS_PAGE).default(QURAN_VIDEOS_PAGE),
+  })
+  .strict()
+  .refine((value) => value.surah === null || value.shelf !== 'general', {
+    message: 'A Surah narrows the videos that explain one.',
+  });
+export type QuranVideosQuery = z.infer<typeof quranVideosQuerySchema>;
+
 /** An administrative directory's filters: a state and a bounded text match. */
 export const mediaAdminQuerySchema = z
   .object({
@@ -421,6 +491,105 @@ export interface QuranPassageVideo {
   readonly poster: VideoPoster | null;
   readonly speakerIds: readonly string[];
   readonly passages: readonly TimedQuranPassage[];
+}
+
+/** The published Series a Quran video is an episode of, as its card names it. */
+export interface QuranVideoSeries {
+  readonly id: string;
+  readonly slug: string;
+  readonly kind: SeriesKind;
+  readonly primaryLocale: Locale;
+  readonly labels: readonly MediaLabel[];
+}
+
+/**
+ * Quran Part 11: one PUBLISHED Video on the Quran Videos hub — a card's worth:
+ * identity, address, titles, poster, running time, provider date, content
+ * language, speakers, whether the provider is known to serve it, its curated
+ * format, its published Series and place in it, and the passages it explains
+ * with their starts. No provider identifier, thumbnail, transcript or embed
+ * address.
+ */
+export interface QuranVideo {
+  readonly id: string;
+  readonly slug: string;
+  readonly primaryLocale: Locale;
+  readonly isFeatured: boolean;
+  readonly availability: VideoAvailability;
+  readonly format: VideoFormat | null;
+  readonly languageCode: string;
+  readonly labels: readonly MediaLabel[];
+  readonly durationSeconds: number | null;
+  /** `YYYY-MM-DD`, a date and not an instant. */
+  readonly publishedOn: string | null;
+  readonly poster: VideoPoster | null;
+  readonly speakerIds: readonly string[];
+  /** Present only while the Series itself is published. */
+  readonly series: (QuranVideoSeries & { readonly position: number }) | null;
+  /** Its Quran passages, in its editor's order, each with its start. */
+  readonly passages: readonly TimedQuranPassage[];
+}
+
+/** One page of the Quran Videos read, with how many Videos the query admits in all. */
+export interface QuranVideoPage {
+  readonly items: readonly QuranVideo[];
+  readonly total: number;
+  readonly hasMore: boolean;
+}
+
+/** One facet value — a content language or a speaker — and its count. */
+export interface QuranVideoFacet {
+  readonly id: string;
+  readonly videos: number;
+}
+
+export interface QuranVideoFacetPage {
+  readonly items: readonly QuranVideoFacet[];
+  readonly hasMore: boolean;
+}
+
+/**
+ * Quran Part 11: the aggregates the Quran Videos hub is navigated by — each
+ * ONE grouped read, each bounded, each counting published Videos:
+ *
+ *   `hub`        the whole set, unfiltered: Videos, those explaining a
+ *                passage, the featured, the distinct content languages, the
+ *                distinct Surahs explained, and the recorded running time in
+ *                seconds (Videos whose length is unknown add nothing);
+ *   `shelves`    the set under the query's language, speaker, Series and
+ *                length: all, and those explaining a passage;
+ *   `languages`  content language → Videos, under every other filter;
+ *   `speakers`   Person → Videos, under every other filter;
+ *   `series`     published Series → Videos, under every other filter, with
+ *                the Series' address and titles;
+ *   `lengths`    length band → Videos, under every other filter;
+ *   `surahs`     Surah → Videos explaining a passage in it, under the
+ *                language, speaker, Series and length.
+ *
+ * Each facet leaves its OWN filter out, so every option says what choosing it
+ * would show.
+ */
+export interface QuranVideoFacets {
+  readonly hub: {
+    readonly videos: number;
+    readonly explaining: number;
+    readonly featured: number;
+    readonly languages: number;
+    readonly surahs: number;
+    readonly seconds: number;
+  };
+  readonly shelves: { readonly all: number; readonly explaining: number };
+  readonly languages: QuranVideoFacetPage;
+  readonly speakers: QuranVideoFacetPage;
+  readonly series: {
+    readonly items: readonly (QuranVideoSeries & { readonly videos: number })[];
+    readonly hasMore: boolean;
+  };
+  readonly lengths: readonly {
+    readonly length: QuranVideoLength;
+    readonly videos: number;
+  }[];
+  readonly surahs: readonly PassageSurahCount[];
 }
 
 /**

@@ -424,7 +424,12 @@ topic). Since Phase 22 Quran Courses is offered too — Learning's public Course
 `quran` topic. Since Quran Part 10 Quran Books is a hub of its own (`/quran/books`): Library's books
 on the `quran` topic together with every book that explains a Quran passage, shelved by whether it
 explains a Surah, filtered by Surah, language and author, each book's Surahs linked to their tafsir
-(ROUTE_MAP.md §3.3) — no longer the Library listing's mirror. Quran Articles and Quran Teachers are not yet offered and are not linked
+(ROUTE_MAP.md §3.3) — no longer the Library listing's mirror. Since Quran Part 11 Quran Videos is
+likewise a hub of its own (`/quran/videos`): Media's videos on the `quran` topic together with
+every lecture that explains a Quran passage, with lectures by Surah, shelved by whether a video
+explains a Surah, filtered by Surah, language, speaker, series and length, each lecture opened at
+the passage where its start is recorded and its Surahs linked to their tafsir — no longer Watch's
+mirror. The Quran landing's directory lists both hubs. Quran Articles and Quran Teachers are not yet offered and are not linked
 (ROUTE_MAP.md §3.3). While no corpus is active the section says so plainly instead of showing
 empty structure, and Listen's Quran Recitations appear only once a corpus is active. The
 signed-in additions remain Phase 21's. Since Rebaseline R2 a deployment that admits it may show a

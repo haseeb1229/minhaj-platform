@@ -251,6 +251,9 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/quran/books.tsx',
     'apps/web/src/components/quran/books-view.ts',
     'apps/web/src/components/quran/explore.tsx',
+    // Quran Part 11: the Quran Videos hub and its pure address rules.
+    'apps/web/src/components/quran/videos.tsx',
+    'apps/web/src/components/quran/videos-view.ts',
     // Phase 19. The public Hadith surfaces, their pure presentation decisions
     // and their request-cached reads, and the one batched current-text read
     // and pure labels the search pages use for Hadith results. The ROUTES that

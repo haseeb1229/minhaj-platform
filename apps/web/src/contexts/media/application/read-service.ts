@@ -6,6 +6,7 @@ import {
   mediaSlugSchema,
   PHOTO_LIMITS,
   photoArchiveQuerySchema,
+  quranVideosQuerySchema,
   seriesKindSchema,
   videoQuerySchema,
   type MediaPublicReaderPort,
@@ -238,6 +239,21 @@ export function createMediaReadService(reader: MediaPublicReaderPort) {
     /** How many published Videos carry a passage in each Surah. */
     quranPassageCounts() {
       return reader.quranPassageCounts();
+    },
+
+    /**
+     * Quran Part 11 — the Quran Videos hub, composed at Layer 4: one bounded
+     * page of the published Videos on the named Topic or explaining a Quran
+     * passage, and the aggregates the hub is navigated by. Every field is
+     * parsed here (a Surah beside the `general` shelf is refused), before any
+     * read.
+     */
+    quranVideos(raw: unknown = {}) {
+      return reader.quranVideos(quranVideosQuerySchema.parse(raw));
+    },
+
+    quranVideoFacets(raw: unknown = {}) {
+      return reader.quranVideoFacets(quranVideosQuerySchema.parse(raw));
     },
 
     gallerySitemap(offset: number, limit: number) {

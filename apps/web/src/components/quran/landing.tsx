@@ -43,7 +43,6 @@ import {
   jumpIndex,
   quickJumpLabels,
 } from './reader';
-import { RELATED_KINDS } from './related';
 
 /**
  * `/quran` — the Quran landing (ROUTE_MAP.md §3.3; R2).
@@ -126,7 +125,8 @@ export async function QuranLandingPage({
     topic === null
       ? []
       : [
-          ...RELATED_KINDS.filter((kind) => kind !== 'courses').map(section),
+          // The two hubs (Quran Parts 10 and 11), then the related Research view.
+          ...['books', 'videos', 'research'].map(section),
           {
             key: 'topics',
             href: localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`),
