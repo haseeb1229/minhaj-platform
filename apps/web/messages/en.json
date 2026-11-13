@@ -3137,7 +3137,7 @@
       "transliteration": "Published transliterations, each read alongside the Arabic text.",
       "tajweed": "Guidance on the rules of recitation.",
       "recitations": "Recitations by reciters, played Surah by Surah alongside the text.",
-      "books": "Books from the Library classified under the Quran.",
+      "books": "Books from the Library on the Quran and its sciences, with the Surahs each one explains.",
       "videos": "Videos classified under the Quran.",
       "research": "Research from the Library classified under the Quran.",
       "topics": "Everything on the platform classified under the Quran, in one place.",
@@ -3337,13 +3337,11 @@
     "topicEmpty": "No Ayah has been assigned to this topic yet.",
     "topicAll": "All ayat on this topic",
     "relatedEmpty": {
-      "books": "No book on the Quran has been published in the Library yet.",
       "videos": "No video on the Quran has been published yet.",
       "research": "No research on the Quran has been published yet.",
       "courses": "No course on the Quran has been published yet."
     },
     "relatedOwner": {
-      "books": "Browse these books in the Library",
       "videos": "Browse these videos in Watch",
       "research": "Browse this research in the Library",
       "courses": "Browse these courses in Learn"
@@ -3675,6 +3673,74 @@
     "tafsirLinks": {
       "heading": "On the Quran",
       "help": "The passages of the Quran this explains. Each opens its tafsir: the ayat, and everything else linked to them."
+    },
+    "booksHub": {
+      "eyebrow": "Explore · Books",
+      "lede": "Books from Minhaj-ul-Quran’s Library on the Quran and its sciences — with the Surahs each tafsir and commentary explains. Choose a shelf, a Surah, a language or an author.",
+      "statBooks": "{count, plural, one {book on the Quran} other {books on the Quran}}",
+      "statExplaining": "{count, plural, one {explains a Surah} other {explain a Surah}}",
+      "statLanguages": "{count, plural, one {language} other {languages}}",
+      "tafsirLink": "Tafsir by Surah",
+      "readLink": "Read the Quran",
+      "featuredHeading": "Featured books",
+      "featuredHelp": "Chosen by the Library’s editors.",
+      "listHeading": "Browse the books",
+      "shelves": "Shelves",
+      "shelf": {
+        "all": "All books",
+        "explains": "Explains a Surah",
+        "general": "Other books on the Quran"
+      },
+      "shelfHelp": {
+        "all": "Every book on the Quran in the Library, whether or not it is linked to a passage.",
+        "explains": "Tafsir and commentary, linked to the Surahs and ayat they explain. Each Surah opens its tafsir.",
+        "general": "Books on the Quran and its sciences that are not linked to a particular passage."
+      },
+      "filters": "Filter the books",
+      "filterSurah": "Surah",
+      "anySurah": "Any Surah",
+      "filterLanguage": "Language",
+      "anyLanguage": "Any language",
+      "filterContributor": "Author",
+      "anyContributor": "Any author",
+      "filterSort": "Order",
+      "sort": {
+        "title": "Title, A–Z",
+        "newest": "Newest first",
+        "quran": "Quran order"
+      },
+      "option": "{name} ({count})",
+      "surahOption": "{number}. {name}",
+      "apply": "Show books",
+      "reset": "Clear filters",
+      "active": "Filters in use",
+      "remove": "Remove filter: {name}",
+      "unknownContributor": "An author",
+      "summary": "{from}–{to} of {total, plural, one {# book} other {# books}}",
+      "explains": "Explains",
+      "moreSurahs": "+{count} more",
+      "readable": "Read online",
+      "credit": "{name} ({role})",
+      "roles": {
+        "author": "author",
+        "translator": "translator",
+        "editor": "editor",
+        "compiler": "compiler",
+        "narrator": "narrator",
+        "reciter": "reciter",
+        "speaker": "speaker"
+      },
+      "emptyTitle": "No books on the Quran yet",
+      "empty": "Books appear here as the Library publishes them under the Quran or links them to the Surahs they explain.",
+      "noResultsTitle": "No books match these filters",
+      "noResults": "Try another Surah, language or author — or clear the filters to see every book on the Quran.",
+      "pastEndTitle": "This page is empty",
+      "pastEnd": "There are fewer books than page {page} would hold.",
+      "firstPage": "Go to the first page",
+      "pages": "Pages of books",
+      "pageLabel": "Page {page}",
+      "libraryLink": "All books in the Library",
+      "about": "Every book here is published in Minhaj-ul-Quran’s Library. Which Surahs a book explains is recorded by the Library’s editors and may be corrected."
     },
     "tajweed": {
       "setting": "Tajweed colours",

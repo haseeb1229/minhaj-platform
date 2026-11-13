@@ -4708,3 +4708,363 @@ test.describe('Quran Part 9: tajweed colours', () => {
     await axe(page, '/ur/quran/tajweed', testInfo);
   });
 });
+
+test.describe('Quran Part 10: the Quran Books hub', () => {
+  const part10 = {
+    author: randomUUID(),
+    general: randomUUID(),
+    tafsir: randomUUID(),
+    readable: randomUUID(),
+    draft: randomUUID(),
+  };
+  const part10Slug = {
+    author: `fixture-books-author-${run}`,
+    general: `fixture-books-general-${run}`,
+    tafsir: `fixture-books-tafsir-${run}`,
+    readable: `fixture-books-readable-${run}`,
+    draft: `fixture-books-draft-${run}`,
+  };
+  const BOOK = {
+    author: `Fixture Books Author ${run}`,
+    general: `NON_QURAN_FIXTURE books general ${run}`,
+    tafsir: `NON_QURAN_FIXTURE books tafsir ${run}`,
+    readable: `NON_QURAN_FIXTURE books readable ${run}`,
+    draft: `NON_QURAN_FIXTURE books draft ${run}`,
+  };
+  /**
+   * Enough passage-carrying books for a second page (24 a page). Titled to
+   * sort LAST in every interface — "Zz…" in English, Urdu yeh barree in Urdu,
+   * after Arabic in this database's collation — so a Library listing another
+   * spec reads in parallel keeps its own records on its first page. No Topic,
+   * and each explains one Ayah of fixture Surah 3.
+   */
+  const FILLERS = 22;
+  const LIST = 'Books on the Quran';
+
+  async function axe(page: Page, target: string, testInfo: TestInfo): Promise<void> {
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    const blocking = results.violations.filter(
+      (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+    );
+    for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+      testInfo.annotations.push({
+        type: 'axe',
+        description: `${target}: ${finding.id} (${String(finding.impact)})`,
+      });
+    expect(
+      blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+      target,
+    ).toEqual([]);
+  }
+
+  /** The card of one book in the hub's listing. */
+  const card = (page: Page, title: string) =>
+    page
+      .getByRole('list', { name: LIST, exact: true })
+      .locator('li', { has: page.getByRole('link', { name: title, exact: true }) });
+
+  test.beforeAll(async () => {
+    test.setTimeout(180_000);
+    const [quran] = await sql.query<{ id: string }>(
+      `SELECT [id] FROM [dbo].[Topic] WHERE [slug] = N'quran';`,
+    );
+    if (quran === undefined) throw new Error('The seeded quran Topic is missing.');
+    const work = (
+      id: string,
+      slugValue: string,
+      title: string,
+      state: string,
+      featured: boolean,
+    ) => `
+      INSERT INTO [dbo].[Work] ([id],[slug],[primaryLocale],[state],[isFeatured]) VALUES (N'${id}', N'${slugValue}', N'en', N'${state}', ${featured ? 1 : 0});
+      INSERT INTO [dbo].[WorkLabel] ([workId],[locale],[title],[description]) VALUES (N'${id}', N'en', ${n(title)}, N'NON_QURAN_FIXTURE description of a book on the Quran.');`;
+    const edition = (
+      workId: string,
+      language: string,
+      year: number,
+      readable: boolean,
+    ) => `
+      INSERT INTO [dbo].[Edition] ([id],[workId],[languageCode],[label],[state],[publicationYear],[reading],[download],[document],[contentVersion],[version],[updatedAt]) VALUES
+        (N'${randomUUID()}', N'${workId}', N'${language}', N'NON_QURAN_FIXTURE edition', N'published', ${String(year)},
+         N'${readable ? 'allowed' : 'unavailable'}', N'denied', ${readable ? `N'{}'` : 'NULL'}, ${readable ? `N'${'b'.repeat(64)}'` : 'NULL'}, 1, SYSUTCDATETIME());`;
+    const fillers = Array.from({ length: FILLERS }, (_, index) => {
+      const id = randomUUID();
+      const number = String(index + 1).padStart(2, '0');
+      return `
+        INSERT INTO [dbo].[Work] ([id],[slug],[primaryLocale],[state]) VALUES (N'${id}', N'fixture-books-filler-${run}-${number}', N'en', N'published');
+        INSERT INTO [dbo].[WorkLabel] ([workId],[locale],[title],[description]) VALUES
+          (N'${id}', N'en', N'Zz NON_QURAN_FIXTURE filler ${run} ${number}', N''),
+          (N'${id}', N'ur', N'ےے NON_QURAN_FIXTURE ${run} ${number}', N'');
+        ${edition(id, 'en', 2000, false)}
+        INSERT INTO [dbo].[WorkQuranPassage] ([workId],[position],[surahNumber],[ayahFrom],[ayahTo]) VALUES (N'${id}', 0, 3, ${String(index + 10)}, ${String(index + 10)});`;
+    }).join('\n');
+    await sql.query(`
+      INSERT INTO [dbo].[Person] ([id],[slug],[primaryLocale],[status]) VALUES (N'${part10.author}', N'${part10Slug.author}', N'en', N'published');
+      INSERT INTO [dbo].[PersonTranslation] ([personId],[locale],[name],[biography]) VALUES (N'${part10.author}', N'en', ${n(BOOK.author)}, NULL);
+
+      ${work(part10.general, part10Slug.general, BOOK.general, 'published', true)}
+      ${edition(part10.general, 'en', 2018, false)}
+      INSERT INTO [dbo].[WorkTopic] ([workId],[topicId]) VALUES (N'${part10.general}', N'${quran.id}');
+      INSERT INTO [dbo].[WorkContributor] ([workId],[personId],[role],[position]) VALUES (N'${part10.general}', N'${part10.author}', N'author', 0);
+
+      ${work(part10.tafsir, part10Slug.tafsir, BOOK.tafsir, 'published', false)}
+      ${edition(part10.tafsir, 'ar', 2022, false)}
+      INSERT INTO [dbo].[WorkContributor] ([workId],[personId],[role],[position]) VALUES (N'${part10.tafsir}', N'${part10.author}', N'translator', 0);
+      INSERT INTO [dbo].[WorkQuranPassage] ([workId],[position],[surahNumber],[ayahFrom],[ayahTo]) VALUES (N'${part10.tafsir}', 0, 3, 1, 5);
+
+      ${work(part10.readable, part10Slug.readable, BOOK.readable, 'published', false)}
+      ${edition(part10.readable, 'ur', 2010, true)}
+      INSERT INTO [dbo].[WorkTopic] ([workId],[topicId]) VALUES (N'${part10.readable}', N'${quran.id}');
+      INSERT INTO [dbo].[WorkContributor] ([workId],[personId],[role],[position]) VALUES (N'${part10.readable}', N'${ids.reciter}', N'author', 0);
+      INSERT INTO [dbo].[WorkQuranPassage] ([workId],[position],[surahNumber],[ayahFrom],[ayahTo]) VALUES (N'${part10.readable}', 0, 1, 1, 3);
+
+      ${work(part10.draft, part10Slug.draft, BOOK.draft, 'draft', true)}
+      ${edition(part10.draft, 'en', 2019, false)}
+      INSERT INTO [dbo].[WorkTopic] ([workId],[topicId]) VALUES (N'${part10.draft}', N'${quran.id}');
+      INSERT INTO [dbo].[WorkQuranPassage] ([workId],[position],[surahNumber],[ayahFrom],[ayahTo]) VALUES (N'${part10.draft}', 0, 2, 1, 1);
+
+      ${fillers}
+    `);
+  });
+
+  test('the hub: its figures, featured books, shelves, cards and Surah chips — never a draft', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await visitFixture(page, '/quran/books');
+    const main = page.getByRole('main');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(LIST);
+    await expect(main.getByRole('link', { name: /books on the Quran$/ })).toHaveAttribute(
+      'href',
+      '#quran-books-list',
+    );
+    await expect(main.getByRole('link', { name: /explain a Surah$/ })).toHaveAttribute(
+      'href',
+      '/quran/books?shelf=explains',
+    );
+    await expect(main.getByRole('link', { name: 'Tafsir by Surah' })).toHaveAttribute(
+      'href',
+      '/quran/tafsir',
+    );
+
+    // The editor's featured book, with its description, opens the hub; the
+    // featured DRAFT is nowhere.
+    const featured = page.locator('section[aria-labelledby="quran-books-featured"]');
+    await expect(
+      featured.getByRole('link', { name: BOOK.general, exact: true }),
+    ).toHaveAttribute('href', `/library/books/${part10Slug.general}`);
+    await expect(featured).toContainText('NON_QURAN_FIXTURE description');
+    await expect(main).not.toContainText(BOOK.draft);
+
+    // Three shelves, the current one marked.
+    const shelves = page.getByRole('navigation', { name: 'Shelves' });
+    await expect(shelves.getByRole('link', { name: /^All books/ })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect(
+      shelves.getByRole('link', { name: /^Explains a Surah/ }),
+    ).toHaveAttribute('href', '/quran/books?shelf=explains');
+
+    // A card: title, credit with its role, language and year, and each Surah
+    // it explains as its own link to that Surah's tafsir.
+    const tafsir = card(page, BOOK.tafsir);
+    await expect(tafsir).toContainText(`${BOOK.author} (translator)`);
+    await expect(tafsir).toContainText('Arabic · 2022');
+    await expect(tafsir.getByRole('link', { name: /3:1–5/ })).toHaveAttribute(
+      'href',
+      '/quran/tafsir/surah/3',
+    );
+    const readable = card(page, BOOK.readable);
+    await expect(readable).toContainText('Read online');
+    await expect(readable.getByRole('link', { name: /1:1–3/ })).toHaveAttribute(
+      'href',
+      '/quran/tafsir/surah/1',
+    );
+    // A book that explains no passage is one link: its own.
+    await expect(card(page, BOOK.general).getByRole('link')).toHaveCount(1);
+    // The chips sit outside the card's stretched link: following one opens
+    // the Surah's tafsir, not the book.
+    await tafsir.getByRole('link', { name: /3:1–5/ }).click();
+    await page.waitForURL('**/quran/tafsir/surah/3');
+    await page.goBack();
+
+    // A page of 24, said in words, and a second page.
+    const list = page.getByRole('list', { name: LIST, exact: true });
+    await expect(list.locator(':scope > li')).toHaveCount(24);
+    await expect(main.getByText(/^1–24 of \d+ books$/)).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath('part10-hub-en-1440.png'),
+      fullPage: true,
+    });
+    await axe(page, '/quran/books', testInfo);
+
+    await page
+      .getByRole('navigation', { name: 'Pages of books' })
+      .getByRole('link', { name: 'Next page' })
+      .click();
+    await page.waitForURL('**/quran/books?page=2');
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Pages of books' })
+        .locator('[aria-current="page"]'),
+    ).toHaveAccessibleName('Page 2');
+    await expect(list.locator(':scope > li').first()).toBeVisible();
+    await expect(main.getByText(/^25–\d+ of \d+ books$/)).toBeVisible();
+    // Featured books open the first page of the whole hub only.
+    await expect(
+      page.locator('section[aria-labelledby="quran-books-featured"]'),
+    ).toHaveCount(0);
+  });
+
+  test('filters, shelves and orders are addresses that work without script — chips, reset and honest empty states', async ({
+    browser,
+  }) => {
+    test.setTimeout(180_000);
+    const plain = await browser.newContext({
+      baseURL: baseUrl(),
+      javaScriptEnabled: false,
+    });
+    contexts.push(plain);
+    const page = await plain.newPage();
+    await page.goto('/quran/books');
+    const form = page.getByRole('form', { name: 'Filter the books' });
+
+    // By author: exactly this author's two books, as a removable chip.
+    await form.getByLabel('Author', { exact: true }).selectOption(part10.author);
+    await form.getByRole('button', { name: 'Show books' }).click();
+    await page.waitForURL(`**/quran/books?contributor=${part10.author}`);
+    const list = page.getByRole('list', { name: LIST, exact: true });
+    await expect(list.locator(':scope > li')).toHaveCount(2);
+    await expect(card(page, BOOK.general)).toHaveCount(1);
+    await expect(card(page, BOOK.tafsir)).toHaveCount(1);
+    await expect(page.getByLabel('Author', { exact: true })).toHaveValue(part10.author);
+    await expect(
+      page
+        .getByRole('list', { name: 'Filters in use' })
+        .getByRole('link', { name: `Remove filter: ${BOOK.author}` }),
+    ).toHaveAttribute('href', '/quran/books');
+
+    // The explaining shelf keeps the author; the general book leaves it.
+    await page
+      .getByRole('navigation', { name: 'Shelves' })
+      .getByRole('link', { name: /^Explains a Surah/ })
+      .click();
+    await page.waitForURL(`**/quran/books?shelf=explains&contributor=${part10.author}`);
+    await expect(card(page, BOOK.general)).toHaveCount(0);
+    await expect(card(page, BOOK.tafsir)).toHaveCount(1);
+
+    // A Surah narrows the shelf; the form carries the shelf with it.
+    await page.goto('/quran/books?shelf=explains');
+    await page.getByLabel('Surah', { exact: true }).selectOption('1');
+    await page.getByRole('button', { name: 'Show books' }).click();
+    await page.waitForURL('**/quran/books?shelf=explains&surah=1');
+    await expect(card(page, BOOK.readable)).toHaveCount(1);
+    await expect(card(page, BOOK.tafsir)).toHaveCount(0);
+
+    // A published Edition's language.
+    await page.goto('/quran/books?language=ur');
+    await expect(card(page, BOOK.readable)).toHaveCount(1);
+    await expect(card(page, BOOK.tafsir)).toHaveCount(0);
+
+    // The general shelf: no Surah to choose, and a Surah in the address is
+    // dropped rather than contradicting the shelf.
+    await page.goto('/quran/books?shelf=general&surah=3');
+    await page.waitForURL('**/quran/books?shelf=general');
+    await expect(page.getByLabel('Surah', { exact: true })).toHaveCount(0);
+    await expect(card(page, BOOK.general)).toHaveCount(1);
+    await expect(card(page, BOOK.tafsir)).toHaveCount(0);
+
+    // Quran order: Surah 1 before Surah 3.
+    await page.goto('/quran/books?shelf=explains&sort=quran');
+    await expect(page.getByLabel('Order', { exact: true })).toHaveValue('quran');
+    const titles = await list
+      .locator(':scope > li h3')
+      .evaluateAll((nodes) => nodes.map((node) => node.textContent ?? ''));
+    expect(titles.indexOf(BOOK.readable)).toBeGreaterThanOrEqual(0);
+    expect(titles.indexOf(BOOK.readable)).toBeLessThan(titles.indexOf(BOOK.tafsir));
+
+    // Nothing matches: said, with the way back, and no pager.
+    await page.goto(`/quran/books?surah=2&contributor=${part10.author}`);
+    await expect(page.getByText('No books match these filters')).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: 'Clear filters' }).first(),
+    ).toHaveAttribute('href', '/quran/books');
+    await expect(page.getByRole('navigation', { name: 'Pages of books' })).toHaveCount(0);
+
+    // Past the last page: said, with the first page offered.
+    await page.goto('/quran/books?page=900');
+    await expect(page.getByText('This page is empty')).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: 'Go to the first page' }),
+    ).toHaveAttribute('href', '/quran/books');
+
+    // Anything malformed is ONE redirect to the plain hub, never an error;
+    // another spelling of a view, to that view's one address.
+    for (const target of [
+      '/quran/books?surah=999',
+      '/quran/books?contributor=nobody',
+      "/quran/books?language=x'y",
+      '/quran/books?sort=random&shelf=drafts&page=-1',
+    ]) {
+      const response = await page.goto(target);
+      expect(response?.status(), target).toBe(200);
+      expect(new URL(page.url()).pathname + new URL(page.url()).search, target).toBe(
+        '/quran/books',
+      );
+      await expect(page.getByRole('heading', { level: 1 }), target).toHaveText(LIST);
+    }
+    await page.goto('/quran/books?sort=newest&shelf=general&surah=3');
+    expect(new URL(page.url()).search).toBe('?shelf=general&sort=newest');
+  });
+
+  test('Urdu and Arabic read right to left, fit 320 and 390 px, and have no serious accessibility finding', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(240_000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await visitFixture(page, localizedPath('ur', '/quran/books'), 'ur');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('قرآن پر کتابیں');
+    // A book's title keeps its own language inside the Urdu page.
+    await expect(
+      page.getByRole('heading', { name: BOOK.tafsir, exact: true }),
+    ).toHaveAttribute('lang', 'en');
+    const { overflow, offenders } = await overflowOf(page);
+    expect(overflow, offenders.join(', ')).toBeLessThanOrEqual(0);
+    await page.screenshot({
+      path: testInfo.outputPath('part10-hub-ur-390.png'),
+      fullPage: true,
+    });
+    await axe(page, '/ur/quran/books', testInfo);
+
+    await visitFixture(page, localizedPath('ar', '/quran/books?shelf=explains'), 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await axe(page, '/ar/quran/books?shelf=explains', testInfo);
+
+    await visitFixture(page, '/quran/books');
+    await page.screenshot({
+      path: testInfo.outputPath('part10-hub-en-390.png'),
+      fullPage: true,
+    });
+    for (const width of [320, 390])
+      for (const target of [
+        '/quran/books',
+        '/ur/quran/books',
+        '/ar/quran/books?shelf=explains',
+        `/quran/books?contributor=${part10.author}`,
+        '/quran/books?page=900',
+      ]) {
+        await page.setViewportSize({ width, height: 800 });
+        await page.goto(target);
+        const result = await overflowOf(page);
+        expect(
+          result.overflow,
+          `${target} @${String(width)}: ${result.offenders.join(', ')}`,
+        ).toBeLessThanOrEqual(0);
+      }
+  });
+});

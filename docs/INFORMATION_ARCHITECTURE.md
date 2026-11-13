@@ -421,7 +421,10 @@ Since Phase 18 the Quran item is delivered (engineering only — no authoritativ
 OPEN_DECISIONS.md §1.1). Read, Study and Search entries, Recitations and Quran Topics are available,
 as are Quran Books, Quran Videos and Quran Research (each the owner's own listing for the `quran`
 topic). Since Phase 22 Quran Courses is offered too — Learning's public Course listing for the
-`quran` topic. Quran Articles and Quran Teachers are not yet offered and are not linked
+`quran` topic. Since Quran Part 10 Quran Books is a hub of its own (`/quran/books`): Library's books
+on the `quran` topic together with every book that explains a Quran passage, shelved by whether it
+explains a Surah, filtered by Surah, language and author, each book's Surahs linked to their tafsir
+(ROUTE_MAP.md §3.3) — no longer the Library listing's mirror. Quran Articles and Quran Teachers are not yet offered and are not linked
 (ROUTE_MAP.md §3.3). While no corpus is active the section says so plainly instead of showing
 empty structure, and Listen's Quran Recitations appear only once a corpus is active. The
 signed-in additions remain Phase 21's. Since Rebaseline R2 a deployment that admits it may show a

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { localeSchema } from '../env/shared.ts';
 import { CONTRIBUTION_ROLES } from '../people/values.ts';
+import { SURAH_TOTAL } from '../passage/index.ts';
 
 export const libraryIdSchema = z.uuid();
 /** One slug grammar for every Library aggregate with a public address. */
@@ -351,6 +352,53 @@ export const libraryQuerySchema = z
   })
   .strict()
   .refine((v) => v.from === null || v.to === null || v.from <= v.to);
+
+/**
+ * QURAN PART 10 — THE QURAN BOOKS READ. Which public Works are "books on the
+ * Quran": every public Work on the Topic a caller names (Taxonomy's `quran`
+ * Topic, resolved at Layer 4 — Library holds only its identifier) TOGETHER
+ * WITH every public Work that explains a Quran passage (§10.1's citation
+ * values, which Library owns). A Work that explains a Surah is a book on the
+ * Quran whether or not an editor also filed it under the Topic; with no Topic
+ * (`topic: null`) the set is the passage-carrying Works alone.
+ *
+ *   `shelf`        `all`; `explains` — the Works carrying a passage (in
+ *                  `surah`, when one is named); `general` — the rest.
+ *   `language`     a published Edition in that content language;
+ *   `contributor`  a credited Person, in any role;
+ *   `featured`     only the Works an editor featured;
+ *   `sort`         `title` (A–Z by the title a reader of `titleLocale` is
+ *                  shown), `newest` (latest publication year first, undated
+ *                  last) or `quran` (by the earliest passage, in Quran order;
+ *                  Works with none last). Every order ends on the identifier.
+ *
+ * A Surah is a filter of the `explains` shelf, so it is refused beside
+ * `general` rather than quietly answered with nothing.
+ */
+export const QURAN_WORKS_PAGE = 24;
+export const quranWorksShelfSchema = z.enum(['all', 'explains', 'general']);
+export type QuranWorksShelf = z.infer<typeof quranWorksShelfSchema>;
+export const quranWorksSortSchema = z.enum(['title', 'newest', 'quran']);
+export type QuranWorksSort = z.infer<typeof quranWorksSortSchema>;
+
+export const quranWorksQuerySchema = z
+  .object({
+    topic: libraryIdSchema.nullable().default(null),
+    shelf: quranWorksShelfSchema.default('all'),
+    surah: z.number().int().min(1).max(SURAH_TOTAL).nullable().default(null),
+    language: libraryLanguageCodeSchema.nullable().default(null),
+    contributor: libraryIdSchema.nullable().default(null),
+    featured: z.boolean().default(false),
+    sort: quranWorksSortSchema.default('title'),
+    titleLocale: localeSchema.nullable().default(null),
+    offset: z.number().int().min(0).max(25_000).default(0),
+    limit: z.number().int().min(1).max(QURAN_WORKS_PAGE).default(QURAN_WORKS_PAGE),
+  })
+  .strict()
+  .refine((value) => value.surah === null || value.shelf !== 'general', {
+    message: 'A Surah narrows the books that explain one.',
+  });
+export type QuranWorksQuery = z.infer<typeof quranWorksQuerySchema>;
 
 export type WorkInput = z.infer<typeof workInputSchema>;
 export type EditionInput = z.infer<typeof editionInputSchema>;

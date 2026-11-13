@@ -145,6 +145,8 @@ describe('the shipped typefaces', () => {
         named.push(relative(file));
     }
     expect(named.sort()).toEqual([
+      // Quran Part 10: a Surah's Arabic name on a Quran book's Surah chips.
+      'apps/web/src/components/quran/explore.tsx',
       // Quran Part 3: each Juz card's opening words and Arabic Surah names.
       'apps/web/src/components/quran/juz-index-island.tsx',
       'apps/web/src/components/quran/reader.tsx',

@@ -7,6 +7,7 @@ import type {
   LibraryQuery,
   AssetPurpose,
   LibraryCover,
+  QuranWorksQuery,
 } from './values.ts';
 import type { PassageQuery, PassageSurahCount, QuranPassage } from '../passage/index.ts';
 import type {
@@ -92,6 +93,70 @@ export interface QuranPassageWork {
   readonly year: number | null;
   readonly passages: readonly QuranPassage[];
 }
+/**
+ * Quran Part 10: one PUBLIC Work on the Quran Books hub — a card's worth:
+ * identity, address, titles and descriptions, card cover, credits, the
+ * content languages of its published Editions, its latest year, whether a
+ * published Edition may be read online, and the passages it explains. No
+ * file, asset or availability internals.
+ */
+export interface QuranWork {
+  readonly id: string;
+  readonly slug: string;
+  readonly primaryLocale: Locale;
+  readonly isFeatured: boolean;
+  readonly labels: readonly {
+    readonly locale: Locale;
+    readonly title: string;
+    readonly description: string;
+  }[];
+  readonly cover: (LibraryCover & { readonly editionId: string }) | null;
+  readonly contributors: readonly { readonly personId: string; readonly role: string }[];
+  /** The distinct content languages of its published Editions, A–Z by code. */
+  readonly languages: readonly string[];
+  /** The latest publication year among its published Editions, or null. */
+  readonly year: number | null;
+  /** A published Edition offers reading online (its availability allows it). */
+  readonly readable: boolean;
+  /** Its Quran passages, in the order its editor gave them. */
+  readonly passages: readonly QuranPassage[];
+}
+
+/** One page of the Quran Books read, with how many Works the query admits in all. */
+export interface QuranWorkPage {
+  readonly items: readonly QuranWork[];
+  readonly total: number;
+  readonly hasMore: boolean;
+}
+
+/**
+ * Quran Part 10: the aggregates the Quran Books hub is navigated by — each
+ * ONE grouped read, each bounded, each counting public Works:
+ *
+ *   `hub`          the whole set, unfiltered: Works, those explaining a
+ *                  passage, the featured, and the distinct content languages;
+ *   `shelves`      the set under the query's language and contributor: all,
+ *                  and those explaining a passage;
+ *   `languages`    content language → Works, under the query's shelf, Surah
+ *                  and contributor (its own filter left out, so every option
+ *                  says what choosing it would show);
+ *   `contributors` Person → Works, under the shelf, Surah and language;
+ *   `surahs`       Surah → Works explaining a passage in it, under the
+ *                  language and contributor.
+ */
+export interface QuranWorkFacets {
+  readonly hub: {
+    readonly works: number;
+    readonly explaining: number;
+    readonly featured: number;
+    readonly languages: number;
+  };
+  readonly shelves: { readonly all: number; readonly explaining: number };
+  readonly languages: LibraryFacetPage;
+  readonly contributors: LibraryFacetPage;
+  readonly surahs: readonly PassageSurahCount[];
+}
+
 export interface WorkPage {
   items: WorkRecord[];
   hasMore: boolean;
@@ -225,6 +290,17 @@ export interface LibraryPublicReaderPort {
   quranPassageWorks(query: PassageQuery): Promise<readonly QuranPassageWork[]>;
   /** How many public Works carry a passage in each Surah. ONE grouped read. */
   quranPassageCounts(): Promise<readonly PassageSurahCount[]>;
+
+  /**
+   * QURAN PART 10 — THE QURAN BOOKS HUB. One bounded, ordered page of the
+   * public Works on the query's Topic or carrying a Quran passage
+   * (`quranWorksQuerySchema`), with the total the query admits; and the
+   * hub's aggregates (`QuranWorkFacets`). The ordinary public predicate
+   * throughout; the Topic is an identifier Library holds, never a Taxonomy
+   * read, and the passages are Library's own citation values.
+   */
+  quranWorks(query: QuranWorksQuery): Promise<QuranWorkPage>;
+  quranWorkFacets(query: QuranWorksQuery): Promise<QuranWorkFacets>;
 
   /* -------------------------------------------------------------------------
    * Phase 9 — Research, ResearchPaper, Publication, Magazine, MagazineIssue and

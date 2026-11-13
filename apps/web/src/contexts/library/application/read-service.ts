@@ -3,6 +3,7 @@ import {
   libraryIdSchema,
   libraryQuerySchema,
   librarySlugSchema,
+  quranWorksQuerySchema,
   scholarlyKindSchema,
   scholarlyQuerySchema,
   type LibraryFacetPage,
@@ -191,6 +192,21 @@ export function createLibraryReadService(reader: LibraryPublicReaderPort) {
     /** How many public Works carry a passage in each Surah. */
     quranPassageCounts() {
       return reader.quranPassageCounts();
+    },
+
+    /**
+     * Quran Part 10 — the Quran Books hub, composed at Layer 4: one bounded
+     * page of the public Works on the named Topic or explaining a Quran
+     * passage, and the aggregates the hub is navigated by. Every field is
+     * parsed here (a Surah beside the `general` shelf is refused), before any
+     * read.
+     */
+    quranWorks(raw: unknown = {}) {
+      return reader.quranWorks(quranWorksQuerySchema.parse(raw));
+    },
+
+    quranWorkFacets(raw: unknown = {}) {
+      return reader.quranWorkFacets(quranWorksQuerySchema.parse(raw));
     },
   };
 }

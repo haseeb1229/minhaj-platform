@@ -3466,6 +3466,68 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > one text node, the key, every mode, the recited wash, Copy; ur/ar right to left at 320 px; the hub
 > and a rule's page; axe. *CI and staging evidence are recorded when they exist.*
 
+> **Quran Part 10 — the Quran Books hub (owner direction: every Quran menu item built from A to Z,
+> one at a time; on `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (DOMAIN_MODEL.md
+> §10.1; ROUTE_MAP.md §3.3). No schema change and no migration (the count stays at its Part-9
+> value); staging only, the production gates unchanged.
+>
+> - **Which books (decision).** Until now `/quran/books` was the generic related view — one
+>   topic-filtered page of `/library/books`, canonical to it. Taxonomy has no sub-topics under
+>   `quran` (the 19 seeded Topics are flat), and the staging corpus files Works under Topics only
+>   where an operator mapped a legacy category, so the honest set is Library's own: the public
+>   Works on the `quran` Topic **together with** every public Work that explains a Quran passage
+>   (Part 8's citation values — a tafsir book is a book on the Quran whether or not it was also
+>   filed under the Topic). Shelves are derived from the data the same way: *Explains a Surah*
+>   (carries a passage) and *Other books on the Quran* (carries none) — no invented categories.
+> - **Library reads (Model A).** `quranWorksQuerySchema` and the `QuranWork`, `QuranWorkPage` and
+>   `QuranWorkFacets` shapes in `@minhaj/contracts/library`; `quranWorks` and `quranWorkFacets` on
+>   `LibraryPublicReaderPort`, implemented in `packages/database/src/adapters/library/persistence.ts`
+>   under the ONE public predicate (`PUBLIC_WORK`) — a bounded SQL page of identifiers in the
+>   reader's order with `COUNT(*) OVER ()` for the total, then those Works hydrated with the public
+>   predicate and the membership applied again; five grouped facet reads, each leaving its own
+>   filter out; every value a bound parameter; and Library's public read service parsing every
+>   field first (a Surah beside the general shelf, an unknown order, an offset past 25,000 or a
+>   page over 24 refused before any read). Quran imports nothing of Library: the hub composes the
+>   reads at Layer 4.
+> - **The hub** (`apps/web/src/components/quran/books.tsx`, its pure address rules
+>   `books-view.ts`, and the Explore hubs' shared parts `explore.tsx` — header, GET filter form,
+>   removable filter chips, Surah chips — for the Videos part to reuse): a header with the figures
+>   the data supports (books, books explaining a Surah, languages when more than one) and the ways
+>   to the Tafsir hub and the reader; the featured books (with their descriptions, first page of
+>   the unfiltered hub only); shelf tabs with counts (only when both shelves hold books); a filter
+>   form of plain controls — Surah (only the Surahs books explain, with counts; not on the general
+>   shelf), language (when more than one), author (the credited People, named by People), order
+>   (title, newest, Quran order where books explain passages) — with removable chips and *Clear
+>   filters*; "1–24 of N books"; cover-led cards (a titled tile without a cover) with title in its
+>   own language, credits (a role other than author named), languages and year, *Read online*
+>   where an Edition offers it, and up to three Surah chips (name and citations, "+n more") each a
+>   link to `/quran/tafsir/surah/{n}` — outside the card's one stretched link; a numbered pager;
+>   honest empty states (no books yet, nothing matches, past the last page). Every view is a GET
+>   address that works without script, at ONE spelling: a form's empty controls, a malformed or
+>   repeated value or another order is one redirect to the canonical address built from the
+>   parsed view (`booksCanonicalRedirect`), never an error.
+>   `/quran/videos`, `/quran/research` and `/quran/courses` keep the generic related view, which
+>   no longer has a `books` kind.
+> - **Canonical (decision).** `/quran/books` is now canonical to itself (ROUTE_MAP.md §2.3, §3.3);
+>   every filtered or paged view is canonical to the bare path, as on `/library/books`. While the
+>   corpus is not approved the page claims no canonical at all, like every Quran page.
+>
+> **Proof:** `tests/quran/books-view.test.ts` (the address a view reads and builds — tolerant,
+> round-tripping, the general shelf dropping a Surah, the page bound inside Library's offset
+> bound; the one redirect for a form's submission, another order, a malformed value, never for an
+> address it built; ranges; Surah chips), `tests/library/quran-works.test.ts` (the read service's defaults and
+> fifteen refusals before any read); on SQL Server `tests/library/quran-works.integration.test.ts`
+> (the set — Topic or passage, no draft, no Work without a published Edition, no other Topic;
+> shelves, Surah, a published Edition's language, contributor, featured; the three orders; pages
+> and the total past the end; each card's languages, year, reading flag and passage order; every
+> facet without its own filter); `tests/config/fonts.test.ts` and `tests/config/locale.test.ts`
+> (the new modules); the browser journey (`tests/browser/quran.spec.ts`, "Quran Part 10"): the
+> figures, featured books, shelves, a card's credit, language, year, *Read online* and Surah chips
+> (a chip opens the Surah's tafsir), a page of 24 and the second page, never a draft; every filter,
+> the shelf, a Surah, a language and Quran order without script, chips and *Clear filters*, no
+> results, past the end, malformed and re-ordered addresses redirected to their one address; Urdu at 390 px and Arabic right to left, no sideways
+> scroll at 320 and 390 px; axe. *CI and staging evidence are recorded when they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

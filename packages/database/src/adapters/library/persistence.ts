@@ -13,6 +13,8 @@ import {
   type LibraryFacetPage,
   type LibraryCover,
   type QuranPassageWork,
+  type QuranWork,
+  type QuranWorksQuery,
 } from '@minhaj/contracts/library';
 import {
   canonicalPassageOrder,
@@ -863,6 +865,290 @@ function passageWhere(query: PassageQuery): Prisma.WorkQuranPassageWhereInput {
   };
 }
 
+/* ---- Quran Part 10: the Quran Books hub ----------------------------------- */
+
+/** Which of the query's filters a statement applies. */
+interface QuranWorksFilters {
+  readonly scope: boolean;
+  readonly language: boolean;
+  readonly contributor: boolean;
+  readonly featured: boolean;
+}
+
+const ALL_FILTERS: QuranWorksFilters = {
+  scope: true,
+  language: true,
+  contributor: true,
+  featured: true,
+};
+const NO_FILTERS: QuranWorksFilters = {
+  scope: false,
+  language: false,
+  contributor: false,
+  featured: false,
+};
+
+/**
+ * THE QURAN BOOKS SET, as SQL over `[dbo].[Work] w`: the ONE public predicate
+ * (published, with a published Edition — the language narrows WHICH Edition
+ * must be published, never widens it), membership (on the Topic, or carrying
+ * a passage), and whichever of the query's filters `use` names. Every value is
+ * a bound parameter.
+ */
+function quranWorksWhere(q: QuranWorksQuery, use: QuranWorksFilters): Prisma.Sql {
+  const edition = [Prisma.sql`e.[workId] = w.[id]`, Prisma.sql`e.[state] = N'published'`];
+  if (use.language && q.language !== null)
+    edition.push(Prisma.sql`e.[languageCode] = ${q.language}`);
+  const carries = Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[WorkQuranPassage] m WHERE m.[workId] = w.[id])`;
+  const conditions = [
+    Prisma.sql`w.[state] = N'published'`,
+    Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[Edition] e WHERE ${Prisma.join(edition, ' AND ')})`,
+    q.topic === null
+      ? carries
+      : Prisma.sql`(EXISTS (SELECT 1 FROM [dbo].[WorkTopic] o WHERE o.[workId] = w.[id] AND o.[topicId] = ${q.topic}) OR ${carries})`,
+  ];
+  if (use.scope) {
+    if (q.surah !== null)
+      conditions.push(
+        Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[WorkQuranPassage] s WHERE s.[workId] = w.[id] AND s.[surahNumber] = ${q.surah})`,
+      );
+    else if (q.shelf === 'explains') conditions.push(carries);
+    else if (q.shelf === 'general') conditions.push(Prisma.sql`NOT ${carries}`);
+  }
+  if (use.contributor && q.contributor !== null)
+    conditions.push(
+      Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[WorkContributor] c WHERE c.[workId] = w.[id] AND c.[personId] = ${q.contributor})`,
+    );
+  if (use.featured && q.featured) conditions.push(Prisma.sql`w.[isFeatured] = 1`);
+  return Prisma.join(conditions, ' AND ');
+}
+
+/** The same membership as an ORM filter: the hydrating read re-applies it. */
+function quranWorksMembership(q: QuranWorksQuery): Prisma.WorkWhereInput {
+  return q.topic === null
+    ? { quranPassages: { some: {} } }
+    : {
+        OR: [{ topics: { some: { topicId: q.topic } } }, { quranPassages: { some: {} } }],
+      };
+}
+
+/** How many content languages one card names, at most. */
+const QURAN_WORK_EDITIONS = 50;
+
+function quranWorksReader(): Pick<
+  LibraryPublicReaderPort,
+  'quranWorks' | 'quranWorkFacets'
+> {
+  const db = getDatabaseClient();
+
+  /** Counts over a filtered set: every Work, and those carrying a passage. */
+  async function counts(where: Prisma.Sql) {
+    const [row] = await db.$queryRaw<
+      { works: number; explaining: number | null; featured: number | null }[]
+    >`
+      WITH s AS (
+        SELECT CASE WHEN EXISTS (SELECT 1 FROM [dbo].[WorkQuranPassage] m WHERE m.[workId] = w.[id])
+                    THEN 1 ELSE 0 END AS [explaining],
+               CASE WHEN w.[isFeatured] = 1 THEN 1 ELSE 0 END AS [featured]
+        FROM [dbo].[Work] w
+        WHERE ${where}
+      )
+      SELECT COUNT(*) AS [works], SUM(s.[explaining]) AS [explaining], SUM(s.[featured]) AS [featured]
+      FROM s;`;
+    return {
+      works: Number(row?.works ?? 0),
+      explaining: Number(row?.explaining ?? 0),
+      featured: Number(row?.featured ?? 0),
+    };
+  }
+
+  return {
+    /**
+     * TWO READS, THE SECOND AUTHORITATIVE — as `orderedWorks`: one bounded SQL
+     * page of identifiers in the reader's order (with the total the query
+     * admits), then those Works loaded under the public predicate and the
+     * membership again, so an error in the ordering query could only drop a
+     * Work, never admit one.
+     */
+    async quranWorks(q) {
+      const where = quranWorksWhere(q, ALL_FILTERS);
+      const order =
+        q.sort === 'newest'
+          ? Prisma.sql`CASE WHEN y.[year] IS NULL THEN 1 ELSE 0 END, y.[year] DESC, t.[title] ASC, w.[id] ASC`
+          : q.sort === 'quran'
+            ? Prisma.sql`CASE WHEN f.[surahNumber] IS NULL THEN 1 ELSE 0 END, f.[surahNumber] ASC, f.[ayahFrom] ASC, f.[ayahTo] ASC, t.[title] ASC, w.[id] ASC`
+            : Prisma.sql`t.[title] ASC, w.[id] ASC`;
+      // In Quran order a Surah filter orders by the passage in THAT Surah.
+      const first =
+        q.surah === null ? Prisma.empty : Prisma.sql`AND p.[surahNumber] = ${q.surah}`;
+      const page = await db.$queryRaw<{ id: string; total: number }[]>`
+        SELECT w.[id], COUNT(*) OVER () AS [total]
+        FROM [dbo].[Work] w
+        OUTER APPLY (
+          SELECT TOP (1) l.[title] FROM [dbo].[WorkLabel] l
+          WHERE l.[workId] = w.[id]
+          ORDER BY CASE WHEN l.[locale] = ${q.titleLocale} THEN 0
+                        WHEN l.[locale] = w.[primaryLocale] THEN 1 ELSE 2 END, l.[locale]
+        ) t
+        OUTER APPLY (
+          SELECT MAX(e.[publicationYear]) AS [year] FROM [dbo].[Edition] e
+          WHERE e.[workId] = w.[id] AND e.[state] = N'published'
+        ) y
+        OUTER APPLY (
+          SELECT TOP (1) p.[surahNumber], p.[ayahFrom], p.[ayahTo]
+          FROM [dbo].[WorkQuranPassage] p
+          WHERE p.[workId] = w.[id] ${first}
+          ORDER BY p.[surahNumber], p.[ayahFrom], p.[ayahTo]
+        ) f
+        WHERE ${where}
+        ORDER BY ${order}
+        OFFSET ${boundedOffset(q.offset)} ROWS FETCH NEXT ${q.limit + 1} ROWS ONLY`;
+
+      // Past the end there is no row to carry the total; it is counted alone.
+      const total =
+        page[0] === undefined
+          ? q.offset === 0
+            ? 0
+            : (await counts(where)).works
+          : Number(page[0].total);
+      const ids = page.slice(0, q.limit).map((row) => row.id);
+      if (ids.length === 0) return { items: [], total, hasMore: false };
+
+      const rows = await db.work.findMany({
+        where: { ...PUBLIC_WORK, ...quranWorksMembership(q), id: { in: ids } },
+        select: {
+          id: true,
+          slug: true,
+          primaryLocale: true,
+          isFeatured: true,
+          labels: {
+            select: { locale: true, title: true, description: true },
+            orderBy: { locale: 'asc' as const },
+          },
+          contributors: {
+            select: { personId: true, role: true },
+            orderBy: [{ position: 'asc' as const }, { personId: 'asc' as const }],
+          },
+          editions: {
+            where: { state: 'published' },
+            select: {
+              id: true,
+              languageCode: true,
+              publicationYear: true,
+              reading: true,
+              coverAssetId: true,
+              coverWidth: true,
+              coverHeight: true,
+            },
+            orderBy: { id: 'asc' as const },
+            take: QURAN_WORK_EDITIONS,
+          },
+          quranPassages: {
+            select: PASSAGE_SELECT,
+            orderBy: { position: 'asc' as const },
+          },
+        },
+      });
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      const items: QuranWork[] = ids.flatMap((id) => {
+        const row = byId.get(id);
+        if (row === undefined) return [];
+        const coverEdition = row.editions.find((entry) => coverOf(entry) !== null);
+        const cover = coverEdition === undefined ? null : coverOf(coverEdition);
+        const years = row.editions.flatMap((entry) =>
+          entry.publicationYear === null ? [] : [entry.publicationYear],
+        );
+        return [
+          {
+            id: row.id,
+            slug: row.slug,
+            primaryLocale: row.primaryLocale as WorkRecord['primaryLocale'],
+            isFeatured: row.isFeatured,
+            labels: row.labels.map((label) => ({
+              locale: label.locale as WorkRecord['primaryLocale'],
+              title: label.title,
+              description: label.description,
+            })),
+            cover:
+              cover === null || coverEdition === undefined
+                ? null
+                : { ...cover, editionId: coverEdition.id },
+            contributors: row.contributors,
+            languages: [
+              ...new Set(row.editions.map((entry) => entry.languageCode)),
+            ].sort(),
+            year: years.length === 0 ? null : Math.max(...years),
+            readable: row.editions.some((entry) => entry.reading === 'allowed'),
+            passages: row.quranPassages.map(passageOf),
+          },
+        ];
+      });
+      return { items, total, hasMore: page.length > q.limit };
+    },
+
+    /**
+     * FIVE GROUPED READS, each bounded: a facet's own filter is left out of its
+     * own counts, so every option says how many Works choosing it would show.
+     */
+    async quranWorkFacets(q) {
+      const scoped = (use: Partial<QuranWorksFilters>) =>
+        quranWorksWhere(q, { ...NO_FILTERS, ...use });
+      const [hub, hubLanguages, shelves, languages, contributors, surahs] =
+        await Promise.all([
+          counts(scoped({})),
+          db.$queryRaw<{ languages: number }[]>`
+            SELECT COUNT(DISTINCT e.[languageCode]) AS [languages]
+            FROM [dbo].[Edition] e
+            WHERE e.[state] = N'published'
+              AND e.[workId] IN (SELECT w.[id] FROM [dbo].[Work] w WHERE ${scoped({})});`,
+          counts(scoped({ language: true, contributor: true })),
+          db.$queryRaw<{ id: string; count: number }[]>`
+            SELECT TOP (${FACET_PAGE + 1}) e.[languageCode] AS [id], COUNT(DISTINCT e.[workId]) AS [count]
+            FROM [dbo].[Edition] e
+            WHERE e.[state] = N'published'
+              AND e.[workId] IN (SELECT w.[id] FROM [dbo].[Work] w
+                                 WHERE ${scoped({ scope: true, contributor: true })})
+            GROUP BY e.[languageCode]
+            ORDER BY [count] DESC, [id] ASC;`,
+          db.$queryRaw<{ id: string; count: number }[]>`
+            SELECT TOP (${FACET_PAGE + 1}) c.[personId] AS [id], COUNT(DISTINCT c.[workId]) AS [count]
+            FROM [dbo].[WorkContributor] c
+            WHERE c.[workId] IN (SELECT w.[id] FROM [dbo].[Work] w
+                                 WHERE ${scoped({ scope: true, language: true })})
+            GROUP BY c.[personId]
+            ORDER BY [count] DESC, [id] ASC;`,
+          db.$queryRaw<{ surah: number; owners: number }[]>`
+            SELECT p.[surahNumber] AS [surah], COUNT(DISTINCT p.[workId]) AS [owners]
+            FROM [dbo].[WorkQuranPassage] p
+            WHERE p.[workId] IN (SELECT w.[id] FROM [dbo].[Work] w
+                                 WHERE ${scoped({ language: true, contributor: true })})
+            GROUP BY p.[surahNumber]
+            ORDER BY p.[surahNumber];`,
+        ]);
+      const facet = (rows: readonly { id: string; count: number }[]) =>
+        facetPage(
+          rows.map((row) => ({ id: row.id, count: Number(row.count) })),
+          FACET_PAGE,
+        );
+      return {
+        hub: {
+          works: hub.works,
+          explaining: hub.explaining,
+          featured: hub.featured,
+          languages: Number(hubLanguages[0]?.languages ?? 0),
+        },
+        shelves: { all: shelves.works, explaining: shelves.explaining },
+        languages: facet(languages),
+        contributors: facet(contributors),
+        surahs: surahs.map((row) => ({
+          surah: Number(row.surah),
+          owners: Number(row.owners),
+        })),
+      };
+    },
+  };
+}
+
 /** At most one Collection's worth of Works is described in one read. */
 const REFERENCE_BATCH = 100;
 /** How many Works an editor's selector offers at once. */
@@ -877,6 +1163,7 @@ export function createLibraryPublicReader(): LibraryPublicReaderPort {
   const db = getDatabaseClient();
   return {
     ...createScholarlyPublicReader(),
+    ...quranWorksReader(),
     async contributorFacets(offset) {
       const rows = await db.workContributor.groupBy({
         by: ['personId'],

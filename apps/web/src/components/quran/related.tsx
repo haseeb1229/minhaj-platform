@@ -19,7 +19,6 @@ import {
   LEARNING_MAX_OFFSET,
   outlineLabel,
 } from '@/components/learning/presentation';
-import { labelFor, WORK_PAGE, workPath } from '@/components/library/presentation';
 import { listingHref } from '@/components/library/scholarly';
 import {
   scholarlyLabel,
@@ -34,15 +33,15 @@ import { QuranFrame, quranTrail } from './parts';
 import { offsetPathOf, quranPath } from './presentation';
 
 /**
- * Related material — `/quran/books`, `/quran/videos`, `/quran/research`,
- * `/quran/courses` (ROUTE_MAP.md §3.3: "related material, canonical to their
- * domain collections").
+ * Related material — `/quran/videos`, `/quran/research`, `/quran/courses`
+ * (ROUTE_MAP.md §3.3: "related material, canonical to their domain
+ * collections"). `/quran/books` was one of these until Quran Part 10 made it
+ * the Quran Books hub (`./books.tsx`), canonical to itself.
  *
  * LAYER-4 COMPOSITION OF THE OWNERS' OWN PUBLIC READS. Each view is ONE bounded,
  * topic-filtered page of the owner's public listing for Taxonomy's `quran`
- * Topic — Library's Works and Research, Media's Videos and, since Phase 22,
- * Learning's published Courses — never the search index and never a Quran
- * read. Quran itself imports none of them; only this presentation layer
+ * Topic — Library's Research, Media's Videos and, since Phase 22, Learning's
+ * published Courses — never the search index and never a Quran read. Quran itself imports none of them; only this presentation layer
  * composes them. Each item links to its owner's canonical address, and the
  * page canonicalises to the owner's collection.
  *
@@ -53,17 +52,11 @@ import { offsetPathOf, quranPath } from './presentation';
  * (ROUTE_MAP.md §5.2).
  */
 
-export const RELATED_KINDS = Object.freeze([
-  'books',
-  'videos',
-  'research',
-  'courses',
-] as const);
+export const RELATED_KINDS = Object.freeze(['videos', 'research', 'courses'] as const);
 export type RelatedKind = (typeof RELATED_KINDS)[number];
 
 /** The LOCALE-FREE owner collection each related view canonicalises to. */
 export const RELATED_CANONICAL: Readonly<Record<RelatedKind, string>> = Object.freeze({
-  books: '/library/books',
   videos: '/watch/videos',
   research: '/library/research',
   courses: '/learn/courses',
@@ -89,26 +82,6 @@ async function relatedPage(
   readonly owner: string;
 }> {
   switch (kind) {
-    case 'books': {
-      const page = await libraryReadRuntime().works({ topic: topic.id, offset });
-      return {
-        rows: page.items.map((work) => {
-          const label = labelFor(work, locale);
-          return {
-            key: work.id,
-            href: workPath(locale, work.slug),
-            title: label.title,
-            locale: label.locale,
-          };
-        }),
-        hasMore: page.hasMore,
-        size: WORK_PAGE,
-        owner: localizedPath(
-          locale,
-          `/library/books?topic=${encodeURIComponent(topic.id)}`,
-        ),
-      };
-    }
     case 'videos': {
       const page = await mediaReadRuntime().videos({ topic: topic.id, offset });
       return {

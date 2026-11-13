@@ -294,7 +294,8 @@ it reserves is unpublished. No route changes.
 | `/quran/tajweed` · `/quran/tajweed/{rule}` | Study aids. Since Quran Part 9, with a public tajweed colour overlay, the **Tajweed hub**: every rule the overlay marks (the 18 of `QURAN_TAJWEED_RULES`) with its colour, its counts and the shortest ayat where it occurs (only that rule coloured, each linked to its Ayah), the colour key, the published guidance on other subjects, and the overlay's credit and standing ("not yet reviewed by a qari"); `/quran/tajweed/{rule}` for such a rule shows its colour, its guidance where an editor published a Tajweed rule of that slug ("not yet" otherwise) and six examples. Without a public overlay, the published guidance alone, as before; an unknown or unpublished slug is 404 |
 | `/quran/recitations` · `/quran/recitations/{reciter}` | **Recitations — owned by Quran** (DOMAIN_MODEL.md §8.1) |
 | `/quran/topics/{slug}` | Filtered view, canonical → `/topics/{slug}` |
-| `/quran/{books\|videos\|articles\|research\|courses\|teachers}` | Related material, canonical to their domain collections |
+| `/quran/books` | The **Quran Books hub** (Quran Part 10): Library's public Works on the `quran` Topic together with every public Work that explains a Quran passage — figures, featured books, shelves (`?shelf=explains\|general`), `?surah`, `?language`, `?contributor`, `?sort=newest\|quran`, `?page`; **canonical to itself**, every filtered or paged view canonical to the bare path |
+| `/quran/{videos\|articles\|research\|courses\|teachers}` | Related material, canonical to their domain collections |
 
 Translation, tafsir and reciter selections are **query parameters, not path segments**, so a
 citation remains valid regardless of reading preferences.
@@ -313,6 +314,21 @@ overlay is public) is a browser preference like the reading mode, applied before
 every reading address — Surah, Juz, mushaf page, Ayah — stays the bare citation. The colour key
 appears beneath the reader's bar only while the colours are on.
 
+**Quran Part 10 — the Quran Books hub (DOMAIN_MODEL.md §10.1).** `/quran/books` is no longer a
+related-material view canonical to `/library/books` (its form from Phase 18 to Quran Part 9,
+historical): it is a curated navigational view of its own (§2.3), so its canonical address is the
+bare `/quran/books`, and every combination of `?shelf`, `?surah`, `?language`, `?contributor`,
+`?sort` and `?page` is a query filter canonical to it and never in a sitemap. Like every Quran page
+it claims no canonical at all while the corpus is not approved. Its books are Library's, composed
+at Layer 4 from Library's public `quranWorks` and `quranWorkFacets` reads: the Works on the `quran`
+Topic and every Work carrying a Quran passage (with no `quran` Topic, the latter alone — an empty
+state, never a 404). Each book links to its canonical `/library/books/{slug}`, and each Surah it
+explains to `/quran/tafsir/surah/{n}`. Every view is a GET address that works without script, and
+has ONE spelling: a filter form's empty controls, a malformed or repeated value, a Surah beside the
+general shelf or another parameter order is answered with one redirect to the view's canonical
+address, built from the parsed view and never from the typed text (so no parameter is a redirect
+target), never an error.
+
 **Delivered in Phase 18 (engineering — no authoritative corpus is supplied; DELIVERY_PLAN.md
 Phase-18 continuity).** Every route above except the three related views named below. Surah, Ayah
 and Juz addresses are numbers; `?translation`, `?transliteration` and `?tafsir` name a public work's
@@ -323,7 +339,8 @@ is the reciter's People slug. **Corpus states:** while no corpus is active, sect
 honest unavailable state and named resources answer 404; a fixture-mode corpus carries a visible
 non-authoritative notice on every page and is `noindex`; only an approved corpus is indexable.
 Related views: `/quran/books`, `/quran/videos` and `/quran/research` are delivered — each the
-owner's own public listing for the seeded `quran` topic, canonical to the owner's collection;
+owner's own public listing for the seeded `quran` topic, canonical to the owner's collection
+(`/quran/books` until Quran Part 10, which made it the Quran Books hub above — historical);
 `/quran/articles` and `/quran/teachers` stay absent and unlinked until an owner exposes a
 deterministic by-topic read. **Phase 22:** `/quran/courses` is delivered — Learning's own public
 Course listing for the seeded `quran` topic, composed at Layer 4 and canonical to the Course catalogue

@@ -1596,6 +1596,19 @@ Owns published works. Corrects the prior revision's conflation of *localized met
   (`library.work.passages-proposed`, origin `operator:tafsir-passages`) applies only to a Work
   that carries none. Public reads: `quranPassageWorks` (public Works whose passages overlap a
   range of a Surah, ordered by passage; bounded) and `quranPassageCounts` (public Works per Surah).
+- **Books on the Quran (Quran Part 10).** Which Works are "books on the Quran" is Library's
+  answer: every public Work on a Topic the caller names by identifier (the `quran` Topic, resolved
+  at Layer 4 — Library holds only the key) together with every public Work carrying a Quran
+  passage; with no Topic, the passage-carrying Works alone. `quranWorks` returns one bounded page
+  (24) of them with the total the query admits — narrowed by shelf (`explains`: carrying a passage,
+  in a named Surah when one is given; `general`: carrying none — a Surah beside `general` is
+  refused), a published Edition's content language, a credited Person and the featured flag;
+  ordered by title (as `titleLocale` reads it), newest publication or Quran order (earliest
+  passage), each total — and a card's worth per Work (titles and descriptions, card cover,
+  credits, the content languages and latest year of its published Editions, whether one offers
+  reading, its passages). `quranWorkFacets` returns the hub's figures unfiltered, the shelves under
+  the language and contributor, and the languages, contributors and Surahs, each counted without
+  its own filter. Both are the ordinary public predicate, parameterised SQL, bounded; no schema.
 - **Listing order (Rebaseline R2).** A public listing of Works is ordered by `sort`: absent, the
   stable catalogue order (by slug), unchanged for every caller that does not ask; `title`, A–Z by
   the title a reader of `titleLocale` is shown (the label in that locale, else the Work's
