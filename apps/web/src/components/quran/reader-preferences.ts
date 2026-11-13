@@ -12,7 +12,8 @@ import {
  *
  * PRESENTATION AND PLACE, NOTHING ELSE. The reading mode, which of the page's
  * translations are shown and how, which transliteration and which word-by-word
- * work are shown (Quran Part 7), the two text sizes, the line spacing, and
+ * work are shown (Quran Part 7), whether the Arabic is shown in tajweed colours
+ * (Quran Part 9), the two text sizes, the line spacing, and
  * the last Ayah read on this device. Kept in `localStorage` under two keys,
  * never sent anywhere, carrying no account identifier; an account's reading
  * position is Personalisation's, set only through its own signed-in controls.
@@ -84,6 +85,8 @@ export interface ReaderPreferences {
   readonly transliteration: string | null;
   /** The word-by-word work the Arabic is shown with, by slug; `null` is none. */
   readonly words: string | null;
+  /** The Arabic in tajweed colours (Quran Part 9), where the page has an overlay. */
+  readonly tajweed: boolean;
 }
 
 export const DEFAULT_PREFERENCES: ReaderPreferences = Object.freeze({
@@ -97,6 +100,7 @@ export const DEFAULT_PREFERENCES: ReaderPreferences = Object.freeze({
   notes: 'request',
   transliteration: null,
   words: null,
+  tajweed: false,
 });
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -162,6 +166,7 @@ export function readPreferences(raw: string | null): ReaderPreferences {
     notes: oneOf(NOTE_DISPLAYS, parsed['notes'], DEFAULT_PREFERENCES.notes),
     transliteration: workOf(parsed['transliteration']),
     words: workOf(parsed['words']),
+    tajweed: parsed['tajweed'] === true,
   };
 }
 
@@ -177,6 +182,7 @@ export function writePreferences(preferences: ReaderPreferences): string {
     notes: preferences.notes,
     transliteration: preferences.transliteration,
     words: preferences.words,
+    tajweed: preferences.tajweed,
   });
 }
 
@@ -281,6 +287,8 @@ export interface ReaderPresentation {
   readonly transliteration: string;
   /** The shown word-by-word work's index, or `''`. */
   readonly words: string;
+  /** `'on'` while the Arabic is shown in tajweed colours, else `''` (Quran Part 9). */
+  readonly tajweed: '' | 'on';
   readonly arabicScale: number | null;
   readonly translationScale: number;
 }
@@ -292,6 +300,8 @@ export function presentationOf(
     readonly explicitSize: boolean;
     readonly transliterations: RenderedLayer;
     readonly words: RenderedLayer;
+    /** The page rendered a tajweed overlay's colours (Quran Part 9). */
+    readonly tajweed: boolean;
   },
 ): ReaderPresentation {
   return {
@@ -302,6 +312,7 @@ export function presentationOf(
     notes: preferences.notes,
     transliteration: layerShownOf(preferences.transliteration, page.transliterations),
     words: layerShownOf(preferences.words, page.words),
+    tajweed: preferences.tajweed && page.tajweed ? 'on' : '',
     arabicScale: page.explicitSize ? null : preferences.arabicScale,
     translationScale: preferences.translationScale,
   };
@@ -315,11 +326,13 @@ export function presentationOf(
  * permits). It never throws: unreadable storage leaves the server's render.
  * The study layers (Quran Part 7) are read the same way: `data-transliterations`
  * and `data-word-works` list what was rendered, and the shown index is written
- * to `data-transliteration` and `data-words` unless the address fixed it.
+ * to `data-transliteration` and `data-words` unless the address fixed it. The
+ * tajweed colours (Quran Part 9) are written to `data-tajweed` only where the
+ * page rendered an overlay (`data-tajweed-overlay`).
  * Its first act marks the element `data-script`, so controls that need script
  * are drawn from the first paint when script runs, and never without it.
  */
-export const READER_BOOT_SCRIPT = `(function(r){if(!r)return;r.setAttribute("data-script","");var p;try{p=JSON.parse(window.localStorage.getItem(${JSON.stringify(PREFERENCES_KEY)})||"null")}catch(e){return}if(!p||typeof p!=="object"||Array.isArray(p))return;function one(v,a){return typeof v==="string"&&a.indexOf(v)>=0}function sc(v){return typeof v==="number"&&isFinite(v)&&v>=${String(SCALE.min)}&&v<=${String(SCALE.max)}}if(r.hasAttribute("data-modes")&&one(p.mode,${JSON.stringify(READING_MODES)}))r.setAttribute("data-mode",p.mode);if(one(p.leading,${JSON.stringify(LEADINGS)}))r.setAttribute("data-leading",p.leading);if(one(p.layout,${JSON.stringify(TRANSLATION_LAYOUTS)}))r.setAttribute("data-layout",p.layout);if(one(p.notes,${JSON.stringify(NOTE_DISPLAYS)}))r.setAttribute("data-notes",p.notes);if(!r.hasAttribute("data-fixed")){var s=(r.getAttribute("data-slugs")||"").split(" ").filter(Boolean),d=r.getAttribute("data-shown")||"",w=null;if(p.translationsOn===false||p.translations==="none")w="";else if(Array.isArray(p.translations)){var ok=true;for(var i=0;i<p.translations.length;i++)if(typeof p.translations[i]!=="string"||!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(p.translations[i])||p.translations[i].length<2||p.translations[i].length>120)ok=false;if(ok){if(p.translations.length===0)w="";else{var c=[];for(var j=0;j<p.translations.length&&j<${String(TRANSLATIONS_RENDERED_MAX)};j++){var k=s.indexOf(p.translations[j]);if(k>=0&&c.indexOf(k)<0)c.push(k)}c.sort(function(a,b){return a-b});w=c.length?c.join(" "):d}}}if(w!==null)r.setAttribute("data-shown",w)}function lay(l,f,c,v){if(r.hasAttribute(f))return;var s=(r.getAttribute(l)||"").split(" ").filter(Boolean),k=typeof v==="string"?s.indexOf(v):-1;r.setAttribute(c,k>=0?String(k):"")}lay("data-transliterations","data-transliteration-fixed","data-transliteration",p.transliteration);lay("data-word-works","data-words-fixed","data-words",p.words);if(sc(p.arabicScale)&&!r.hasAttribute("data-explicit-size"))r.style.setProperty("--quran-arabic-scale",String(p.arabicScale));if(sc(p.translationScale))r.style.setProperty("--quran-translation-scale",String(p.translationScale))})(document.currentScript&&document.currentScript.parentElement)`;
+export const READER_BOOT_SCRIPT = `(function(r){if(!r)return;r.setAttribute("data-script","");var p;try{p=JSON.parse(window.localStorage.getItem(${JSON.stringify(PREFERENCES_KEY)})||"null")}catch(e){return}if(!p||typeof p!=="object"||Array.isArray(p))return;function one(v,a){return typeof v==="string"&&a.indexOf(v)>=0}function sc(v){return typeof v==="number"&&isFinite(v)&&v>=${String(SCALE.min)}&&v<=${String(SCALE.max)}}if(r.hasAttribute("data-modes")&&one(p.mode,${JSON.stringify(READING_MODES)}))r.setAttribute("data-mode",p.mode);if(one(p.leading,${JSON.stringify(LEADINGS)}))r.setAttribute("data-leading",p.leading);if(one(p.layout,${JSON.stringify(TRANSLATION_LAYOUTS)}))r.setAttribute("data-layout",p.layout);if(one(p.notes,${JSON.stringify(NOTE_DISPLAYS)}))r.setAttribute("data-notes",p.notes);if(!r.hasAttribute("data-fixed")){var s=(r.getAttribute("data-slugs")||"").split(" ").filter(Boolean),d=r.getAttribute("data-shown")||"",w=null;if(p.translationsOn===false||p.translations==="none")w="";else if(Array.isArray(p.translations)){var ok=true;for(var i=0;i<p.translations.length;i++)if(typeof p.translations[i]!=="string"||!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(p.translations[i])||p.translations[i].length<2||p.translations[i].length>120)ok=false;if(ok){if(p.translations.length===0)w="";else{var c=[];for(var j=0;j<p.translations.length&&j<${String(TRANSLATIONS_RENDERED_MAX)};j++){var k=s.indexOf(p.translations[j]);if(k>=0&&c.indexOf(k)<0)c.push(k)}c.sort(function(a,b){return a-b});w=c.length?c.join(" "):d}}}if(w!==null)r.setAttribute("data-shown",w)}function lay(l,f,c,v){if(r.hasAttribute(f))return;var s=(r.getAttribute(l)||"").split(" ").filter(Boolean),k=typeof v==="string"?s.indexOf(v):-1;r.setAttribute(c,k>=0?String(k):"")}lay("data-transliterations","data-transliteration-fixed","data-transliteration",p.transliteration);lay("data-word-works","data-words-fixed","data-words",p.words);if(r.hasAttribute("data-tajweed-overlay"))r.setAttribute("data-tajweed",p.tajweed===true?"on":"");if(sc(p.arabicScale)&&!r.hasAttribute("data-explicit-size"))r.style.setProperty("--quran-arabic-scale",String(p.arabicScale));if(sc(p.translationScale))r.style.setProperty("--quran-translation-scale",String(p.translationScale))})(document.currentScript&&document.currentScript.parentElement)`;
 
 /* ===========================================================================
  * The last place read on this device

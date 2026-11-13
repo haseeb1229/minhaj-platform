@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -2349,6 +2349,188 @@ live('Phase 18 Quran adapter against real SQL Server, as the runtime principal',
         'QuranRecitationTranslationSpan',
       ])
         expect(await count(db.admin, table, `[segmentId] = ${n(segmentId)}`)).toBe(0);
+    });
+
+    it('records a tajweed overlay once, shows it only while public, and never over a corrected text (Quran Part 9)', async () => {
+      // The digest the import records: SHA-256 of the stored text's UTF-16LE.
+      const digest = (text: string) =>
+        createHash('sha256').update(Buffer.from(text, 'utf16le')).digest('hex');
+      const texts = new Map(
+        (await persistence.surahAyat(1, 0)).items.map((entry) => [
+          entry.ayah,
+          entry.text,
+        ]),
+      );
+      const overlay = await persistence.createTajweedOverlay({
+        actorId,
+        value: {
+          slug: 'non-quran-fixture-tajweed',
+          name: 'NON_QURAN_FIXTURE tajweed overlay',
+          description: null,
+          attribution: 'NON_QURAN_FIXTURE attribution',
+          sourceId: primary.id,
+        },
+      });
+      expect(overlay).toMatchObject({ state: 'draft', ayahCount: 0, spanCount: 0 });
+      expect(
+        await reasonOf(
+          persistence.setTajweedOverlayState({
+            actorId,
+            id: overlay.id,
+            expectedVersion: overlay.version,
+            state: 'published',
+          }),
+        ),
+      ).toBe('text-required');
+
+      const ayat = [
+        {
+          ayah: 1,
+          textSha256: digest(texts.get(1)!),
+          spans: [
+            { rule: 'ghunnah' as const, start: 0, end: 4 },
+            { rule: 'ikhfa' as const, start: 2, end: 6 },
+          ],
+        },
+        {
+          ayah: 3,
+          textSha256: digest(texts.get(3)!),
+          spans: [{ rule: 'qalqalah' as const, start: 1, end: 2 }],
+        },
+      ];
+      // A digest of any other text is refused, and nothing is written.
+      expect(
+        await reasonOf(
+          persistence.saveTajweedAyat({
+            actorId,
+            id: overlay.id,
+            expectedVersion: overlay.version,
+            surah: 1,
+            ayat: [{ ...ayat[0]!, textSha256: digest('NON_QURAN_FIXTURE other') }],
+          }),
+        ),
+      ).toBe('invalid');
+      expect(await count(db.admin, 'QuranTajweedOverlayAyah')).toBe(0);
+
+      const saved = await persistence.saveTajweedAyat({
+        actorId,
+        id: overlay.id,
+        expectedVersion: overlay.version,
+        surah: 1,
+        ayat,
+      });
+      expect(saved).toMatchObject({ recorded: 2, kept: 0 });
+      expect(saved.overlay).toMatchObject({
+        version: overlay.version + 1,
+        ayahCount: 2,
+        spanCount: 3,
+        staleAyat: 0,
+        rules: [
+          { rule: 'ghunnah', spans: 1 },
+          { rule: 'ikhfa', spans: 1 },
+          { rule: 'qalqalah', spans: 1 },
+        ],
+      });
+      // Recorded once: a second save keeps both, under the version lock.
+      expect(
+        await reasonOf(
+          persistence.saveTajweedAyat({
+            actorId,
+            id: overlay.id,
+            expectedVersion: overlay.version,
+            surah: 1,
+            ayat,
+          }),
+        ),
+      ).toBe('conflict');
+      const again = await persistence.saveTajweedAyat({
+        actorId,
+        id: overlay.id,
+        expectedVersion: saved.overlay.version,
+        surah: 1,
+        ayat,
+      });
+      expect(again).toMatchObject({ recorded: 0, kept: 2 });
+      expect(await persistence.tajweedAyat(overlay.id, 1)).toEqual([
+        { ayah: 1, textSha256: digest(texts.get(1)!), spans: 2 },
+        { ayah: 3, textSha256: digest(texts.get(3)!), spans: 1 },
+      ]);
+
+      // A draft is never public.
+      expect(await reader.tajweedOverlays()).toEqual([]);
+      expect(await reader.tajweedSpans(overlay.id, 1, 1, 3)).toEqual([]);
+      const published = await persistence.setTajweedOverlayState({
+        actorId,
+        id: overlay.id,
+        expectedVersion: again.overlay.version,
+        state: 'published',
+      });
+      expect((await reader.tajweedOverlays()).map((entry) => entry.slug)).toEqual([
+        'non-quran-fixture-tajweed',
+      ]);
+      expect(await reader.tajweedSpans(overlay.id, 1, 1, 3)).toEqual([
+        { ayah: 1, spans: ayat[0]!.spans },
+        { ayah: 3, spans: ayat[1]!.spans },
+      ]);
+      expect(await reader.tajweedSpans(overlay.id, 1, 2, 2)).toEqual([]);
+      const uses = await reader.tajweedRuleUses(overlay.id, 3, null);
+      expect(uses.ayat).toBe(2);
+      expect(uses.rules.map((use) => [use.rule, use.ayat, use.spans])).toEqual([
+        ['ghunnah', 1, 1],
+        ['ikhfa', 1, 1],
+        ['qalqalah', 1, 1],
+      ]);
+      // An example is the stored text, with only its own rule's spans.
+      expect(uses.rules[1]!.examples).toEqual([
+        { surah: 1, ayah: 1, text: texts.get(1), spans: [ayat[0]!.spans[1]] },
+      ]);
+      expect((await reader.tajweedRuleUses(overlay.id, 0, 'qalqalah')).rules).toEqual([
+        { rule: 'qalqalah', ayat: 1, spans: 1, examples: [] },
+      ]);
+
+      // FAIL CLOSED: once 1:1's canonical text is corrected, its spans describe
+      // another text — the reader shows it uncoloured, and administration
+      // counts it stale.
+      const current = (await persistence.ayah({ surah: 1, ayah: 1 }))!;
+      await canonical.correctAyah({
+        authority: editor,
+        ref: { surah: 1, ayah: 1 },
+        expectedVersion: current.version,
+        sourceId: corrections.id,
+        reviewedText: corrections.ayat.find((entry) => entry.ayah === 1)!.text,
+        reason: 'Fixture correction under a tajweed overlay',
+      });
+      expect(await reader.tajweedSpans(overlay.id, 1, 1, 3)).toEqual([
+        { ayah: 3, spans: ayat[1]!.spans },
+      ]);
+      expect((await reader.tajweedRuleUses(overlay.id, 3, null)).ayat).toBe(1);
+      expect(await persistence.tajweedOverlay(overlay.id)).toMatchObject({
+        ayahCount: 2,
+        staleAyat: 1,
+      });
+      // A digest of another Ayah's text is refused, whichever Ayah it names.
+      expect(
+        await reasonOf(
+          persistence.saveTajweedAyat({
+            actorId,
+            id: overlay.id,
+            expectedVersion: published.version,
+            surah: 2,
+            ayat: [{ ayah: 1, textSha256: digest(texts.get(1)!), spans: [] }],
+          }),
+        ),
+      ).toBe('invalid');
+
+      // Archived, it is gone from every public read.
+      await persistence.setTajweedOverlayState({
+        actorId,
+        id: overlay.id,
+        expectedVersion: published.version,
+        state: 'archived',
+      });
+      expect(await reader.tajweedOverlays()).toEqual([]);
+      expect(await reader.tajweedSpans(overlay.id, 1, 1, 3)).toEqual([]);
+      expect((await reader.tajweedRuleUses(overlay.id, 3, null)).rules).toEqual([]);
     });
 
     it('beside an APPROVED corpus, shows only approved-source works and lists the sitemap', async () => {

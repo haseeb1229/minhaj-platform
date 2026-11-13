@@ -924,6 +924,7 @@ export async function changeQuranState(
         'tafsir',
         'recitation',
         'tajweed',
+        'tajweed-overlay',
       ])
       .safeParse(form.get('kind'));
     const target = versioned(form);
@@ -950,6 +951,9 @@ export async function changeQuranState(
         break;
       case 'tajweed':
         await service.setTajweedRuleState(actor, input);
+        break;
+      case 'tajweed-overlay':
+        await service.setTajweedOverlayState(actor, input);
         break;
     }
 

@@ -520,6 +520,11 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[quranwordbyword]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[quranwordbywordcontributor]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[quranwordbywordgloss]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  // Quran Part 9: a tajweed overlay (never deleted, its slug fixed) and its
+  // recorded ayat and spans, inserted once by the import and never edited.
+  '[dbo].[qurantajweedoverlay]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[qurantajweedoverlayayah]': ['SELECT', 'INSERT'],
+  '[dbo].[qurantajweedspan]': ['SELECT', 'INSERT'],
   // Phase 19: Hadith, in the same four postures. SOURCE (source systems,
   // editions, activation) and CANONICAL (records, history, gradings,
   // verifications, citations, conflict evidence) are SELECT only, written by

@@ -14,9 +14,11 @@ import {
   type PublicLayerWork,
   type PublicRecitation,
   type PublicSurah,
+  type PublicTajweedOverlay,
   type QuranAvailability,
   type QuranRef,
   type TafsirEntryRecord,
+  type TajweedSpan,
   type TranslationLayerText,
   type TranslationNote,
   type WordGloss,
@@ -105,6 +107,7 @@ import {
 } from './scripture';
 import { juzSpans, type SurahIndexQuery, type SurahIndexRow } from './surah-index';
 import { TafsirPanel } from './tafsir-panel';
+import { TajweedKey, tajweedKeyLabels } from './tajweed-key';
 import {
   resourceCount,
   resourcesForAyah,
@@ -649,6 +652,11 @@ interface AyahLayers {
    */
   readonly explained: ReadonlyMap<number, AyahResources<HubBook, HubLecture>>;
   readonly tafsirWorks: ReadonlyMap<string, PublicLayerWork>;
+  /**
+   * Quran Part 9: each Ayah's spans in the page's tajweed overlay — only ayat
+   * whose canonical text still matches the text they were aligned to.
+   */
+  readonly tajweed: ReadonlyMap<number, readonly TajweedSpan[]>;
 }
 
 /** The works of one layer a page renders, and whether the address chose them. */
@@ -664,6 +672,12 @@ interface StudySet {
 interface TranslationSet extends StudySet {
   readonly transliterations: StudySet;
   readonly words: StudySet;
+  /**
+   * The tajweed overlay whose colours the page carries (Quran Part 9): the
+   * first public one, in slug order, or none — then no colour, no setting and
+   * no key exist on the page.
+   */
+  readonly tajweed: PublicTajweedOverlay | null;
 }
 
 /**
@@ -708,6 +722,7 @@ function translationSet(
       context.options.transliterations,
     ),
     words: studySet(context.chosen.words, request.words, context.options.wordByWords),
+    tajweed: context.options.tajweed[0] ?? null,
   };
   const chosen = context.chosen.translation;
   if (chosen !== null) return { works: [chosen], fixed: true, ...study };
@@ -748,6 +763,7 @@ async function layersFor(
     tafsirEntries,
     resources,
     works,
+    tajweed,
   ] = await Promise.all([
     Promise.all(
       set.works.map((work) => reader.translationTexts(work.id, surah, from, to)),
@@ -765,6 +781,9 @@ async function layersFor(
       : reader.tafsirEntries(tafsir.id, surah, from, to),
     readTafsirResources(surah, from, to),
     readTafsirWorks(),
+    set.tajweed === null
+      ? Promise.resolve([])
+      : reader.tajweedSpans(set.tajweed.id, surah, from, to),
   ]);
   // A tafsir the address asked for that is not public shows NO tafsir text —
   // never another work's in its place (the layer rule); books and lectures
@@ -809,6 +828,7 @@ async function layersFor(
           },
     explained,
     tafsirWorks: new Map(works.map((work) => [work.id, work])),
+    tajweed: new Map(tajweed.map((entry) => [entry.ayah, entry.spans] as const)),
   };
 }
 
@@ -819,6 +839,7 @@ const NO_LAYERS: AyahLayers = {
   tafsir: null,
   explained: new Map(),
   tafsirWorks: new Map(),
+  tajweed: new Map(),
 };
 
 /* ===========================================================================
@@ -1271,6 +1292,7 @@ function AyahItem({
           text={ayah.text}
           ayah={ayah.ayah}
           open={t('reader.openAyah', ref)}
+          tajweed={layers.tajweed.get(ayah.ayah) ?? []}
         />
         <AyahWordByWord ayah={ayah} layers={layers} idBase={`words-${key}`} t={t} />
         {ayah.sajdah === null ? null : (
@@ -1471,6 +1493,11 @@ async function controlLabels(locale: Locale): Promise<ReaderControlLabels> {
       help: t('notes.display.help'),
     },
     noteTitle: t('notes.title'),
+    tajweed: {
+      label: t('tajweed.setting'),
+      help: t('tajweed.experimental'),
+      learn: t('tajweed.learn'),
+    },
     study: {
       transliteration: t('reader.study.transliteration'),
       transliterationHelp: t('reader.study.transliterationHelp'),
@@ -1591,6 +1618,8 @@ async function ReadingFrame({
       data-word-works={set.words.works.map((work) => work.slug).join(' ')}
       data-words={set.words.fixed ? '0' : ''}
       {...(set.words.fixed ? { 'data-words-fixed': '' } : {})}
+      {...(set.tajweed === null ? {} : { 'data-tajweed-overlay': '' })}
+      data-tajweed=""
       suppressHydrationWarning
       className={`quran-reader quran-size-${request.size} flex min-w-0 flex-col`}
     >
@@ -1624,6 +1653,11 @@ async function ReadingFrame({
             }
             transliterations={study('transliteration', set.transliterations)}
             words={study('words', set.words)}
+            tajweed={
+              set.tajweed === null
+                ? null
+                : { name: set.tajweed.name, hubHref: quranPath(locale, 'tajweed') }
+            }
             explicitSize={explicitSize}
             modes={modes}
             initialJuz={initialJuz}
@@ -1646,6 +1680,15 @@ async function ReadingFrame({
           <QuranModeSwitch labels={{ modes: labels.modes }} />
         </div>
       ) : null}
+      {set.tajweed === null ? null : (
+        <div className="pt-4">
+          <TajweedKey
+            labels={await tajweedKeyLabels(locale)}
+            attribution={set.tajweed.attribution}
+            hubHref={quranPath(locale, 'tajweed')}
+          />
+        </div>
+      )}
       {children}
     </div>
   );
@@ -2533,6 +2576,7 @@ export async function AyahPage({
               label={t('layer.arabic')}
               text={ayah.text}
               ayah={ayah.ayah}
+              tajweed={layers.tajweed.get(ayah.ayah) ?? []}
             />
             <AyahWordByWord ayah={ayah} layers={layers} idBase="ayah-words" t={t} />
             <AyahTransliterations

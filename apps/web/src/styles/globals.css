@@ -87,6 +87,31 @@
   --color-accent-surface: #f3e8cc;
   --color-accent-rule: #cfb57e;
 
+  /* TAJWEED (Quran Part 9) — one colour per rule the overlay marks, each text
+     AA on every surface a Quran line sits on (paper, raised, sunken, the
+     recited-Ayah wash and the search highlight). Rules that sound alike share
+     a hue family: green and teal for the nasal sounds, olive and violet for the
+     merged letters, red to amber for the lengthenings (deepest = longest),
+     blue for the echo, warm grey for letters written but not pronounced. */
+  --color-tajweed-ghunnah: #1b7130;
+  --color-tajweed-idghaam-ghunnah: #0b6e5a;
+  --color-tajweed-idghaam-shafawi: #38701a;
+  --color-tajweed-ikhfa: #86278c;
+  --color-tajweed-ikhfa-shafawi: #a1246f;
+  --color-tajweed-iqlab: #0a6a8a;
+  --color-tajweed-idghaam-no-ghunnah: #54662a;
+  --color-tajweed-idghaam-mutajanisayn: #6b5a8e;
+  --color-tajweed-idghaam-mutaqaribayn: #6b5a8e;
+  --color-tajweed-madd-2: #8a5600;
+  --color-tajweed-madd-246: #a0480b;
+  --color-tajweed-madd-munfasil: #a83a1a;
+  --color-tajweed-madd-muttasil: #b02a26;
+  --color-tajweed-madd-6: #8e0f22;
+  --color-tajweed-qalqalah: #2747b8;
+  --color-tajweed-hamzat-wasl: #625d55;
+  --color-tajweed-lam-shamsiyyah: #625d55;
+  --color-tajweed-silent: #625d55;
+
   /* INK — the one deep surface, for the bands that frame a page (the brand
      band of the home hero and the footer). Its foreground roles are measured
      against both ink values. Focus on ink uses the ink accent. */
@@ -934,4 +959,127 @@ body:has([data-quran-dock]) {
 }
 .quran-progress::-moz-progress-bar {
   background: var(--color-accent);
+}
+
+/*
+ * QURAN PART 9 — TAJWEED COLOURS. A coloured run (`.tj`, `./scripture`) is a
+ * bare inline span inside the Arabic paragraph: it changes the COLOUR and
+ * nothing else — no font, weight, spacing, padding or position — so the
+ * letters join and shape across runs as in one text node, a recited Ayah's
+ * wash is drawn behind them unchanged, and Copy takes the stored text. Runs
+ * are colourless until the reader turns the colours on (`data-tajweed="on"`,
+ * set before the first paint) or a page shows them always
+ * (`.tajweed-colours`: the Tajweed hub's examples and keys).
+ *
+ * NOT COLOUR ALONE. The key names every rule; and where the reader asks for
+ * more contrast, or the system forces its own colours, each family of rules
+ * is also drawn with its own underline — solid for the nasal sounds, dashed
+ * for the merged letters, double for the lengthenings, wavy for the echo,
+ * dotted for the unpronounced letters — and a swatch keeps its colour.
+ */
+.tj-ghunnah {
+  --tj: var(--color-tajweed-ghunnah);
+}
+.tj-idghaam-ghunnah {
+  --tj: var(--color-tajweed-idghaam-ghunnah);
+}
+.tj-idghaam-shafawi {
+  --tj: var(--color-tajweed-idghaam-shafawi);
+}
+.tj-ikhfa {
+  --tj: var(--color-tajweed-ikhfa);
+}
+.tj-ikhfa-shafawi {
+  --tj: var(--color-tajweed-ikhfa-shafawi);
+}
+.tj-iqlab {
+  --tj: var(--color-tajweed-iqlab);
+}
+.tj-idghaam-no-ghunnah {
+  --tj: var(--color-tajweed-idghaam-no-ghunnah);
+}
+.tj-idghaam-mutajanisayn {
+  --tj: var(--color-tajweed-idghaam-mutajanisayn);
+}
+.tj-idghaam-mutaqaribayn {
+  --tj: var(--color-tajweed-idghaam-mutaqaribayn);
+}
+.tj-madd-2 {
+  --tj: var(--color-tajweed-madd-2);
+}
+.tj-madd-246 {
+  --tj: var(--color-tajweed-madd-246);
+}
+.tj-madd-munfasil {
+  --tj: var(--color-tajweed-madd-munfasil);
+}
+.tj-madd-muttasil {
+  --tj: var(--color-tajweed-madd-muttasil);
+}
+.tj-madd-6 {
+  --tj: var(--color-tajweed-madd-6);
+}
+.tj-qalqalah {
+  --tj: var(--color-tajweed-qalqalah);
+}
+.tj-hamzat-wasl {
+  --tj: var(--color-tajweed-hamzat-wasl);
+}
+.tj-lam-shamsiyyah {
+  --tj: var(--color-tajweed-lam-shamsiyyah);
+}
+.tj-silent {
+  --tj: var(--color-tajweed-silent);
+}
+.tj-ghunnah,
+.tj-idghaam-ghunnah,
+.tj-idghaam-shafawi,
+.tj-ikhfa,
+.tj-ikhfa-shafawi,
+.tj-iqlab {
+  --tj-line: solid;
+}
+.tj-idghaam-no-ghunnah,
+.tj-idghaam-mutajanisayn,
+.tj-idghaam-mutaqaribayn {
+  --tj-line: dashed;
+}
+.tj-madd-2,
+.tj-madd-246,
+.tj-madd-munfasil,
+.tj-madd-muttasil,
+.tj-madd-6 {
+  --tj-line: double;
+}
+.tj-qalqalah {
+  --tj-line: wavy;
+}
+.tj-hamzat-wasl,
+.tj-lam-shamsiyyah,
+.tj-silent {
+  --tj-line: dotted;
+}
+:is(.quran-reader[data-tajweed='on'], .tajweed-colours) .tj {
+  color: var(--tj);
+}
+.quran-reader:not([data-tajweed='on']) .quran-tajweed-key {
+  display: none;
+}
+.tajweed-swatch {
+  display: inline-block;
+  flex-shrink: 0;
+  inline-size: 1.75rem;
+  block-size: 0.875rem;
+  border-radius: 999px;
+  background-color: var(--tj);
+  forced-color-adjust: none;
+}
+@media (prefers-contrast: more), (forced-colors: active) {
+  :is(.quran-reader[data-tajweed='on'], .tajweed-colours) .tj {
+    text-decoration-line: underline;
+    text-decoration-style: var(--tj-line);
+    text-decoration-thickness: 0.06em;
+    text-underline-offset: 0.45em;
+    text-decoration-skip-ink: none;
+  }
 }

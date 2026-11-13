@@ -3705,6 +3705,7 @@ try {
   const quranTranslation = randomUUID();
   const quranTransliteration = randomUUID();
   const quranWordByWord = randomUUID();
+  const quranTajweed = randomUUID();
   const quranTafsir = randomUUID();
   const quranRecitation = randomUUID();
   const quranRule = randomUUID();
@@ -3720,8 +3721,9 @@ try {
      INSERT INTO [dbo].[QuranTafsir] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${quranTafsir}',N'lp-quran-tafsir-${quranRun}',N'en',N'NON_QURAN_FIXTURE tafsir',N'draft',1,SYSUTCDATETIME());
      INSERT INTO [dbo].[QuranRecitation] ([id],[slug],[personId],[name],[state],[version],[updatedAt]) VALUES (N'${quranRecitation}',N'lp-quran-recitation-${quranRun}',N'${quranPerson}',N'NON_QURAN_FIXTURE recitation',N'draft',1,SYSUTCDATETIME());
      INSERT INTO [dbo].[QuranTajweedRule] ([id],[slug],[position],[state],[version],[updatedAt]) VALUES (N'${quranRule}',N'lp-quran-tajweed-${quranRun}',0,N'draft',1,SYSUTCDATETIME());
-     INSERT INTO [dbo].[QuranWordByWord] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${quranWordByWord}',N'lp-quran-word-by-word-${quranRun}',N'en',N'NON_QURAN_FIXTURE word by word',N'draft',1,SYSUTCDATETIME());`,
-    'six draft works with a registered language and a typed reciter',
+     INSERT INTO [dbo].[QuranWordByWord] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${quranWordByWord}',N'lp-quran-word-by-word-${quranRun}',N'en',N'NON_QURAN_FIXTURE word by word',N'draft',1,SYSUTCDATETIME());
+     INSERT INTO [dbo].[QuranTajweedOverlay] ([id],[slug],[name],[state],[version],[updatedAt]) VALUES (N'${quranTajweed}',N'lp-quran-tajweed-overlay-${quranRun}',N'NON_QURAN_FIXTURE tajweed overlay',N'draft',1,SYSUTCDATETIME());`,
+    'seven draft works with a registered language and a typed reciter',
   );
   await expectAllowed(
     app,
@@ -3738,10 +3740,12 @@ try {
      INSERT INTO [dbo].[QuranRecitationSegment] ([id],[recitationId],[surahNumber],[startAyah],[endAyah]) VALUES (N'${quranSegment}',N'${quranRecitation}',1,1,3);
      INSERT INTO [dbo].[QuranRecitationTiming] ([segmentId],[ayahNumber],[startMs],[endMs]) VALUES (N'${quranSegment}',1,0,1000),(N'${quranSegment}',2,1000,2000),(N'${quranSegment}',3,2000,3000);
      INSERT INTO [dbo].[QuranTajweedRuleText] ([ruleId],[languageCode],[title],[body]) VALUES (N'${quranRule}',N'en',N'NON_QURAN_FIXTURE rule',N'NON_QURAN_FIXTURE rule body');
+     INSERT INTO [dbo].[QuranTajweedOverlayAyah] ([overlayId],[surahNumber],[ayahNumber],[textSha256],[spanCount]) SELECT N'${quranTajweed}',1,1,HASHBYTES('SHA2_256',[text]),1 FROM [dbo].[Ayah] WHERE [surahNumber]=1 AND [ayahNumber]=1;
+     INSERT INTO [dbo].[QuranTajweedSpan] ([overlayId],[surahNumber],[ayahNumber],[ordinal],[rule],[startCodepoint],[endCodepoint]) VALUES (N'${quranTajweed}',1,1,1,N'ghunnah',0,1);
      INSERT INTO [dbo].[SurahName] ([surahNumber],[locale],[name]) VALUES (1,N'en',N'NON_QURAN_FIXTURE name'),(1,N'ur',N'NON_QURAN_FIXTURE name ur');
      INSERT INTO [dbo].[QuranTopic] ([surahNumber],[ayahNumber],[topicId]) VALUES (1,1,N'${editorialTopic.id}');
      INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'quran-ayah',N'1:1');`,
-    "texts, a translator's note, glosses, entries, contributors, a timed segment, display names, a topic and Ayah search intent",
+    "texts, a translator's note, glosses, a tajweed Ayah and span, entries, contributors, a timed segment, display names, a topic and Ayah search intent",
   );
   await expectAllowed(
     app,
@@ -3751,6 +3755,7 @@ try {
      UPDATE [dbo].[QuranTransliterationText] SET [text]=N'NON_QURAN_FIXTURE_TRANSLITERATION_REVISED_1_1' WHERE [transliterationId]=N'${quranTransliteration}';
      UPDATE [dbo].[QuranWordByWordGloss] SET [text]=N'NON_QURAN_FIXTURE gloss revised' WHERE [wordByWordId]=N'${quranWordByWord}' AND [position]=1;
      UPDATE [dbo].[QuranWordByWord] SET [state]=N'published',[sourceId]=N'${quranSource}',[publishedAt]=SYSUTCDATETIME(),[version]=[version]+1 WHERE [id]=N'${quranWordByWord}';
+     UPDATE [dbo].[QuranTajweedOverlay] SET [state]=N'published',[sourceId]=N'${quranSource}',[publishedAt]=SYSUTCDATETIME(),[version]=[version]+1 WHERE [id]=N'${quranTajweed}';
      UPDATE [dbo].[QuranTafsirText] SET [text]=N'${quranText('TAFSIR_REVISED', 1, 1)}' WHERE [id]=N'${quranEntry}';
      UPDATE [dbo].[QuranTajweedRuleText] SET [body]=N'NON_QURAN_FIXTURE rule body revised' WHERE [ruleId]=N'${quranRule}';
      UPDATE [dbo].[QuranRecitationSegment] SET [assetId]=N'${quranAsset}' WHERE [id]=N'${quranSegment}';
@@ -3783,6 +3788,7 @@ try {
     'QuranRecitation',
     'QuranTajweedRule',
     'QuranWordByWord',
+    'QuranTajweedOverlay',
   ]) {
     await expectDenied(
       app,
@@ -3881,6 +3887,24 @@ try {
       'QuranTajweedRuleText language UPDATE denied',
       'UPDATE [dbo].[QuranTajweedRuleText] SET [languageCode]=[languageCode];',
     ],
+    // Quran Part 9: a tajweed Ayah and its spans are written once, by the
+    // import, and never edited or removed.
+    [
+      'QuranTajweedOverlayAyah UPDATE denied',
+      'UPDATE [dbo].[QuranTajweedOverlayAyah] SET [spanCount]=[spanCount];',
+    ],
+    [
+      'QuranTajweedOverlayAyah DELETE denied',
+      `DELETE FROM [dbo].[QuranTajweedOverlayAyah] WHERE [overlayId]=N'${quranTajweed}';`,
+    ],
+    [
+      'QuranTajweedSpan UPDATE denied',
+      'UPDATE [dbo].[QuranTajweedSpan] SET [endCodepoint]=[endCodepoint];',
+    ],
+    [
+      'QuranTajweedSpan DELETE denied',
+      `DELETE FROM [dbo].[QuranTajweedSpan] WHERE [overlayId]=N'${quranTajweed}';`,
+    ],
   ] as const)
     await expectDenied(app, label, statement);
 
@@ -3909,6 +3933,9 @@ try {
     'QuranWordByWord',
     'QuranWordByWordContributor',
     'QuranWordByWordGloss',
+    'QuranTajweedOverlay',
+    'QuranTajweedOverlayAyah',
+    'QuranTajweedSpan',
   ]) {
     await assertObjectVisible(app, table);
     await expectDenied(
@@ -3958,6 +3985,11 @@ try {
     QuranWordByWord: ['INSERT,SELECT', 'all but slug'],
     QuranWordByWordContributor: ['DELETE,INSERT,SELECT', ''],
     QuranWordByWordGloss: ['DELETE,INSERT,SELECT', 'text'],
+    // Quran Part 9: the overlay's slug is fixed; its ayat and spans are
+    // inserted once and never edited or removed.
+    QuranTajweedOverlay: ['INSERT,SELECT', 'all but slug'],
+    QuranTajweedOverlayAyah: ['INSERT,SELECT', ''],
+    QuranTajweedSpan: ['INSERT,SELECT', ''],
   };
   const posture = await app.query<{
     name: string;

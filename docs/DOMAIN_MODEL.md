@@ -853,6 +853,7 @@ Independent first-class context with the platform's strictest integrity requirem
 | Tafsir / TafsirText | A named exegetical work; content per ayah or range |
 | **Recitation / RecitationSegment** | **A reciter's recitation work and its verse/surah mapping** |
 | TajweedRule | Tajweed guidance |
+| TajweedOverlay / TajweedOverlayAyah / TajweedSpan | Tajweed colour spans over the UNCHANGED canonical Arabic, each Ayah tied to the text it was aligned to (§8.9) |
 
 ### 8.1 Recitation ownership — competing ownership removed
 
@@ -876,8 +877,8 @@ General non-Quran audio (lectures, talks) remains owned by Media.
 - **Quranic Arabic text is immutable in normal operation.** Change requires
   `quran.editCanonical`, a documented authoritative source, step-up reauthentication, and a
   full audit entry.
-- Translation, transliteration, word by word, tafsir and recitation are **separate works layered
-  over** the Ayah — never fields on it. Multiple translations coexist; none is privileged.
+- Translation, transliteration, word by word, tafsir, recitation and tajweed colours are **separate
+  works layered over** the Ayah — never fields on it, and never a change to its text. Multiple translations coexist; none is privileged.
 - Every Ayah has a stable canonical reference (surah:ayah) that never changes.
 - **Quran is never merged into Library.** Books *about* the Quran are Works; the Quran is not.
 
@@ -954,7 +955,9 @@ source: `QuranTranslation` + `QuranTranslationText` (one text per work and Ayah)
 shared by both ends' foreign keys, so a cross-Surah range is unrepresentable; entries of one work
 never overlap) + `QuranTafsirContributor` (author, translator, editor, compiler);
 `QuranTajweedRule` + `QuranTajweedRuleText` (plain-text guidance per language — nothing is
-annotated onto canonical text). Several coexist and **none is privileged**; a reader chooses.
+annotated onto canonical text). *(As at Phase 18. Since Quran Part 9 a tajweed colour OVERLAY marks
+rule spans over the canonical text, which stays exactly as stored — an overlay is never a text
+change — §8.9.)* Several coexist and **none is privileged**; a reader chooses.
 **A layered work is public only while the corpus is active, it is published, and it names a
 registered source** — and beside an approved corpus only an approved source will do. Publishing
 therefore needs a source the operator registered, which is why `quran.administer` is not religious
@@ -1345,6 +1348,80 @@ recorded, each audited with the command as its origin.
 and the citation search already resolves "18:10", "Surah Kahf" or "Al-Kahf 10" to its place
 (Quran Part 4). The search card now offers that place's tafsir — the same exact overlap answer the
 hub gives — and a title that names a Surah is already found by its words.
+
+### 8.9 Tajweed colours (Quran Part 9)
+
+**Owner decision (OPEN_DECISIONS.md §1.2 item 4):** the CC BY 4.0 `cpfair/quran-tajweed` colour
+annotations, re-aligned to the Tanzil Uthmani 1.1 text, on staging only — any Ayah whose text does
+not match is skipped, never adjusted — with a qari's review before production. Production gates
+unchanged.
+
+**An overlay of rule spans over UNCHANGED canonical text — never a text change.** Migration
+`20261112000000_r2_quran_tajweed_overlay` (with its rollback) adds three Quran-owned tables:
+
+| Fact | Shape | Rule |
+|---|---|---|
+| The overlay | `QuranTajweedOverlay` (slug, name, description, attribution, optional registered source, `draft`/`published`/`archived`, version, `publishedAt`) | A layered work: immutable slug (`_slug_ck`; runtime UPDATE of `slug` denied, no DELETE), `_state_ck` (published needs a source and `publishedAt`), public under the one `publicWork` predicate. **No content Language** (it marks the Arabic itself) and **no contributor** — its source's credit is its attribution |
+| An Ayah it colours | `QuranTajweedOverlayAyah (overlayId, surahNumber, ayahNumber, textSha256, spanCount)` | Typed keys to the overlay and to the canonical `Ayah` (NO ACTION). `textSha256` is the SHA-256 of the canonical text the spans were aligned to — the stored NVARCHAR as `HASHBYTES('SHA2_256', …)` sees it (UTF-16LE) — and must equal the Ayah's CURRENT text when written (trigger `QuranTajweedOverlayAyahRules`, 51407). `spanCount` 0–999 (`_ck`): an Ayah aligned with no rule in it is recorded with 0. Written once, never edited |
+| A span | `QuranTajweedSpan (overlayId, surahNumber, ayahNumber, ordinal, rule, startCodepoint, endCodepoint)` | Typed key to its recorded Ayah. `rule` one of a CLOSED vocabulary of 18 (`QURAN_TAJWEED_RULES`, `@minhaj/contracts/quran`; `_ck`), `[start, end)` in Unicode CODE POINTS, non-empty, ordinal from 1, end ≤ 4000. Trigger `QuranTajweedSpanRules` (51407): written once, the end within the Ayah's text (its UTF-16 length, a ceiling the code-point length never exceeds), and no Ayah gains spans beyond its `spanCount`. That a span ends within the Ayah's CODE POINTS and spans come in order of their start is the service's check against the stored text (`tajweedSpanProblem`) |
+
+A published overlay colours an Ayah (trigger `QuranTajweedOverlayPublishedAyat`, 51406 →
+`text-required`). **Spans MAY overlap or nest** — that is what the data is: the source marks two
+rules on one letter where they meet (39 ayat; one nesting) — so no non-overlap rule exists.
+Restore proof: 53 CHECKs, 58 foreign keys and 38 triggers on the Quran tables.
+
+**FAIL CLOSED AFTER A CORRECTION.** Every public read joins the recorded Ayah to the canonical one
+and shows its spans only while `textSha256 = HASHBYTES('SHA2_256', Ayah.text)`: once an Ayah is
+corrected (`QuranCorrectAyah`), its spans describe another text and the reader shows it
+uncoloured; administration counts it as stale. Nothing re-aligns an Ayah silently; a new import
+would record it again only once its new text is aligned.
+
+**The rules' names and the guidance.** Each rule key is also the slug of its guidance page
+`/quran/tajweed/{rule}`: where an editor published a `QuranTajweedRule` of that slug, its text
+is the rule's guidance; nothing explains a rule in words the editors did not write.
+
+**Re-alignment (`scripts/quran/tajweed-overlay.ts`, pure, exhaustively unit-tested).** The
+annotations count code points of the 2017 Tanzil Uthmani 1.0.2 text the project ships; our corpus is
+Tanzil 1.1, which differs in 4,346 of 6,236 ayat (a tatweel before a superscript alif, pause marks
+as their own words, hamza spellings, the 2017 file's Bismillah at the head of each Surah's first
+Ayah). Per Ayah: equal texts keep their offsets; otherwise a code-point diff (common head and tail
+paired, Myers' shortest edit script between) pairs the shared code points, and a span is carried
+only if EVERY code point it covers is paired and they land CONTIGUOUSLY — its 1.1 substring is
+code-point-identical to its 2017 substring, no edit inside it; an edit at its edge stays outside,
+uncoloured. If any span of an Ayah cannot be carried the WHOLE Ayah is skipped. Neither text is ever
+changed. Against the real files: **5,558 of 6,236 ayat aligned** (1,890 unchanged, 3,668
+re-mapped; 63 of them with no rule marked), **678 skipped** (a span on changed text; none too
+different, none unannotated), **48,035 spans** carried; 40 Surahs wholly coloured.
+
+**Who writes what.** Only the operator's import writes spans
+(`docker/staging/bin/quran-reference.sh tajweed`; ARCHITECTURE.md, staging operations): the owner
+registers the `reference` provenance source (`quran-tajweed-annotations`, both pinned digests,
+both licences and the change made in its evidence), then the runtime principal, under the
+operator's live `quran.read` and `quran.administer`, creates the DRAFT overlay and records each
+aligned Ayah through Quran's service (`createTajweedOverlay`, `saveTajweedAyat` — one Surah per
+transaction under the expected version; an Ayah already recorded is kept). An authorised editor
+publishes or archives it on `/admin/quran/tajweed` (`setTajweedOverlayState`). **There is no span
+editor, by design**: a span is meaningful only against the exact code points it was aligned to, a
+hand-moved span would colour letters its source never marked, and the qari's review is of the
+overlay as imported — a correction is a new, re-reviewed import, not an edit. Audit actions
+`quran.tajweed-overlay.created`, `.ayat-recorded`, `.state-changed` — counts only. Runtime
+grants: overlay SELECT, INSERT, UPDATE (slug denied; no DELETE); recorded Ayah and span SELECT,
+INSERT only.
+
+**Public reads** (`QuranPublicReaderPort`): `tajweedOverlays` (public ones, slug order — a
+reading page colours by the first), `tajweedSpans(overlay, surah, from, to)` (one bounded read per
+window, current ayat only) and `tajweedRuleUses(overlay, perRule, rule)` (how many current ayat
+the overlay colours; per rule its ayat and spans and the shortest example ayat, one per distinct
+text, with only that rule's spans). Nothing while the corpus is inactive; nothing of an overlay not
+public now. Spans are not indexed for search.
+
+**Presentation** (ROUTE_MAP.md §3.3). The reader draws an Ayah's Arabic as runs
+(`tajweed-layout.ts`): plain text and a bare `<span>` per coloured run, colourless until the reader
+turns "Tajweed colours" on — so the paragraph's text, what Copy takes and what a screen reader reads
+are the stored string exactly, and letters join across runs. The key names every rule in en/ur/ar,
+and under `prefers-contrast: more` or forced colours each family of rules also carries its own
+underline style. Every place the colours appear says "Colour-coded tajweed — not yet reviewed by a
+qari" and credits the source with the change made.
 
 ---
 

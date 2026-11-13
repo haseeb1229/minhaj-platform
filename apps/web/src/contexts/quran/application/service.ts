@@ -15,10 +15,14 @@ import {
   recitationSegmentInputSchema,
   recitationStreamSchema,
   surahNamesInputSchema,
+  quranSlugSchema,
   surahNumberSchema,
   tafsirEntryInputSchema,
   tafsirInputSchema,
+  tajweedAyatSaveSchema,
+  tajweedOverlayInputSchema,
   tajweedRuleInputSchema,
+  tajweedSpanProblem,
   tieTranslationNotes,
   timingProblem,
   translationInputSchema,
@@ -34,6 +38,7 @@ import {
   type QuranPersistencePort,
   type QuranRef,
   type QuranSourceAuthority,
+  type TajweedAyahValue,
   type TranslationTextChange,
   type WordGlossChange,
 } from '@minhaj/contracts/quran';
@@ -43,7 +48,7 @@ import { QuranRefusal, asRefusal } from '../domain/refusal.ts';
 /**
  * The Quran administrative service — the LAYERED works (Translation,
  * Transliteration, Tafsir, word by word, Recitation and its segments, Tajweed
- * guidance),
+ * guidance and tajweed colour overlays),
  * Surah display names and Ayah topic assignments (DOMAIN_MODEL.md §8.2;
  * DELIVERY_PLAN.md Phase 18).
  *
@@ -152,6 +157,14 @@ const segmentAddition = versioned(recitationSegmentInputSchema);
 const segmentAlignment = versioned(recitationAlignmentInputSchema);
 const tajweedCreate = creation(tajweedRuleInputSchema);
 const tajweedEdit = versioned(tajweedRuleInputSchema);
+const tajweedOverlayCreate = creation(tajweedOverlayInputSchema);
+
+const tajweedSave = z.strictObject({
+  id: quranIdSchema,
+  expectedVersion: quranVersionSchema,
+  surah: z.unknown(),
+  ayat: z.unknown(),
+});
 
 /**
  * What each operation is CALLED with. The types are ergonomics for the caller;
@@ -181,6 +194,14 @@ export interface WordGlossSaveInput {
   readonly expectedVersion: number;
   readonly surah: number;
   readonly changes: readonly WordGlossChange[];
+}
+
+/** An overlay's save: each named Ayah of one Surah, with all its spans (Quran Part 9). */
+export interface TajweedAyatSaveInput {
+  readonly id: string;
+  readonly expectedVersion: number;
+  readonly surah: number;
+  readonly ayat: readonly TajweedAyahValue[];
 }
 
 /** What publication needs of a work, whatever kind it is. */
@@ -739,6 +760,95 @@ export function createQuranService(deps: {
         'text-required',
       );
       return run(store.setTajweedRuleState({ actorId: actor.accountId, ...change }));
+    },
+
+    /* ---- Tajweed colours (Quran Part 9) ----------------------------------- */
+
+    async tajweedOverlays(actor: QuranActor) {
+      await read(actor);
+      return run(store.tajweedOverlays());
+    },
+
+    async tajweedOverlay(actor: QuranActor, id: string) {
+      await read(actor);
+      return run(store.tajweedOverlay(parse(quranIdSchema, id)));
+    },
+
+    async tajweedOverlayBySlug(actor: QuranActor, slug: string) {
+      await read(actor);
+      return run(store.tajweedOverlayBySlug(parse(quranSlugSchema, slug)));
+    },
+
+    /**
+     * A draft overlay — only the operator's import creates one; no
+     * administrative form builds this envelope.
+     */
+    async createTajweedOverlay(
+      actor: QuranActor,
+      input: In<typeof tajweedOverlayCreate>,
+    ) {
+      await administer(actor);
+      const { value } = parse(tajweedOverlayCreate, input);
+      return run(store.createTajweedOverlay({ actorId: actor.accountId, value }));
+    },
+
+    async setTajweedOverlayState(actor: QuranActor, input: In<typeof stateChange>) {
+      await administer(actor);
+      const change = parse(stateChange, input);
+      await publishable(
+        change.state,
+        change.expectedVersion,
+        () => store.tajweedOverlay(change.id),
+        (overlay) => overlay.ayahCount > 0,
+        'text-required',
+      );
+      return run(store.setTajweedOverlayState({ actorId: actor.accountId, ...change }));
+    },
+
+    async tajweedAyat(actor: QuranActor, id: string, surah: number) {
+      await read(actor);
+      return run(
+        store.tajweedAyat(parse(quranIdSchema, id), parse(surahNumberSchema, surah)),
+      );
+    },
+
+    /**
+     * EVERY SPAN WITHIN ITS AYAH'S STORED TEXT. Each recorded Ayah's stored
+     * text is read and every span checked against it in CODE POINTS
+     * (`tajweedSpanProblem`): an Ayah the Surah does not hold is
+     * `outside-surah`, a span that is empty, ends beyond the text or comes out
+     * of order is `invalid`. The digest is the database's to compare with the
+     * text as it is now (51407) — a span is never moved to fit. Only the
+     * canonical pages holding the named ayat are read.
+     */
+    async saveTajweedAyat(actor: QuranActor, input: TajweedAyatSaveInput) {
+      await administer(actor);
+      const { id, expectedVersion, surah, ayat } = parse(tajweedSave, input);
+      const save = parse(tajweedAyatSaveSchema, { surah, ayat });
+      const offsets = [
+        ...new Set(
+          save.ayat.map(
+            (entry) => Math.floor((entry.ayah - 1) / QURAN_PAGE) * QURAN_PAGE,
+          ),
+        ),
+      ];
+      const pages = await Promise.all(
+        offsets.map((offset) => run(store.surahAyat(save.surah, offset))),
+      );
+      const texts = new Map(
+        pages.flatMap((page) =>
+          page.items.map((ayah) => [ayah.ayah, ayah.text] as const),
+        ),
+      );
+      for (const entry of save.ayat) {
+        const text = texts.get(entry.ayah);
+        if (text === undefined) throw new QuranRefusal('outside-surah');
+        if (tajweedSpanProblem(text, entry.spans) !== null)
+          throw new QuranRefusal('invalid');
+      }
+      return run(
+        store.saveTajweedAyat({ actorId: actor.accountId, id, expectedVersion, ...save }),
+      );
     },
   };
 }

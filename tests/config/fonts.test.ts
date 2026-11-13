@@ -133,6 +133,8 @@ describe('the shipped typefaces', () => {
       'apps/web/src/components/quran/reader.tsx',
       'apps/web/src/components/quran/scripture.tsx',
       'apps/web/src/components/quran/search.tsx',
+      // Quran Part 9: the Tajweed hub's and a rule's example ayat.
+      'apps/web/src/components/quran/tajweed.tsx',
     ]);
 
     // The Quran face's other use stays on Quran pages: names and marks only.

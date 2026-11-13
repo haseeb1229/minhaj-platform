@@ -725,6 +725,12 @@ IF OBJECT_ID(N'[dbo].[QuranTranslationNote]',N'U') IS NOT NULL BEGIN GRANT SELEC
 IF OBJECT_ID(N'[dbo].[QuranWordByWord]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[QuranWordByWord] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranWordByWord] ([slug]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[QuranWordByWord] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[QuranWordByWordContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranWordByWordContributor] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[QuranWordByWordContributor] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[QuranWordByWordGloss]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[QuranWordByWordGloss] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranWordByWordGloss] ([wordByWordId], [surahNumber], [ayahNumber], [position]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[QuranWordByWordGloss] TO [$(app_login)]; END;
+-- Quran Part 9. A tajweed overlay is administered like a layered work: its
+-- slug fixed, never deleted. Its recorded ayat and their spans are inserted
+-- once by the operator's import and never edited or removed.
+IF OBJECT_ID(N'[dbo].[QuranTajweedOverlay]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[QuranTajweedOverlay] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranTajweedOverlay] ([slug]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[QuranTajweedOverlay] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranTajweedOverlayAyah]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[QuranTajweedOverlayAyah] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[QuranTajweedOverlayAyah] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranTajweedSpan]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[QuranTajweedSpan] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[QuranTajweedSpan] TO [$(app_login)]; END;
 
 -- Phase 19: Hadith.
 --

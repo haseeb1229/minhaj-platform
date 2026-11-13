@@ -3927,6 +3927,8 @@ model QuranSource {
   /// Quran translation audio: the narration alignments this source records.
   recitationAlignments QuranRecitationAlignment[]
   tajweedRules     QuranTajweedRule[]
+  /// Quran Part 9: the tajweed colour overlays this source records.
+  tajweedOverlays  QuranTajweedOverlay[]
 
   @@map("QuranSource")
 }
@@ -4033,6 +4035,7 @@ model Ayah {
   savedItems           SavedItem[]
   readingHistory       ReadingHistory[]
   quranProgress        QuranReadingProgress[]
+  tajweedAyat          QuranTajweedOverlayAyah[]
 
   @@id([surahNumber, ayahNumber])
   @@index([juzNumber, surahNumber, ayahNumber])
@@ -4461,6 +4464,69 @@ model QuranTajweedRuleText {
 
   @@id([ruleId, languageCode])
   @@map("QuranTajweedRuleText")
+}
+
+/// Quran Part 9: a tajweed colour OVERLAY - rule spans over the UNCHANGED
+/// canonical Arabic, never a change to it. A layered work (slug immutable,
+/// lifecycle, version, registered source) with no content Language and no
+/// contributor; its spans arrive only from the operator's import.
+model QuranTajweedOverlay {
+  id          String    @id @db.NVarChar(36)
+  slug        String    @unique @db.NVarChar(120)
+  name        String    @db.NVarChar(200)
+  description String?   @db.NVarChar(2000)
+  attribution String?   @db.NVarChar(400)
+  sourceId    String?   @db.NVarChar(36)
+  /// draft | published | archived
+  state       String    @db.NVarChar(16)
+  version     Int
+  createdAt   DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt   DateTime  @db.DateTime2
+  publishedAt DateTime? @db.DateTime2
+
+  source QuranSource?              @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ayat   QuranTajweedOverlayAyah[]
+
+  @@index([state, slug])
+  @@map("QuranTajweedOverlay")
+}
+
+/// One Ayah an overlay colours: the SHA-256 (HASHBYTES, UTF-16LE) of the
+/// canonical text its spans were aligned to - shown only while the Ayah still
+/// hashes to it - and how many spans it has. Written once (51407).
+model QuranTajweedOverlayAyah {
+  overlayId   String @db.NVarChar(36)
+  surahNumber Int
+  ayahNumber  Int
+  textSha256  Bytes  @db.Binary(32)
+  spanCount   Int
+
+  overlay QuranTajweedOverlay @relation(fields: [overlayId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ayah    Ayah                @relation(fields: [surahNumber, ayahNumber], references: [surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction, map: "QuranTajweedOverlayAyah_ayah_fkey")
+  spans   QuranTajweedSpan[]
+
+  @@id([overlayId, surahNumber, ayahNumber])
+  @@index([surahNumber, ayahNumber], map: "QuranTajweedOverlayAyah_ayah_idx")
+  @@map("QuranTajweedOverlayAyah")
+}
+
+/// One coloured stretch of an Ayah's stored text: [startCodepoint,
+/// endCodepoint) in Unicode code points, and its rule (a CHECKed vocabulary,
+/// QURAN_TAJWEED_RULES). Spans may overlap or nest. Written once (51407).
+model QuranTajweedSpan {
+  overlayId      String @db.NVarChar(36)
+  surahNumber    Int
+  ayahNumber     Int
+  ordinal        Int
+  rule           String @db.NVarChar(32)
+  startCodepoint Int
+  endCodepoint   Int
+
+  ayah QuranTajweedOverlayAyah @relation(fields: [overlayId, surahNumber, ayahNumber], references: [overlayId, surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction, map: "QuranTajweedSpan_ayah_fkey")
+
+  @@id([overlayId, surahNumber, ayahNumber, ordinal])
+  @@index([overlayId, rule], map: "QuranTajweedSpan_rule_idx")
+  @@map("QuranTajweedSpan")
 }
 
 /// Typed topic assignment: real foreign keys to the Ayah and to the Topic.

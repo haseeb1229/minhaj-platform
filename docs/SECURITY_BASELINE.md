@@ -435,6 +435,30 @@ books and lectures and the public Tafsir works an operator registered.
   seconds within the video; the provider address is still derived by the contract, which ignores
   any offset outside a day, so the parameter can only move where an already-allowed player starts.
 
+**Quran Part 9 — tajweed colours (DOMAIN_MODEL.md §8.9).** Rules 1–5 hold: an overlay marks rule
+spans over the canonical Arabic, which is never changed — the reader draws plain text and bare
+coloured spans whose joined text is the stored string, so what is read, selected and copied is the
+canonical text.
+
+- **Imported once, from pinned files, never edited.** The spans come only from the operator's
+  command, from the two quran-tajweed files whose SHA-256 digests are pinned in the release; the
+  data is read fail-closed and an Ayah that cannot be carried exactly to the canonical text is
+  skipped whole, never adjusted. There is no span editor. The runtime principal holds SELECT,
+  INSERT and UPDATE on `QuranTajweedOverlay` (UPDATE of `slug` denied, no DELETE) and SELECT and
+  INSERT only on `QuranTajweedOverlayAyah` and `QuranTajweedSpan` (UPDATE, DELETE and ALTER
+  denied); trigger 51407 refuses an edit, an Ayah digest that is not its current text's, a span past
+  the text and a span beyond its Ayah's count.
+- **Fail closed after a correction.** Each recorded Ayah carries the SHA-256 of the text it was
+  aligned to; every public read compares it with the Ayah's current text in the query, so a
+  corrected Ayah is shown uncoloured, never coloured over letters its spans did not describe.
+- **One administrative mutation, the usual one.** An authorised editor publishes, returns to draft
+  or archives an overlay (`changeQuranState`, kind `tajweed-overlay`) under `quran.administer`
+  re-read live, under the expected version, audited (`quran.tajweed-overlay.state-changed`); a
+  published overlay must name a registered source and colour an Ayah (51406). The import's
+  `quran.tajweed-overlay.created` and `.ayat-recorded` audit entries carry counts only.
+- **Labelled.** Every surface that shows the colours says "Colour-coded tajweed — not yet reviewed
+  by a qari" and credits the CC BY 4.0 source with the change made; staging only.
+
 ### 5.2 Hadith
 
 1. **Text, reference numbers, narrator chains and gradings are sourced data — never inferred,

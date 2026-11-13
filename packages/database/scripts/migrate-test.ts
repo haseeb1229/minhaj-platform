@@ -368,6 +368,20 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
     'QuranRecitationAlignment',
     'QuranRecitationTranslationSpan',
   ],
+  // QURAN PART 9 CREATES THREE TABLES: a tajweed colour overlay (a layered
+  // work with no content Language), the ayat it colours — each with the
+  // SHA-256 of the canonical text it was aligned to and its span count, typed
+  // to the Ayah (NO ACTION) — and their rule spans in code points, typed to
+  // the recorded Ayah; four CHECKs and three triggers (51406 a published
+  // overlay colours an Ayah; 51407 written once, aligned to the current text,
+  // within it and its count). Asserted by `assertQuranFoundation`, proved as
+  // behaviour inside `assertQuranCanonicalRules`, its rollback by
+  // `assertTajweedOverlayRemoved`.
+  '20261112000000_r2_quran_tajweed_overlay': [
+    'QuranTajweedOverlay',
+    'QuranTajweedOverlayAyah',
+    'QuranTajweedSpan',
+  ],
   // THE DONATIONS CONTEXT: a campaign with its words per locale and its
   // per-currency policy, the owner's fail-closed provider activation (one
   // immutable row the runtime can only read), the donation — one payment
@@ -2025,6 +2039,23 @@ const QURAN_TRANSLATION_AUDIO_TRIGGER_NUMBERS: Readonly<
 };
 
 /**
+ * Quran Part 9's three tables and three triggers (51406–51407, after
+ * translation audio's): a published tajweed overlay that colours no Ayah; a
+ * recorded Ayah or span that is edited, an Ayah not aligned to its current
+ * text, and a span beyond its text or its Ayah's count.
+ */
+const QURAN_PART9_TABLES = [
+  'QuranTajweedOverlay',
+  'QuranTajweedOverlayAyah',
+  'QuranTajweedSpan',
+] as const;
+const QURAN_PART9_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, string]>> = {
+  QuranTajweedOverlayPublishedAyat: ['QuranTajweedOverlay', '51406'],
+  QuranTajweedOverlayAyahRules: ['QuranTajweedOverlayAyah', '51407'],
+  QuranTajweedSpanRules: ['QuranTajweedSpan', '51407'],
+};
+
+/**
  * Each Quran trigger, the table it guards and the refusal numbers its body
  * raises: 51180 an immutable registered source, 51181 immutable canonical
  * structure, 51182 a canonical change that is a recorded, one-step correction,
@@ -2173,6 +2204,8 @@ const EXPECTED_TRIGGERS = [
   ...Object.keys(QURAN_PART7_TRIGGER_NUMBERS),
   // Quran translation audio: the alignment, its spans, and what they rely on.
   ...Object.keys(QURAN_TRANSLATION_AUDIO_TRIGGER_NUMBERS),
+  // Quran Part 9: the tajweed overlay, its recorded ayat and their spans.
+  ...Object.keys(QURAN_PART9_TRIGGER_NUMBERS),
   // Phase 19: every Hadith invariant no constraint can express — each listed,
   // with the refusal it raises, in `HADITH_TRIGGER_NUMBERS`.
   ...Object.keys(HADITH_TRIGGER_NUMBERS),
@@ -2470,6 +2503,12 @@ const EXPECTED_CHECK_CONSTRAINTS = [
     table: 'QuranRecitationTranslationSpan',
     constraint: 'QuranRecitationTranslationSpan_ck',
   },
+  // Quran Part 9: an overlay's slug and lifecycle, an Ayah's span count, and a
+  // span's rule, place and bounded, non-empty stretch.
+  { table: 'QuranTajweedOverlay', constraint: 'QuranTajweedOverlay_state_ck' },
+  { table: 'QuranTajweedOverlay', constraint: 'QuranTajweedOverlay_slug_ck' },
+  { table: 'QuranTajweedOverlayAyah', constraint: 'QuranTajweedOverlayAyah_ck' },
+  { table: 'QuranTajweedSpan', constraint: 'QuranTajweedSpan_ck' },
   ...[
     'QuranTranslation',
     'QuranTransliteration',
@@ -4948,6 +4987,7 @@ async function assertQuranFoundation(
           ...QURAN_PART6_TABLES,
           ...QURAN_PART7_TABLES,
           ...QURAN_TRANSLATION_AUDIO_TABLES,
+          ...QURAN_PART9_TABLES,
         ]
       : QURAN_TABLES;
   const tables = all.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',');
@@ -4963,7 +5003,7 @@ async function assertQuranFoundation(
       .join(' UNION ALL ') + ';',
   );
   const seeded = counts.filter((row) => Number(row.total) !== 0);
-  const tableCount = stage === 'reference' ? 30 : 23;
+  const tableCount = stage === 'reference' ? 33 : 23;
   if (QURAN_TABLES.length !== 23 || counts.length !== tableCount || seeded.length > 0)
     fail(
       `The Quran migrations must create ${String(tableCount)} empty tables and seed no content; ` +
@@ -5014,10 +5054,15 @@ async function assertQuranFoundation(
     GROUP BY fk.[name];
   `);
   const personalAyah = await personalisationAyahKeys(session);
-  // Quran Part 7: a gloss names its Ayah by the same two-column citation.
+  // Quran Part 7: a gloss names its Ayah by the same two-column citation, and
+  // Quran Part 9: so does a tajweed overlay's recorded Ayah.
   const quranAyahKeys =
     stage === 'reference'
-      ? [...QURAN_AYAH_KEYS, 'QuranWordByWordGloss_ayah_fkey']
+      ? [
+          ...QURAN_AYAH_KEYS,
+          'QuranWordByWordGloss_ayah_fkey',
+          'QuranTajweedOverlayAyah_ayah_fkey',
+        ]
       : QURAN_AYAH_KEYS;
   if (
     ayahKeys
@@ -5168,6 +5213,7 @@ async function assertQuranFoundation(
           ...QURAN_PART6_TRIGGER_NUMBERS,
           ...QURAN_PART7_TRIGGER_NUMBERS,
           ...QURAN_TRANSLATION_AUDIO_TRIGGER_NUMBERS,
+          ...QURAN_PART9_TRIGGER_NUMBERS,
         }
       : QURAN_TRIGGER_NUMBERS;
   const expectedTriggers = Object.entries(triggerNumbers)
@@ -7009,6 +7055,154 @@ async function assertQuranCanonicalRules(session: SqlSession): Promise<void> {
   );
   if ((await spansHeld()) !== 0 || (await timedAyat(narrationSegment)) !== 0)
     fail('A removed alignment left rows behind.');
+
+  // ---- Quran Part 9: a tajweed colour overlay ---------------------------------
+  //
+  // An overlay colours UNCHANGED canonical text: each recorded Ayah carries the
+  // SHA-256 of the Ayah's current text (HASHBYTES, UTF-16LE) and its span
+  // count, and is written once; its spans name a known rule over a non-empty
+  // stretch within the text, may overlap, never exceed the count and are never
+  // edited. A published overlay colours an Ayah and names a registered source.
+  const overlay = randomUUID();
+  const tajweedAyah = (surah: number, ayah: number, digest: string, spanCount: number) =>
+    `INSERT INTO [dbo].[QuranTajweedOverlayAyah] ([overlayId],[surahNumber],[ayahNumber],[textSha256],[spanCount]) VALUES (N'${overlay}',${String(surah)},${String(ayah)},${digest},${String(spanCount)});`;
+  const currentDigest = (surah: number, ayah: number) =>
+    `(SELECT HASHBYTES('SHA2_256',[text]) FROM [dbo].[Ayah] WHERE [surahNumber]=${String(surah)} AND [ayahNumber]=${String(ayah)})`;
+  const tajweedSpan = (
+    ayah: number,
+    ordinal: number,
+    rule: string,
+    start: number,
+    end: number,
+  ) =>
+    `INSERT INTO [dbo].[QuranTajweedSpan] ([overlayId],[surahNumber],[ayahNumber],[ordinal],[rule],[startCodepoint],[endCodepoint]) VALUES (N'${overlay}',1,${String(ayah)},${String(ordinal)},N'${rule}',${String(start)},${String(end)});`;
+  const tajweedSpansHeld = () =>
+    count(
+      `SELECT COUNT_BIG(*) AS [total] FROM [dbo].[QuranTajweedSpan] WHERE [overlayId]=N'${overlay}';`,
+    );
+  await expectAccepted(
+    session,
+    'A draft tajweed overlay',
+    `INSERT INTO [dbo].[QuranTajweedOverlay] ([id],[slug],[name],[state],[version],[updatedAt]) VALUES (N'${overlay}',N'proof-quran-tajweed-overlay-${run}',N'NON_QURAN_FIXTURE tajweed overlay',N'draft',1,SYSUTCDATETIME());`,
+  );
+  const ALIGNED_TO_CURRENT = 'is aligned to the Ayah';
+  for (const [label, statement, numbers, ruleName] of [
+    [
+      'A tajweed overlay that colours no Ayah is never published',
+      publish('QuranTajweedOverlay', overlay),
+      [51406],
+      'A published tajweed overlay colours an Ayah.',
+    ],
+    [
+      'A published tajweed overlay names a registered source',
+      `UPDATE [dbo].[QuranTajweedOverlay] SET [state]=N'published',[publishedAt]=SYSUTCDATETIME() WHERE [id]=N'${overlay}';`,
+      [547],
+      'QuranTajweedOverlay_state_ck',
+    ],
+    [
+      'A tajweed overlay slug keeps its grammar',
+      `INSERT INTO [dbo].[QuranTajweedOverlay] ([id],[slug],[name],[state],[version],[updatedAt]) VALUES (N'${randomUUID()}',N'Proof--Tajweed',N'NON_QURAN_FIXTURE',N'draft',1,SYSUTCDATETIME());`,
+      [547],
+      'QuranTajweedOverlay_slug_ck',
+    ],
+    [
+      'A tajweed Ayah is aligned to the canonical text as it is now',
+      tajweedAyah(1, 1, `HASHBYTES('SHA2_256', N'NON_QURAN_FIXTURE another text')`, 0),
+      [51407],
+      ALIGNED_TO_CURRENT,
+    ],
+    [
+      'A tajweed Ayah names a real Ayah',
+      tajweedAyah(9, 1, currentDigest(1, 1), 0),
+      [547],
+      'QuranTajweedOverlayAyah_ayah_fkey',
+    ],
+    [
+      'A tajweed Ayah has at most the ceiling of spans',
+      tajweedAyah(1, 1, currentDigest(1, 1), 1000),
+      [547],
+      'QuranTajweedOverlayAyah_ck',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, ruleName);
+  await expectAccepted(
+    session,
+    'Ayah 1:1 recorded against its current text, with room for two spans',
+    tajweedAyah(1, 1, currentDigest(1, 1), 2),
+  );
+  for (const [label, statement, numbers, ruleName] of [
+    [
+      'A span names a rule of the vocabulary',
+      tajweedSpan(1, 1, 'idghaam_ghunnah', 0, 2),
+      [547],
+      'QuranTajweedSpan_ck',
+    ],
+    [
+      'A span is never empty',
+      tajweedSpan(1, 1, 'ghunnah', 2, 2),
+      [547],
+      'QuranTajweedSpan_ck',
+    ],
+    [
+      'A span takes a place from 1',
+      tajweedSpan(1, 0, 'ghunnah', 0, 2),
+      [547],
+      'QuranTajweedSpan_ck',
+    ],
+    [
+      'A span ends within its Ayah’s text',
+      tajweedSpan(1, 1, 'ghunnah', 0, 3999),
+      [51407],
+      'ends within its Ayah',
+    ],
+    [
+      'A span belongs to a recorded Ayah',
+      tajweedSpan(2, 1, 'ghunnah', 0, 2),
+      [547],
+      'QuranTajweedSpan_ayah_fkey',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, ruleName);
+  await expectAccepted(
+    session,
+    'Two overlapping spans of two rules, as the source marks where rules meet',
+    `${tajweedSpan(1, 1, 'ghunnah', 0, 3)}
+     ${tajweedSpan(1, 2, 'ikhfa', 2, 5)}`,
+  );
+  for (const [label, statement, numbers, ruleName] of [
+    [
+      'An Ayah never gains a span beyond its count',
+      tajweedSpan(1, 3, 'qalqalah', 5, 6),
+      [51407],
+      'no spans beyond its count',
+    ],
+    [
+      'A tajweed Ayah is never edited',
+      `UPDATE [dbo].[QuranTajweedOverlayAyah] SET [spanCount]=3 WHERE [overlayId]=N'${overlay}';`,
+      [51407],
+      'A tajweed Ayah is written once',
+    ],
+    [
+      'A tajweed span is never edited',
+      `UPDATE [dbo].[QuranTajweedSpan] SET [endCodepoint]=4 WHERE [overlayId]=N'${overlay}' AND [ordinal]=1;`,
+      [51407],
+      'A tajweed span is written once',
+    ],
+    [
+      'A recorded Ayah is never removed from under its spans',
+      `DELETE FROM [dbo].[QuranTajweedOverlayAyah] WHERE [overlayId]=N'${overlay}';`,
+      [547],
+      'QuranTajweedSpan_ayah_fkey',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, ruleName);
+  if ((await tajweedSpansHeld()) !== 2)
+    fail('A refused change altered a tajweed overlay.');
+  await expectAccepted(
+    session,
+    'The overlay published beside a registered source',
+    publish('QuranTajweedOverlay', overlay),
+  );
 
   // ---- a published work keeps its text against a MOVE as well as a delete -------
   //
@@ -19381,6 +19575,39 @@ async function assertWordByWordRemoved(session: SqlSession): Promise<void> {
   );
 }
 
+/** Quran Part 9: the tajweed colour overlay, its recorded ayat and spans. */
+const TAJWEED_OVERLAY_MIGRATION = '20261112000000_r2_quran_tajweed_overlay';
+
+/**
+ * After the Quran Part 9 rollback: no overlay table, CHECK, key, index or
+ * trigger anywhere — and the Ayah referenced by exactly the keys it had before.
+ */
+async function assertTajweedOverlayRemoved(session: SqlSession): Promise<void> {
+  const [row] = await session.query<{ tables: number; added: number; ayahKeys: number }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables WHERE [name] IN (N'QuranTajweedOverlay',
+        N'QuranTajweedOverlayAyah', N'QuranTajweedSpan')) AS [tables],
+      (SELECT COUNT(*) FROM sys.objects WHERE [name] LIKE N'QuranTajweedOverlay%'
+        OR [name] LIKE N'QuranTajweedSpan%') AS [added],
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE [referenced_object_id] = OBJECT_ID(N'[dbo].[Ayah]')
+          AND [name] LIKE N'QuranTajweed%') AS [ayahKeys];
+  `);
+  if (
+    Number(row?.tables) !== 0 ||
+    Number(row?.added) !== 0 ||
+    Number(row?.ayahKeys) !== 0
+  )
+    fail(
+      `The Quran Part 9 rollback must remove every tajweed overlay object; ` +
+        `found ${JSON.stringify(row ?? null)}.`,
+    );
+  report(
+    'tajweed overlay rollback',
+    'three tables, their CHECKs, keys, indexes and triggers removed',
+  );
+}
+
 /** Quran translation audio: a narration segment's alignment and translation spans. */
 const TRANSLATION_AUDIO_MIGRATION = '20261111000000_r2_quran_translation_audio';
 
@@ -25797,6 +26024,9 @@ try {
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
     }
+    if (migration.id === TAJWEED_OVERLAY_MIGRATION)
+      // Quran Part 9 is gone without a trace on the Ayah.
+      await assertTajweedOverlayRemoved(session);
     if (migration.id === TRANSLATION_AUDIO_MIGRATION)
       // Translation audio is gone without a trace on the recitation tables.
       await assertTranslationAudioRemoved(session);

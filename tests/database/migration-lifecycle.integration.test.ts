@@ -473,6 +473,10 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         // spans where each passage's translation is heard.
         'QuranRecitationAlignment',
         'QuranRecitationTranslationSpan',
+        // Quran Part 9 — a tajweed colour overlay, the ayat it colours and their spans.
+        'QuranTajweedOverlay',
+        'QuranTajweedOverlayAyah',
+        'QuranTajweedSpan',
         // Phase 19 — Hadith: registered source systems, editions and
         // activations; the canonical structure and source-qualified records with
         // immutable history, gradings, verification, citation mapping and

@@ -30,6 +30,7 @@ import {
 
 import { getDatabaseClient } from '../../client.ts';
 import { TRANSLATION_NOTES, toEntry } from './layers.ts';
+import { tajweedOverlayReader } from './tajweed-overlay.ts';
 import { groupByAyah } from './word-by-word.ts';
 import {
   activeMode,
@@ -639,6 +640,8 @@ export function createQuranPublicReader(
   }
 
   return {
+    ...tajweedOverlayReader(admission),
+
     /** Answered with literal domain values, one per mode — nothing else is handed back. */
     async availability() {
       switch (await activeMode(db, admission)) {

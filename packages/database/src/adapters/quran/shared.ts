@@ -43,7 +43,7 @@ export class QuranDataError extends Error {
  * ========================================================================= */
 
 /**
- * The migration's own refusals (`THROW 51180`–`51199`, and Quran Parts 5–7's and translation audio's `51400`–`51405`), by number, as the
+ * The migration's own refusals (`THROW 51180`–`51199`, and Quran Parts 5–7's, translation audio's and Part 9's `51400`–`51407`), by number, as the
  * context's vocabulary. Read from the STRUCTURED fields the driver populates —
  * never from message text, which a stored value could otherwise imitate.
  */
@@ -85,6 +85,12 @@ const THROW_REASONS: ReadonlyMap<number, string> = new Map([
   // is edited, partial, out of order or beside a non-reference source, or an
   // aligned segment's timing or file changed under it.
   [51405, 'invalid'],
+  // Quran Part 9: a published tajweed overlay that colours no Ayah — the
+  // answer a published work without text gets — and a recorded Ayah or span
+  // that is edited, not aligned to the Ayah's current text, beyond its text
+  // or beyond its count.
+  [51406, 'text-required'],
+  [51407, 'invalid'],
 ]);
 
 /**
@@ -112,6 +118,7 @@ const KEY_REASONS: ReadonlyMap<string, string> = new Map([
   ['dbo.QuranRecitation', 'duplicate-slug'],
   ['dbo.QuranTajweedRule', 'duplicate-slug'],
   ['dbo.QuranWordByWord', 'duplicate-slug'],
+  ['dbo.QuranTajweedOverlay', 'duplicate-slug'],
   // Two entries or segments starting at one Ayah cover it twice.
   ['dbo.QuranTafsirText', 'overlap'],
   ['dbo.QuranRecitationSegment', 'overlap'],
@@ -377,7 +384,8 @@ export type WorkKind =
   | 'tafsir'
   | 'recitation'
   | 'tajweed'
-  | 'word-by-word';
+  | 'word-by-word'
+  | 'tajweed-overlay';
 
 /** What every layered work's lifecycle decisions read. */
 export interface WorkHead {
@@ -411,6 +419,8 @@ function headOf(tx: Client, kind: WorkKind, id: string): Promise<WorkHead | null
       return tx.quranTajweedRule.findUnique(query);
     case 'word-by-word':
       return tx.quranWordByWord.findUnique(query);
+    case 'tajweed-overlay':
+      return tx.quranTajweedOverlay.findUnique(query);
   }
 }
 
@@ -463,6 +473,9 @@ export async function claim(
       break;
     case 'word-by-word':
       changed = await tx.quranWordByWord.updateMany({ where, data });
+      break;
+    case 'tajweed-overlay':
+      changed = await tx.quranTajweedOverlay.updateMany({ where, data });
       break;
   }
   if (changed.count !== 1) throw new QuranDataError('conflict');

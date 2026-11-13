@@ -326,6 +326,16 @@ export const QURAN_RECITATIONS_TOOL_ENTRY = path.join(
 );
 
 /**
+ * Quran Part 9's tajweed overlay import, run as the RUNTIME principal by
+ * `staging-quran-reference`'s `tajweed` mode.
+ */
+export const QURAN_TAJWEED_TOOL_ENTRY = path.join(
+  'scripts',
+  'quran',
+  'tajweed-runtime.ts',
+);
+
+/**
  * Storage's derivative backfill (Rebaseline R2), run as the RUNTIME principal
  * by `staging-storage-derivatives`: it reads published picture relations and
  * writes Storage's own rows and files, exactly as the application does.
@@ -398,6 +408,7 @@ export async function runMigrationTool(input: {
     input.entry !== MIGRATION_PROOF_ENTRY &&
     input.entry !== QURAN_REFERENCE_TOOL_ENTRY &&
     input.entry !== QURAN_RECITATIONS_TOOL_ENTRY &&
+    input.entry !== QURAN_TAJWEED_TOOL_ENTRY &&
     input.entry !== STORAGE_DERIVATIVES_TOOL_ENTRY &&
     input.entry !== DEMO_TOOL_ENTRY &&
     input.entry !== HOST_STEP_UP_TOOL_ENTRY &&

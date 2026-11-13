@@ -3675,6 +3675,57 @@
     "tafsirLinks": {
       "heading": "On the Quran",
       "help": "The passages of the Quran this explains. Each opens its tafsir: the ayat, and everything else linked to them."
+    },
+    "tajweed": {
+      "setting": "Tajweed colours",
+      "experimental": "Colour-coded tajweed — not yet reviewed by a qari.",
+      "learn": "Learn the rules",
+      "key": "Colour key",
+      "families": {
+        "nasal": "Nasal sounds",
+        "merged": "Merged letters",
+        "lengthened": "Lengthening",
+        "echo": "Echoing",
+        "unsounded": "Written, not pronounced"
+      },
+      "rules": {
+        "ghunnah": "Ghunnah (nasalisation)",
+        "idghaam-ghunnah": "Idghaam with ghunnah",
+        "idghaam-no-ghunnah": "Idghaam without ghunnah",
+        "idghaam-mutajanisayn": "Idghaam mutajanisayn",
+        "idghaam-mutaqaribayn": "Idghaam mutaqaribayn",
+        "idghaam-shafawi": "Idghaam shafawi",
+        "ikhfa": "Ikhfa",
+        "ikhfa-shafawi": "Ikhfa shafawi",
+        "iqlab": "Iqlab",
+        "madd-2": "Madd — 2 counts",
+        "madd-246": "Madd 'arid or leen — 2, 4 or 6 counts",
+        "madd-muttasil": "Madd muttasil — 4 or 5 counts",
+        "madd-munfasil": "Madd munfasil — 4 or 5 counts",
+        "madd-6": "Madd lazim — 6 counts",
+        "qalqalah": "Qalqalah",
+        "hamzat-wasl": "Hamzat al-wasl",
+        "lam-shamsiyyah": "Lam shamsiyyah",
+        "silent": "Silent letter"
+      },
+      "hub": {
+        "intro": "Tajweed is the art of reciting the Quran as it was revealed. Each rule below has its own colour; turn on “Tajweed colours” in the reader’s settings to read any Surah in colour.",
+        "read": "Start reading",
+        "coverage": "{ayat} ayat are shown in colour.",
+        "uses": "{ayat} ayat · {spans} marks",
+        "examples": "Where it occurs",
+        "openAyah": "Read Surah {surah}, Ayah {ayah} in the reader",
+        "rulePage": "About this rule",
+        "guidance": "Guidance",
+        "noGuidance": "No guidance has been written for this rule yet.",
+        "moreGuidance": "More tajweed guidance",
+        "about": "About these colours",
+        "aboutBody": "The colours come from the quran-tajweed annotations by Collin Fair (Creative Commons Attribution 4.0), re-aligned to the unchanged Tanzil Uthmani 1.1 text shown here. An Ayah whose text could not be matched exactly is shown without colours, never adjusted.",
+        "licence": "Licence",
+        "source": "Source",
+        "allRules": "All tajweed rules",
+        "emphasised": "Only this rule is coloured in these examples."
+      }
     }
   },
   "quranAdmin": {
@@ -4035,6 +4086,16 @@
       "textLanguage": "Language {number}",
       "textTitle": "Title {number}",
       "textBody": "Body {number}"
+    },
+    "overlay": {
+      "heading": "Colour overlays",
+      "scope": "Tajweed colours over the unchanged canonical Arabic. An overlay and its spans arrive only from the operator’s import (quran-reference.sh tajweed); here an authorised editor publishes or archives it. Spans are never edited by hand: each is tied to the exact text it was aligned to.",
+      "empty": "No colour overlay has been imported.",
+      "ayat": "Ayat coloured",
+      "spans": "Marks",
+      "stale": "Ayat whose text has changed since (not shown)",
+      "rules": "Marks by rule",
+      "rule": "Rule"
     }
   },
   "hadith": {

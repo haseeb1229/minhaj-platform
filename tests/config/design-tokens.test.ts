@@ -23,7 +23,7 @@ async function tokens(): Promise<Record<string, string>> {
   );
   const theme = /@theme\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? '';
   const found: Record<string, string> = {};
-  for (const match of theme.matchAll(/--color-([a-z-]+):\s*(#[0-9a-f]{6})\s*;/g)) {
+  for (const match of theme.matchAll(/--color-([a-z0-9-]+):\s*(#[0-9a-f]{6})\s*;/g)) {
     found[match[1]!] = match[2]!;
   }
   return found;
@@ -92,6 +92,21 @@ describe('the design tokens meet WCAG 2.2 AA', () => {
   it.each(TEXT)('%s text on %s is at least 4.5:1', async (foreground, background) => {
     const found = await tokens();
     expect(contrast(found[foreground]!, found[background]!)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // Quran Part 9: every tajweed colour — one per rule the overlay marks — is
+  // text, on every ground a Quran line sits on: the page's surfaces, the
+  // recited Ayah's wash and the search highlight.
+  it('sets every tajweed colour as AA text on every ground a Quran line has', async () => {
+    const found = await tokens();
+    const colours = Object.keys(found).filter((name) => name.startsWith('tajweed-'));
+    expect(colours).toHaveLength(18);
+    for (const colour of colours)
+      for (const ground of [...LIGHT, 'accent-surface', 'highlight'])
+        expect(
+          contrast(found[colour]!, found[ground]!),
+          `${colour} on ${ground}`,
+        ).toBeGreaterThanOrEqual(4.5);
   });
 
   it.each(NON_TEXT)(

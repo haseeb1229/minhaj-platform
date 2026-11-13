@@ -122,7 +122,7 @@ export function irfanNarrationEvidence(sha256: string): string {
   ].join('\n');
 }
 
-async function assertConnectedDatabase(sql: SqlSession): Promise<void> {
+export async function assertConnectedDatabase(sql: SqlSession): Promise<void> {
   const rows = await sql.query<{ name: string | null }>('SELECT DB_NAME() AS [name];');
   const name = rows.length === 1 ? rows[0]?.name : null;
   if (typeof name !== 'string')
@@ -134,7 +134,7 @@ async function assertConnectedDatabase(sql: SqlSession): Promise<void> {
  * Refuses, with nothing changed, unless the active corpus is the whole Tanzil
  * reference corpus and the content languages the recitations name exist.
  */
-async function assertReferenceCorpus(
+export async function assertReferenceCorpus(
   sql: SqlSession,
   languages: readonly string[],
 ): Promise<void> {
@@ -148,7 +148,7 @@ async function assertReferenceCorpus(
       (SELECT s.[authority] FROM [dbo].[QuranActivation] a JOIN [dbo].[QuranSource] s ON s.[id] = a.[sourceId] WHERE a.[id] = 1) AS [activeAuthority],
       (SELECT s.[code] FROM [dbo].[QuranActivation] a JOIN [dbo].[QuranSource] s ON s.[id] = a.[sourceId] WHERE a.[id] = 1) AS [activeCode],
       (SELECT COUNT_BIG(*) FROM [dbo].[Surah]) AS [surahs],
-      (SELECT COUNT_BIG(*) FROM [dbo].[Language] WHERE [code] IN (${languages.map(n).join(', ')})) AS [languages];
+      (SELECT COUNT_BIG(*) FROM [dbo].[Language] WHERE ${languages.length === 0 ? '1 = 0' : `[code] IN (${languages.map(n).join(', ')})`}) AS [languages];
   `);
   if (
     row === undefined ||
@@ -174,8 +174,21 @@ export async function registerRecitationProvenance(
   which: keyof typeof RECITATION_PROVENANCE,
   evidence: string,
 ): Promise<{ readonly id: string; readonly state: 'registered' | 'kept' }> {
+  return registerProvenanceSource(sql, RECITATION_PROVENANCE[which], evidence);
+}
+
+/**
+ * Registers (or finds) a `reference` provenance source of this code — the
+ * recitation imports' and Quran Part 9's tajweed import's. A source already
+ * registered with different evidence is refused, never edited.
+ */
+export async function registerProvenanceSource(
+  sql: SqlSession,
+  entry: { readonly code: string; readonly title: string; readonly version: string },
+  evidence: string,
+): Promise<{ readonly id: string; readonly state: 'registered' | 'kept' }> {
   await assertConnectedDatabase(sql);
-  const { code, title, version } = RECITATION_PROVENANCE[which];
+  const { code, title, version } = entry;
   const [existing] = await sql.query<{
     id: string;
     authority: string;

@@ -1752,6 +1752,23 @@ file fail-closed (`scripts/quran/narration-timing.ts`) and records each accepted
 timing, alignment and translation spans through Quran's `alignRecitationSegment`. Run after both
 recitation imports; idempotent; counts only.
 
+**Tajweed colours (Quran Part 9; OPEN_DECISIONS.md §1.2 item 4).** `quran-reference.sh tajweed
+--sha256 <json hex> --text-sha256 <txt hex> --operator <id>` (`quran.read`, `quran.administer`)
+runs in the `ops` profile — no network — with `/srv/minhaj/imports/quran-tajweed/` mounted
+READ-ONLY, where the operator first places the two quran-tajweed files exactly as published,
+`tajweed.hafs.uthmani-pause-sajdah.json` and `quran-uthmani.txt` (readable by uid 1000; never named
+on the command line). The owner side (`packages/database/src/lifecycle/quran-tajweed.ts`) refuses
+unless each file's SHA-256 is the one given AND the release's pinned `TAJWEED_ANNOTATIONS_SHA256` /
+`TAJWEED_BASE_TEXT_SHA256`, and unless the active corpus is the Tanzil reference corpus; it
+registers the `quran-tajweed-annotations` provenance source (both digests, both licences and the
+re-alignment noted) and starts the runtime child `scripts/quran/tajweed-runtime.ts` (a new entry on
+the tool runner's allowlist, `QURAN_TAJWEED_TOOL_ENTRY`), which re-checks both digests, reads both
+files fail-closed, reads the canonical ayat through Quran's service, re-aligns every Ayah
+(`scripts/quran/tajweed-overlay.ts`: unchanged, re-mapped, or skipped whole) and records each
+aligned Ayah on the DRAFT overlay through `saveTajweedAyat`, one Surah per transaction. An editor
+publishes it on `/admin/quran/tajweed`. Idempotent; counts only (aligned, unchanged, re-mapped,
+spans, skipped by reason, recorded, kept, differs).
+
 **Demonstration data (Rebaseline R2; OPEN_DECISIONS.md §4.2).** `bin/demo.sh seed|status|reset`
 runs `staging-demo` in the operations image after the staging host proof and a check that the
 running web service is explicitly non-indexable. The owner side writes the three synthetic

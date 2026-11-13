@@ -205,6 +205,10 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       // spans where each passage's translation is heard.
       'QuranRecitationAlignment',
       'QuranRecitationTranslationSpan',
+      // Quran Part 9 — a tajweed colour overlay, the ayat it colours and their spans.
+      'QuranTajweedOverlay',
+      'QuranTajweedOverlayAyah',
+      'QuranTajweedSpan',
       // Phase 19 — Hadith's source systems, editions and activations, canonical
       // structure, records and evidence, layered works and typed topic
       // assignment.

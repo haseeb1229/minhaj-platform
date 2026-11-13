@@ -1,6 +1,14 @@
-import type { AyahWord, TranslationNote, WordGloss } from '@minhaj/contracts/quran';
+import type { ReactNode } from 'react';
+
+import type {
+  AyahWord,
+  TajweedSpan,
+  TranslationNote,
+  WordGloss,
+} from '@minhaj/contracts/quran';
 
 import { arabicIndic } from './citation';
+import { tajweedClass, tajweedRuns } from './tajweed-layout';
 import { noteParagraphs, noteSegments } from './translation-notes';
 
 /**
@@ -34,6 +42,14 @@ import { noteParagraphs, noteSegments } from './translation-notes';
  * mark once the reader island can answer it — so in flowing Arabic every Ayah
  * is one keyboard stop that opens its translation. The button holds only the
  * presentational mark; the text node is untouched.
+ *
+ * TAJWEED COLOURS (Quran Part 9). With `tajweed` spans the text is drawn as
+ * runs (`tajweedRuns`): plain text, and a `<span>` per coloured run carrying
+ * its rule's class — and nothing else: no space, no mark, no change of font,
+ * so the letters join and shape across runs as in one text node and the
+ * paragraph's text (what a screen reader reads and Copy takes) is the stored
+ * string exactly. The runs are colourless until the reader shows the colours
+ * (`data-tajweed="on"`) or a page shows them always (`.tajweed-colours`).
  */
 export function ArabicText({
   id,
@@ -41,6 +57,7 @@ export function ArabicText({
   text,
   ayah,
   open,
+  tajweed = [],
 }: {
   readonly id: string;
   readonly label: string;
@@ -49,6 +66,8 @@ export function ArabicText({
   readonly ayah?: number;
   /** The accessible name of the reading-mode button, when there is one. */
   readonly open?: string;
+  /** The Ayah's spans in a public tajweed overlay (Quran Part 9). */
+  readonly tajweed?: readonly TajweedSpan[];
 }) {
   const mark = ayah === undefined ? null : `۝${arabicIndic(ayah)}`;
   return (
@@ -64,7 +83,7 @@ export function ArabicText({
           data-ayah-arabic=""
           className="quran-text inline"
         >
-          {text}
+          {tajweedChildren(text, tajweed)}
         </p>
         {mark === null ? null : (
           <>
@@ -91,6 +110,28 @@ export function ArabicText({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The stored text as tajweed runs — the bare text, the element's only child,
+ * when no span applies. Each coloured run names every rule covering it
+ * (`data-tajweed`); its colour is the last-begun rule's class.
+ */
+export function tajweedChildren(text: string, spans: readonly TajweedSpan[]): ReactNode {
+  if (spans.length === 0) return text;
+  return tajweedRuns(text, spans).map((run, index) =>
+    run.rule === null ? (
+      run.text
+    ) : (
+      <span
+        key={index}
+        className={tajweedClass(run.rule)}
+        data-tajweed={run.rules.join(' ')}
+      >
+        {run.text}
+      </span>
+    ),
   );
 }
 

@@ -9,6 +9,7 @@
 #   quran-reference.sh recitations-mp3quran --operator <accountId>
 #   quran-reference.sh recitations-irfan-urdu --operator <accountId>
 #   quran-reference.sh recitations-narration-timing --sha256 <hex> --operator <accountId>
+#   quran-reference.sh tajweed --sha256 <json hex> --text-sha256 <txt hex> --operator <accountId>
 #
 # Owner decision 2026-11-06 (OPEN_DECISIONS.md §1.1): staging may show the
 # Tanzil Uthmani 1.1 text, verbatim (CC BY 3.0), with Minhaj-ul-Quran's own
@@ -71,6 +72,20 @@
 # quran.read and quran.administer, and both recitation imports above; a re-run
 # changes nothing.
 #
+# `tajweed` (Quran Part 9; owner decision, OPEN_DECISIONS.md §1.2 item 4)
+# reads the two files of Collin Fair's quran-tajweed the operator downloaded
+# and placed, readable by uid 1000, in
+#   /srv/minhaj/imports/quran-tajweed/tajweed.hafs.uthmani-pause-sajdah.json
+#   /srv/minhaj/imports/quran-tajweed/quran-uthmani.txt
+# (mounted READ-ONLY into the operations image). It refuses unless each file's
+# SHA-256 is the one given AND the one pinned in the release; it then
+# registers the provenance, re-aligns the CC BY 4.0 colour annotations to the
+# canonical Tanzil 1.1 text (an Ayah that cannot be carried over exactly is
+# skipped whole, never adjusted) and records every aligned Ayah on a DRAFT
+# overlay — an editor publishes it on the admin Quran screen. Staging only,
+# labelled not yet reviewed by a qari. It needs an account holding quran.read
+# and quran.administer; a re-run changes nothing.
+#
 # The last output line is the command's JSON summary: identifiers and counts.
 # =============================================================================
 
@@ -80,6 +95,8 @@ readonly IMPORT_DIR="$MINHAJ_SRV/imports/quran-reference"
 readonly MOUNTED=/var/lib/minhaj/quran-reference
 readonly RECITATION_DIR="$MINHAJ_SRV/imports/quran-recitations"
 readonly RECITATION_MOUNT=/var/lib/minhaj/quran-recitations
+readonly TAJWEED_DIR="$MINHAJ_SRV/imports/quran-tajweed"
+readonly TAJWEED_MOUNT=/var/lib/minhaj/quran-tajweed
 
 staging_preflight
 host_lock
@@ -137,5 +154,12 @@ case "${1:-}" in
       --file "$RECITATION_MOUNT/narration-timing.json" \
       | tail -n 1 | jq -c . || die "staging-quran-reference did not end with a JSON summary"
     ;;
-  *) die "usage: quran-reference.sh import --sha256 <hex> --operator <accountId> [--session <sessionId>] | translations --operator <accountId> | names --sha256 <metadata hex> --operator <accountId> | recitations-mp3quran --operator <accountId> | recitations-irfan-urdu --operator <accountId> | recitations-narration-timing --sha256 <hex> --operator <accountId>" ;;
+  tajweed)
+    case " $* " in
+      *' --annotations '* | *' --text '*) die "the files are read from $TAJWEED_DIR, not named on the command line" ;;
+    esac
+    [ -r "$TAJWEED_DIR/tajweed.hafs.uthmani-pause-sajdah.json" ] && [ -r "$TAJWEED_DIR/quran-uthmani.txt" ]       || die "place tajweed.hafs.uthmani-pause-sajdah.json and quran-uthmani.txt in $TAJWEED_DIR first"
+    release_compose "$(current_release_dir)" --profile ops run --rm --no-deps -T       -v "$TAJWEED_DIR:$TAJWEED_MOUNT:ro" ops       packages/database/scripts/staging-quran-reference.ts "$@"       --annotations "$TAJWEED_MOUNT/tajweed.hafs.uthmani-pause-sajdah.json"       --text "$TAJWEED_MOUNT/quran-uthmani.txt"       | tail -n 1 | jq -c . || die "staging-quran-reference did not end with a JSON summary"
+    ;;
+  *) die "usage: quran-reference.sh import --sha256 <hex> --operator <accountId> [--session <sessionId>] | translations --operator <accountId> | names --sha256 <metadata hex> --operator <accountId> | recitations-mp3quran --operator <accountId> | recitations-irfan-urdu --operator <accountId> | recitations-narration-timing --sha256 <hex> --operator <accountId> | tajweed --sha256 <json hex> --text-sha256 <txt hex> --operator <accountId>" ;;
 esac

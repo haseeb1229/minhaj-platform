@@ -923,6 +923,142 @@ export const wordGlossSaveSchema = z
   );
 export type WordGlossSave = z.output<typeof wordGlossSaveSchema>;
 
+/* ===========================================================================
+ * Tajweed colours (Quran Part 9)
+ * ========================================================================= */
+
+/**
+ * THE TAJWEED RULES A COLOUR OVERLAY MAY NAME, in the order a legend lists
+ * them: nasalisation, the merging and hiding of nun and mim, the lengthenings,
+ * then the letters that echo, join or fall silent. A closed vocabulary — the
+ * database CHECKs the same list — and each is also the slug of the rule's
+ * guidance page, `/quran/tajweed/{rule}`, where an editor may write about it.
+ */
+export const QURAN_TAJWEED_RULES = Object.freeze([
+  'ghunnah',
+  'idghaam-ghunnah',
+  'idghaam-no-ghunnah',
+  'idghaam-mutajanisayn',
+  'idghaam-mutaqaribayn',
+  'idghaam-shafawi',
+  'ikhfa',
+  'ikhfa-shafawi',
+  'iqlab',
+  'madd-2',
+  'madd-246',
+  'madd-muttasil',
+  'madd-munfasil',
+  'madd-6',
+  'qalqalah',
+  'hamzat-wasl',
+  'lam-shamsiyyah',
+  'silent',
+] as const);
+export type TajweedRule = (typeof QURAN_TAJWEED_RULES)[number];
+export const tajweedRuleSchema = z.enum(QURAN_TAJWEED_RULES);
+
+/** Is this one of the overlay's rules? */
+export function isTajweedRule(value: string): value is TajweedRule {
+  return (QURAN_TAJWEED_RULES as readonly string[]).includes(value);
+}
+
+/** How many example ayat one rule's use in an overlay may name. */
+export const QURAN_TAJWEED_EXAMPLES_MAX = 12;
+
+/** A structural ceiling on one Ayah's spans — never a claim about any Ayah. */
+export const QURAN_TAJWEED_SPANS_MAX = 999;
+
+/**
+ * One coloured stretch of an Ayah's STORED text: `[start, end)` in Unicode
+ * CODE POINTS (not UTF-16 units) and the rule it shows. A span never carries
+ * text: it points into the canonical text, which it never changes.
+ */
+export const tajweedSpanSchema = z.strictObject({
+  rule: tajweedRuleSchema,
+  start: z
+    .number()
+    .int()
+    .min(0)
+    .max(QURAN_LIMITS.ayahText - 1),
+  end: z.number().int().min(1).max(QURAN_LIMITS.ayahText),
+});
+export type TajweedSpan = z.output<typeof tajweedSpanSchema>;
+
+/** An Ayah's length as the overlay counts it: in code points. */
+export function codePointLength(text: string): number {
+  let count = 0;
+  for (const _ of text) count += 1;
+  return count;
+}
+
+/**
+ * Why spans cannot lie over an Ayah's text, or `null` when they can: each is
+ * non-empty (`empty`), ends within the text (`beyond-text`), and they come in
+ * order of their start (`order`). Spans MAY overlap or nest — the source's do,
+ * where two rules meet on one letter — so overlap is not a problem.
+ */
+export type TajweedSpanProblem = 'empty' | 'beyond-text' | 'order';
+
+export function tajweedSpanProblem(
+  text: string,
+  spans: readonly Pick<TajweedSpan, 'start' | 'end'>[],
+): TajweedSpanProblem | null {
+  const length = codePointLength(text);
+  let previous = 0;
+  for (const span of spans) {
+    if (span.end <= span.start) return 'empty';
+    if (span.end > length) return 'beyond-text';
+    if (span.start < previous) return 'order';
+    previous = span.start;
+  }
+  return null;
+}
+
+/** A SHA-256 in lowercase hexadecimal. */
+export const sha256HexSchema = z.string().regex(/^[0-9a-f]{64}$/u);
+
+/**
+ * One Ayah's spans in an overlay, recorded WHOLE and once, with the SHA-256 of
+ * the canonical text they were aligned to — the Ayah's stored NVARCHAR text
+ * as SQL Server hashes it (`HASHBYTES('SHA2_256', …)`: UTF-16LE), so the
+ * database checks it on insert and the reader shows the spans only while the
+ * Ayah still hashes to it. An Ayah with no span is recorded too: it was
+ * aligned, and no rule is marked in it.
+ */
+export const tajweedAyahSchema = z.strictObject({
+  ayah: ayahNumberSchema,
+  textSha256: sha256HexSchema,
+  spans: z.array(tajweedSpanSchema).max(QURAN_TAJWEED_SPANS_MAX),
+});
+export type TajweedAyahValue = z.output<typeof tajweedAyahSchema>;
+
+export const tajweedAyatSaveSchema = z
+  .strictObject({
+    surah: surahNumberSchema,
+    ayat: z.array(tajweedAyahSchema).min(1).max(QURAN_LIMITS.textsPerSave),
+  })
+  .refine((value) => new Set(value.ayat.map((a) => a.ayah)).size === value.ayat.length, {
+    path: ['ayat'],
+    message: 'An ayah is recorded once per save.',
+  });
+export type TajweedAyatSave = z.output<typeof tajweedAyatSaveSchema>;
+
+/**
+ * A TAJWEED OVERLAY: colour spans over the UNCHANGED canonical Arabic, a
+ * layered work like a Translation — its own identity, immutable slug,
+ * lifecycle, version and registered source — but with no content language
+ * (it marks the Arabic itself) and no contributor (its source's credit is its
+ * attribution). Its spans arrive only from the operator's import.
+ */
+export const tajweedOverlayInputSchema = z.strictObject({
+  slug: quranSlugSchema,
+  name: labelText(QURAN_LIMITS.name),
+  description: labelText(QURAN_LIMITS.description).nullable(),
+  attribution: labelText(QURAN_LIMITS.attribution).nullable(),
+  sourceId: quranIdSchema.nullable(),
+});
+export type TajweedOverlayValue = z.output<typeof tajweedOverlayInputSchema>;
+
 /** One Tafsir entry over a same-Surah range of ayat. */
 export const tafsirEntryInputSchema = z
   .strictObject({
@@ -1282,6 +1418,44 @@ export interface TajweedRuleRecord {
   readonly publishedAt: Date | null;
 }
 
+/**
+ * A tajweed overlay as administration sees it (Quran Part 9): what is
+ * recorded — ayat and spans — and how many recorded ayat no longer match the
+ * canonical text (`staleAyat`: corrected since, so not shown).
+ */
+export interface TajweedOverlayRecord {
+  readonly id: string;
+  readonly slug: string;
+  readonly name: string;
+  readonly description: string | null;
+  readonly attribution: string | null;
+  readonly sourceId: string | null;
+  readonly sourceAuthority: QuranSourceAuthority | null;
+  readonly state: QuranLayerState;
+  readonly version: number;
+  readonly ayahCount: number;
+  readonly spanCount: number;
+  readonly staleAyat: number;
+  readonly rules: readonly { readonly rule: TajweedRule; readonly spans: number }[];
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+  readonly publishedAt: Date | null;
+}
+
+/** One Ayah an overlay records, without its spans: what an import compares. */
+export interface TajweedAyahRecord {
+  readonly ayah: number;
+  readonly textSha256: string;
+  readonly spans: number;
+}
+
+/** What recording a Surah's ayat did: new ayat, and ayat already recorded. */
+export interface TajweedSaveResult {
+  readonly recorded: number;
+  readonly kept: number;
+  readonly overlay: TajweedOverlayRecord;
+}
+
 /** One Ayah's text in one layered work. */
 export interface LayerText {
   readonly ayah: number;
@@ -1590,6 +1764,46 @@ export interface PublicTajweedRule {
   readonly position: number;
   readonly attribution: string | null;
   readonly texts: readonly TajweedRuleText[];
+}
+
+/** A public tajweed overlay (Quran Part 9). */
+export interface PublicTajweedOverlay {
+  readonly id: string;
+  readonly slug: string;
+  readonly name: string;
+  readonly description: string | null;
+  readonly attribution: string | null;
+  readonly publishedAt: Date;
+}
+
+/** One Ayah's spans in a public overlay — only while its text still matches. */
+export interface PublicAyahTajweed {
+  readonly ayah: number;
+  readonly spans: readonly TajweedSpan[];
+}
+
+/**
+ * How often one rule is marked in a public overlay, and a few ayat where it
+ * is, for its guidance: the SHORTEST matching ayat first (then in reading
+ * order), each with its stored text and ONLY that rule's spans.
+ */
+export interface PublicTajweedRuleUse {
+  readonly rule: TajweedRule;
+  readonly ayat: number;
+  readonly spans: number;
+  readonly examples: readonly {
+    readonly surah: number;
+    readonly ayah: number;
+    readonly text: string;
+    readonly spans: readonly TajweedSpan[];
+  }[];
+}
+
+/** What a public overlay colours now: its ayat, and each rule's use. */
+export interface PublicTajweedUses {
+  /** Ayat whose recorded spans still match the canonical text. */
+  readonly ayat: number;
+  readonly rules: readonly PublicTajweedRuleUse[];
 }
 
 export interface PublicTopicAyah {

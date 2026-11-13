@@ -5,6 +5,7 @@ import type { Locale } from '@minhaj/contracts';
 import {
   QURAN_LIMITS,
   type QuranSourceRecord,
+  type TajweedOverlayRecord,
   type TajweedRuleRecord,
 } from '@minhaj/contracts/quran';
 import type { LanguageView } from '@minhaj/contracts/taxonomy';
@@ -25,6 +26,7 @@ import {
   TextInput,
   TextLink,
 } from '@/components/ui';
+import { TajweedSwatch, tajweedKeyLabels } from '@/components/quran/tajweed-key';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
 import { saveTajweedRule } from './actions';
@@ -48,7 +50,14 @@ import {
 
 /**
  * Tajweed rules (`/admin/quran/tajweed`), Phase 18 — a study aid, managed under
- * `quran.administer` like every other non-canonical Quran work.
+ * `quran.administer` like every other non-canonical Quran work — and, since
+ * Quran Part 9, the tajweed COLOUR OVERLAYS above them: each one's state and
+ * what it records (ayat, marks, marks per rule, and ayat whose canonical text
+ * has changed since and so are not shown), published or archived here like
+ * any layered work. Its spans arrive only from the operator's import and are
+ * never edited by hand: each is tied to the exact code points of the text it
+ * was aligned to, so a span moved in a form would colour letters its source
+ * never marked, and a correction is a new import, not an edit.
  *
  * A RULE IS SOURCED, PLAIN TEXT. Each has a fixed slug, a position, an optional
  * registered source and attribution, and a title and PLAIN-TEXT body per
@@ -77,10 +86,11 @@ export async function TajweedDirectory({ params }: ListParams) {
   const actor = actorOf(context);
   const administer = context.authorization.can('quran.administer');
 
-  const [rules, status, languages] = await Promise.all([
+  const [rules, status, languages, overlays] = await Promise.all([
     quranRuntime().quran.tajweedRules(actor),
     quranRuntime().quran.corpusStatus(actor),
     languageIndex(),
+    quranRuntime().quran.tajweedOverlays(actor),
   ]);
   const sources = new Map(status.sources.map((source) => [source.id, source]));
   const ordered = [...rules].sort((a, b) => a.position - b.position);
@@ -88,6 +98,28 @@ export async function TajweedDirectory({ params }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.tajweed')}</PageHeading>
+
+      <section aria-labelledby="tajweed-overlays" className="flex flex-col gap-4">
+        <SectionHeading id="tajweed-overlays">{t('overlay.heading')}</SectionHeading>
+        <p className="text-sm text-foreground-muted">{t('overlay.scope')}</p>
+        {overlays.length === 0 ? (
+          <EmptyState>{t('overlay.empty')}</EmptyState>
+        ) : (
+          overlays.map((overlay) => (
+            <OverlayPanel
+              key={overlay.id}
+              locale={locale}
+              overlay={overlay}
+              source={
+                overlay.sourceId === null ? undefined : sources.get(overlay.sourceId)
+              }
+              administer={administer}
+              copy={copy}
+            />
+          ))
+        )}
+      </section>
+
       <p className="text-sm text-foreground-muted">{t('scope.tajweed')}</p>
 
       {ordered.length === 0 ? (
@@ -164,6 +196,96 @@ export async function TajweedDirectory({ params }: ListParams) {
         )
       ) : null}
     </main>
+  );
+}
+
+/** One colour overlay: what it is, what it records, and its lifecycle. */
+async function OverlayPanel({
+  locale,
+  overlay,
+  source,
+  administer,
+  copy,
+}: {
+  readonly locale: Locale;
+  readonly overlay: TajweedOverlayRecord;
+  readonly source: QuranSourceRecord | undefined;
+  readonly administer: boolean;
+  readonly copy: Copy;
+}) {
+  const { t } = copy;
+  const rules = await tajweedKeyLabels(locale);
+  return (
+    <Panel>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-subheading font-semibold break-words">
+            <bdi>{overlay.name}</bdi>
+          </h3>
+          <StateBadge state={overlay.state} copy={copy} />
+        </div>
+        <p className="text-caption font-medium text-warning">{rules.experimental}</p>
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+          <div className="flex flex-wrap gap-2">
+            <dt className="font-semibold">{t('slug')}</dt>
+            <dd dir="ltr">{overlay.slug}</dd>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <dt className="font-semibold">{t('source')}</dt>
+            <dd>
+              <SourceName source={source} copy={copy} />
+            </dd>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <dt className="font-semibold">{t('overlay.ayat')}</dt>
+            <dd>{overlay.ayahCount}</dd>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <dt className="font-semibold">{t('overlay.spans')}</dt>
+            <dd>{overlay.spanCount}</dd>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <dt className="font-semibold">{t('overlay.stale')}</dt>
+            <dd>{overlay.staleAyat}</dd>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <dt className="font-semibold">{t('version')}</dt>
+            <dd>{overlay.version}</dd>
+          </div>
+        </dl>
+        {overlay.attribution === null ? null : (
+          <p className="text-sm break-words text-foreground-muted" dir="auto">
+            {overlay.attribution}
+          </p>
+        )}
+        {overlay.rules.length === 0 ? null : (
+          <DataTable
+            caption={t('overlay.rules')}
+            columns={[t('overlay.rule'), t('overlay.spans')]}
+          >
+            {overlay.rules.map((entry) => (
+              <DataRow key={entry.rule}>
+                <DataCell wrap>
+                  <span className="inline-flex items-center gap-2">
+                    <TajweedSwatch rule={entry.rule} />
+                    {rules.rules[entry.rule]}
+                  </span>
+                </DataCell>
+                <DataCell>{entry.spans}</DataCell>
+              </DataRow>
+            ))}
+          </DataTable>
+        )}
+        {administer ? (
+          <StateControls
+            kind="tajweed-overlay"
+            locale={locale}
+            record={overlay}
+            copy={copy}
+          />
+        ) : null}
+      </div>
+    </Panel>
   );
 }
 

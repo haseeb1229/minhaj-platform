@@ -4313,37 +4313,398 @@ test.describe('Quran Part 8: the Tafsir hub', () => {
     );
     expect(Number(video?.total)).toBe(2);
   });
+});
 
-  // TEMPORARY-PART8-SCREENSHOTS (removed after the evidence run)
-  test('part 8 evidence screenshots', async ({ page }) => {
-    const dir = process.env['PART8_SHOTS'];
-    test.skip(dir === undefined, 'evidence only');
-    test.setTimeout(240_000);
-    for (const [width, height] of [
-      [1440, 1000],
-      [390, 844],
-    ] as const)
-      for (const locale of ['en', 'ur'] as const) {
-        await page.setViewportSize({ width, height });
-        const tag = `${locale}-${String(width)}`;
-        await page.goto(localizedPath(locale, '/quran/tafsir'));
-        await page.screenshot({ path: `${String(dir)}/hub-${tag}.png`, fullPage: true });
-        await page.goto(localizedPath(locale, '/quran/tafsir/surah/2'));
+test.describe('Quran Part 9: tajweed colours', () => {
+  const overlay = randomUUID();
+  const overlaySlug = `fixture-tajweed-overlay-${run}`;
+  const OVERLAY_NAME = `NON_QURAN_FIXTURE tajweed overlay ${run}`;
+  const EXPERIMENTAL = 'Colour-coded tajweed — not yet reviewed by a qari.';
+  /**
+   * The spans, over each fixture text's Arabic: "NON_QURAN_FIXTURE_CANONICAL_s_a "
+   * is 32 code points, then "نص اختبار غير قرآني" — a whole word, two letters
+   * in the middle of a word (where they join on both sides), and the start of
+   * the last word. Invented colouring of invented text, never a ruling.
+   */
+  const SPANS = [
+    ['ghunnah', 32, 34],
+    ['madd-2', 37, 39],
+    ['qalqalah', 46, 48],
+  ] as const;
+  const COLOURED = [
+    [1, 2],
+    [1, 3],
+    [2, 1],
+  ] as const;
+  let editor: Page;
+
+  async function axe(page: Page, target: string, testInfo: TestInfo): Promise<void> {
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    const blocking = results.violations.filter(
+      (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+    );
+    for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+      testInfo.annotations.push({
+        type: 'axe',
+        description: `${target}: ${finding.id} (${String(finding.impact)})`,
+      });
+    expect(
+      blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+      target,
+    ).toEqual([]);
+  }
+
+  /** The reader's Settings button, in each interface locale. */
+  const SETTINGS = Object.fromEntries(
+    (['en', 'ur', 'ar'] as const).map((locale) => [
+      locale,
+      (
+        JSON.parse(readFileSync(path.join(MESSAGES, `${locale}.json`), 'utf8')) as {
+          quran: { reader: { settings: string } };
+        }
+      ).quran.reader.settings,
+    ]),
+  ) as Record<'en' | 'ur' | 'ar', string>;
+
+  /** Turns the colours on through the reader's own settings. */
+  async function colourOn(page: Page, locale: 'en' | 'ur' | 'ar' = 'en'): Promise<void> {
+    await readerReady(page);
+    await page.getByRole('button', { name: SETTINGS[locale] }).click();
+    const sheet = page.getByRole('dialog').first();
+    await sheet
+      .getByRole('switch', { name: /Tajweed colours|تجوید کے رنگ|ألوان التجويد/ })
+      .check();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#quran-reader')).toHaveAttribute('data-tajweed', 'on');
+  }
+
+  const colourOf = (locator: Locator) =>
+    locator.evaluate((element) => getComputedStyle(element).color);
+
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(180_000);
+    // A DRAFT overlay over three fixture ayat, each recorded against its
+    // current text — so nothing of it is public until an editor publishes it.
+    await sql.query(`
+      INSERT INTO [dbo].[QuranTajweedOverlay] ([id],[slug],[name],[description],[attribution],[sourceId],[state],[version],[updatedAt]) VALUES
+        (N'${overlay}', N'${overlaySlug}', ${n(OVERLAY_NAME)}, NULL, N'NON_QURAN_FIXTURE tajweed attribution', N'${ids.source}', N'draft', 1, SYSUTCDATETIME());
+      INSERT INTO [dbo].[QuranTajweedOverlayAyah] ([overlayId],[surahNumber],[ayahNumber],[textSha256],[spanCount])
+        SELECT N'${overlay}', [surahNumber], [ayahNumber], HASHBYTES('SHA2_256', [text]), ${String(SPANS.length)}
+        FROM [dbo].[Ayah] WHERE ${COLOURED.map(([surah, ayah]) => `([surahNumber]=${String(surah)} AND [ayahNumber]=${String(ayah)})`).join(' OR ')};
+      INSERT INTO [dbo].[QuranTajweedSpan] ([overlayId],[surahNumber],[ayahNumber],[ordinal],[rule],[startCodepoint],[endCodepoint]) VALUES
+        ${COLOURED.flatMap(([surah, ayah]) => SPANS.map(([rule, start, end], index) => `(N'${overlay}', ${String(surah)}, ${String(ayah)}, ${String(index + 1)}, N'${rule}', ${String(start)}, ${String(end)})`)).join(',\n        ')};
+    `);
+    const context = await browser.newContext({
+      baseURL: baseUrl(),
+      extraHTTPHeaders: { 'x-forwarded-for': '100.64.249.9' },
+    });
+    contexts.push(context);
+    editor = await context.newPage();
+    const { email } = await registerAndSignIn(editor, 'quran-tajweed-editor');
+    await grantRole(
+      sql,
+      await accountIdFor(sql, email),
+      ['quran.read', 'quran.administer'],
+      'Quran Part 9 browser proof',
+    );
+  });
+
+  test('with no public overlay: no switch, no key, no colour, and the hub is the guidance alone', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await visitFixture(page, '/quran/surah/1');
+    await readerReady(page);
+    const reader = page.locator('#quran-reader');
+    await expect(reader).not.toHaveAttribute('data-tajweed-overlay', /.*/);
+    await expect(page.locator('.tj')).toHaveCount(0);
+    await expect(page.locator('.quran-tajweed-key')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Settings' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Reading settings' });
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole('switch', { name: /Tajweed colours/ })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    await visitFixture(page, '/quran/tajweed');
+    await expect(page.getByRole('link', { name: NAME.rule })).toBeVisible();
+    await expect(page.getByText(EXPERIMENTAL)).toHaveCount(0);
+    expect((await page.goto('/quran/tajweed/ghunnah'))?.status()).toBe(404);
+  });
+
+  test('an editor sees the overlay’s counts and publishes it; there is no span editor', async () => {
+    const response = await editor.goto('/admin/quran/tajweed');
+    expect(response?.status()).toBe(200);
+    const panel = editor
+      .locator('section[aria-labelledby="tajweed-overlays"]')
+      .locator('div')
+      .filter({ hasText: OVERLAY_NAME })
+      .first();
+    await expect(panel).toContainText('Ayat coloured');
+    await expect(panel).toContainText(EXPERIMENTAL);
+    await expect(panel.getByRole('table', { name: 'Marks by rule' })).toContainText(
+      'Ghunnah (nasalisation)',
+    );
+    await expect(
+      editor.locator('input[name^="span"], textarea[name^="span"]'),
+    ).toHaveCount(0);
+    await panel.getByRole('button', { name: 'Publish' }).click();
+    // Published, the panel offers the other two states.
+    await expect(panel.getByRole('button', { name: 'Return to draft' })).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Publish' })).toHaveCount(0);
+    const [row] = await sql.query<{ state: string }>(
+      `SELECT [state] FROM [dbo].[QuranTajweedOverlay] WHERE [id]=N'${overlay}';`,
+    );
+    expect(row?.state).toBe('published');
+    const audit = await sql.query<{ total: number }>(
+      `SELECT COUNT_BIG(*) AS [total] FROM [dbo].[AuditLog] WHERE [targetId]=N'${overlay}' AND [action]=N'quran.tajweed-overlay.state-changed';`,
+    );
+    expect(Number(audit[0]?.total)).toBe(1);
+  });
+
+  test('the reader: colours on request, the stored text intact and joined, the key, every mode, recitation and Copy unaffected', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await visitFixture(page, '/quran/surah/1');
+    const reader = page.locator('#quran-reader');
+    await expect(reader).toHaveAttribute('data-tajweed-overlay', '');
+    await expect(reader).toHaveAttribute('data-tajweed', '');
+    const arabic = page.locator('#ayah-1-2 [data-ayah-arabic]');
+    // The paragraph's text is the stored text, exactly; the runs are bare spans.
+    await expect(arabic).toHaveText(canonicalText(1, 2));
+    expect(await arabic.evaluate((element) => element.textContent)).toBe(
+      canonicalText(1, 2),
+    );
+    const ghunnah = arabic.locator('.tj-ghunnah');
+    await expect(ghunnah).toHaveText('نص');
+    await expect(ghunnah).toHaveAttribute('data-tajweed', 'ghunnah');
+    // Off by default: the runs carry the text's own colour, and no key shows.
+    expect(await colourOf(ghunnah)).toBe(await colourOf(arabic));
+    await expect(page.locator('.quran-tajweed-key')).toBeHidden();
+
+    await colourOn(page);
+    expect(await colourOf(ghunnah)).toBe('rgb(27, 113, 48)');
+    expect(await colourOf(arabic.locator('.tj-madd-2'))).toBe('rgb(138, 86, 0)');
+    expect(await colourOf(arabic.locator('.tj-qalqalah'))).toBe('rgb(39, 71, 184)');
+    // An Ayah the overlay does not colour is plain text.
+    await expect(page.locator('#ayah-1-1 .tj')).toHaveCount(0);
+
+    // SHAPING INTACT: the coloured paragraph is exactly as wide, on one line in
+    // its own face and size, as the same text in one text node — a run
+    // boundary that broke a join would change the letters' forms and widths.
+    const widths = await arabic.evaluate((element) => {
+      const host = document.createElement('div');
+      host.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap';
+      const coloured = element.cloneNode(true) as HTMLElement;
+      const plain = element.cloneNode(false) as HTMLElement;
+      plain.textContent = element.textContent;
+      for (const copy of [coloured, plain]) copy.style.display = 'inline-block';
+      host.append(coloured, document.createElement('br'), plain);
+      element.parentElement?.append(host);
+      const box = (node: HTMLElement) => {
+        const rect = node.getBoundingClientRect();
+        return [Math.round(rect.width * 10) / 10, Math.round(rect.height * 10) / 10];
+      };
+      const result = {
+        coloured: box(coloured),
+        plain: box(plain),
+        runs: coloured.querySelectorAll('.tj').length,
+      };
+      host.remove();
+      return result;
+    });
+    expect(widths.runs).toBe(3);
+    expect(widths.coloured).toEqual(widths.plain);
+
+    // The key: the standing said plainly, every rule named.
+    const key = page.locator('.quran-tajweed-key');
+    await expect(key).toBeVisible();
+    await expect(key).toContainText(EXPERIMENTAL);
+    await key.getByText('Colour key').click();
+    await expect(key.getByText('Ghunnah (nasalisation)')).toBeVisible();
+    await expect(key.getByText('Madd lazim — 6 counts')).toBeVisible();
+    await expect(key.getByRole('link', { name: 'Learn the rules' })).toHaveAttribute(
+      'href',
+      '/quran/tajweed',
+    );
+    await page.locator('#ayah-1-2').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath('part9-reader-en-1440.png') });
+    await arabic.screenshot({ path: testInfo.outputPath('part9-ayah-en-1440.png') });
+
+    // Kept in this browser, applied before the first paint.
+    await page.reload();
+    await expect(reader).toHaveAttribute('data-tajweed', 'on');
+    expect(await colourOf(ghunnah)).toBe('rgb(27, 113, 48)');
+
+    // The recited Ayah's wash is drawn behind the colours, unchanged.
+    await readerReady(page);
+    const body = page.locator('#ayah-1-2 > .quran-ayah-body');
+    await page
+      .locator('#ayah-1-2')
+      .evaluate((row) => row.setAttribute('data-recited', ''));
+    expect(
+      await body.evaluate((element) => getComputedStyle(element).backgroundColor),
+    ).toBe('rgb(243, 232, 204)');
+    expect(await colourOf(ghunnah)).toBe('rgb(27, 113, 48)');
+    await page
+      .locator('#ayah-1-2')
+      .evaluate((row) => row.removeAttribute('data-recited'));
+
+    // Copy takes the stored Arabic, byte for byte.
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page
+      .getByRole('article', { name: 'Surah 1, Ayah 2' })
+      .getByRole('button', { name: 'Copy with citation' })
+      .click();
+    await expect(page.getByText('Copied with its citation.')).toBeVisible();
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied.startsWith(canonicalText(1, 2))).toBe(true);
+
+    // Reading and mushaf modes colour the same runs.
+    for (const mode of ['Reading', 'Page'] as const) {
+      await page.getByRole('button', { name: 'Settings' }).click();
+      await page.getByRole('dialog').first().getByLabel(mode, { exact: true }).check();
+      await page.keyboard.press('Escape');
+      await expect(reader).toHaveAttribute(
+        'data-mode',
+        mode === 'Reading' ? 'reading' : 'mushaf',
+      );
+      expect(await colourOf(ghunnah)).toBe('rgb(27, 113, 48)');
+      await expect(arabic).toHaveText(canonicalText(1, 2));
+    }
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page
+      .getByRole('dialog')
+      .first()
+      .getByLabel('Translation', { exact: true })
+      .check();
+    await page.keyboard.press('Escape');
+
+    // The Ayah's own page colours it too.
+    await visitFixture(page, '/quran/surah/2/1');
+    await expect(page.locator('[data-ayah-arabic] .tj-qalqalah')).toHaveCount(1);
+    expect(await colourOf(page.locator('[data-ayah-arabic] .tj-qalqalah'))).toBe(
+      'rgb(39, 71, 184)',
+    );
+    await axe(page, '/quran/surah/2/1 (colours on)', testInfo);
+  });
+
+  test('Urdu and Arabic, right to left, at 320 px and 390 px — and axe with the key open', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(180_000);
+    for (const [locale, key, width] of [
+      ['ur', 'رنگوں کی کلید', 320],
+      ['ar', 'مفتاح الألوان', 320],
+      ['ur', 'رنگوں کی کلید', 390],
+      ['en', 'Colour key', 390],
+    ] as const) {
+      await page.setViewportSize({ width, height: 844 });
+      await visitFixture(page, localizedPath(locale, '/quran/surah/1'), locale);
+      await colourOn(page, locale);
+      await expect(page.locator('html')).toHaveAttribute(
+        'dir',
+        locale === 'en' ? 'ltr' : 'rtl',
+      );
+      const arabic = page.locator('#ayah-1-2 [data-ayah-arabic]');
+      await expect(arabic).toHaveText(canonicalText(1, 2));
+      await expect(arabic).toHaveAttribute('dir', 'rtl');
+      expect(await colourOf(arabic.locator('.tj-ghunnah'))).toBe('rgb(27, 113, 48)');
+      const legend = page.locator('.quran-tajweed-key');
+      await legend.getByText(key).click();
+      await expect(legend.locator('.tajweed-swatch')).toHaveCount(18);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+        `${locale} at ${String(width)}`,
+      ).toBe(true);
+      if (width === 390) {
+        await page.locator('#ayah-1-2').scrollIntoViewIfNeeded();
         await page.screenshot({
-          path: `${String(dir)}/surah-2-${tag}.png`,
-          fullPage: true,
+          path: testInfo.outputPath(`part9-reader-${locale}-390.png`),
         });
-        await page.goto(localizedPath(locale, '/quran/tafsir/surah/1'));
-        await page.screenshot({
-          path: `${String(dir)}/surah-1-${tag}.png`,
-          fullPage: true,
-        });
-        await page.goto(localizedPath(locale, '/quran/surah/2'));
-        await readerReady(page);
-        await page.locator('#ayah-2-2 [data-ayah-action="tafsir"]').click();
-        await expect(page.getByRole('dialog')).toBeVisible();
-        await page.waitForTimeout(400);
-        await page.screenshot({ path: `${String(dir)}/reader-panel-${tag}.png` });
       }
+      await axe(
+        page,
+        `/${locale}/quran/surah/1 at ${String(width)} (colours on, key open)`,
+        testInfo,
+      );
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await visitFixture(page, localizedPath('ur', '/quran/surah/1'), 'ur');
+    await readerReady(page);
+    await page.locator('.quran-tajweed-key').getByText('رنگوں کی کلید').click();
+    await page.screenshot({ path: testInfo.outputPath('part9-key-ur-1440.png') });
+    await page.locator('#ayah-1-2').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath('part9-reader-ur-1440.png') });
+  });
+
+  test('the hub and a rule’s page: colours, counts and real examples, linked to the reader; credit and standing', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await visitFixture(page, '/quran/tajweed');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tajweed');
+    await expect(page.getByText(EXPERIMENTAL).first()).toBeVisible();
+    await expect(page.getByText('3 ayat are shown in colour.')).toBeVisible();
+    // Every rule is listed by name and colour, linked to its page.
+    for (const name of ['Ghunnah (nasalisation)', 'Iqlab', 'Silent letter'])
+      await expect(page.getByRole('link', { name, exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: 'Ghunnah (nasalisation)', exact: true }),
+    ).toHaveAttribute('href', '/quran/tajweed/ghunnah');
+    // An example: the stored text, only its rule coloured, linked to its Ayah.
+    const card = page.locator('li').filter({
+      has: page.getByRole('link', { name: 'Ghunnah (nasalisation)', exact: true }),
+    });
+    const example = card.locator('p[lang="ar"]').first();
+    await expect(example.locator('.tj')).toHaveCount(1);
+    await expect(example.locator('.tj-ghunnah')).toHaveText('نص');
+    const text = await example.textContent();
+    expect(COLOURED.map(([s, a]) => canonicalText(s, a))).toContain(text);
+    await expect(
+      card.getByRole('link', { name: /^Read Surah \d, Ayah \d in the reader$/ }).first(),
+    ).toHaveAttribute('href', /^\/quran\/surah\/[12]\/[123]$/);
+    expect(await colourOf(example.locator('.tj-ghunnah'))).toBe('rgb(27, 113, 48)');
+    // The published guidance on another subject is still offered.
+    await expect(page.getByRole('link', { name: NAME.rule })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Licence: CC BY 4.0' })).toHaveAttribute(
+      'href',
+      'https://creativecommons.org/licenses/by/4.0/',
+    );
+    await page.screenshot({
+      path: testInfo.outputPath('part9-hub-en-1440.png'),
+      fullPage: true,
+    });
+    await axe(page, '/quran/tajweed', testInfo);
+
+    // A rule's page: its colour, no guidance yet, six examples at most.
+    await visitFixture(page, '/quran/tajweed/qalqalah');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Qalqalah');
+    await expect(
+      page.getByText('No guidance has been written for this rule yet.'),
+    ).toBeVisible();
+    await expect(page.locator('p[lang="ar"] .tj-qalqalah')).toHaveCount(3);
+    await expect(page.locator('p[lang="ar"] .tj-ghunnah')).toHaveCount(0);
+    await axe(page, '/quran/tajweed/qalqalah', testInfo);
+    expect((await page.goto('/quran/tajweed/not-a-rule'))?.status()).toBe(404);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await visitFixture(page, localizedPath('ur', '/quran/tajweed'), 'ur');
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: testInfo.outputPath('part9-hub-ur-390.png'),
+      fullPage: true,
+    });
+    await axe(page, '/ur/quran/tajweed', testInfo);
   });
 });

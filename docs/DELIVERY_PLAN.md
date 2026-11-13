@@ -3411,6 +3411,60 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > (`tests/browser/quran.spec.ts`): qari, then the passage's translation with its ayat marked, then
 > the qari; the unavailable Surah; the narration chosen; Urdu and Arabic at 320 px; axe. *CI and
 > staging evidence are recorded when they exist.*
+>
+> **Quran Part 9 — tajweed colours (owner decision, OPEN_DECISIONS.md §1.2 item 4; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (DOMAIN_MODEL.md §8.9; ROUTE_MAP.md
+> §3.3, admin surfaces; ARCHITECTURE.md staging operations; SECURITY_BASELINE.md §5.1). Staging only;
+> a qari's review is required before production; the production gates are unchanged.
+>
+> - **Model.** Migration `20261112000000_r2_quran_tajweed_overlay` (with its rollback): a
+>   Quran-owned overlay work (`QuranTajweedOverlay`), each Ayah it colours with the SHA-256 of the
+>   canonical text it was aligned to and its span count (`QuranTajweedOverlayAyah`), and its spans
+>   — a CHECKed vocabulary of 18 rules, `[start, end)` in code points, overlapping as the data does
+>   (`QuranTajweedSpan`). Four CHECKs, four keys, three triggers (51406 a published overlay
+>   colours an Ayah; 51407 written once, aligned to the Ayah's current text, within it and its
+>   count). Every public read shows an Ayah's spans only while its current text still hashes to
+>   the recorded digest (fail closed after a correction). Restore proof: 53 CHECKs, 58 foreign
+>   keys, 38 triggers; 33 Quran tables.
+> - **Re-alignment** (`scripts/quran/tajweed-overlay.ts`, pure): equal text keeps its offsets;
+>   otherwise a code-point diff (common head and tail, then Myers) carries a span only when every
+>   code point it covers is shared and contiguous, else the whole Ayah is skipped; neither text is
+>   changed. On the real files: 5,558 of 6,236 ayat aligned (1,890 unchanged, 3,668 re-mapped),
+>   678 skipped, 48,035 spans.
+> - **Import.** `quran-reference.sh tajweed --sha256 <json hex> --text-sha256 <txt hex> --operator
+>   <id>` from `/srv/minhaj/imports/quran-tajweed/` (read-only), both digests pinned in the
+>   release (`151d616a…bf67`, `abe6447a…b9a2`); provenance source `quran-tajweed-annotations`;
+>   the runtime child records every aligned Ayah on a DRAFT overlay; idempotent; counts only.
+> - **Reader.** "Tajweed colours" in the reader's settings, offered only while an overlay is
+>   public, off by default, applied before the first paint; an Ayah is drawn as plain text and bare
+>   coloured spans (its text, Copy and a screen reader's reading unchanged); a colour key naming
+>   every rule in en/ur/ar beneath the bar while the colours are on, saying "Colour-coded tajweed —
+>   not yet reviewed by a qari"; high-contrast and forced-colour underlines per family of rules.
+>   Translation, Reading and Page modes alike; the recited Ayah's wash unchanged.
+> - **Hub.** `/quran/tajweed`: every rule with its colour, counts and the shortest real examples
+>   (only that rule coloured, each linked to its Ayah), the key, the other published guidance and
+>   the credit; `/quran/tajweed/{rule}`: the rule's colour, editor-written guidance where one is
+>   published ("not yet" otherwise) and six examples. Without a public overlay, the guidance alone.
+> - **Admin.** `/admin/quran/tajweed` shows each overlay's source, state, version, ayat, marks,
+>   marks per rule and stale ayat, with publish / draft / archive under `quran.administer`. No
+>   span editor, by design (DOMAIN_MODEL.md §8.9).
+>
+> **Proof:** `tests/quran/tajweed-overlay.test.ts` (the diff; equal text; insertion before, after,
+> inside and at the edge of a span; a changed or removed code point; combining marks; overlapping
+> and nested spans; an opening phrase; the bound; 400 random edit sequences; both files' readers and
+> every refusal; the plan's counts), `tests/quran/tajweed-layout.test.ts` (runs rejoin the stored
+> text, overlaps, astral characters, spans that do not fit colour nothing; the Arabic paragraph's
+> text is the stored string), `tests/quran/service.test.ts`, `tests/quran/reader-surface.test.ts`
+> (the boot script and the preference), `tests/config/design-tokens.test.ts` (every tajweed colour
+> AA on five grounds); on SQL Server `tests/quran/persistence.integration.test.ts` (written once,
+> digest checked, version lock, public only while published, fail closed after a real correction)
+> and `tests/quran/tajweed.integration.test.ts` (the runtime import end to end, refusals,
+> idempotency, the owner side refusing any file but the pinned ones); `db:migrate:test` (every
+> 51406/51407 rule and the rollback), `db:test:permissions`, `db:recovery:populated`; the browser
+> journey (`tests/browser/quran.spec.ts`, "Quran Part 9"): no switch without a public overlay; the
+> editor publishes; colours on request, the text intact, the coloured paragraph laid out exactly as
+> one text node, the key, every mode, the recited wash, Copy; ur/ar right to left at 320 px; the hub
+> and a rule's page; axe. *CI and staging evidence are recorded when they exist.*
 
 ---
 

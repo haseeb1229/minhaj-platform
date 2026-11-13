@@ -25,7 +25,10 @@ import type {
   PublicRecitationAlignment,
   PublicRecitationSegment,
   PublicSurah,
+  PublicAyahTajweed,
+  PublicTajweedOverlay,
   PublicTajweedRule,
+  PublicTajweedUses,
   PublicTransliteration,
   QuranAvailability,
   QuranCorpusStatus,
@@ -45,8 +48,14 @@ import type {
   TafsirEntryValue,
   TafsirRecord,
   TafsirValue,
+  TajweedAyahRecord,
+  TajweedAyahValue,
+  TajweedOverlayRecord,
+  TajweedOverlayValue,
+  TajweedRule,
   TajweedRuleRecord,
   TajweedRuleValue,
+  TajweedSaveResult,
   PublicTafsirCoverage,
   PublicTranslationCoverage,
   TranslationLayerText,
@@ -252,6 +261,34 @@ export interface QuranPublicReaderPort {
 
   tajweedRules(): Promise<readonly PublicTajweedRule[]>;
   tajweedRule(slug: string): Promise<PublicTajweedRule | null>;
+  /**
+   * The public tajweed colour overlays (Quran Part 9), in slug order — none
+   * while the corpus is inactive, and none that is not public now.
+   */
+  tajweedOverlays(): Promise<readonly PublicTajweedOverlay[]>;
+  /**
+   * One public overlay's spans for a range of one Surah, each Ayah's in its
+   * recorded order — ONE read per page. An Ayah whose canonical text no longer
+   * hashes to the text it was aligned to is ABSENT: its spans described
+   * another text, so the reader shows it uncoloured.
+   */
+  tajweedSpans(
+    overlayId: string,
+    surah: number,
+    from: number,
+    to: number,
+  ): Promise<readonly PublicAyahTajweed[]>;
+  /**
+   * How many ayat a public overlay colours now and, for each rule it marks,
+   * how many current ayat and spans and up to `perRule` of the shortest such
+   * ayat (one per distinct text) with that rule's spans — ONE bounded read for
+   * the Tajweed hub and a rule's page (`rule` narrows it).
+   */
+  tajweedRuleUses(
+    overlayId: string,
+    perRule: number,
+    rule: TajweedRule | null,
+  ): Promise<PublicTajweedUses>;
 
   /** One bounded page of the public ayat assigned to a Topic, in canonical order. */
   topicAyat(topicId: string, offset: number): Promise<TopicAyahPage>;
@@ -482,6 +519,32 @@ export interface QuranPersistencePort {
   setTajweedRuleState(
     input: Versioned & { readonly state: QuranLayerState },
   ): Promise<TajweedRuleRecord>;
+
+  /* ---- Tajweed colours (Quran Part 9) ------------------------------------- */
+
+  tajweedOverlays(): Promise<readonly TajweedOverlayRecord[]>;
+  tajweedOverlay(id: string): Promise<TajweedOverlayRecord | null>;
+  tajweedOverlayBySlug(slug: string): Promise<TajweedOverlayRecord | null>;
+  createTajweedOverlay(
+    input: Attributed & { readonly value: TajweedOverlayValue },
+  ): Promise<TajweedOverlayRecord>;
+  setTajweedOverlayState(
+    input: Versioned & { readonly state: QuranLayerState },
+  ): Promise<TajweedOverlayRecord>;
+  /** The ayat of one Surah an overlay records, in canonical order, without spans. */
+  tajweedAyat(id: string, surah: number): Promise<readonly TajweedAyahRecord[]>;
+  /**
+   * Records each named Ayah of one Surah WITH its spans, in ONE transaction
+   * under the expected version — an Ayah already recorded is KEPT, never
+   * edited. The service has already checked every span against the Ayah's
+   * stored text; the database checks each Ayah's digest against it again.
+   */
+  saveTajweedAyat(
+    input: Versioned & {
+      readonly surah: number;
+      readonly ayat: readonly TajweedAyahValue[];
+    },
+  ): Promise<TajweedSaveResult>;
 }
 
 /* ===========================================================================

@@ -584,7 +584,8 @@ export type StateKind =
   | 'word-by-word'
   | 'tafsir'
   | 'recitation'
-  | 'tajweed';
+  | 'tajweed'
+  | 'tajweed-overlay';
 
 /**
  * The lifecycle controls: one small form per reachable state, each carrying the

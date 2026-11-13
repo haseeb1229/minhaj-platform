@@ -59,6 +59,14 @@ export const readTransliterations = cache(() =>
 /** Every public word-by-word work, read once per request (Quran Part 7). */
 export const readWordByWords = cache(() => quranReadRuntime().reader.wordByWords());
 
+/**
+ * Every public tajweed colour overlay, read once per request (Quran Part 9).
+ * A reading page colours by the first, in slug order; the hub names them all.
+ */
+export const readTajweedOverlays = cache(() =>
+  quranReadRuntime().reader.tajweedOverlays(),
+);
+
 /** Every public recitation, read once per request — the page and the Quran layout's player share it. */
 export const readRecitations = cache(() => quranReadRuntime().reader.recitations());
 
@@ -131,13 +139,14 @@ export const readQuranTopic = cache(async (locale: Locale) => {
  */
 export async function readingContext(request: ReadingRequest) {
   const reader = quranReadRuntime().reader;
-  const [translations, transliterations, wordByWords, tafsirs, recitations] =
+  const [translations, transliterations, wordByWords, tafsirs, recitations, tajweed] =
     await Promise.all([
       reader.translations(),
       readTransliterations(),
       readWordByWords(),
       reader.tafsirs(),
       readRecitations(),
+      readTajweedOverlays(),
     ]);
 
   const pick = <T extends { readonly slug: string }>(
@@ -170,7 +179,14 @@ export async function readingContext(request: ReadingRequest) {
   };
 
   return {
-    options: { translations, transliterations, wordByWords, tafsirs, recitations },
+    options: {
+      translations,
+      transliterations,
+      wordByWords,
+      tafsirs,
+      recitations,
+      tajweed,
+    },
     chosen,
     unavailable,
     choice,

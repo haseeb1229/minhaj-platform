@@ -32,6 +32,7 @@ import {
   readQuranTopic,
   readSurahs,
   readTransliterations,
+  readTajweedOverlays,
   readWordByWords,
 } from './read';
 import { hizbJuzOf } from './quick-jump';
@@ -88,6 +89,7 @@ export async function QuranLandingPage({
     transliterations,
     wordByWords,
     tajweed,
+    tajweedOverlays,
     recitations,
     topic,
     lastPage,
@@ -99,6 +101,7 @@ export async function QuranLandingPage({
     readTransliterations(),
     readWordByWords(),
     reader.tajweedRules(),
+    readTajweedOverlays(),
     reader.recitations(),
     readQuranTopic(locale),
     readLastPage(),
@@ -115,7 +118,8 @@ export async function QuranLandingPage({
     ...(wordByWords.length > 0
       ? [{ key: 'wordByWord', href: quranPath(locale, 'word-by-word') }]
       : []),
-    ...(tajweed.length > 0 ? [section('tajweed')] : []),
+    // Tajweed: published guidance, or (Quran Part 9) a public colour overlay.
+    ...(tajweed.length > 0 || tajweedOverlays.length > 0 ? [section('tajweed')] : []),
     ...(recitations.length > 0 ? [section('recitations')] : []),
   ];
   const explore =

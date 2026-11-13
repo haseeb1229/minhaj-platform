@@ -21,6 +21,7 @@ import { getDatabaseClient } from '../../client.ts';
 import { requestSearchIndexing } from '../../search-intent.ts';
 import { layerPersistence } from './layers.ts';
 import { recitationPersistence } from './recitation.ts';
+import { tajweedOverlayPersistence } from './tajweed-overlay.ts';
 import { wordByWordPersistence } from './word-by-word.ts';
 import {
   audit,
@@ -280,6 +281,7 @@ export function createQuranPersistence(): QuranPersistencePort {
     ...layerPersistence(),
     ...recitationPersistence(),
     ...wordByWordPersistence(),
+    ...tajweedOverlayPersistence(),
 
     /* ---- Canonical position — read only ---------------------------------- */
 

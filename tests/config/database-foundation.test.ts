@@ -306,6 +306,10 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'QuranRecitationTranslationSpan',
       'QuranTajweedRule',
       'QuranTajweedRuleText',
+      // Quran Part 9 — a tajweed colour overlay, the ayat it colours and their spans.
+      'QuranTajweedOverlay',
+      'QuranTajweedOverlayAyah',
+      'QuranTajweedSpan',
       'QuranTopic',
       // Phase 19 — Hadith: the operator-registered source systems, editions
       // and activations, the canonical structure and source-qualified records

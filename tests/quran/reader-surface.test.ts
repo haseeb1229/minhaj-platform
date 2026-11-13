@@ -176,6 +176,7 @@ describe('the reader’s preferences, as this browser stores them', () => {
       notes: 'inline',
       transliteration: 'a-transliteration',
       words: 'a-word-by-word',
+      tajweed: true,
     } as const;
     expect(readPreferences(writePreferences(stored))).toEqual(stored);
   });
@@ -354,6 +355,8 @@ const PAGES = [
       'data-transliteration': '',
       'data-word-works': 'wbw-one',
       'data-words': '',
+      'data-tajweed-overlay': '',
+      'data-tajweed': '',
     },
     page: {
       slugs: ['ur-work', 'en-work'],
@@ -363,6 +366,7 @@ const PAGES = [
       explicitSize: false,
       transliterations: { slugs: ['tr-one', 'tr-two'], fixed: false },
       words: { slugs: ['wbw-one'], fixed: false },
+      tajweed: true,
     },
   },
   {
@@ -380,6 +384,7 @@ const PAGES = [
       'data-transliteration-fixed': '',
       'data-word-works': '',
       'data-words': '',
+      'data-tajweed': '',
     },
     page: {
       slugs: ['en-work'],
@@ -389,6 +394,7 @@ const PAGES = [
       explicitSize: true,
       transliterations: { slugs: ['tr-two'], fixed: true },
       words: { slugs: [], fixed: false },
+      tajweed: false,
     },
   },
 ] as const;
@@ -424,6 +430,10 @@ const STORED: readonly (string | null)[] = [
   JSON.stringify({ transliteration: 'tr-one', words: 'gone' }),
   JSON.stringify({ transliteration: '<b>', words: 7 }),
   JSON.stringify({ transliteration: null, words: null, mode: 'mushaf' }),
+  // Quran Part 9: the tajweed colours, only where the page has an overlay.
+  JSON.stringify({ tajweed: true }),
+  JSON.stringify({ tajweed: 'on', mode: 'reading' }),
+  JSON.stringify({ tajweed: false, words: 'wbw-one' }),
 ];
 
 describe('the boot script', () => {
@@ -444,6 +454,7 @@ describe('the boot script', () => {
           expected.transliteration,
         );
         expect(reader.attributes.get('data-words'), label).toBe(expected.words);
+        expect(reader.attributes.get('data-tajweed'), label).toBe(expected.tajweed);
         const arabic = reader.properties.get('--quran-arabic-scale');
         expect(
           arabic === undefined ? (page.explicitSize ? null : 1) : Number(arabic),

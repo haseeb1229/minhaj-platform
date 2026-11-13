@@ -273,6 +273,23 @@ its own later part of the Quran programme, not by Part 1 (the reading experience
    Uthmani 1.1 text, on staging only — **any Ayah whose text does not match is skipped**, never
    adjusted — with a **qari's review before production**. *Staging only; production gates of
    §1.1/§1.2/§2.4 unchanged.*
+   *Built in Quran Part 9 (DOMAIN_MODEL.md §8.9, ROUTE_MAP.md §3.3):* a Quran-owned colour overlay
+   (migration `20261112000000_r2_quran_tajweed_overlay`) — rule spans in code points over the
+   UNCHANGED canonical text, each Ayah recorded with the SHA-256 of the text it was aligned to and
+   shown only while the Ayah still hashes to it — imported by `quran-reference.sh tajweed` from the
+   two files whose digests are pinned (`tajweed.hafs.uthmani-pause-sajdah.json`
+   `151d616a…bf67`, CC BY 4.0; `quran-uthmani.txt` `abe6447a…b9a2`, the Tanzil Uthmani 1.0.2 copy
+   its offsets count into). Only the data file is used; the repository's unlicensed classifier code
+   is never run or copied. **Re-alignment against the real files:** of 6,236 ayat, 1,890 have the same
+   text in both editions and keep their offsets, 3,668 are re-mapped exactly, **5,558 align** (48,035
+   spans); **678 are skipped** because a span covers text that changed, and are shown uncoloured.
+   The overlay is imported as a DRAFT; an authorised editor publishes it on `/admin/quran/tajweed`.
+   The reader offers "Tajweed colours" (off by default) with a named colour key; the Tajweed hub
+   shows each rule with real examples; every surface says "Colour-coded tajweed — not yet reviewed
+   by a qari" and credits "quran-tajweed by Collin Fair (CC BY 4.0), re-aligned to Tanzil Uthmani
+   v1.1". **Still required before production: a qari's review of the colours** (and any guidance
+   text, which editors write — none is invented); the 678 skipped ayat stay uncoloured until a
+   reviewed source covers them.
 5. **External reference translations — `OWNER-DECISION-2026-11-10-EXTERNAL-REFERENCE-TRANSLATIONS`
    (owner direction 2026-11-10: "add urdu translation of famous translators too. and also english
    translation").** Staging may show, beside Irfan-ul-Quran, four famous translations of the meanings

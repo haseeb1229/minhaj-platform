@@ -140,6 +140,11 @@ const READS = [
   ['recitation', ID(1)],
   ['tajweedRules'],
   ['tajweedRule', ID(1)],
+  // Quran Part 9: the tajweed colour overlays.
+  ['tajweedOverlays'],
+  ['tajweedOverlay', ID(1)],
+  ['tajweedOverlayBySlug', 'non-quran-fixture-tajweed'],
+  ['tajweedAyat', ID(1), 2],
   // Quran Part 7.
   ['wordByWords', 0],
   ['wordByWord', ID(1)],
@@ -231,6 +236,20 @@ const WRITES = [
   ['createWordByWord', { value: translationValue() }],
   ['updateWordByWord', { id: ID(1), expectedVersion: 3, value: translationValue() }],
   ['setWordByWordState', { id: ID(1), expectedVersion: 3, state: 'archived' }],
+  // Quran Part 9: an overlay is created by the import and moved by an editor.
+  [
+    'createTajweedOverlay',
+    {
+      value: {
+        slug: 'non-quran-fixture-tajweed',
+        name: 'NON_QURAN_FIXTURE tajweed',
+        description: null,
+        attribution: null,
+        sourceId: null,
+      },
+    },
+  ],
+  ['setTajweedOverlayState', { id: ID(1), expectedVersion: 3, state: 'archived' }],
 ] as const;
 
 type AnyService = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -711,6 +730,129 @@ describe('every gloss lands on a word its Ayah has (Quran Part 7)', () => {
     );
     const ready = harness({ records: { wordByWord: layerRecord() } });
     expect(await failure(ready.service.setWordByWordState(actor, published))).toBe(
+      'accepted',
+    );
+  });
+});
+
+describe('every tajweed span lies within its Ayah’s stored text (Quran Part 9)', () => {
+  /**
+   * The canonical page the service reads: 2:1 is six code points — a letter
+   * with a fatha and a shadda counts three — and 2:2 three. Neutral Arabic
+   * words, never an Ayah.
+   */
+  const page = {
+    items: [
+      { surah: 2, ayah: 1, text: 'بَّ نص' },
+      { surah: 2, ayah: 2, text: 'نصر' },
+    ],
+    total: 2,
+    offset: 0,
+  };
+  const digest = 'a'.repeat(64);
+  const save = (ayat: unknown) => ({ id: ID(1), expectedVersion: 3, surah: 2, ayat });
+
+  it('saves spans that lie within the stored text, overlaps included, exactly as given', async () => {
+    const { service, calls } = harness({ records: { surahAyat: page } });
+    const ayat = [
+      {
+        ayah: 1,
+        textSha256: digest,
+        spans: [
+          { rule: 'ghunnah', start: 0, end: 3 },
+          { rule: 'ikhfa', start: 2, end: 6 },
+        ],
+      },
+      { ayah: 2, textSha256: digest, spans: [] },
+    ];
+    expect(await failure(service.saveTajweedAyat(actor, save(ayat)))).toBe('accepted');
+    expect(calls.map((call) => call.method)).toEqual(['surahAyat', 'saveTajweedAyat']);
+    expect(calls[1]?.args[0]).toEqual({ actorId: actor.accountId, ...save(ayat) });
+  });
+
+  it('refuses a span past the text, empty or out of order, and an Ayah the Surah does not hold', async () => {
+    const { service, calls } = harness({ records: { surahAyat: page } });
+    for (const spans of [
+      [{ rule: 'ghunnah', start: 0, end: 7 }],
+      [{ rule: 'ghunnah', start: 2, end: 2 }],
+      [
+        { rule: 'ghunnah', start: 3, end: 4 },
+        { rule: 'ikhfa', start: 1, end: 2 },
+      ],
+    ])
+      expect(
+        await failure(
+          service.saveTajweedAyat(actor, save([{ ayah: 1, textSha256: digest, spans }])),
+        ),
+        JSON.stringify(spans),
+      ).toBe('invalid');
+    expect(
+      await failure(
+        service.saveTajweedAyat(
+          actor,
+          save([{ ayah: 60, textSha256: digest, spans: [] }]),
+        ),
+      ),
+    ).toBe('outside-surah');
+    expect(calls.some((call) => call.method === 'saveTajweedAyat')).toBe(false);
+  });
+
+  it('refuses before reading anything without quran.administer, and malformed values', async () => {
+    const reader = harness({ permissions: ['quran.read'], records: { surahAyat: page } });
+    expect(
+      await failure(
+        reader.service.saveTajweedAyat(
+          actor,
+          save([{ ayah: 1, textSha256: digest, spans: [] }]),
+        ),
+      ),
+    ).toBe('denied');
+    expect(reader.calls).toEqual([]);
+    const { service, calls } = harness({ records: { surahAyat: page } });
+    for (const ayah of [
+      { ayah: 1, textSha256: 'A'.repeat(64), spans: [] },
+      {
+        ayah: 1,
+        textSha256: digest,
+        spans: [{ rule: 'idghaam_ghunnah', start: 0, end: 1 }],
+      },
+      { ayah: 1, textSha256: digest, spans: [{ rule: 'ghunnah', start: -1, end: 1 }] },
+      { ayah: 1, textSha256: digest, spans: [], text: 'NON_QURAN_FIXTURE' },
+    ])
+      expect(
+        await failure(service.saveTajweedAyat(actor, save([ayah]))),
+        JSON.stringify(ayah),
+      ).toBe('invalid');
+    expect(
+      await failure(
+        service.saveTajweedAyat(
+          actor,
+          save([
+            { ayah: 1, textSha256: digest, spans: [] },
+            { ayah: 1, textSha256: digest, spans: [] },
+          ]),
+        ),
+      ),
+    ).toBe('invalid');
+    expect(calls).toEqual([]);
+  });
+
+  it('publishes an overlay only with a registered source and a coloured Ayah', async () => {
+    const published = { id: ID(1), expectedVersion: 3, state: 'published' };
+    const overlay = (overrides: Record<string, unknown> = {}) =>
+      layerRecord({ ayahCount: 2, ...overrides });
+    const bare = harness({ records: { tajweedOverlay: overlay({ ayahCount: 0 }) } });
+    expect(await failure(bare.service.setTajweedOverlayState(actor, published))).toBe(
+      'text-required',
+    );
+    const unsourced = harness({
+      records: { tajweedOverlay: overlay({ sourceId: null, sourceAuthority: null }) },
+    });
+    expect(
+      await failure(unsourced.service.setTajweedOverlayState(actor, published)),
+    ).toBe('source-required');
+    const ready = harness({ records: { tajweedOverlay: overlay() } });
+    expect(await failure(ready.service.setTajweedOverlayState(actor, published))).toBe(
       'accepted',
     );
   });

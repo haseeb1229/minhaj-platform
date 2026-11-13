@@ -811,6 +811,8 @@ describe('Phase 28 — the operations image is a tool, never a service', () => {
       'scripts/review/review-runtime.ts',
       // Quran Part 8: Quran passages proposed from titles (tafsir-passages.sh).
       'scripts/quran/tafsir-passages-runtime.ts',
+      // Quran Part 9: the tajweed colour overlay (quran-reference.sh tajweed).
+      'scripts/quran/tajweed-runtime.ts',
     ];
     while (queue.length > 0) {
       const file = queue.pop()!;

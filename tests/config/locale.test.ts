@@ -241,6 +241,11 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/quran/tafsir-links.tsx',
     'apps/web/src/components/quran/tafsir-panel.tsx',
     'apps/web/src/components/quran/tafsir-read.ts',
+    // Quran Part 9: the Tajweed hub and a rule's page, the colour key and the
+    // pure tajweed runs.
+    'apps/web/src/components/quran/tajweed.tsx',
+    'apps/web/src/components/quran/tajweed-key.tsx',
+    'apps/web/src/components/quran/tajweed-layout.ts',
     // Phase 19. The public Hadith surfaces, their pure presentation decisions
     // and their request-cached reads, and the one batched current-text read
     // and pure labels the search pages use for Hadith results. The ROUTES that

@@ -859,12 +859,16 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     ];
     // R2 — THE QURAN REFERENCE PREVIEW'S ATTRIBUTION: the Tanzil Project (its
     // CC BY 3.0 terms require a link), the licence and the Irfan-ul-Quran
-    // site — outbound links in "About this text", exactly these, only here.
+    // site — outbound links in "About this text", exactly these, only here —
+    // and (Quran Part 9) the tajweed annotations and their CC BY 4.0 licence,
+    // credited on the Tajweed hub.
     const REFERENCE_SOURCES = 'apps/web/src/components/quran/reference-sources.ts';
     const REFERENCE_URLS = [
       'https://tanzil.net/',
       'https://creativecommons.org/licenses/by/3.0/',
       'https://www.irfan-ul-quran.com/',
+      'https://github.com/cpfair/quran-tajweed',
+      'https://creativecommons.org/licenses/by/4.0/',
     ];
     // R2 — MQI'S OWN FATWA WEBSITE, linked outbound from the Fatwa landing
     // while this platform's service is not open. Exactly this, only here.

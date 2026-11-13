@@ -88,6 +88,13 @@ export interface ReaderControlLabels {
   readonly notes: Readonly<Record<NoteDisplay | 'label' | 'help', string>>;
   /** A translator's note's dialog title. */
   readonly noteTitle: string;
+  /** The tajweed colours' switch (Quran Part 9). */
+  readonly tajweed: {
+    readonly label: string;
+    /** "Colour-coded tajweed — not yet reviewed by a qari". */
+    readonly help: string;
+    readonly learn: string;
+  };
   /** The study layers' choices (Quran Part 7). */
   readonly study: {
     readonly transliteration: string;
@@ -154,6 +161,11 @@ export interface ReaderControlsProps {
   readonly transliterations: RenderedStudy;
   /** The word-by-word works the server rendered, none shown until chosen. */
   readonly words: RenderedStudy;
+  /**
+   * The tajweed overlay whose colours the server rendered (Quran Part 9), off
+   * until the reader turns them on — or null, and no switch is offered.
+   */
+  readonly tajweed: { readonly name: string; readonly hubHref: string } | null;
   /** The address set a size (`?size=`): a stored size does not override it. */
   readonly explicitSize: boolean;
   /** Whether the page reads in modes (a Surah, a Juz, a mushaf page). */
@@ -266,6 +278,7 @@ export function QuranReaderControls({
   fixedTranslation,
   transliterations,
   words,
+  tajweed,
   explicitSize,
   modes,
   initialJuz,
@@ -332,9 +345,19 @@ export function QuranReaderControls({
         ...studyPage,
         modes,
         explicitSize: explicitSize && !arabicTouched,
+        tajweed: tajweed !== null,
       }),
     );
-  }, [readerId, preferences, page, studyPage, modes, explicitSize, arabicTouched]);
+  }, [
+    readerId,
+    preferences,
+    page,
+    studyPage,
+    modes,
+    explicitSize,
+    arabicTouched,
+    tajweed,
+  ]);
 
   const say = useCallback((text: string) => {
     setStatus(text);
@@ -661,6 +684,37 @@ export function QuranReaderControls({
             value={layerShownOf(preferences.words, studyPage.words)}
             onChange={(slug) => updateReaderPreferences({ words: slug })}
           />
+
+          {tajweed === null ? null : (
+            <div className="flex flex-col gap-2">
+              <label className={CHOICE}>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={preferences.tajweed}
+                  onChange={(event) =>
+                    updateReaderPreferences({ tajweed: event.currentTarget.checked })
+                  }
+                  className="size-4 shrink-0 accent-action"
+                />
+                <span className="flex min-w-0 flex-col">
+                  <span>{labels.tajweed.label}</span>
+                  <bdi className="text-caption break-words text-foreground-muted">
+                    {tajweed.name}
+                  </bdi>
+                </span>
+              </label>
+              <p className="text-caption text-foreground-muted">
+                {labels.tajweed.help}{' '}
+                <a
+                  href={tajweed.hubHref}
+                  className="font-semibold text-action underline underline-offset-4"
+                >
+                  {labels.tajweed.learn}
+                </a>
+              </p>
+            </div>
+          )}
 
           {anyTranslation ? (
             <div className="flex flex-col gap-2">

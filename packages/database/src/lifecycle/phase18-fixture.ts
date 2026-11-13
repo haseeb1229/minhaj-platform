@@ -409,7 +409,8 @@ export async function capturePhase18Fixture(
 /**
  * The Quran tables whose constraints and triggers must return intact: Phase
  * 18's, Quran Part 5's per-Ayah recitation timing, Quran Part 6's
- * translator's notes and Quran Part 7's word-by-word works.
+ * translator's notes, Quran Part 7's word-by-word works, translation audio's
+ * alignments and Quran Part 9's tajweed overlays.
  */
 const PHASE18_TABLES = [
   'QuranSource',
@@ -442,6 +443,9 @@ const PHASE18_TABLES = [
   'QuranWordByWordGloss',
   'QuranRecitationAlignment',
   'QuranRecitationTranslationSpan',
+  'QuranTajweedOverlay',
+  'QuranTajweedOverlayAyah',
+  'QuranTajweedSpan',
 ] as const;
 
 const PROCEDURES = [
@@ -637,13 +641,17 @@ export async function verifyRestoredPhase18(
   // bounds, four keys (the alignment's segment, source and reference
   // recitation; the span's alignment) and four triggers (the alignment's
   // rules, the span's shape, an aligned segment keeping its timing and its
-  // file) — 49 CHECKs, 54 foreign keys and 35 triggers, exactly as the
-  // migrations create them: a restore that silently lost one would otherwise
-  // read as "none untrusted".
+  // file), and Quran Part 9's tajweed overlay (its slug, state, Ayah span
+  // count and span CHECKs; the overlay's source, the recorded Ayah's overlay
+  // and canonical Ayah, and the span's recorded Ayah; a published overlay
+  // colours an Ayah, an Ayah aligned to its current text and written once, a
+  // span written once within its text) — 53 CHECKs, 58 foreign keys and 38
+  // triggers, exactly as the migrations create them: a restore that silently
+  // lost one would otherwise read as "none untrusted".
   if (
-    Number(counts?.checks ?? 0) !== 49 ||
-    Number(counts?.keys ?? 0) !== 54 ||
-    Number(counts?.triggers ?? 0) !== 35 ||
+    Number(counts?.checks ?? 0) !== 53 ||
+    Number(counts?.keys ?? 0) !== 58 ||
+    Number(counts?.triggers ?? 0) !== 38 ||
     Number(counts?.procedures ?? 0) !== PROCEDURES.length ||
     Number(counts?.bundled ?? 0) !== 3
   ) {

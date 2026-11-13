@@ -13,6 +13,7 @@ import {
   importMp3QuranRecitations,
   importNarrationAlignment,
 } from '../src/lifecycle/quran-recitations.ts';
+import { importTajweedOverlay } from '../src/lifecycle/quran-tajweed.ts';
 import { STAGING_DATABASE } from '../src/lifecycle/staging-target.ts';
 import {
   readTanzilCorpus,
@@ -90,6 +91,16 @@ import {
  *     spans on the stored narration. Needs both earlier recitation imports;
  *     resumable, and a re-run changes nothing.
  *
+ *   tajweed  --operator <accountId> --annotations <json> --text <txt>
+ *            --sha256 <hex> --text-sha256 <hex>
+ *     (Quran Part 9) Refuses unless both files are the pinned ones
+ *     (`TAJWEED_ANNOTATIONS_SHA256`, `TAJWEED_BASE_TEXT_SHA256`) and the active
+ *     corpus is the Tanzil reference corpus; registers the provenance as the
+ *     OWNER, then, as the RUNTIME principal (quran.read + quran.administer),
+ *     re-aligns the colour annotations to the canonical text and records every
+ *     aligned Ayah on a DRAFT overlay — an editor publishes it. Resumable; a
+ *     re-run changes nothing.
+ *
  * THE WHOLE STAGING GUARD FIRST — declared environment and instance, internal
  * host and port, `MinhajStaging`, distinct principals, TLS posture, the SQL
  * container's machine name and the database's fingerprint — then the
@@ -108,7 +119,8 @@ const USAGE =
   'names --meta <file> --sha256 <metadata hex> --operator <accountId> | ' +
   'recitations-mp3quran --operator <accountId> | ' +
   'recitations-irfan-urdu --operator <accountId> --dir <directory> | ' +
-  'recitations-narration-timing --operator <accountId> --file <json> --sha256 <hex>';
+  'recitations-narration-timing --operator <accountId> --file <json> --sha256 <hex> | ' +
+  'tajweed --operator <accountId> --annotations <json> --text <txt> --sha256 <hex> --text-sha256 <hex>';
 
 function required(flag: string): string {
   const value = argumentValue(flag);
@@ -132,7 +144,8 @@ await runStagingCommand('staging:quran:reference', async () => {
     mode !== 'names' &&
     mode !== 'recitations-mp3quran' &&
     mode !== 'recitations-irfan-urdu' &&
-    mode !== 'recitations-narration-timing'
+    mode !== 'recitations-narration-timing' &&
+    mode !== 'tajweed'
   )
     throw new Error(`usage: ${USAGE}`);
   const operator = account('--operator');
@@ -189,6 +202,17 @@ await runStagingCommand('staging:quran:reference', async () => {
         operator,
         file: required('--file'),
         sha256: required('--sha256'),
+        environment,
+      });
+    else if (mode === 'tajweed')
+      result = await importTajweedOverlay({
+        owner,
+        runtime,
+        operator,
+        annotations: required('--annotations'),
+        text: required('--text'),
+        sha256: required('--sha256'),
+        textSha256: required('--text-sha256'),
         environment,
       });
     else if (mode === 'recitations-irfan-urdu')

@@ -5,6 +5,8 @@ import {
   QURAN_JUZ_MAX,
   QURAN_PAGE_NUMBER_MAX,
   QURAN_SURAH_MAX,
+  QURAN_TAJWEED_EXAMPLES_MAX,
+  isTajweedRule,
   quranIdSchema,
   quranRefSchema,
   quranSlugSchema,
@@ -164,6 +166,19 @@ export function createQuranReadService(
 
     tajweedRules: () => reader.tajweedRules(),
     tajweedRule: (slug) => (slugOk(slug) ? reader.tajweedRule(slug) : absent()),
+    tajweedOverlays: () => reader.tajweedOverlays(),
+    tajweedSpans: (overlayId, surah, from, to) =>
+      idOk(overlayId) && rangeOk(surah, from, to)
+        ? reader.tajweedSpans(overlayId, surah, from, to)
+        : none(),
+    tajweedRuleUses: async (overlayId, perRule, rule) =>
+      idOk(overlayId) &&
+      Number.isInteger(perRule) &&
+      perRule >= 0 &&
+      perRule <= QURAN_TAJWEED_EXAMPLES_MAX &&
+      (rule === null || isTajweedRule(rule))
+        ? reader.tajweedRuleUses(overlayId, perRule, rule)
+        : { ayat: 0, rules: [] },
 
     topicAyat: async (topicId, offset) =>
       idOk(topicId) && offsetOk(offset)
