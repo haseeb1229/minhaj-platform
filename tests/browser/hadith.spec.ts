@@ -691,7 +691,21 @@ test.describe('while no collection is activated', () => {
         ).toHaveCount(0);
       }
       await expect(main).not.toContainText('NON_HADITH_FIXTURE');
-      await expect(main).not.toContainText(/\d/);
+      // No hadith number, chain or grading anywhere. The only digits are the
+      // hub figures (Hadith Part 2): other owners' counts on the `hadith`
+      // Topic, which a parallel spec may make non-zero. Each is a bare count,
+      // and with them removed no digit remains.
+      const digits = await main.evaluate((root) => {
+        const copy = root.cloneNode(true) as HTMLElement;
+        const figures = [...copy.querySelectorAll('.tabular-nums')].map((figure) => {
+          const text = figure.textContent ?? '';
+          figure.remove();
+          return text;
+        });
+        return { figures, rest: copy.textContent ?? '' };
+      });
+      for (const figure of digits.figures) expect(figure).toMatch(/^\d+$/);
+      expect(digits.rest).not.toMatch(/\d/);
       await expect(main.getByRole('search')).toHaveCount(0);
       await expectNoAbsentLinks(page, localizedPath(locale, '/hadith'));
     }
