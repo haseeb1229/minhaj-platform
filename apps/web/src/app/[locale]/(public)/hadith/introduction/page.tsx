@@ -1,19 +1,23 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
-import { HadithIntroductionPage } from '@/components/hadith/landing';
-import { HadithUnavailable } from '@/components/hadith/parts';
+import { HadithIntroductionPage } from '@/components/hadith/guide';
 import { hadithAvailability, hadithMetadata } from '@/components/hadith/read';
 import { requireLocale } from '@/config/route-locale';
 
 /**
- * `/{locale}/hadith/introduction` — how the Hadith section is organised and
- * what each part of a citation page shows. Product guidance only; it claims
- * nothing about any narration.
+ * `/{locale}/hadith/introduction` — what the Hadith section is, how it is
+ * organised, what is open now and how to read a citation page. Product
+ * guidance only; it claims nothing about any narration.
  *
- * Signed out and `force-dynamic`: activation and what is public are mutable
- * data. The honest unavailable state while no collection is activated; the
- * fixture banner and `noindex` while the activation is fixture text.
+ * IT STANDS WITHOUT A CORPUS (Hadith Part 2; ROUTE_MAP.md §3.4). It reads no
+ * Hadith record — only whether a collection is activated, to say so and to
+ * link the pages that are open — so while none is it is the section's honest
+ * guide rather than an unavailable state (its form from Phase 19 to Hadith
+ * Part 2, historical). Signed out and `force-dynamic`: activation and the
+ * hubs' figures are mutable data. The fixture banner and `noindex` while the
+ * activation is fixture text; `noindex` with no canonical claim while no
+ * activation is approved.
  */
 export const dynamic = 'force-dynamic';
 
@@ -35,10 +39,7 @@ export async function generateMetadata({ params }: SectionParams): Promise<Metad
 
 export default async function IntroductionRoute({ params }: SectionParams) {
   const locale = await requireLocale(params);
-  const availability = await hadithAvailability();
-  if (!availability.active) {
-    const t = await getTranslations({ locale, namespace: 'hadith' });
-    return <HadithUnavailable locale={locale} section={t('sections.introduction')} />;
-  }
-  return <HadithIntroductionPage locale={locale} availability={availability} />;
+  return (
+    <HadithIntroductionPage locale={locale} availability={await hadithAvailability()} />
+  );
 }

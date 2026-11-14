@@ -3884,6 +3884,121 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > Parts 10–13) runs unchanged against the shared hubs. *CI and staging evidence are recorded when
 > they exist.*
 
+> **Hadith Part 2 — the Hadith Read and Study pages and the landing (owner direction: every section
+> built from A to Z, one item at a time; on `feature/rebaseline-r2-full-ecosystem-completion`).**
+> Delivered (DOMAIN_MODEL.md §9.1; ROUTE_MAP.md §3.4; INFORMATION_ARCHITECTURE.md §3.3;
+> OPEN_DECISIONS.md §1.3). No schema change, no migration and no new read in any context; staging
+> only, the production gates unchanged. OPEN_DECISIONS.md §1.3 is unchanged: there is no Hadith
+> corpus, no hadith text, number, chain or grading is shown, and nothing is invented.
+>
+> - **The Introduction stands without a corpus (decision).** `/hadith/introduction` is product
+>   guidance — it reads no Hadith record, only whether a collection is activated — so, like the
+>   landing (R2) and the hubs (Hadith Part 1), it renders whether or not a collection is activated;
+>   from Phase 19 until now it showed the unavailable state while none was (historical). It says
+>   what the section is (what hadith are, in the words the R2 landing already used, and that the
+>   site does not grade, rank or endorse any narration); **where things stand** while no collection
+>   is activated (nothing is published, what opens once an authorised source is in place, and that
+>   nothing is shown in its place); **how it is organised** — the four parts of the Hadith menu
+>   (Read, Study, Explore, Learn) with every page named, the open ones linked and those that need an
+>   activated collection marked "Opens when a collection is activated", never linked; **Minhaj-ul-
+>   Quran's work on Hadith** — the four hubs with the figure each opens with; and **reading a
+>   citation page** — the five paragraphs it has always had, each now titled and numbered, described
+>   as what the page *will* show while no collection is activated. A contents list ("On this page")
+>   sits beside it on a laptop and above it on a phone. Under a fixture activation it carries the
+>   banner, links every part and omits "where things stand"; it is `noindex` with no canonical claim
+>   unless an approved activation is indexable, as every Hadith page.
+> - **Sciences stays gated (decision, from the documents — and a question for the owner).** A study
+>   page is editor-authored, Hadith-owned content, not a narration, but DOMAIN_MODEL.md §9.1 makes it
+>   public only while "it is published and it names a registered source system of the section's own
+>   authority" — and the section's authority exists only through an activation; the adapter's public
+>   read (`sciences`, `science`) answers nothing without one, exactly as for translations and
+>   commentary. Publishing a study page also needs a registered `HadithSourceSystem`, which only the
+>   owner/operator registers (no admin surface; an `approved` one needs the authority's evidence,
+>   §1.3). So ungating Sciences would change the Hadith model and its security property (a
+>   fixture-sourced study page would show with no banner), not a page: it is not done. The admin
+>   authoring path exists and works without a corpus up to a draft (`/admin/hadith/sciences`,
+>   `hadith.administer`), and publishing is refused (`source-required`) until a source system is
+>   registered. Whether study material may stand on its own source authority, independent of an
+>   activated collection, is recorded as an open owner question in OPEN_DECISIONS.md §1.3.
+> - **The pages that need a collection await an authorised source.** `/hadith/collections`,
+>   `/hadith/browse`, `/hadith/search`, `/hadith/sciences` and `/hadith/commentary` stay gated; while
+>   no collection is activated each now shows one designed state (`HadithAwaiting`) in place of the
+>   Phase-19 single sentence (historical): an "Awaiting an authorised source" mark, the page's name,
+>   one sentence on what will appear there, a notice that nothing is shown in its place (no sample
+>   text, number, chain or grading) with the way to the introduction, then **Open now** — the
+>   introduction and the four hubs with their figures — and the way back to `/hadith`. It links no
+>   page that cannot open and lists nothing. **Search does not mislead:** it searches nothing of
+>   Hadith's; its one form is a GET form to the site's `/search`, carrying the visitor's `?q` and
+>   the `hadith` Topic (`topic=hadith`), introduced as finding books, videos, research and courses
+>   on Hadith and saying it does not search hadith text. Named resources (a collection, its
+>   structure, a citation, a study page, a topic view) still answer 404.
+> - **The landing, as the section's front door.** While no collection is activated: the hero (what
+>   hadith are, the one sentence that the collections reader awaits an authorised source, "Start
+>   with the introduction" and *Books on Hadith*), its picture the works' cover stack when three
+>   covers exist — otherwise words alone, never half a split; **Open now**, the four hubs with their
+>   figures; the Library's hadith works shelf; "Hadith at Minhaj-ul-Quran"; and "How this section is
+>   organised" — the same section map as the introduction (Read now links the introduction; Study
+>   and the rest of Read are named and marked, not linked); then the way home. The activated
+>   landing is unchanged.
+> - **The figures are the hubs' own** (`components/hadith/hub-figures.ts`): each is the `total` of
+>   the very read its hub makes for its unfiltered first page — Library's `topicWorks` and
+>   `topicResearch`, Media's `topicVideos`, Learning's `topicCourses` on the `hadith` Topic, without
+>   passage parts — asked for one item, once per request; stated beside a hub only when it is more
+>   than none, and absent with the hubs when there is no Topic.
+> - **Messages.** New `hadith.awaiting.*`, `hadith.parts.*` (the section map's descriptions, moved
+>   from `hadith.unavailable.parts`, whose `collections` became `read`), `hadith.landing.{read,
+>   start,openHeading,openIntro}` and the introduction's titles, headings and new paragraphs, in
+>   en/ur/ar; `hadith.unavailable.structureIntro` now names the introduction as open.
+>   `hadith.unavailable.body` stays (the home page's Hadith card uses it). The bare unavailable
+>   component (`HadithUnavailable`) is removed; nothing else used it.
+>
+> **What staging will show:** no Hadith activation exists there, so the introduction and the five
+> awaiting pages render as above; the hubs' figures are what the Topic holds there — the books an
+> operator mapped to `hadith` (the Hadith Part 1 Books hub's set) and, since the staging corpus and
+> demo data file no Video, research record or Course under `hadith`, no figure for those three. The
+> local persistent database holds the `hadith` Topic and nothing published on it, so locally no
+> figure is stated.
+>
+> **Proof:** `tests/config/locale.test.ts` (the two new modules);
+> `tests/browser/hadith.spec.ts` — while no collection is activated: the landing (its hrefs now
+> include the introduction; the hero's first action; the five corpus pages named and never linked
+> in its map), every corpus page in en/ur/ar awaiting a source (its heading, mark, what will
+> appear, the notice, the introduction and the four hubs linked, no corpus page linked, no listing,
+> `noindex`, no banner, a fixture-sourced study page still absent), the introduction in en/ur/ar
+> (honest state, the citation page as what it will show, every contents anchor landing, the corpus
+> pages named and not linked), and Hadith search offering only site search (one GET form to
+> `/search` with exactly `q` — the visitor's words — and `topic=hadith`, no Hadith search link, no
+> result) — replacing the Phase-19 assertions of the bare sentence on the five pages and of no form
+> on Search (the introduction was one of the five; it now has its own, stricter test); the hubs'
+> visit now asserts the awaiting mark is absent (the bare sentence it checked no longer renders on
+> any Hadith page); a new describe after Hadith Part 1 asserting every hub figure on the landing,
+> the introduction and an awaiting page against what is published on the Topic in the database,
+> the introduction reached by keyboard from an awaiting page and its contents by keyboard with a
+> visible focus, right to left in Urdu and Arabic, no sideways scroll at 320, 390 and 1440 px and
+> axe on the landing, introduction, Sciences and Search in all three locales, with the screenshots of
+> record; and under the fixture activation, no page awaiting a source and the introduction linking
+> every part without "where things stand". *CI and staging evidence are recorded when they exist.*
+>
+> **Hadith Part 1's CI failure, corrected here (fact).** The Browser flows job of Hadith Part 1
+> (`89c34d3`) failed three tests in other specs, all caused by the Hadith hub fixtures, since CI
+> runs the specs in parallel on one database (`hadith.spec.ts` ran alongside them): (1)
+> `library.spec.ts` could not find its Work on `/library/books`, crowded off the first page of the
+> title order by the hub Works; (2) `media.spec.ts` did not find its Urdu interview in Watch's
+> "Latest", pushed past the landing's twelve by the hub's English videos (the landing puts the
+> interface language first); (3) `shell.spec.ts`'s link check got a **500** from the hub's readable
+> book. **Root cause of (3): the fixture, not the page.** It wrote the readable Edition's document
+> as `{}` with an arbitrary content version — the column's JSON check admits it, but the Library's
+> only write path (`saveEdition`) validates the document against its reader schema and stores the
+> SHA-256 of it, so `{}` can never be authored, and the reader's parse of a stored document refuses
+> it (an error page, nothing served). The fixture now writes a schema-valid document and its
+> SHA-256, as the authoring path does; the Quran Part 10 fixture carried the same `{}` and is
+> corrected the same way. (1) and (2): every hub book is titled "Yy …"/"Zz …" and dated 1900–1922,
+> every hub video is dated 1990–1996 and the 22 video fillers are Arabic, so in each Library and
+> Watch order they sort after other specs' records; and the file's last hook archives every Work,
+> Video and research record the hubs published, as the Courses describe already archived its
+> Courses. Neither other spec is changed. Proof: the four specs in one run, one worker, in that
+> order (`hadith`, `library`, `media`, `shell`).
+
 ---
 
 ### Phase 31 — Search Completeness Validation

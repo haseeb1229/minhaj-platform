@@ -1555,6 +1555,15 @@ the Quran passage parts. The Hadith context gains no dependency and no read: no 
 §3.1, nothing of Hadith's is joined, no hadith text, reference or grading is shown, and there is no
 hadith reference model for a Work or a Video, so none is invented (OPEN_DECISIONS.md §1.3).
 
+**The section's guide reads no Hadith record (Hadith Part 2).** The introduction, the landing and
+the pages that await an authorised source state each hub's figure from the same Layer-4 topic reads
+(the `total` of the hub's unfiltered first page), and read of Hadith only `availability`. Nothing
+of this model changed: `HadithScience` is still public only under the section's authority — which
+exists only through an activation — so study material stays unavailable while no collection is
+activated, as translations and commentary do; publishing one still needs a source system only the
+owner/operator registers. Whether study material may stand on its own authority, independent of an
+activated collection, is an open owner question (OPEN_DECISIONS.md §1.3).
+
 ---
 
 ## 10. Library

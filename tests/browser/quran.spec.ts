@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -4817,6 +4817,21 @@ test.describe('Quran Part 10: the Quran Books hub', () => {
     ) => `
       INSERT INTO [dbo].[Work] ([id],[slug],[primaryLocale],[state],[isFeatured]) VALUES (N'${id}', N'${slugValue}', N'en', N'${state}', ${featured ? 1 : 0});
       INSERT INTO [dbo].[WorkLabel] ([workId],[locale],[title],[description]) VALUES (N'${id}', N'en', ${n(title)}, N'NON_QURAN_FIXTURE description of a book on the Quran.');`;
+    // A readable edition carries what the Library's authoring path writes: a
+    // document its reader schema accepts, and the SHA-256 of that document as
+    // its content version. (Until Hadith Part 2 it was `{}`, which the column's
+    // JSON check admits but the reader refuses, so the book's page would answer
+    // 500 — the defect the Hadith hub fixture showed in CI; historical.)
+    const document = JSON.stringify({
+      sections: [
+        {
+          key: 'one',
+          title: 'NON_QURAN_FIXTURE section',
+          paragraphs: ['NON_QURAN_FIXTURE text of a readable edition.'],
+        },
+      ],
+    });
+    const contentVersion = createHash('sha256').update(document).digest('hex');
     const edition = (
       workId: string,
       language: string,
@@ -4825,7 +4840,7 @@ test.describe('Quran Part 10: the Quran Books hub', () => {
     ) => `
       INSERT INTO [dbo].[Edition] ([id],[workId],[languageCode],[label],[state],[publicationYear],[reading],[download],[document],[contentVersion],[version],[updatedAt]) VALUES
         (N'${randomUUID()}', N'${workId}', N'${language}', N'NON_QURAN_FIXTURE edition', N'published', ${String(year)},
-         N'${readable ? 'allowed' : 'unavailable'}', N'denied', ${readable ? `N'{}'` : 'NULL'}, ${readable ? `N'${'b'.repeat(64)}'` : 'NULL'}, 1, SYSUTCDATETIME());`;
+         N'${readable ? 'allowed' : 'unavailable'}', N'denied', ${readable ? n(document) : 'NULL'}, ${readable ? `N'${contentVersion}'` : 'NULL'}, 1, SYSUTCDATETIME());`;
     const fillers = Array.from({ length: FILLERS }, (_, index) => {
       const id = randomUUID();
       const number = String(index + 1).padStart(2, '0');

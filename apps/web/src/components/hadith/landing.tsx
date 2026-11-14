@@ -20,22 +20,22 @@ import {
   Hero,
   Icon,
   LinkCard,
-  PageHeading,
   PageHero,
-  Prose,
   SectionHeader,
   TextInput,
   TextLink,
 } from '@/components/ui';
 import { directionOf } from '@/config/locale';
 import { pathFor, requireRoute } from '@/shell/registry';
-import { FixtureNotice, HadithFrame, hadithTrail } from './parts';
+import { HubCards, SectionMap } from './guide';
+import { readHadithHubFigures } from './hub-figures';
+import { FixtureNotice, hadithTrail } from './parts';
 import { collectionName, collectionPath, hadithPath } from './presentation';
 import { readCollections, readHadithTopic } from './read';
 import { HADITH_HUBS } from './hubs';
 
 /**
- * `/hadith` and `/hadith/introduction` (ROUTE_MAP.md §3.4).
+ * `/hadith` (ROUTE_MAP.md §3.4); `/hadith/introduction` is the guide's (`guide.tsx`).
  *
  * A KNOWLEDGE LANDING, NOT A SHOWCASE, AND COLLECTIONS FIRST. It opens with the
  * way in — the collections, or a search — then lists the public collections
@@ -253,32 +253,35 @@ export async function HadithLandingPage({
 const WORKS_SHELF = 12;
 
 /**
- * THE LANDING WHILE NO COLLECTION IS ACTIVATED — MQI's HADITH WORKS (R2).
+ * THE LANDING WHILE NO COLLECTION IS ACTIVATED — MQI's HADITH WORKS (R2;
+ * the section's front door since Hadith Part 2).
  *
  * Owner decision (2026-11-06): no external hadith corpus is taken in, and MQI
  * has no structured one to migrate, so the section presents what Minhaj-ul-
- * Quran itself publishes on hadith — the Library's public works classified
- * under the `hadith` Topic — as a shelf of covers, with a short word on the
- * hadith sciences. ONE calm sentence says the collections reader awaits an
- * authorised source; there is no disclaimer wall, no count and no link into
- * a part of the section that is not open. Every work links to its own Library
- * page, and "all" to the Hadith Books hub (Hadith Part 1; the Library's own
- * listing for the Topic until then — historical).
+ * Quran itself publishes on hadith. The hero says what hadith are and, in ONE
+ * calm sentence, that the collections reader awaits an authorised source; it
+ * leads to the introduction (open whatever the corpus, Hadith Part 2) and to
+ * the Books hub. Its picture is a stack of the shelf's covers when there are
+ * three; without them the hero is words alone — never a stock image.
  *
- * Below it, HOW THE SECTION IS ORGANISED: the collections and their study,
- * each described and marked as opening once a collection is activated — words
- * only, never a link into a part that is not open — and exploring and
- * learning, linked to the section's own hubs, which are open now (Hadith Part
- * 1: Books, Videos and Research, the topic hub, Courses and Learn). Then the
- * way back home.
+ * Then, in order: WHAT IS OPEN NOW — the four hubs of MQI's material on the
+ * `hadith` Topic, each with the figure it opens with (Hadith Part 1's hubs);
+ * the Library's hadith works as a shelf of covers, "all" leading to the Books
+ * hub; a short word on the hadith sciences; and HOW THE SECTION IS ORGANISED
+ * (`SectionMap`) — the four parts of the Hadith menu, the open pages linked,
+ * those that await an activated collection named and marked so, never linked.
+ * Then the way back home. No hadith text, number, chain or grading, and no
+ * disclaimer wall.
  *
- * With no such work (or no Topic) the shelf is simply absent.
+ * With no such work (or no Topic) the shelf is simply absent; without the
+ * Topic the hubs are too.
  */
 export async function HadithLandingUnavailable({ locale }: { readonly locale: Locale }) {
-  const [t, parts, topic] = await Promise.all([
+  const [t, parts, topic, figures] = await Promise.all([
     getTranslations({ locale, namespace: 'hadith' }),
     hadithTrail(locale),
     readHadithTopic(locale),
+    readHadithHubFigures(locale),
   ]);
   const works =
     topic === null
@@ -288,41 +291,9 @@ export async function HadithLandingUnavailable({ locale }: { readonly locale: Lo
     ...works.filter((work) => work.cover !== null),
     ...works.filter((work) => work.cover === null),
   ].slice(0, WORKS_SHELF);
-  // Hadith Part 1: the hubs are open whatever the corpus, and are linked
-  // while there is a Topic for anything to be classified under.
-  const hub = (key: 'books' | 'videos' | 'research' | 'courses') => ({
-    href: hadithPath(locale, key),
-    text: t(`sections.${key}`),
-  });
-  const structure: readonly {
-    readonly key: 'collections' | 'study' | 'explore' | 'learn';
-    readonly links: readonly { readonly href: string; readonly text: string }[] | null;
-  }[] = [
-    { key: 'collections', links: null },
-    { key: 'study', links: null },
-    {
-      key: 'explore',
-      links:
-        topic === null
-          ? []
-          : [
-              hub('books'),
-              hub('videos'),
-              hub('research'),
-              {
-                href: localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`),
-                text: t('sections.topics'),
-              },
-            ],
-    },
-    {
-      key: 'learn',
-      links: [
-        ...(topic === null ? [] : [hub('courses')]),
-        { href: pathFor(locale, requireRoute('learn')), text: t('landing.learnAll') },
-      ],
-    },
-  ];
+  // The cover stack draws three covers or nothing; a hero without them is
+  // words alone rather than half a split.
+  const pictured = shelf.filter((work) => work.cover !== null).length >= 3;
 
   return (
     <>
@@ -333,19 +304,42 @@ export async function HadithLandingUnavailable({ locale }: { readonly locale: Lo
       </Container>
 
       <Hero
-        variant="split"
+        variant={pictured ? 'split' : 'plain'}
         title={t('title')}
         lede={t('works.lede')}
-        aside={<CoverStack works={shelf} />}
+        {...(pictured ? { aside: <CoverStack works={shelf} /> } : {})}
+        actions={
+          <>
+            <ActionLink href={hadithPath(locale, 'introduction')}>
+              {t('landing.start')}
+            </ActionLink>
+            {topic === null ? null : (
+              <ActionLink href={hadithPath(locale, 'books')} tone="secondary">
+                {t('sections.books')}
+              </ActionLink>
+            )}
+          </>
+        }
       >
         <p className="flex max-w-[var(--measure-prose)] items-start gap-2 text-sm text-foreground-muted">
-          <Icon name="book" size={16} className="mt-1 text-accent" />
+          <Icon name="book" size={16} className="mt-1 shrink-0 text-accent" />
           <span>{t('works.awaiting')}</span>
         </p>
       </Hero>
 
       <Container>
         <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
+          {figures === null ? null : (
+            <section className="flex flex-col gap-5" aria-labelledby="hadith-open">
+              <SectionHeader
+                id="hadith-open"
+                heading={t('landing.openHeading')}
+                intro={t('landing.openIntro')}
+              />
+              <HubCards locale={locale} figures={figures} />
+            </section>
+          )}
+
           {topic === null || shelf.length === 0 ? null : (
             <LibraryShelf
               id="hadith-works"
@@ -375,38 +369,13 @@ export async function HadithLandingUnavailable({ locale }: { readonly locale: Lo
             </p>
           </section>
 
-          <section className="flex flex-col gap-5" aria-labelledby="hadith-structure">
-            <SectionHeader
-              id="hadith-structure"
-              heading={t('unavailable.structureHeading')}
-              intro={t('unavailable.structureIntro')}
-            />
-            <ul className="grid list-none grid-cols-1 gap-x-10 gap-y-8 p-0 *:min-w-0 sm:grid-cols-2 lg:grid-cols-4">
-              {structure.map((part) => (
-                <li key={part.key} className="flex h-full min-w-0 flex-col gap-2.5">
-                  <h3 className="border-b border-border pb-2 text-subheading font-semibold">
-                    {t(`landing.${part.key}`)}
-                  </h3>
-                  <p className="text-sm text-foreground-muted">
-                    {t(`unavailable.parts.${part.key}`)}
-                  </p>
-                  {part.links === null ? (
-                    <p className="mt-auto pt-1 text-caption font-medium text-foreground-muted">
-                      {t('unavailable.awaiting')}
-                    </p>
-                  ) : part.links.length === 0 ? null : (
-                    <ul className="mt-auto flex list-none flex-col gap-1 p-0 pt-1 text-sm">
-                      {part.links.map((link) => (
-                        <li key={link.href}>
-                          <TextLink href={link.href}>{link.text}</TextLink>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
+          <SectionMap
+            locale={locale}
+            active={false}
+            id="hadith-structure"
+            heading={t('unavailable.structureHeading')}
+            intro={t('unavailable.structureIntro')}
+          />
 
           <p>
             <TextLink href={localizedPath(locale, '')}>{t('unavailable.home')}</TextLink>
@@ -414,50 +383,5 @@ export async function HadithLandingUnavailable({ locale }: { readonly locale: Lo
         </div>
       </Container>
     </>
-  );
-}
-
-/** The introduction's paragraphs, in reading order. */
-const INTRODUCTION = Object.freeze([
-  'structure',
-  'citation',
-  'source',
-  'sourced',
-  'layers',
-] as const);
-
-/**
- * `/hadith/introduction` — how this section is organised and what each part of
- * a citation page is. Product guidance only: it states how the platform shows
- * sourced material and claims nothing about any narration.
- */
-export async function HadithIntroductionPage({
-  locale,
-  availability,
-}: {
-  readonly locale: Locale;
-  readonly availability: HadithAvailability;
-}) {
-  const t = await getTranslations({ locale, namespace: 'hadith' });
-  const parts = await hadithTrail(locale);
-  const title = t('sections.introduction');
-  return (
-    <HadithFrame
-      locale={locale}
-      availability={availability}
-      trail={[parts.home, parts.hadith, { text: title }]}
-    >
-      <Prose>
-        <PageHeading>{title}</PageHeading>
-        {INTRODUCTION.map((key) => (
-          <p key={key}>{t(`introduction.${key}`)}</p>
-        ))}
-        <p>
-          <TextLink href={hadithPath(locale, 'collections')}>
-            {t('sections.collections')}
-          </TextLink>
-        </p>
-      </Prose>
-    </HadithFrame>
   );
 }

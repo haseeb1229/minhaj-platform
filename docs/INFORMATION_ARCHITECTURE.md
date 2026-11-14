@@ -492,7 +492,15 @@ timeline for research, format tabs and level steps for courses, each view one ad
 other owners' material, so — unlike the collections' pages — they are open whether or not a
 collection is activated; the landing links them under Explore and Learn, and each hub leads to the
 others (ROUTE_MAP.md §3.4). Until Hadith Part 1 they were one-page related views canonical to the
-owner's listing, unavailable while no collection was activated (historical).
+owner's listing, unavailable while no collection was activated (historical). Since Hadith Part 2
+the Introduction is open whether or not a collection is activated — the section's guide: what it
+is, where things stand, the four parts of this menu (open pages linked, the rest named and marked
+as opening with an activated collection), the hubs with their figures, and how to read a citation
+page. Collections, Browse All, Search Hadith, Hadith Sciences and Commentary still need an
+activated collection; while none is, each says what will appear there and leads to the
+Introduction and the hubs, and Search Hadith offers site search on the `hadith` topic instead of
+pretending to search hadith text (until Hadith Part 2 each, the Introduction included, showed one
+sentence, historical). The landing leads with the Introduction and the hubs (ROUTE_MAP.md §3.4).
 
 ### 3.4 Learn
 

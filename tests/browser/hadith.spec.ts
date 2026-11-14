@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -183,7 +183,37 @@ interface HadithCopy {
     readonly awaiting: string;
   };
   readonly works: { readonly awaiting: string };
+  readonly landing: { readonly start: string; readonly openHeading: string };
+  readonly introduction: {
+    readonly title: string;
+    readonly onThisPage: string;
+    readonly citationIntro: string;
+    readonly citationIntroAwaiting: string;
+    readonly headings: { readonly state: string };
+  };
+  readonly awaiting: {
+    readonly status: string;
+    readonly notice: string;
+    readonly howItWorks: string;
+    readonly searchHeading: string;
+    readonly what: Readonly<Record<AwaitingSection, string>>;
+  };
+  readonly sections: Readonly<Record<string, string>>;
+  readonly booksHub: { readonly statBooks: string };
+  readonly videosHub: { readonly statVideos: string };
+  readonly researchHub: { readonly statRecords: string };
+  readonly coursesHub: { readonly statCourses: string };
 }
+
+/** The pages that need an activated collection (Hadith Part 2). */
+type AwaitingSection = 'collections' | 'browse' | 'search' | 'sciences' | 'commentary';
+const AWAITING: readonly AwaitingSection[] = [
+  'collections',
+  'browse',
+  'search',
+  'sciences',
+  'commentary',
+];
 
 /** The shipped catalogue's Hadith copy in each interface locale. */
 const COPY = Object.fromEntries(
@@ -260,6 +290,20 @@ async function visitFixture(
   return response as Response;
 }
 
+/**
+ * The words of an ICU plural message for an English count — the catalogue's
+ * own `{count, plural, one {…} other {…}}` — so a figure is asserted in the
+ * words the page uses.
+ */
+function plural(message: string, count: number): string {
+  const match = /one \{([^}]*)\} other \{([^}]*)\}/u.exec(message);
+  if (match === null) throw new Error(`Not a plural message: ${message}`);
+  return (count === 1 ? match[1] : match[2]) ?? '';
+}
+
+/** The pages of the collections and their study, which need an activation. */
+const CORPUS_PATHS = AWAITING.map((section) => `/hadith/${section}`);
+
 /** Moves focus by Tab alone until it lands on `target`. */
 async function tabTo(page: Page, target: Locator): Promise<void> {
   const handle = await target.elementHandle();
@@ -288,6 +332,50 @@ async function expectVisibleFocus(target: Locator): Promise<void> {
     (focus.outline !== 'none' && focus.width > 0) || focus.shadow !== 'none',
     JSON.stringify(focus),
   ).toBe(true);
+}
+
+/** No serious or critical axe finding; the rest are recorded as annotations. */
+async function axe(page: Page, target: string, testInfo: TestInfo): Promise<void> {
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  const blocking = results.violations.filter(
+    (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+  );
+  for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+    testInfo.annotations.push({
+      type: 'axe',
+      description: `${target}: ${finding.id} (${String(finding.impact)})`,
+    });
+  expect(
+    blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+    target,
+  ).toEqual([]);
+}
+
+/** The document's sideways overflow and, when there is some, what causes it. */
+function overflowDetail(page: Page): Promise<{ overflow: number; offenders: string[] }> {
+  return page.evaluate(() => {
+    const root = document.documentElement;
+    const overflow = root.scrollWidth - root.clientWidth;
+    if (overflow <= 0) return { overflow, offenders: [] };
+    const beyond = [...document.body.querySelectorAll('*')].filter((element) => {
+      const box = element.getBoundingClientRect();
+      return box.width > 0 && (box.right > root.clientWidth + 0.5 || box.left < -0.5);
+    });
+    const innermost = beyond.filter(
+      (element) => !beyond.some((other) => other !== element && element.contains(other)),
+    );
+    return {
+      overflow,
+      offenders: innermost
+        .slice(0, 5)
+        .map(
+          (element) =>
+            `${element.tagName.toLowerCase()}.${[...element.classList].join('.')} ${String(Math.round(element.getBoundingClientRect().width))}px`,
+        ),
+    };
+  });
 }
 
 /** Horizontal overflow of the document, in CSS pixels (≤ 0 means none). */
@@ -513,6 +601,21 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   for (const context of contexts) await context.close();
+  // WHAT THE HUBS PUBLISHED IS WITHDRAWN when the file is done, as the Courses
+  // describe withdraws its Courses: CI runs every spec against ONE database,
+  // and the Hadith hub fixtures — two dozen Works, Videos and research records
+  // each — would otherwise crowd later specs' records off the first page of
+  // the Library's and Watch's own listings. Archived, as an editor archives.
+  await sql?.query(`
+    UPDATE [dbo].[Work] SET [state] = N'archived', [version] = [version] + 1, [updatedAt] = SYSUTCDATETIME()
+      WHERE [state] = N'published' AND [slug] LIKE N'fixture-hadith-hub-%-${run}';
+    UPDATE [dbo].[Video] SET [state] = N'archived', [version] = [version] + 1, [updatedAt] = SYSUTCDATETIME()
+      WHERE [state] = N'published' AND [slug] LIKE N'fixture-hadith-hub-%-${run}';
+    UPDATE [dbo].[Research] SET [state] = N'archived', [version] = [version] + 1, [updatedAt] = SYSUTCDATETIME()
+      WHERE [state] = N'published' AND [slug] LIKE N'fixture-hadith-hub-%-${run}';
+    UPDATE [dbo].[ResearchPaper] SET [state] = N'archived', [version] = [version] + 1, [updatedAt] = SYSUTCDATETIME()
+      WHERE [state] = N'published' AND [slug] LIKE N'fixture-hadith-hub-%-${run}';
+  `);
   await sql?.close();
 });
 
@@ -554,6 +657,8 @@ test.describe('while no collection is activated', () => {
       await expect(
         main.getByRole('link', { name: COPY[locale].unavailable.home }),
       ).toHaveAttribute('href', localizedPath(locale, ''));
+      // Hadith Part 2: and the introduction, which stands without a corpus —
+      // the hero's first action and the Read part's one open page.
       expect(
         [
           ...new Set((await hrefsIn(page)).filter((href) => href.includes('/hadith'))),
@@ -562,6 +667,7 @@ test.describe('while no collection is activated', () => {
         [
           '/hadith/books',
           '/hadith/courses',
+          '/hadith/introduction',
           '/hadith/research',
           '/hadith/videos',
           '/topics/hadith',
@@ -569,46 +675,183 @@ test.describe('while no collection is activated', () => {
           .map((path) => localizedPath(locale, path))
           .sort(),
       );
+      await expect(
+        main.getByRole('link', { name: COPY[locale].landing.start, exact: true }),
+      ).toHaveAttribute('href', localizedPath(locale, '/hadith/introduction'));
+      // The pages that await a collection are NAMED in the map, never linked.
+      const map = page.locator('section[aria-labelledby="hadith-structure"]');
+      for (const section of AWAITING) {
+        await expect(
+          map.getByText(COPY[locale].sections[section] ?? '', { exact: true }),
+          section,
+        ).toHaveCount(1);
+        await expect(
+          map.getByRole('link', { name: COPY[locale].sections[section], exact: true }),
+          section,
+        ).toHaveCount(0);
+      }
       await expect(main).not.toContainText('NON_HADITH_FIXTURE');
       await expect(main).not.toContainText(/\d/);
       await expect(main.getByRole('search')).toHaveCount(0);
       await expectNoAbsentLinks(page, localizedPath(locale, '/hadith'));
     }
 
-    // Hadith search, too, is honestly unavailable rather than an empty search.
+    // Hadith search awaits a source too (Hadith Part 2): it searches nothing
+    // of Hadith's and never pretends to. Its one search form is SITE search,
+    // on the `hadith` Topic, carrying the visitor's words — never a Hadith
+    // search and never a result.
     const search = await page.goto(`/hadith/search?q=${WORD}`);
     expect(search?.status()).toBe(200);
     expect(search?.headers()['set-cookie']).toBeUndefined();
-    await expect(page.getByText(COPY.en.unavailable.body)).toBeVisible();
-    await expect(page.getByRole('main').getByRole('search')).toHaveCount(0);
+    const main = page.getByRole('main');
+    await expect(main.getByText(COPY.en.awaiting.status)).toBeVisible();
+    await expect(main.getByText(COPY.en.awaiting.what.search)).toBeVisible();
+    const form = main.getByRole('search');
+    await expect(form).toHaveCount(1);
+    await expect(form).toHaveAccessibleName(COPY.en.awaiting.searchHeading);
+    await expect(form).toHaveAttribute('action', '/search');
+    await expect(form).toHaveAttribute('method', 'get');
+    await expect(form.locator('input[name="q"]')).toHaveValue(WORD);
+    await expect(form.locator('input[type="hidden"][name="topic"]')).toHaveValue(
+      'hadith',
+    );
+    expect(
+      (
+        await form
+          .locator('[name]')
+          .evaluateAll((fields) => fields.map((field) => field.getAttribute('name')))
+      ).sort(),
+    ).toEqual(['q', 'topic']);
+    expect(
+      (await hrefsIn(page)).filter((href) => href.startsWith('/hadith/search')),
+    ).toEqual([]);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
       'content',
       /noindex/,
     );
-    await expect(page.getByRole('main')).not.toContainText('NON_HADITH_FIXTURE');
+    await expect(main).not.toContainText('NON_HADITH_FIXTURE');
+    await expect(main).not.toContainText(WORD);
   });
 
-  test('every section page of the collections is unavailable, never an empty listing', async ({
+  test('every page of the collections and their study awaits a source, never an empty listing', async ({
     page,
   }) => {
     // The four hubs are not among them: they are other owners' material on
     // the `hadith` Topic and stand without a corpus (Hadith Part 1, below).
-    for (const section of [
-      'introduction',
-      'collections',
-      'browse',
-      'sciences',
-      'commentary',
-    ]) {
-      const response = await page.goto(`/hadith/${section}`);
-      expect(response?.status(), section).toBe(200);
-      expect(response?.headers()['set-cookie'], section).toBeUndefined();
-      await expect(page.getByText(COPY.en.unavailable.body), section).toBeVisible();
-      await expect(page.getByRole('note'), section).toHaveCount(0);
-      await expect(page.getByRole('main'), section).not.toContainText(
-        'NON_HADITH_FIXTURE',
+    // Nor is the introduction since Hadith Part 2: it is product guidance and
+    // stands too (its own test, next). Until Hadith Part 2 each of these
+    // showed one bare sentence (historical); each now names the page, says
+    // what will appear here, says nothing is shown in its place, and leads to
+    // what is open — the introduction and the hubs — and to nothing that is
+    // not. A study page published from a fixture source exists in this
+    // database and stays absent: Sciences awaits an activation like the rest.
+    for (const locale of LOCALES)
+      for (const section of AWAITING) {
+        const target = localizedPath(locale, `/hadith/${section}`);
+        const response = await page.goto(target);
+        expect(response?.status(), target).toBe(200);
+        expect(response?.headers()['set-cookie'], target).toBeUndefined();
+        const main = page.getByRole('main');
+        await expect(page.getByRole('heading', { level: 1 }), target).toHaveText(
+          COPY[locale].sections[section] ?? '',
+        );
+        await expect(main.getByText(COPY[locale].awaiting.status), target).toBeVisible();
+        await expect(
+          main.getByText(COPY[locale].awaiting.what[section]),
+          target,
+        ).toBeVisible();
+        await expect(main.getByText(COPY[locale].awaiting.notice), target).toBeVisible();
+        await expect(
+          main.getByRole('link', { name: COPY[locale].awaiting.howItWorks }),
+          target,
+        ).toHaveAttribute('href', localizedPath(locale, '/hadith/introduction'));
+        await expect(page.getByRole('note'), target).toHaveCount(0);
+        await expect(page.locator('meta[name="robots"]'), target).toHaveAttribute(
+          'content',
+          /noindex/,
+        );
+        await expect(page.locator('link[rel="canonical"]'), target).toHaveCount(0);
+        await expect(main, target).not.toContainText('NON_HADITH_FIXTURE');
+        // Open now: the introduction and the four hubs, and no page of the
+        // collections or their study.
+        const hrefs = await hrefsIn(page);
+        for (const open of ['introduction', 'books', 'videos', 'research', 'courses'])
+          expect(hrefs, `${target} → ${open}`).toContain(
+            localizedPath(locale, `/hadith/${open}`),
+          );
+        expect(
+          hrefs.filter((href) =>
+            CORPUS_PATHS.some((path) => href.startsWith(localizedPath(locale, path))),
+          ),
+          target,
+        ).toEqual([]);
+        // A listing would be a list of citations, works or study pages; the
+        // only lists here are the open hubs.
+        await expect(main.getByRole('article'), target).toHaveCount(0);
+        await expectNoAbsentLinks(page, target);
+      }
+  });
+
+  test('the introduction stands without a corpus: honest, organised, and linking only what is open', async ({
+    page,
+  }) => {
+    for (const locale of LOCALES) {
+      const target = localizedPath(locale, '/hadith/introduction');
+      const response = await page.goto(target);
+      expect(response?.status(), target).toBe(200);
+      expect(response?.headers()['set-cookie'], target).toBeUndefined();
+      await expect(page.getByRole('note'), target).toHaveCount(0);
+      await expect(page.locator('meta[name="robots"]'), target).toHaveAttribute(
+        'content',
+        /noindex/,
       );
-      await expectNoAbsentLinks(page, section);
+      await expect(page.locator('link[rel="canonical"]'), target).toHaveCount(0);
+      await expect(
+        page.locator('script[type="application/ld+json"]'),
+        target,
+      ).toHaveCount(0);
+      const main = page.getByRole('main');
+      await expect(page.getByRole('heading', { level: 1 }), target).toHaveText(
+        COPY[locale].introduction.title,
+      );
+      // Where things stand, said plainly; the citation page described as what
+      // it WILL show.
+      await expect(
+        main.getByRole('heading', { name: COPY[locale].introduction.headings.state }),
+        target,
+      ).toBeVisible();
+      await expect(
+        main.getByText(COPY[locale].introduction.citationIntroAwaiting),
+        target,
+      ).toBeVisible();
+      await expect(
+        main.getByText(COPY[locale].introduction.citationIntro),
+        target,
+      ).toHaveCount(0);
+      // Every anchor of "On this page" lands on a heading that exists.
+      const toc = main.getByRole('navigation', {
+        name: COPY[locale].introduction.onThisPage,
+      });
+      const anchors = await toc
+        .getByRole('link')
+        .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
+      expect(anchors.length, target).toBe(5);
+      for (const anchor of anchors)
+        await expect(page.locator(anchor), `${target} ${anchor}`).toHaveCount(1);
+      // The pages that await a collection are named and never linked.
+      expect(
+        (await hrefsIn(page)).filter((href) =>
+          CORPUS_PATHS.some((path) => href.startsWith(localizedPath(locale, path))),
+        ),
+        target,
+      ).toEqual([]);
+      for (const section of AWAITING)
+        await expect(
+          main.getByText(COPY[locale].sections[section] ?? '', { exact: true }).first(),
+          `${target} names ${section}`,
+        ).toBeVisible();
+      await expect(main, target).not.toContainText('NON_HADITH_FIXTURE');
+      await expectNoAbsentLinks(page, target);
     }
   });
 
@@ -684,10 +927,10 @@ test.describe('Hadith Part 1: the Hadith hubs', () => {
     teacherOne: `Fixture Hadith Hub Teacher One ${run}`,
     teacherTwo: `Fixture Hadith Hub Teacher Two ${run}`,
     series: `NON_HADITH_FIXTURE hub circle ${run}`,
-    bookFeatured: `NON_HADITH_FIXTURE hub book featured ${run}`,
-    bookTranslated: `NON_HADITH_FIXTURE hub book translated ${run}`,
-    bookReadable: `NON_HADITH_FIXTURE hub book readable ${run}`,
-    bookDraft: `NON_HADITH_FIXTURE hub book draft ${run}`,
+    bookFeatured: `Yy NON_HADITH_FIXTURE hub book featured ${run}`,
+    bookTranslated: `Yy NON_HADITH_FIXTURE hub book translated ${run}`,
+    bookReadable: `Yy NON_HADITH_FIXTURE hub book readable ${run}`,
+    bookDraft: `Yy NON_HADITH_FIXTURE hub book draft ${run}`,
     videoFeatured: `NON_HADITH_FIXTURE hub video featured ${run}`,
     videoLecture: `NON_HADITH_FIXTURE hub video lecture ${run}`,
     videoShort: `NON_HADITH_FIXTURE hub video short ${run}`,
@@ -711,52 +954,6 @@ test.describe('Hadith Part 1: the Hadith hubs', () => {
   const base = { works: 0, videos: 0, records: 0, courses: 0 };
   let hadithTopic = '';
 
-  async function axe(page: Page, target: string, testInfo: TestInfo): Promise<void> {
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-      .analyze();
-    const blocking = results.violations.filter(
-      (violation) => violation.impact === 'serious' || violation.impact === 'critical',
-    );
-    for (const finding of results.violations.filter((v) => !blocking.includes(v)))
-      testInfo.annotations.push({
-        type: 'axe',
-        description: `${target}: ${finding.id} (${String(finding.impact)})`,
-      });
-    expect(
-      blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
-      target,
-    ).toEqual([]);
-  }
-
-  /** The document's sideways overflow and, when there is some, what causes it. */
-  function overflowDetail(
-    page: Page,
-  ): Promise<{ overflow: number; offenders: string[] }> {
-    return page.evaluate(() => {
-      const root = document.documentElement;
-      const overflow = root.scrollWidth - root.clientWidth;
-      if (overflow <= 0) return { overflow, offenders: [] };
-      const beyond = [...document.body.querySelectorAll('*')].filter((element) => {
-        const box = element.getBoundingClientRect();
-        return box.width > 0 && (box.right > root.clientWidth + 0.5 || box.left < -0.5);
-      });
-      const innermost = beyond.filter(
-        (element) =>
-          !beyond.some((other) => other !== element && element.contains(other)),
-      );
-      return {
-        overflow,
-        offenders: innermost
-          .slice(0, 5)
-          .map(
-            (element) =>
-              `${element.tagName.toLowerCase()}.${[...element.classList].join('.')} ${String(Math.round(element.getBoundingClientRect().width))}px`,
-          ),
-      };
-    });
-  }
-
   /**
    * Visits a hub while no collection is activated and asserts what each owes:
    * a 200 with no cookie, the hub itself — never the unavailable state — no
@@ -768,7 +965,7 @@ test.describe('Hadith Part 1: the Hadith hubs', () => {
     expect(response?.status(), target).toBe(200);
     expect(response?.headers()['set-cookie'], target).toBeUndefined();
     await expect(page.getByRole('note'), target).toHaveCount(0);
-    await expect(page.getByText(COPY.en.unavailable.body), target).toHaveCount(0);
+    await expect(page.getByText(COPY.en.awaiting.status), target).toHaveCount(0);
     await expect(page.locator('meta[name="robots"]'), target).toHaveAttribute(
       'content',
       /noindex/,
@@ -924,6 +1121,21 @@ test.describe('Hadith Part 1: the Hadith hubs', () => {
         INSERT INTO [dbo].[Work] ([id],[slug],[primaryLocale],[state],[isFeatured]) VALUES (N'${id}', N'${hubSlug(key)}', N'en', N'${state}', ${featured ? 1 : 0});
         INSERT INTO [dbo].[WorkLabel] ([workId],[locale],[title],[description]) VALUES (N'${id}', N'en', ${n(title)}, N'NON_HADITH_FIXTURE description of a book on Hadith.');
         INSERT INTO [dbo].[WorkTopic] ([workId],[topicId]) VALUES (N'${id}', N'${hadithTopic}');`;
+      // A readable edition carries what the Library's authoring path writes: a
+      // document its reader schema accepts, and the SHA-256 of that document
+      // as its content version. (Until Hadith Part 2 it was `{}`, which the
+      // column's JSON check admits but the reader refuses, so the book's page
+      // answered 500 to the shell's link check — historical.)
+      const document = JSON.stringify({
+        sections: [
+          {
+            key: 'one',
+            title: 'NON_HADITH_FIXTURE section',
+            paragraphs: ['NON_HADITH_FIXTURE text of a readable edition.'],
+          },
+        ],
+      });
+      const contentVersion = createHash('sha256').update(document).digest('hex');
       const edition = (
         workId: string,
         language: string,
@@ -932,7 +1144,11 @@ test.describe('Hadith Part 1: the Hadith hubs', () => {
       ) => `
         INSERT INTO [dbo].[Edition] ([id],[workId],[languageCode],[label],[state],[publicationYear],[reading],[download],[document],[contentVersion],[version],[updatedAt]) VALUES
           (N'${randomUUID()}', N'${workId}', N'${language}', N'NON_HADITH_FIXTURE edition', N'published', ${String(year)},
-           N'${readable ? 'allowed' : 'unavailable'}', N'denied', ${readable ? `N'{}'` : 'NULL'}, ${readable ? `N'${'c'.repeat(64)}'` : 'NULL'}, 1, SYSUTCDATETIME());`;
+           N'${readable ? 'allowed' : 'unavailable'}', N'denied', ${readable ? n(document) : 'NULL'}, ${readable ? `N'${contentVersion}'` : 'NULL'}, 1, SYSUTCDATETIME());`;
+      // Every book here is titled "Yy …" or "Zz …" and dated a century ago, so
+      // in each of the Library's own orders (title, newest) it sorts after a
+      // concurrently running spec's records (CI runs specs in parallel on one
+      // database) and never crowds them off a first page.
       const fillers = Array.from({ length: FILLERS }, (_, index) => {
         const id = randomUUID();
         const number = String(index + 1).padStart(2, '0');
@@ -942,25 +1158,25 @@ test.describe('Hadith Part 1: the Hadith hubs', () => {
             (N'${id}', N'en', N'Zz NON_HADITH_FIXTURE hub book filler ${run} ${number}', N''),
             (N'${id}', N'ur', N'ےے NON_HADITH_FIXTURE ${run} ${number}', N'');
           INSERT INTO [dbo].[WorkTopic] ([workId],[topicId]) VALUES (N'${id}', N'${hadithTopic}');
-          ${edition(id, 'en', 2000, false)}`;
+          ${edition(id, 'en', 1900, false)}`;
       }).join('\n');
       await sql.query(`
         INSERT INTO [dbo].[Person] ([id],[slug],[primaryLocale],[status]) VALUES (N'${hub.author}', N'${hubSlug('author')}', N'en', N'published');
         INSERT INTO [dbo].[PersonTranslation] ([personId],[locale],[name],[biography]) VALUES (N'${hub.author}', N'en', ${n(TITLE.author)}, NULL);
 
         ${work(hub.bookFeatured, 'book-featured', TITLE.bookFeatured, 'published', true)}
-        ${edition(hub.bookFeatured, 'en', 2018, false)}
+        ${edition(hub.bookFeatured, 'en', 1918, false)}
         INSERT INTO [dbo].[WorkContributor] ([workId],[personId],[role],[position]) VALUES (N'${hub.bookFeatured}', N'${hub.author}', N'author', 0);
 
         ${work(hub.bookTranslated, 'book-translated', TITLE.bookTranslated, 'published', false)}
-        ${edition(hub.bookTranslated, 'ar', 2022, false)}
+        ${edition(hub.bookTranslated, 'ar', 1922, false)}
         INSERT INTO [dbo].[WorkContributor] ([workId],[personId],[role],[position]) VALUES (N'${hub.bookTranslated}', N'${hub.author}', N'translator', 0);
 
         ${work(hub.bookReadable, 'book-readable', TITLE.bookReadable, 'published', false)}
-        ${edition(hub.bookReadable, 'ur', 2010, true)}
+        ${edition(hub.bookReadable, 'ur', 1910, true)}
 
         ${work(hub.bookDraft, 'book-draft', TITLE.bookDraft, 'draft', true)}
-        ${edition(hub.bookDraft, 'en', 2019, false)}
+        ${edition(hub.bookDraft, 'en', 1919, false)}
 
         ${fillers}
       `);
@@ -1010,7 +1226,7 @@ test.describe('Hadith Part 1: the Hadith hubs', () => {
       // A card: title, credit with its role, language and year — one link each.
       const translated = item(page, LIST, TITLE.bookTranslated);
       await expect(translated).toContainText(`${TITLE.author} (translator)`);
-      await expect(translated).toContainText('Arabic · 2022');
+      await expect(translated).toContainText('Arabic · 1922');
       await expect(translated.getByRole('link')).toHaveCount(1);
       await expect(item(page, LIST, TITLE.bookReadable)).toContainText('Read online');
 
@@ -1190,8 +1406,13 @@ test.describe('Hadith Part 1: the Hadith hubs', () => {
           `video-filler-${number}`,
           `Zz NON_HADITH_FIXTURE hub video filler ${run} ${number}`,
           {
-            language: 'en',
-            date: `2000-01-${number}`,
+            // Arabic and old, like every video here: Watch's landing puts the
+            // interface language first and the newest next, so English or
+            // recent fixtures would push a concurrently running spec's own
+            // videos off its "Latest" (CI runs specs in parallel on one
+            // database).
+            language: 'ar',
+            date: `1990-01-${number}`,
             seconds: null,
           },
         );
@@ -1202,12 +1423,12 @@ test.describe('Hadith Part 1: the Hadith hubs', () => {
         INSERT INTO [dbo].[Series] ([id],[slug],[kind],[primaryLocale],[state]) VALUES (N'${hub.series}', N'${hubSlug('series')}', N'series', N'en', N'published');
         INSERT INTO [dbo].[SeriesLabel] ([seriesId],[locale],[title],[description]) VALUES (N'${hub.series}', N'en', ${n(TITLE.series)}, N'');
 
-        ${video(hub.videoFeatured, 'video-featured', TITLE.videoFeatured, { featured: true, language: 'en', date: '2026-01-05', seconds: 1_500, series: hub.series })}
+        ${video(hub.videoFeatured, 'video-featured', TITLE.videoFeatured, { featured: true, language: 'en', date: '1996-01-05', seconds: 1_500, series: hub.series })}
         INSERT INTO [dbo].[VideoSpeaker] ([videoId],[personId],[position]) VALUES (N'${hub.videoFeatured}', N'${hub.speaker}', 0);
-        ${video(hub.videoLecture, 'video-lecture', TITLE.videoLecture, { language: 'ar', date: '2025-06-01', seconds: 4_000 })}
+        ${video(hub.videoLecture, 'video-lecture', TITLE.videoLecture, { language: 'ar', date: '1995-06-01', seconds: 4_000 })}
         INSERT INTO [dbo].[VideoSpeaker] ([videoId],[personId],[position]) VALUES (N'${hub.videoLecture}', N'${hub.speaker}', 0);
-        ${video(hub.videoShort, 'video-short', TITLE.videoShort, { language: 'ur', date: '2024-03-03', seconds: 600 })}
-        ${video(hub.videoDraft, 'video-draft', TITLE.videoDraft, { state: 'draft', featured: true, language: 'en', date: '2026-02-02', seconds: 900 })}
+        ${video(hub.videoShort, 'video-short', TITLE.videoShort, { language: 'ur', date: '1994-03-03', seconds: 600 })}
+        ${video(hub.videoDraft, 'video-draft', TITLE.videoDraft, { state: 'draft', featured: true, language: 'en', date: '1996-02-02', seconds: 900 })}
         ${fillers}
       `);
     });
@@ -1819,6 +2040,176 @@ test.describe('Hadith Part 1: the Hadith hubs', () => {
 });
 
 /* ===========================================================================
+ * 1c. Hadith Part 2 — the guide, while no collection is activated
+ * ========================================================================= */
+
+/**
+ * THE FIGURES ARE THE HUBS' OWN. By now the Hadith Part 1 describes have
+ * published books, videos and research on the `hadith` Topic (its Courses are
+ * withdrawn again), so every figure the landing, the introduction and an
+ * awaiting page state beside a hub is checked against what is published on the
+ * Topic in the database — stated exactly when there is any, and absent when
+ * there is none. Then each page by keyboard, at every width, in every locale,
+ * with axe, and the screenshots of record.
+ */
+test.describe('Hadith Part 2: the landing, the introduction and the awaiting pages', () => {
+  const published = { books: 0, videos: 0, research: 0, courses: 0 };
+
+  test.beforeAll(async () => {
+    const [row] = await sql.query<Record<string, number | null>>(`
+      DECLARE @topic NVARCHAR(36) = (SELECT [id] FROM [dbo].[Topic] WHERE [slug] = N'hadith' AND [status] = N'active');
+      SELECT
+        (SELECT COUNT(*) FROM [dbo].[Work] w WHERE w.[state] = N'published'
+          AND EXISTS (SELECT 1 FROM [dbo].[WorkTopic] o WHERE o.[workId] = w.[id] AND o.[topicId] = @topic)
+          AND EXISTS (SELECT 1 FROM [dbo].[Edition] e WHERE e.[workId] = w.[id] AND e.[state] = N'published')) AS [books],
+        (SELECT COUNT(*) FROM [dbo].[Video] v WHERE v.[state] = N'published'
+          AND EXISTS (SELECT 1 FROM [dbo].[VideoTopic] o WHERE o.[videoId] = v.[id] AND o.[topicId] = @topic)) AS [videos],
+        (SELECT COUNT(*) FROM [dbo].[Research] r WHERE r.[state] = N'published'
+          AND EXISTS (SELECT 1 FROM [dbo].[ResearchTopic] o WHERE o.[researchId] = r.[id] AND o.[topicId] = @topic))
+        + (SELECT COUNT(*) FROM [dbo].[ResearchPaper] r WHERE r.[state] = N'published'
+          AND EXISTS (SELECT 1 FROM [dbo].[ResearchPaperTopic] o WHERE o.[researchPaperId] = r.[id] AND o.[topicId] = @topic)) AS [research],
+        (SELECT COUNT(*) FROM [dbo].[Course] c WHERE c.[state] = N'published'
+          AND EXISTS (SELECT 1 FROM [dbo].[CourseTopic] o WHERE o.[courseId] = c.[id] AND o.[topicId] = @topic)) AS [courses];`);
+    published.books = Number(row?.['books'] ?? 0);
+    published.videos = Number(row?.['videos'] ?? 0);
+    published.research = Number(row?.['research'] ?? 0);
+    published.courses = Number(row?.['courses'] ?? 0);
+  });
+
+  /** The figure a hub's card states, in the catalogue's words, or null for none. */
+  function figureOf(hub: keyof typeof published): string | null {
+    const count = published[hub];
+    if (count === 0) return null;
+    const message =
+      hub === 'books'
+        ? COPY.en.booksHub.statBooks
+        : hub === 'videos'
+          ? COPY.en.videosHub.statVideos
+          : hub === 'research'
+            ? COPY.en.researchHub.statRecords
+            : COPY.en.coursesHub.statCourses;
+    return `${String(count)} ${plural(message, count)}`;
+  }
+
+  /** Each hub's card in `scope` states its figure exactly, or none at all. */
+  async function expectFigures(scope: Locator, where: string): Promise<void> {
+    for (const hub of ['books', 'videos', 'research', 'courses'] as const) {
+      const card = scope.locator('li', {
+        has: scope.page().getByRole('link', {
+          name: COPY.en.sections[hub],
+          exact: true,
+        }),
+      });
+      await expect(card, `${where} ${hub}`).toHaveCount(1);
+      const figure = figureOf(hub);
+      if (figure === null) await expect(card, `${where} ${hub}`).not.toContainText(/\d/u);
+      else await expect(card, `${where} ${hub}`).toContainText(figure);
+    }
+  }
+
+  test('every hub is stated with exactly what it opens with', async ({ page }) => {
+    expect(
+      published.books + published.videos + published.research,
+      'the Hadith Part 1 describes published on the Topic',
+    ).toBeGreaterThan(0);
+
+    await page.goto('/hadith');
+    const open = page.locator('section[aria-labelledby="hadith-open"]');
+    await expect(
+      open.getByRole('heading', { name: COPY.en.landing.openHeading }),
+    ).toBeVisible();
+    await expectFigures(open, '/hadith');
+
+    await page.goto('/hadith/introduction');
+    await expectFigures(
+      page.locator('section[aria-labelledby="hadith-intro-works-heading"]'),
+      '/hadith/introduction',
+    );
+
+    await page.goto('/hadith/collections');
+    await expectFigures(
+      page.locator('section[aria-labelledby="hadith-awaiting-open"]'),
+      '/hadith/collections',
+    );
+  });
+
+  test('by keyboard alone: the introduction from an awaiting page, and its contents to their sections', async ({
+    page,
+  }) => {
+    await page.goto('/hadith/browse');
+    const how = page
+      .getByRole('main')
+      .getByRole('link', { name: COPY.en.awaiting.howItWorks });
+    await tabTo(page, how);
+    await expectVisibleFocus(how);
+    await page.keyboard.press('Enter');
+    await page.waitForURL('**/hadith/introduction');
+    const toc = page
+      .getByRole('main')
+      .getByRole('navigation', { name: COPY.en.introduction.onThisPage });
+    const first = toc.getByRole('link').first();
+    await tabTo(page, first);
+    await expectVisibleFocus(first);
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/#hadith-intro-what$/u);
+  });
+
+  test('Urdu and Arabic read right to left, every page fits 320 to 1440 px, and none has a serious accessibility finding', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(300_000);
+    const pages = [
+      '/hadith',
+      '/hadith/introduction',
+      '/hadith/sciences',
+      '/hadith/search',
+    ];
+    for (const locale of LOCALES)
+      for (const target of pages) {
+        const address = localizedPath(locale, target);
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await page.goto(address);
+        await expect(page.locator('html'), address).toHaveAttribute(
+          'dir',
+          locale === 'en' ? 'ltr' : 'rtl',
+        );
+        await axe(page, address, testInfo);
+        for (const width of [320, 390, 1440]) {
+          await page.setViewportSize({ width, height: 800 });
+          await page.goto(address);
+          const result = await overflowDetail(page);
+          expect(
+            result.overflow,
+            `${address} @${String(width)}: ${result.offenders.join(', ')}`,
+          ).toBeLessThanOrEqual(0);
+        }
+      }
+
+    // The screenshots of record: each page in English at 1440 px and in Urdu
+    // at 390 px.
+    for (const [name, target] of [
+      ['landing', '/hadith'],
+      ['introduction', '/hadith/introduction'],
+      ['sciences', '/hadith/sciences'],
+      ['search', '/hadith/search'],
+    ] as const)
+      for (const [locale, width] of [
+        ['en', 1440],
+        ['ur', 390],
+      ] as const) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(localizedPath(locale, target));
+        await page.screenshot({
+          path: testInfo.outputPath(
+            `hadith-part2-${name}-${locale}-${String(width)}.png`,
+          ),
+          fullPage: true,
+        });
+      }
+  });
+});
+
+/* ===========================================================================
  * 2. A fixture collection is activated
  * ========================================================================= */
 
@@ -1869,7 +2260,7 @@ test.describe('a fixture activation', () => {
 
   test('the landing offers only what exists', async ({ page }) => {
     await visitFixture(page, '/hadith');
-    await expect(page.getByText(COPY.en.unavailable.body)).toHaveCount(0);
+    await expect(page.getByText(COPY.en.awaiting.status)).toHaveCount(0);
     const hrefs = await hrefsIn(page);
     for (const section of [
       'collections',
@@ -1903,6 +2294,26 @@ test.describe('a fixture activation', () => {
     await expect(
       page.getByRole('contentinfo').locator('a[href="/hadith/collections"]'),
     ).toHaveCount(1);
+  });
+
+  test('once a collection is activated nothing awaits a source, and the introduction links every part', async ({
+    page,
+  }) => {
+    for (const target of CORPUS_PATHS) {
+      await visitFixture(page, target);
+      await expect(page.getByText(COPY.en.awaiting.status), target).toHaveCount(0);
+    }
+    await visitFixture(page, '/hadith/introduction');
+    const main = page.getByRole('main');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      COPY.en.introduction.title,
+    );
+    await expect(
+      main.getByRole('heading', { name: COPY.en.introduction.headings.state }),
+    ).toHaveCount(0);
+    await expect(main.getByText(COPY.en.introduction.citationIntro)).toBeVisible();
+    const hrefs = await hrefsIn(page);
+    for (const path of CORPUS_PATHS) expect(hrefs, path).toContain(path);
   });
 
   test('a citation shows its original, chain and gradings exactly as sourced, in every locale', async ({

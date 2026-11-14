@@ -285,6 +285,11 @@ describe('the render and routing tree stays statically renderable', () => {
     // `related.tsx`) and their scopes.
     'apps/web/src/components/hadith/hub-pages.tsx',
     'apps/web/src/components/hadith/hubs.ts',
+    // Hadith Part 2: the section's guide — the introduction, the pages that
+    // await an authorised source and the map of the section — and the
+    // figures each hub opens with (its own read, asked for one item).
+    'apps/web/src/components/hadith/guide.tsx',
+    'apps/web/src/components/hadith/hub-figures.ts',
     'apps/web/src/components/hadith/sciences.tsx',
     'apps/web/src/components/hadith/search.tsx',
     'apps/web/src/components/hadith/structure.tsx',

@@ -760,6 +760,28 @@ landing links the four hubs (and the topic hub) under Explore and Learn, and its
 "all" leads to `/hadith/books` (until Hadith Part 1 it led to the Library's listing for the Topic,
 historical — the R2 note above already described the hub).
 
+**Hadith Part 2 — the Read and Study pages and the landing (DOMAIN_MODEL.md §9.1;
+OPEN_DECISIONS.md §1.3).** No route changes. The "Corpus states" rule above now reads, while no
+collection is activated: **`/hadith/introduction` stands** — it is product guidance that reads no
+Hadith record, so it renders whatever the corpus (until Hadith Part 2 it showed the unavailable
+state, historical): what the section is, where things stand, how it is organised (the four parts
+of the Hadith menu, every page named, the open ones linked and the rest marked "Opens when a
+collection is activated", never linked), the hubs with the figure each opens with, and how to read
+a citation page, described as what it will show. **`/hadith/collections`, `/hadith/browse`,
+`/hadith/search`, `/hadith/sciences` and `/hadith/commentary` await an authorised source** — one
+designed state in place of the Phase-19 single sentence (historical): the page's name, what will
+appear there, that nothing is shown in its place, the introduction and the four hubs (with their
+figures), and the way back to `/hadith`; no listing and no link into a page that cannot open.
+`/hadith/search` searches nothing of Hadith's while inactive: its one form is a GET form to
+`/search` carrying `?q` and `topic=hadith`, and it says it does not search hadith text. Sciences
+stays gated because a study page is public only under the section's authority, which exists only
+through an activation (DOMAIN_MODEL.md §9.1). Named resources still answer 404. The landing's hero
+leads to the introduction and the Books hub, its picture is the works' cover stack only when three
+covers exist, and it adds **Open now** (the four hubs with their figures) and the same section map
+as the introduction. Each figure is the `total` of the hub's own unfiltered read asked for one item,
+stated only when more than none. Every rule above — fixture banner, `noindex`, no canonical claim
+unless an approved activation is indexable — is unchanged.
+
 ### 3.5 Learn
 
 | Route | Purpose |

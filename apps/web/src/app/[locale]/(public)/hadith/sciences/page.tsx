@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
 import { SciencesPage } from '@/components/hadith/sciences';
-import { HadithUnavailable } from '@/components/hadith/parts';
+import { HadithAwaiting } from '@/components/hadith/guide';
 import { hadithAvailability, hadithMetadata } from '@/components/hadith/read';
 import { requireLocale } from '@/config/route-locale';
 
@@ -11,7 +11,8 @@ import { requireLocale } from '@/config/route-locale';
  * order.
  *
  * Signed out and `force-dynamic`: activation and what is public are mutable
- * data. The honest unavailable state while no collection is activated; the
+ * data. While no collection is activated it awaits an authorised source
+ * (`HadithAwaiting`, Hadith Part 2); the
  * fixture banner and `noindex` while the activation is fixture text.
  */
 export const dynamic = 'force-dynamic';
@@ -35,9 +36,6 @@ export async function generateMetadata({ params }: SectionParams): Promise<Metad
 export default async function SciencesRoute({ params }: SectionParams) {
   const locale = await requireLocale(params);
   const availability = await hadithAvailability();
-  if (!availability.active) {
-    const t = await getTranslations({ locale, namespace: 'hadith' });
-    return <HadithUnavailable locale={locale} section={t('sections.sciences')} />;
-  }
+  if (!availability.active) return <HadithAwaiting locale={locale} section="sciences" />;
   return <SciencesPage locale={locale} availability={availability} />;
 }

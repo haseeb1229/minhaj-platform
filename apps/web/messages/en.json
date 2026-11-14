@@ -4183,18 +4183,36 @@
       "body": "Hadith collections are not yet available on this site.",
       "home": "Return to the home page",
       "structureHeading": "How this section is organised",
-      "structureIntro": "The collections and their study open once a collection is activated. Books, videos, research and courses on Hadith are open now.",
-      "awaiting": "Opens when a collection is activated",
-      "parts": {
-        "collections": "Published collections, read by book and chapter, with a permanent address for every citation.",
-        "study": "The original text with its source and edition, published translations, commentary and study material.",
-        "explore": "Books, videos, research and topics from across the platform, connected through the topic hub.",
-        "learn": "Structured courses and learning paths, taught through Learn."
-      }
+      "structureIntro": "The collections and their study open once a collection is activated. The introduction, and books, videos, research and courses on Hadith, are open now.",
+      "awaiting": "Opens when a collection is activated"
+    },
+    "awaiting": {
+      "status": "Awaiting an authorised source",
+      "what": {
+        "collections": "Every published hadith collection will be listed here, each opening onto its books and chapters, with a permanent address for every narration in it.",
+        "browse": "Every published narration will be listed here, collection by collection and number by number, each linking to its own citation page.",
+        "search": "Hadith search will find words in the original texts and in every published translation, each result one citation you can open and cite.",
+        "sciences": "Study material on the sciences of hadith, published by the section's editors from a registered source, will be listed here in its recorded order.",
+        "commentary": "Published commentary works will be listed here, each with its language, contributors and source. Their entries are read on the citations they comment on."
+      },
+      "noticeTitle": "Not open yet",
+      "notice": "No hadith collection is published on this site yet. This page opens once an authorised source is in place. Until then nothing is shown in its place — no sample text, number, chain or grading.",
+      "howItWorks": "How this section works",
+      "searchHeading": "Search the whole site",
+      "searchIntro": "Site search finds books, videos, research and courses on Hadith across the platform. It does not search hadith text, which is not published here.",
+      "searchLabel": "Search the site for",
+      "back": "Back to Hadith"
+    },
+    "parts": {
+      "read": "An introduction to the section, then the published collections — read by book and chapter, browsed whole or searched — with a permanent address for every citation.",
+      "study": "The original text with its source and edition, published translations, commentary and study material.",
+      "explore": "Books, videos, research and topics from across the platform, connected through the topic hub.",
+      "learn": "Structured courses and learning paths, taught through Learn."
     },
     "previous": "Previous page",
     "next": "Next page",
     "landing": {
+      "read": "Read",
       "collections": "Collections",
       "study": "Study",
       "eyebrow": "Collections · Study · Explore · Learn",
@@ -4205,7 +4223,10 @@
       "exploreIntro": "Material from across the platform classified under Hadith.",
       "learn": "Learn",
       "learnIntro": "Courses that teach Hadith, taught through Learn.",
-      "learnAll": "All courses in Learn"
+      "learnAll": "All courses in Learn",
+      "start": "Start with the introduction",
+      "openHeading": "Open now",
+      "openIntro": "Minhaj-ul-Quran's own books, videos, research and courses on Hadith, gathered from the Library, Watch and Learn."
     },
     "sections": {
       "introduction": "Introduction",
@@ -4234,6 +4255,30 @@
       "courses": "Courses from Learn classified under Hadith."
     },
     "introduction": {
+      "title": "Introduction to the Hadith section",
+      "lede": "What this section is, how it is organised, what you can read now, and how to read a citation page.",
+      "onThisPage": "On this page",
+      "headings": {
+        "what": "What this section is",
+        "state": "Where things stand",
+        "parts": "How it is organised",
+        "works": "Minhaj-ul-Quran's work on Hadith",
+        "citation": "Reading a citation page"
+      },
+      "what": "Hadith are the reports of the sayings, actions and approvals of the Prophet Muhammad ﷺ, gathered by scholars into collections. This section is the place on this site for reading those collections from an authorised source, and for Minhaj-ul-Quran's own books, videos, research and courses on Hadith.",
+      "whatMore": "Everything in it is shown exactly as its source gives it, with where it came from. This site does not grade, rank or endorse any narration.",
+      "state": "No hadith collection is published on this site yet. The collections, browsing, search, study material and commentary open once an authorised source is in place. Until then nothing is shown in their place — no sample text, number, chain or grading. The books, videos, research and courses on Hadith are open now.",
+      "partsIntro": "Four parts, as in the Hadith menu. What is open is linked; what awaits a published collection is named and marked.",
+      "worksIntro": "Open whether or not a collection is published: what Minhaj-ul-Quran publishes on Hadith across the platform, each hub with how much it holds.",
+      "citationIntro": "Every published narration has a page of its own at a permanent address. This is what that page shows, and why.",
+      "citationIntroAwaiting": "Once an authorised collection is published, every narration in it will have a page of its own at a permanent address. This is what that page will show, and why.",
+      "titles": {
+        "citation": "One permanent address",
+        "structure": "Collection, book and chapter",
+        "source": "The original text, as its source gives it",
+        "sourced": "Chains and gradings, only as sourced",
+        "layers": "Translations and commentary beside it"
+      },
       "structure": "Each collection is divided into books, and a book may be divided into chapters, exactly as the edition it comes from divides it.",
       "citation": "Every published narration has one permanent address: its collection and its number. Cite that address; it does not change.",
       "source": "The original text is shown exactly as its source gives it, beside the source's own reference and the edition it was taken from, so it can be checked against that source.",

@@ -12,14 +12,7 @@ import type {
 } from '@minhaj/contracts/hadith';
 
 import type { ContentLanguage, referenceNames } from '@/composition/public-references';
-import {
-  Alert,
-  Breadcrumbs,
-  Container,
-  PageHeading,
-  Prose,
-  TextLink,
-} from '@/components/ui';
+import { Breadcrumbs, Container, TextLink } from '@/components/ui';
 import { collectionName, citationHref, derivedDirection } from './presentation';
 import { isFixture, readCollections } from './read';
 
@@ -107,44 +100,6 @@ export async function HadithFrame({
         <FixtureNotice locale={locale} availability={availability} />
         <Breadcrumbs label={parts.label} trail={trail} />
         {children}
-      </div>
-    </Container>
-  );
-}
-
-/**
- * THE HONEST UNAVAILABLE STATE. While no collection is activated a Hadith page
- * says exactly that — no count, no card, no featured narration and no decision
- * identifier — and offers the way home.
- */
-export async function HadithUnavailable({
-  locale,
-  section,
-}: {
-  readonly locale: Locale;
-  /** The section's own name, for a page beneath the landing. */
-  readonly section?: string;
-}) {
-  const t = await getTranslations({ locale, namespace: 'hadith' });
-  const parts = await hadithTrail(locale);
-  return (
-    <Container>
-      <div className="flex flex-col gap-6 pt-6 pb-[var(--space-section)]">
-        <Breadcrumbs
-          label={parts.label}
-          trail={
-            section === undefined
-              ? [parts.home, { text: t('title') }]
-              : [parts.home, parts.hadith, { text: section }]
-          }
-        />
-        <Prose>
-          <PageHeading>{section ?? t('title')}</PageHeading>
-          <Alert tone="info">{t('unavailable.body')}</Alert>
-          <p>
-            <TextLink href={localizedPath(locale, '')}>{t('unavailable.home')}</TextLink>
-          </p>
-        </Prose>
       </div>
     </Container>
   );

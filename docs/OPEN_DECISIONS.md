@@ -352,6 +352,18 @@ reader awaits an authorised source (ROUTE_MAP.md §3.4; INFORMATION_ARCHITECTURE
 unconditional). That is Library content under its own pre-adoption basis (§3.1, §3.9), not a
 Hadith corpus.
 
+**Hadith Part 2 (status unchanged).** Since then the Hadith **introduction** is open whatever the
+corpus (it is product guidance and reads no Hadith record), and the collections, browsing, search,
+study and commentary pages say that they await an authorised source and lead to the introduction
+and the hubs; still no hadith text, number, chain or grading is shown (ROUTE_MAP.md §3.4).
+**Open owner question raised by it:** may Hadith **study material** (`HadithScience`, editor-
+authored pages on the sciences of hadith — never a narration or a grading) be published on its own,
+before any collection is activated? Under the accepted model it may not: it is public only under
+the section's authority, which exists only through an activation, and it must name a registered
+source system, which only the owner/operator registers (an `approved` one with this decision's
+evidence) — DOMAIN_MODEL.md §9.1. Allowing it would need the owner to decide which authority such
+material stands on and who registers that source; until then `/hadith/sciences` stays gated.
+
 ### 1.4 Authorised Fatwa scholars
 **Owner:** Minhaj · **Gates:** Phase 20 · **Priority:** Critical
 
