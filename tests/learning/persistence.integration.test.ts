@@ -19,6 +19,7 @@ import {
   courseQuerySchema,
   LEARNING_RESERVED_SLUGS,
   pathInputSchema,
+  topicCourseQuerySchema,
   type CourseDetail,
   type CourseValue,
   type LearnerPort,
@@ -108,6 +109,10 @@ const lessonLabels = (key: string): LessonLabel[] => [
 
 const publicQuery = (filters: Record<string, unknown>) =>
   courseQuerySchema.parse(filters);
+
+/** The whole catalogue, as `/learn/courses` reads it (Learn Part 1). */
+const catalogueQuery = (filters: Record<string, unknown> = {}) =>
+  topicCourseQuerySchema.parse({ scope: 'catalogue', ...filters });
 
 live('Phase 22 Learning against real SQL Server, as the runtime principal', () => {
   let db: DisposableDatabase;
@@ -311,8 +316,11 @@ live('Phase 22 Learning against real SQL Server, as the runtime principal', () =
           (await reader.sitemap('course', 0, 5000)).map((row) => row.slug),
         ).not.toContain(draft.slug);
         expect(
-          (await reader.teacherFacets(0)).items.map((facet) => facet.id),
+          (await reader.topicCourseFacets(catalogueQuery())).teachers.items.map(
+            (facet) => facet.id,
+          ),
         ).not.toContain(teacher);
+        expect((await reader.courseRelations(draft.id)).related).toEqual([]);
       };
       await hidden();
 
@@ -340,7 +348,9 @@ live('Phase 22 Learning against real SQL Server, as the runtime principal', () =
           ?.locales,
       ).toEqual(['en']);
       expect(
-        (await reader.teacherFacets(0)).items.find((facet) => facet.id === teacher),
+        (await reader.topicCourseFacets(catalogueQuery())).teachers.items.find(
+          (facet) => facet.id === teacher,
+        ),
       ).toEqual({ id: teacher, courses: 1 });
 
       await transition(published, 'archived');
@@ -1008,6 +1018,7 @@ live('Phase 22 Learning against real SQL Server, as the runtime principal', () =
       expect(await learner.courseState(alice, course.id)).toEqual({
         enrolled: true,
         trialRequested: false,
+        completedLessons: 1,
       });
 
       await learner.leave(alice, course.id);
@@ -1060,6 +1071,7 @@ live('Phase 22 Learning against real SQL Server, as the runtime principal', () =
       expect(await learner.courseState(bob, course.id)).toEqual({
         enrolled: false,
         trialRequested: false,
+        completedLessons: 0,
       });
       expect(await learner.paths(bob)).toEqual([]);
       await learner.leave(bob, course.id);
@@ -1124,6 +1136,7 @@ live('Phase 22 Learning against real SQL Server, as the runtime principal', () =
       expect(await learner.courseState(alice, course.id)).toEqual({
         enrolled: false,
         trialRequested: true,
+        completedLessons: 0,
       });
 
       // THE FLOOR: no request on a Course that is not a published live one.

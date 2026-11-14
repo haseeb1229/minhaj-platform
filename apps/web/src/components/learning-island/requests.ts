@@ -16,6 +16,8 @@ const INTENT_VALUE = 'personal';
 export interface CourseStanding {
   readonly enrolled: boolean;
   readonly trialRequested: boolean;
+  /** Lessons of this Course the person has completed (Learn Part 1). */
+  readonly completedLessons: number;
 }
 
 export type LearningRead =
@@ -30,7 +32,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-/** A standing with exactly the two answers the island renders, or `null`. */
+/** A standing with exactly the three answers the island renders, or `null`. */
 function standingOf(value: unknown): CourseStanding | null {
   if (
     !isRecord(value) ||
@@ -38,7 +40,14 @@ function standingOf(value: unknown): CourseStanding | null {
     typeof value['trialRequested'] !== 'boolean'
   )
     return null;
-  return { enrolled: value['enrolled'], trialRequested: value['trialRequested'] };
+  const completed = value['completedLessons'];
+  if (typeof completed !== 'number' || !Number.isSafeInteger(completed) || completed < 0)
+    return null;
+  return {
+    enrolled: value['enrolled'],
+    trialRequested: value['trialRequested'],
+    completedLessons: completed,
+  };
 }
 
 /** The person's own standing on one Course, after the page has rendered. */

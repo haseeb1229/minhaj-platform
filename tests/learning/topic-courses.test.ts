@@ -1,16 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
 import type {
+  ClassPublicReaderPort,
+  LearningActivationPort,
   LearningPublicReaderPort,
   TopicCourseQuery,
 } from '../../packages/contracts/src/learning/index.ts';
-import { createLearningReadService } from '../../apps/web/src/contexts/learning/index.ts';
+import {
+  createClassReadService,
+  createLearningReadService,
+} from '../../apps/web/src/contexts/learning/index.ts';
 
 /**
  * Quran Part 13 — the Topic course hub read's trust boundary. Every field of
  * the query is parsed by Learning's public read service BEFORE any read: a
  * value that is malformed, out of range or unknown reaches no adapter, and an
  * accepted one reaches it with every default stated.
+ *
+ * Learn Part 1 adds the catalogue scope (the same reads with the Topic an
+ * optional filter) and one Course's relations; both are parsed the same way.
  */
 
 const TOPIC = '0f1e2d3c-4b5a-4968-8776-655443322110';
@@ -31,7 +39,12 @@ function recording() {
         levels: { beginner: 0, intermediate: 0, advanced: 0 },
         languages: { items: [], hasMore: false },
         teachers: { items: [], hasMore: false },
+        topics: { items: [], hasMore: false },
       };
+    },
+    courseRelations: async (courseId: string) => {
+      seen.push({ method: 'courseRelations', query: courseId });
+      return { paths: [], related: [] };
     },
     topicCoursePaths: async (topic: string | null) => {
       seen.push({ method: 'topicCoursePaths', query: topic });
@@ -48,6 +61,7 @@ describe('Learning’s public Topic course hub read', () => {
     await service.topicCourseFacets({});
     await service.topicCoursePaths();
     const expected: TopicCourseQuery = {
+      scope: 'topic',
       topic: null,
       format: null,
       level: null,
@@ -68,6 +82,7 @@ describe('Learning’s public Topic course hub read', () => {
   it('passes a full, valid query through unchanged', async () => {
     const { service, seen } = recording();
     const query = {
+      scope: 'catalogue',
       topic: TOPIC,
       format: 'live',
       level: 'advanced',
@@ -87,6 +102,8 @@ describe('Learning’s public Topic course hub read', () => {
   });
 
   it.each([
+    ['an unknown scope', { scope: 'everything' }],
+    ['a scope that is not a word', { scope: true }],
     ['an unknown format', { format: 'in-person' }],
     ['an unknown level', { level: 'expert' }],
     ['an unknown order', { sort: 'popular' }],
@@ -117,6 +134,69 @@ describe('Learning’s public Topic course hub read', () => {
   ])('refuses a path read for %s as its Topic', async (_name, topic) => {
     const { service, seen } = recording();
     expect(() => service.topicCoursePaths(topic)).toThrow();
+    expect(seen).toEqual([]);
+  });
+
+  it('reads the whole catalogue only when asked by name, with the Topic a filter', async () => {
+    const { service, seen } = recording();
+    await service.topicCourses({ scope: 'catalogue' });
+    await service.topicCourseFacets({ scope: 'catalogue', topic: TOPIC });
+    expect(seen.map((entry) => entry.query)).toEqual([
+      expect.objectContaining({ scope: 'catalogue', topic: null }),
+      expect.objectContaining({ scope: 'catalogue', topic: TOPIC }),
+    ]);
+  });
+
+  it('passes a Course identifier to the relations read, and refuses anything else first', async () => {
+    const { service, seen } = recording();
+    await service.courseRelations(TOPIC);
+    expect(seen).toEqual([{ method: 'courseRelations', query: TOPIC }]);
+    for (const raw of ['a-course-slug', "x' OR 1=1 --", 7, null, { id: TOPIC }])
+      expect(() => service.courseRelations(raw)).toThrow();
+    expect(seen).toHaveLength(1);
+  });
+});
+
+describe('Learning’s public schedule of one Course (Learn Part 1)', () => {
+  function schedule(mode: 'fixture' | null) {
+    const seen: { now: Date; courseId: string }[] = [];
+    const reader = {
+      courseSessions: async (now: Date, courseId: string) => {
+        seen.push({ now, courseId });
+        return [];
+      },
+    } as unknown as ClassPublicReaderPort;
+    const now = new Date('2026-11-15T00:00:00Z');
+    const service = createClassReadService({
+      reader,
+      activation: { activeMode: async () => mode } as LearningActivationPort,
+      clock: () => now,
+    });
+    return { service, seen, now };
+  }
+
+  it('reads nothing while live learning is off, and says so', async () => {
+    const { service, seen } = schedule(null);
+    expect(await service.courseSchedule(TOPIC)).toEqual({ mode: null, sessions: [] });
+    expect(seen).toEqual([]);
+  });
+
+  it('asks for the one Course, at the service’s own clock, while activated', async () => {
+    const { service, seen, now } = schedule('fixture');
+    expect(await service.courseSchedule(TOPIC)).toEqual({
+      mode: 'fixture',
+      sessions: [],
+    });
+    expect(seen).toEqual([{ now, courseId: TOPIC }]);
+  });
+
+  it.each([
+    ['a slug', 'a-course'],
+    ['an injection', "x' OR 1=1 --"],
+    ['nothing', null],
+  ])('refuses %s as the Course before any read', async (_name, raw) => {
+    const { service, seen } = schedule('fixture');
+    await expect(service.courseSchedule(raw)).rejects.toThrow();
     expect(seen).toEqual([]);
   });
 });

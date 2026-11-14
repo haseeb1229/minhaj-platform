@@ -2031,6 +2031,23 @@ those Courses (at most 6). All three are the ordinary public predicate, paramete
 and read nothing private — no enrolment, progress, request, class or lesson body; no schema
 change.
 
+**The catalogue and one Course's standing (Learn Part 1).** The same two reads serve Learn's own
+catalogue: `topicCourseQuerySchema` takes `scope` — `topic` (the default, exactly the hubs' read:
+no Topic, no Course) or `catalogue`, where the set is every published Course and the Topic is one
+more filter; which scope is asked is explicit, so a hub whose Topic is missing never falls through to
+the whole catalogue. `topicCourseFacets` adds `topics` (Topic → Courses without the Topic filter,
+the catalogue's only; empty for a hub). `courseRelations(courseId)` answers, for a **published**
+Course only, the published LearningPaths holding it with its step among each path's published
+Courses (at most 6, latest publication first) and the published Courses studied with it — sharing a
+Topic or a published path, the most shared first, then the latest publication (at most 6).
+`courseSessions(now, courseId)` (the class public reader) is one live Course's next public sessions
+(at most 4) under the schedule's own predicate and fields, only while activated. The learner's
+`courseState` adds `completedLessons` — the person's own Progress rows on that Course (0 when not
+enrolled), read only through the private island's `/api/my/learning/state`. The former
+`teacherFacets` read is removed: its one consumer, the Phase-22 catalogue form, now reads the
+teacher facet of `topicCourseFacets` (historical). Every value is a bound parameter; nothing private
+is public; no schema change and no migration.
+
 **Not delivered, and not owed by Phase 22:** ClassSession, Availability, Attendance, Booking and the
 confirmation of a trial request; teacher authority and the teacher area; My Classes and My Teachers;
 certificates, assessments, grades, payments and entitlements; under-18 rules (OPEN_DECISIONS.md §2.1

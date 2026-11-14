@@ -1,12 +1,14 @@
 import { z } from 'zod';
 
 import {
+  learningIdSchema,
   TEACHER_AVAILABILITY_FILTERS,
   type ClassPublicReaderPort,
   type LearningActivationPort,
   type LiveLearningAuthority,
   type OperationalTeacher,
   type PublicSessionPage,
+  type PublicSessionView,
 } from '@minhaj/contracts/learning';
 
 /**
@@ -33,6 +35,12 @@ export interface PublicLiveSchedule {
   readonly page: PublicSessionPage;
 }
 
+/** Learn Part 1 — one live Course's next public classes, on its own page. */
+export interface PublicCourseSchedule {
+  readonly mode: LiveLearningAuthority | null;
+  readonly sessions: readonly PublicSessionView[];
+}
+
 export interface PublicTeacherDirectory {
   readonly mode: LiveLearningAuthority | null;
   readonly teachers: readonly OperationalTeacher[];
@@ -53,6 +61,18 @@ export function createClassReadService(deps: {
         mode,
         page: await deps.reader.upcomingSessions(now(), browseOffset.parse(offset)),
       };
+    },
+
+    /**
+     * Learn Part 1 — the next classes of ONE Course, for its public page: the
+     * schedule's own predicate and fields, bounded, and nothing while live
+     * learning is off. A malformed identifier is refused before any read.
+     */
+    async courseSchedule(courseId: unknown): Promise<PublicCourseSchedule> {
+      const course = learningIdSchema.parse(courseId);
+      const mode = await deps.activation.activeMode();
+      if (mode === null) return { mode, sessions: [] };
+      return { mode, sessions: await deps.reader.courseSessions(now(), course) };
     },
 
     /**

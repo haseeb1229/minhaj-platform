@@ -38,7 +38,11 @@ import { n, person, sentinel } from './fixture-sql.ts';
  *   - each card: the catalogue's own listing — labels, teachers in order, its
  *     module and lesson counts;
  *   - the facets, each leaving its own filter out of its own counts;
- *   - the published LearningPaths holding one of the Topic's Courses.
+ *   - the published LearningPaths holding one of the Topic's Courses;
+ *   - Learn Part 1: the same reads over the WHOLE catalogue (`scope:
+ *     'catalogue'`), the Topic one more filter with a facet of its own; and
+ *     one Course's relations — the published paths holding it with its step,
+ *     and the published Courses sharing a Topic or a published path with it.
  *
  * The owner/migration session writes the rows only another context — or an
  * operator — may write; EVERYTHING read goes through Learning's adapter,
@@ -399,6 +403,7 @@ live('Quran Part 13 — the Topic course hub read against real SQL Server', () =
         ].sort((a, b) => (a.id < b.id ? -1 : 1)),
         hasMore: false,
       },
+      topics: { items: [], hasMore: false },
     });
 
     // Under "taught live": the hub and the formats ignore the format, every
@@ -445,6 +450,7 @@ live('Quran Part 13 — the Topic course hub read against real SQL Server', () =
       levels: { beginner: 0, intermediate: 0, advanced: 0 },
       languages: { items: [], hasMore: false },
       teachers: { items: [], hasMore: false },
+      topics: { items: [], hasMore: false },
     });
   });
 
@@ -461,5 +467,135 @@ live('Quran Part 13 — the Topic course hub read against real SQL Server', () =
       path.quran,
     ]);
     expect(await reads.topicCoursePaths(null)).toEqual([]);
+  });
+
+  /* ----------------------------------------------------------------------
+   * Learn Part 1 — the catalogue and one Course's relations
+   * -------------------------------------------------------------------- */
+
+  const catalogue = (fields: Record<string, unknown> = {}) => ({
+    scope: 'catalogue',
+    ...fields,
+  });
+
+  it('reads the whole catalogue — every Topic’s published Courses, never a draft or an archived one', async () => {
+    const page = await reads.topicCourses(catalogue({ sort: 'newest' }));
+    expect(ids(page)).toEqual([id.elsewhere, id.haa, id.baa, id.jeem, id.alif, id.daal]);
+    expect(page.total).toBe(6);
+    // By level, the catalogue reads as steps too: beginners (latest first) …
+    expect(ids(await reads.topicCourses(catalogue()))).toEqual([
+      id.elsewhere,
+      id.baa,
+      id.alif,
+      id.jeem,
+      id.daal,
+      id.haa,
+    ]);
+    // … and the Topic is one more filter, never the set's definition.
+    expect(ids(await reads.topicCourses(catalogue({ topic: hadith })))).toEqual([
+      id.elsewhere,
+      id.baa,
+    ]);
+    expect(
+      ids(await reads.topicCourses(catalogue({ topic: quran, format: 'live' }))),
+    ).toEqual([id.baa, id.daal]);
+    expect(ids(await reads.topicCourses(catalogue({ topic: randomUUID() })))).toEqual([]);
+    expect(
+      ids(await reads.topicCourses(catalogue({ teacher: teacherA, sort: 'newest' }))),
+    ).toEqual([id.elsewhere, id.baa, id.alif]);
+  });
+
+  it('counts the catalogue, and its Topic facet without the Topic filter', async () => {
+    const whole = await reads.topicCourseFacets(catalogue());
+    expect(whole.hub).toEqual({
+      courses: 6,
+      live: 2,
+      selfPaced: 4,
+      lessons: 11,
+      teachers: 2,
+      languages: 3,
+    });
+    expect(whole.levels).toEqual({ beginner: 3, intermediate: 1, advanced: 1 });
+    expect(whole.topics).toEqual({
+      items: [
+        { id: quran, courses: 5 },
+        { id: hadith, courses: 2 },
+      ],
+      hasMore: false,
+    });
+    // Under one Topic: everything else counts within it; the Topic facet
+    // still offers every Topic, as the other filters allow.
+    const onHadith = await reads.topicCourseFacets(catalogue({ topic: hadith }));
+    expect(onHadith.hub.courses).toBe(6);
+    expect(onHadith.formats).toEqual({ all: 2, live: 1, selfPaced: 1 });
+    expect(onHadith.topics.items.map((facet) => facet.id).sort()).toEqual(
+      [quran, hadith].sort(),
+    );
+    const live = await reads.topicCourseFacets(catalogue({ format: 'live' }));
+    expect(live.topics.items).toEqual([
+      { id: quran, courses: 2 },
+      { id: hadith, courses: 1 },
+    ]);
+    // A Topic's hub has one Topic: it is never navigated by Topic.
+    expect((await reads.topicCourseFacets(query())).topics).toEqual({
+      items: [],
+      hasMore: false,
+    });
+  });
+
+  it('places a Course on its published paths, with its step among their published Courses', async () => {
+    const jeem = await reads.courseRelations(id.jeem);
+    expect(jeem.paths.map((place) => [place.path.id, place.step])).toEqual([
+      [path.quran, 2],
+    ]);
+    expect(jeem.paths[0]?.path).toMatchObject({ state: 'published', courses: 2 });
+    const elsewhere = await reads.courseRelations(id.elsewhere);
+    expect(elsewhere.paths.map((place) => [place.path.id, place.step])).toEqual([
+      [path.other, 1],
+      [path.quran, 1],
+    ]);
+    // A draft path names nobody's step.
+    expect((await reads.courseRelations(id.alif)).paths).toEqual([]);
+  });
+
+  it('relates the Courses sharing a Topic or a published path — the most shared first, never a draft, an archived Course or itself', async () => {
+    // jeem shares the quran Topic with four Courses and a published path with
+    // elsewhere — one thing each, so the latest publication decides.
+    expect((await reads.courseRelations(id.jeem)).related.map((c) => c.id)).toEqual([
+      id.elsewhere,
+      id.haa,
+      id.baa,
+      id.alif,
+      id.daal,
+    ]);
+    // A published path holding baa and daal: daal now shares TWO things with
+    // baa (the quran Topic and the path) and comes first, ahead of later ones.
+    const together = randomUUID();
+    await db.admin.query(`
+      INSERT INTO [dbo].[LearningPath] ([id],[slug],[primaryLocale],[state],[publishedAt],[version],[updatedAt]) VALUES
+        (N'${together}', N'non-learning-fixture-hub-path-together-${run}', N'en', N'draft', NULL, 1, SYSUTCDATETIME());
+      INSERT INTO [dbo].[LearningPathLabel] ([pathId],[locale],[title],[summary],[description]) VALUES
+        (N'${together}', N'en', ${n(sentinel('PATH', 'together'))}, N'', N'');
+      INSERT INTO [dbo].[LearningPathCourse] ([pathId],[courseId],[position]) VALUES
+        (N'${together}', N'${id.daal}', 0), (N'${together}', N'${id.baa}', 1);
+      UPDATE [dbo].[LearningPath] SET [state] = N'published', [publishedAt] = '2024-09-01T00:00:00', [version] = 2 WHERE [id] = N'${together}';`);
+    const baa = await reads.courseRelations(id.baa);
+    expect(baa.related.map((course) => course.id)).toEqual([
+      id.daal,
+      id.elsewhere,
+      id.haa,
+      id.jeem,
+      id.alif,
+    ]);
+    // Its step on the path, counted from 1 in the path's own order.
+    expect(baa.paths.map((place) => [place.path.id, place.step])).toEqual([
+      [together, 2],
+    ]);
+    const all = JSON.stringify(await reads.courseRelations(id.alif));
+    for (const hidden of [id.draft, id.archived]) expect(all).not.toContain(hidden);
+    expect(all).not.toContain('NON_LEARNING_FIXTURE_BODY');
+    // A Course that is not published stands nowhere.
+    for (const course of [id.draft, id.archived, randomUUID()])
+      expect(await reads.courseRelations(course)).toEqual({ paths: [], related: [] });
   });
 });

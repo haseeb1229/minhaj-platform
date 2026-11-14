@@ -362,6 +362,7 @@ live(
           ),
         ).toBe('not-activated');
         expect((await reader.upcomingSessions(new Date(), 0)).items).toEqual([]);
+        expect(await reader.courseSessions(new Date(), live.id)).toEqual([]);
         expect(await reader.operationalTeachers(new Date())).toEqual([]);
         expect(await teaching.availability(identity(teacher), 0)).toEqual({
           items: [],
@@ -1806,6 +1807,25 @@ live(
         expect(text).not.toContain('meet.google.com');
         expect(text).not.toContain(trialled.alice);
         expect(mine[0]?.teacherAccountId).toBe(teacher.accountId);
+
+        // Learn Part 1: the Course's own page reads the same predicate for
+        // that Course alone — soonest first, the same fields, nobody's else.
+        const own = await reader.courseSessions(now, live.id);
+        expect(own.map((item) => item.id)).toEqual(
+          mine
+            .slice()
+            .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+            .map((item) => item.id),
+        );
+        expect(own.map((item) => item.id)).not.toContain(cancelled.session.id);
+        expect(own.map((item) => item.id)).not.toContain(started.session.id);
+        expect(own.map((item) => item.id)).not.toContain(orphan.session.id);
+        expect(Object.keys(own[0] ?? {}).sort()).toEqual(
+          Object.keys(mine[0] ?? {}).sort(),
+        );
+        expect(JSON.stringify(own)).not.toContain('meet.google.com');
+        expect(JSON.stringify(own)).not.toContain(trialled.alice);
+        expect(await reader.courseSessions(now, (await course()).id)).toEqual([]);
 
         const teachers = await reader.operationalTeachers(now);
         const listed = teachers.find((entry) => entry.accountId === teacher.accountId);

@@ -64,6 +64,7 @@ export {
   createClassReadService,
   readAvailabilityFilter,
   type ClassReadService,
+  type PublicCourseSchedule,
   type PublicLiveSchedule,
   type PublicTeacherDirectory,
 } from './application/class-read-service.ts';

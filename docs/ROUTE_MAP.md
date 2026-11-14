@@ -787,7 +787,7 @@ unless an approved activation is indexable — is unchanged.
 | Route | Purpose |
 |---|---|
 | `/learn` | Landing |
-| `/learn/courses` · `/learn/courses/{slug}` | Catalogue — `?topic, level, language, format, teacher` |
+| `/learn/courses` · `/learn/courses/{slug}` | Catalogue — `?format, topic, level, language, teacher, sort, page` (Learn Part 1; `?offset` until then, historical, now one redirect) |
 | `/learn/paths` · `/learn/paths/{slug}` | Learning paths |
 | `/learn/live` · `/learn/trial` · `/learn/training` · `/learn/resources` | Learning surfaces |
 | `/learn/teachers` | Teacher directory — `?subject, language, availability` |
@@ -818,6 +818,33 @@ a meeting address. `/learn/teachers` lists teachers who are current on every axi
 value shows an empty, explained result and never broadens. `/learn/teachers/{slug}` is a one-hop
 `301` to `/people/{slug}` for a published contributor and a 404 otherwise, like the author aliases.
 Both pages read no session. There is no public per-session route.
+
+**Learn Part 1 — the landing, the catalogue and the Course page (DOMAIN_MODEL.md §13.4).** No route
+is added or removed. `/learn/courses` is now the shared Courses listing the Quran and Hadith hubs use
+(Quran Part 13), without a Topic scope: figures (Courses, taught live, self-paced, lessons, teachers,
+languages), format tabs (`?format=live|self-paced`), filters with counts — `?topic` (still a
+canonical Topic **slug**, resolved by Taxonomy, only an active Topic), `?level`, `?language` and
+`?teacher` (still a People **slug**, resolved by People) — `?sort=newest|title` (by level, grouped
+by level, is the neutral order) and `?page` (12 a page). **One address per view:** a form's empty
+controls, another order of the same parameters and the former `?offset=` (24 a page from Phase 22
+until Learn Part 1, historical) are each one redirect to the canonical spelling — an offset to the
+page holding the Course it began with. **The Phase-22 rule stands:** a malformed or repeated filter,
+or a slug that resolves to nothing, is never redirected away and never broadens — the view stays at
+its address, lists nothing and says why, with the way to clear the filters (a repeated parameter was
+read as its first value until Learn Part 1, historical). A filtered or paged view stays canonical to
+the base listing and is never a sitemap entry; it names no learning path (those stand beside the
+whole catalogue). `/learn` is the section's front door: the figures, the newest Courses, how learning
+works (self-paced, taught live, trial classes, progress in My Minhaj), the catalogue by level and by
+Topic with counts, the newest learning paths, the teachers the catalogue names (each a link to the
+catalogue filtered by that teacher) and every Learn menu item. `/learn/courses/{slug}` adds, beside
+the syllabus (now counted per module): what an account adds, the published learning paths holding
+the Course with its step on each, the Courses studied with it (sharing a Topic or a published path),
+its teachers' profiles and — for a live Course while live learning is activated — its next public
+classes (as on `/learn/live`: the time in the class's zone and the teacher's public name, never a
+participant or a meeting address). Every Learn page still reads no session; the private island
+renders the visitor's call to action after load (sign in; enrol; or, enrolled, their progress
+"Lessons complete: n of m" and the way on to My Learning) through the unchanged `/api/my/learning/*`
+handlers. Paths, Live, Trial and Teachers are unchanged (Learn Part 2).
 
 ### 3.6 Library
 

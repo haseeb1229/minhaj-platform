@@ -1,6 +1,11 @@
 import 'server-only';
 
-import { CLASS_PAGE, type ClassPublicReaderPort } from '@minhaj/contracts/learning';
+import {
+  CLASS_PAGE,
+  COURSE_SESSIONS,
+  type ClassPublicReaderPort,
+  type PublicSessionView,
+} from '@minhaj/contracts/learning';
 
 import { getDatabaseClient } from '../../client.ts';
 import { BY_START } from './class-records.ts';
@@ -19,6 +24,54 @@ import { activated, boundedOffset, PUBLISHED } from './shared.ts';
  * published Person — Learning copies no name.
  */
 
+/**
+ * A session is public while scheduled, in the future, on a published live
+ * Course, under a current scope — one predicate for the schedule and for a
+ * Course's own page.
+ */
+function upcoming(now: Date) {
+  return {
+    state: 'scheduled',
+    startsAt: { gte: now },
+    course: { ...PUBLISHED, format: 'live' },
+    scope: { endedAt: null },
+  } as const;
+}
+
+/** What a public session shows — no participant, Booking, window or address. */
+const PUBLIC_SESSION_SELECT = {
+  id: true,
+  startsAt: true,
+  endsAt: true,
+  timeZone: true,
+  startsLocal: true,
+  endsLocal: true,
+  scope: { select: { userId: true } },
+  course: { select: COURSE_LISTING_SELECT },
+} as const;
+
+function toPublicSession(row: {
+  readonly id: string;
+  readonly startsAt: Date;
+  readonly endsAt: Date;
+  readonly timeZone: string;
+  readonly startsLocal: string;
+  readonly endsLocal: string;
+  readonly scope: { readonly userId: string };
+  readonly course: Parameters<typeof toCourseListing>[0];
+}): PublicSessionView {
+  return {
+    id: row.id,
+    course: toCourseListing(row.course),
+    teacherAccountId: row.scope.userId,
+    startsAt: row.startsAt,
+    endsAt: row.endsAt,
+    timeZone: row.timeZone,
+    startsLocal: row.startsLocal,
+    endsLocal: row.endsLocal,
+  };
+}
+
 /** Teachers the directory shows at once. */
 const TEACHER_DIRECTORY = 200;
 
@@ -29,39 +82,28 @@ export function createClassPublicReader(): ClassPublicReaderPort {
     async upcomingSessions(now, offset) {
       if (!(await activated(db))) return { items: [], hasMore: false };
       const rows = await db.classSession.findMany({
-        where: {
-          state: 'scheduled',
-          startsAt: { gte: now },
-          course: { ...PUBLISHED, format: 'live' },
-          scope: { endedAt: null },
-        },
-        select: {
-          id: true,
-          startsAt: true,
-          endsAt: true,
-          timeZone: true,
-          startsLocal: true,
-          endsLocal: true,
-          scope: { select: { userId: true } },
-          course: { select: COURSE_LISTING_SELECT },
-        },
+        where: upcoming(now),
+        select: PUBLIC_SESSION_SELECT,
         orderBy: [...BY_START],
         skip: boundedOffset(offset),
         take: CLASS_PAGE + 1,
       });
       return {
-        items: rows.slice(0, CLASS_PAGE).map((row) => ({
-          id: row.id,
-          course: toCourseListing(row.course),
-          teacherAccountId: row.scope.userId,
-          startsAt: row.startsAt,
-          endsAt: row.endsAt,
-          timeZone: row.timeZone,
-          startsLocal: row.startsLocal,
-          endsLocal: row.endsLocal,
-        })),
+        items: rows.slice(0, CLASS_PAGE).map(toPublicSession),
         hasMore: rows.length > CLASS_PAGE,
       };
+    },
+
+    /** One published live Course's next classes — the schedule's own predicate. */
+    async courseSessions(now, courseId) {
+      if (!(await activated(db))) return [];
+      const rows = await db.classSession.findMany({
+        where: { ...upcoming(now), courseId },
+        select: PUBLIC_SESSION_SELECT,
+        orderBy: [...BY_START],
+        take: COURSE_SESSIONS,
+      });
+      return rows.map(toPublicSession);
     },
 
     /**

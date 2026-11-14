@@ -6008,34 +6008,78 @@
       "teachers": "Teachers currently teaching live courses, by subject, language and open times."
     },
     "landing": {
-      "browse": "Explore Learn",
       "courses": "Recently published courses",
       "paths": "Recently published learning paths",
       "allCourses": "All courses",
       "allPaths": "All learning paths",
       "empty": "No course or learning path has been published yet.",
-      "liveSchedule": "The live class schedule",
-      "allTopics": "Browse all topics",
       "fromLibrary": "Read from the Library",
       "fromLibraryIntro": "No course is published yet. These are published books you can read now.",
       "allBooks": "All books",
       "fromWatch": "Watch lectures",
-      "allVideos": "All videos"
+      "allVideos": "All videos",
+      "find": "Find a course by level or topic",
+      "eyebrow": "Learn with Minhaj",
+      "browseCourses": "Browse all courses",
+      "statCourses": "{count, plural, one {course} other {courses}}",
+      "statLive": "{count, plural, one {taught live} other {taught live}}",
+      "statSelfPaced": "{count, plural, one {self-paced} other {self-paced}}",
+      "statLessons": "{count, plural, one {lesson} other {lessons}}",
+      "statTeachers": "{count, plural, one {teacher} other {teachers}}",
+      "statLanguages": "{count, plural, one {language} other {languages}}",
+      "coursesIntro": "The courses most recently published in Learn.",
+      "how": "How learning works",
+      "howIntro": "Reading a course and its syllabus never needs an account. Sign in only when you want to enrol, keep your progress or ask for a trial class.",
+      "howSteps": {
+        "selfPaced": {
+          "title": "Study at your own pace",
+          "body": "Self-paced courses are set out as modules and lessons you work through when it suits you.",
+          "account": "Read the syllabus freely; enrol to read the lessons."
+        },
+        "live": {
+          "title": "Learn live with a teacher",
+          "body": "Courses taught live meet in scheduled classes with a teacher, by a video meeting link.",
+          "account": "Enrolled learners join the classes."
+        },
+        "trial": {
+          "title": "Ask for a trial class",
+          "body": "Before you commit to a course taught live, ask for one trial class to see whether it suits you.",
+          "account": "A request, not a booking — signed in."
+        },
+        "progress": {
+          "title": "Keep your progress",
+          "body": "My Learning in My Minhaj keeps your courses, the lessons you have completed and your learning paths.",
+          "account": "Private to you — signed in."
+        }
+      },
+      "browseIntro": "Start where you are, or with the subject you want to study.",
+      "byLevel": "Courses by level",
+      "byTopic": "Courses by topic",
+      "levelHelp": {
+        "beginner": "No earlier study assumed — a place to begin.",
+        "intermediate": "For learners with some grounding, ready to build on it.",
+        "advanced": "For learners ready for depth and detail."
+      },
+      "topicCount": "{name} ({count})",
+      "teachers": "Teachers in Learn",
+      "teachersIntro": "The teachers named on published courses. Choose one to see the courses they teach.",
+      "teacherCourses": "{count, plural, one {Teaches # course} other {Teaches # courses}}",
+      "parts": "Everything in Learn",
+      "partsIntro": "Every part of Learn, as the menu has it."
     },
     "coursesEmpty": "No course has been published yet.",
     "pathsEmpty": "No learning path has been published yet.",
     "filter": {
-      "label": "Filter courses",
       "topic": "Topic",
       "level": "Level",
-      "language": "Language",
-      "format": "Format",
       "teacher": "Teacher",
       "any": "Any",
       "apply": "Apply filters",
       "clear": "Clear all filters",
       "invalid": "These filters name a topic, teacher, level, format or language that does not exist, so no course is listed. Clear the filters to see every course.",
-      "empty": "No published course matches these filters."
+      "empty": "No published course matches these filters.",
+      "anyTopic": "Any topic",
+      "invalidTitle": "These filters name nothing in the catalogue"
     },
     "level": {
       "beginner": "Beginner",
@@ -6069,7 +6113,25 @@
       "syllabusEmpty": "The syllabus of this course has not been set out yet.",
       "module": "Module {number}",
       "lessonsIn": "Lessons in {title}",
-      "topics": "More courses on these topics"
+      "topics": "More courses on these topics",
+      "syllabusCount": "{modules, plural, one {# module} other {# modules}} · {lessons, plural, one {# lesson} other {# lessons}}",
+      "classes": "Upcoming classes",
+      "classesIntro": "The next classes on this course. Joining a class is for its enrolled learners and booked trial learners.",
+      "allClasses": "All upcoming classes",
+      "classesEmpty": "No class on this course is scheduled at the moment.",
+      "teachersHeading": "Your teachers",
+      "teacherProfile": "Profile and work",
+      "benefits": "With a free account",
+      "benefitEnrol": "Enrol and keep this course in My Learning.",
+      "benefitProgress": "Read the lessons and mark each one complete as you go.",
+      "benefitTrial": "Ask for a trial class before you commit.",
+      "benefitClasses": "See the classes arranged for you in My classes.",
+      "benefitsFree": "Reading this page and its syllabus never needs an account.",
+      "paths": "On these learning paths",
+      "pathsIntro": "Learning paths that set this course in order with others.",
+      "pathStep": "Course {step} of {total}",
+      "related": "Study it with",
+      "relatedIntro": "Courses that share a topic or a learning path with this one."
     },
     "path": {
       "type": "Learning path",
@@ -6088,6 +6150,13 @@
       "stepAfter": "The request itself schedules nothing. If a class is confirmed for you, it appears in My classes with its time and teacher.",
       "courses": "Courses taught live",
       "empty": "No course taught live has been published yet, so there is no course to ask for a trial class on."
+    },
+    "catalogue": {
+      "lede": "Every course published in Learn — taught live in classes with a teacher, or studied at your own pace. Read any course and its syllabus without an account; choose by how you want to study, a topic, your level, a language or a teacher, and enrol from the course’s own page.",
+      "statCourses": "{count, plural, one {course} other {courses}}",
+      "listIntro": "Every published course, whether taught live or studied on your own.",
+      "emptyTitle": "No courses yet",
+      "alongsideIntro": "Learning with a teacher, beyond the catalogue."
     }
   },
   "learningIsland": {
@@ -6113,7 +6182,9 @@
     "failureCourseUnavailable": "This course is not open for that right now.",
     "failureRateLimited": "Too many changes in a short time. Wait a little and try again.",
     "failureDenied": "This was refused. Reload the page and try again.",
-    "failureUnavailable": "This can’t be done right now. Try again later."
+    "failureUnavailable": "This can’t be done right now. Try again later.",
+    "progress": "Lessons complete: {completed} of {total}",
+    "allComplete": "You have completed every lesson of this course."
   },
   "myLearning": {
     "title": "My learning",

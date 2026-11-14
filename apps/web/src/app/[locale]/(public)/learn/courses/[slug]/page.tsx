@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
+import { learningReadRuntime, liveClassesReadRuntime } from '@/composition/learning-read';
 import { LearningControls } from '@/components/learning-island/learning-controls';
 import { CourseDetailPage } from '@/components/learning/course';
 import { courseMetadata, readCourse } from '@/components/learning/read';
@@ -19,6 +20,12 @@ import { requireLocale } from '@/config/route-locale';
  * request belong to the private island, which reads the signed-in visitor's
  * state through `/api/my/learning/*` after the page has loaded; nothing here
  * reads a session (ARCHITECTURE.md §8.1).
+ *
+ * Learn Part 1: beside the Course, Learning's public answers about where it
+ * stands — the published paths holding it and the Courses studied with it —
+ * and, for a Course taught live, its next public classes while live learning
+ * is on. Each is a public read keyed by the Course's identifier; none takes a
+ * visitor.
  */
 export const dynamic = 'force-dynamic';
 
@@ -40,15 +47,24 @@ export default async function CoursePage({ params }: CourseParams) {
   const { slug } = await params;
   const record = await readCourse(slug);
   if (record === null) notFound();
+  const [relations, schedule] = await Promise.all([
+    learningReadRuntime().courseRelations(record.id),
+    record.format === 'live'
+      ? liveClassesReadRuntime().courseSchedule(record.id)
+      : Promise.resolve(null),
+  ]);
   return (
     <CourseDetailPage
       locale={locale}
       record={record}
+      relations={relations}
+      schedule={schedule}
       controls={
         <LearningControls
           locale={locale}
           courseId={record.id}
           courseSlug={record.slug}
+          lessons={record.lessons}
           live={record.format === 'live'}
         />
       }

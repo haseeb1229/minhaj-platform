@@ -7,7 +7,8 @@ import { answer, failed, isPrivateRead, readActor } from '../../personal-transpo
 
 /**
  * `GET /api/my/learning/state?course=<uuid>` — whether the signed-in person is
- * enrolled on ONE Course and whether they have requested a trial class on it,
+ * enrolled on ONE Course, how many of its lessons they have completed (Learn
+ * Part 1) and whether they have requested a trial class on it,
  * read by the Learning island after the shared public Course page has rendered
  * (ARCHITECTURE.md §8.2; DELIVERY_PLAN.md Phase 22).
  *
@@ -44,7 +45,11 @@ export async function GET(request: Request): Promise<Response> {
     const state = await learningRuntime().learner.courseState(resolved.actor, courseId);
     return answer(200, {
       signedIn: true,
-      state: { enrolled: state.enrolled, trialRequested: state.trialRequested },
+      state: {
+        enrolled: state.enrolled,
+        trialRequested: state.trialRequested,
+        completedLessons: state.completedLessons,
+      },
     });
   } catch (error) {
     const failure = learningFailure(error);

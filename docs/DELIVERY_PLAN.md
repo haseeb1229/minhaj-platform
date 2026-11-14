@@ -3999,6 +3999,101 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > Courses. Neither other spec is changed. Proof: the four specs in one run, one worker, in that
 > order (`hadith`, `library`, `media`, `shell`).
 
+> **Learn Part 1 — the Learn landing, the course catalogue and the course page (owner direction:
+> every section built from A to Z, one item at a time; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (DOMAIN_MODEL.md §13.4; ROUTE_MAP.md
+> §3.5; INFORMATION_ARCHITECTURE.md §3.4). No route is added or removed, no schema change and no
+> migration; Paths, Live, Trial and Teachers are Learn Part 2 and unchanged. Browsing the catalogue
+> and reading a syllabus still need no account; enrolment, a trial request and progress stay the
+> signed-in island's, through the same `/api/my/learning/*` handlers (same origin and intent checks,
+> same rate limits, no GET mutation).
+>
+> - **The audit (before).** The landing listed the six newest Courses and three paths with no figure,
+>   no explanation of how learning works, no way in by level, Topic or teacher, and no link to every
+>   Learn part; the catalogue was a five-select form with no counts, no format tabs, no order, no
+>   level grouping, 24 a page behind Previous/Next, no figures and no active-filter chips, while the
+>   Quran and Hadith Courses hubs (Quran Part 13) had all of these over the same records; the Course
+>   page had no learning-path membership, no related Courses, no class schedule, no statement of
+>   what an account adds, no per-module lesson count, and its island said "enrolled" without the
+>   person's progress.
+> - **One listing, two scopes (decision).** `/learn/courses` is the shared Courses listing
+>   (`components/topic-hub/courses.tsx`) without a Topic scope, not a second implementation: Learning's
+>   `topicCourses`/`topicCourseFacets` take `scope: 'catalogue'` (every published Course, the Topic a
+>   filter, a `topics` facet), the hubs' default `scope: 'topic'` is unchanged. The catalogue keeps
+>   its own address: `?topic` and `?teacher` stay **slugs** resolved at Layer 4 by Taxonomy and
+>   People, and the Phase-22 rule that **an unknown filter never broadens** stands — a malformed or
+>   repeated filter, or a slug naming nothing, is not redirected away but answered in place with an
+>   explained empty result. Valid views have one address: a form's empty controls, the former filter
+>   order and the former `?offset=` (24 a page) are one redirect each (an offset to the page holding
+>   its first Course). A filtered view names no learning path. The catalogue's own `teacherFacets`
+>   read lost its only consumer and is removed (historical).
+> - **The Course page.** A hero with format, level steps, title, summary, language, module and lesson
+>   counts, teachers linked to their People profiles, and the private island beside "With a free
+>   account" (enrol and keep it in My Learning, read and complete lessons, and on a live Course ask
+>   for a trial class and see arranged classes) and "reading this page never needs an account"; the
+>   syllabus counted overall and per module; for a live Course while live learning is activated its
+>   next four public classes (time in the class's zone, the teacher's public name, the fixture banner
+>   under a fixture activation — nothing private); its teachers; its topics; the published learning
+>   paths holding it with "Course n of m"; and up to six Courses studied with it (sharing a Topic or a
+>   published path, the most shared first). New public reads: `courseRelations` (Learning reader) and
+>   `courseSessions`/`courseSchedule` (class reader/service), both keyed by a validated Course
+>   identifier, bound parameters only, the public predicate in every statement.
+> - **The call to action follows the visitor (the island).** Signed out: "Sign in to enrol" as the
+>   primary action (and the trial sign-in on a live Course); signed in and not enrolled: Enrol (and
+>   Request a trial class); enrolled: "Lessons complete: n of m" with a native `<progress>` bar
+>   repeating the words (the CSP refuses an inline style), or "You have completed every lesson", and
+>   "Continue in My Learning" as the primary action. `/api/my/learning/state` adds the person's own
+>   `completedLessons` (their Progress rows on that Course, 0 when not enrolled); the page itself is
+>   still the same document for every visitor.
+> - **The landing.** Hero with the catalogue's figures (Courses, taught live, self-paced, lessons,
+>   teachers, languages — each the catalogue's own count, linked where listed), Browse all courses and
+>   Learning paths; the six newest Courses; how learning works (four steps, each saying what needs an
+>   account); the catalogue by level (with counts) and by Topic (chips with counts); the three newest
+>   learning paths; the teachers the catalogue names (each a link to the catalogue filtered by them);
+>   and every Learn menu item. While nothing is published, the Phase 30-R Library and Watch shelves
+>   stay.
+> - **Messages.** New `learn.landing.*` (figures, how learning works, by level and Topic, teachers,
+>   parts; `find` replaces the unused `browse`), `learn.catalogue.*`, `learn.filter.{anyTopic,
+>   invalidTitle}`, `learn.course.*` (syllabus count, classes, teachers, benefits, paths, related)
+>   and `learningIsland.{progress,allComplete}` in en/ur/ar; removed as unused: `learn.landing.
+>   {browse,liveSchedule,allTopics}` and `learn.filter.{label,language,format}`.
+>
+> **Data facts — what staging will show.** The staging demo data (`scripts/demo/content.ts`) holds two
+> published Courses, both beginner and in English: *Introduction to Quranic Arabic* (taught live,
+> the demo teacher attributed, two modules, four lessons; filed under the `quran` Topic on staging by
+> the operator, as the Quran Courses hub already shows) and *Study skills for online learning*
+> (self-paced, one module, two lessons, no Topic), and no learning path. So the landing states 2
+> courses, 1 taught live, 1 self-paced, 6 lessons, 1 teacher (no language figure: one language),
+> shows both under "newest", the Beginner level card (2), the Quran Topic chip (1) and the demo
+> teacher; the catalogue shows the two as one Beginner group with the format tabs, Topic, teacher
+> and order filters (no level or language select: one value each); the Quranic Arabic page names the
+> study-skills Course as studied with it only if they share a Topic (they do not on the demo data, so
+> no related section), no path section, and — while the staging fixture activation is in force — its
+> two upcoming demo classes under the test banner. The local persistent database holds no published
+> Course, so locally every page shows its honest empty state.
+>
+> **Proof:** `tests/learning/topic-courses.test.ts` (the scope and relations reads parsed before any
+> read; the course schedule refused before any read and empty while off);
+> `tests/learning/topic-courses.integration.test.ts` (the catalogue scope's set, orders, Topic filter
+> and `topics` facet; paths with steps; related Courses ranked, never a draft, archived Course or
+> itself; nothing for an unpublished Course), `persistence.integration` (the catalogue's teacher
+> facet in place of `teacherFacets`; `completedLessons`), `classes.integration` (`courseSessions`:
+> the schedule's predicate for one Course, nothing while off); `tests/learning/presentation.test.ts`
+> and `tests/topic-hub/courses-view.test.ts` (every malformed filter still invalid and never
+> redirected; the former order, empty controls and `?offset` one redirect; a repeated filter now
+> invalid — it was read as its first value until now; the catalogue read carries identifiers, never
+> slugs); `tests/browser/learning.spec.ts` — the catalogue and filter proofs now read the newest
+> order (this file's fresh Courses lead whatever other specs publish; the default is by level) and
+> the shared listing's controls (format tabs, "Show courses", "Clear filters"), the combined empty
+> view uses a teacher no other spec can fill, and the state answer carries `completedLessons`; new:
+> the catalogue (redirects, figures, tabs, Topic options with counts, the Beginner group, a Topic
+> chosen and removed, no path on a filtered view), the landing (figures, newest, how learning works,
+> level, Topic, teachers, every part), the Course page (syllabus count, account benefits, paths with
+> steps, related, teachers; no schedule while off), the island's progress (0 of 2, 1 of 2, every
+> lesson), the live Course's own two classes under the fixture activation, and axe (no serious or
+> critical finding) with no sideways scroll at 390 and 1440 px on the landing, the catalogue and both
+> Course pages in en, ur and ar. *CI and staging evidence are recorded when they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

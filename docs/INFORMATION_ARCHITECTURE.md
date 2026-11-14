@@ -529,6 +529,17 @@ Teacher (`/learn/teachers`) are delivered as activation-aware pages, linked from
 honestly when live learning is not switched on. Training and Resources have no owner contract and are
 not linked.
 
+Since Learn Part 1 the `/learn` landing is the section's front door, in this order: the hero (what
+Learn is, the catalogue's figures, Browse all courses and Learning paths); the newest Courses; how
+learning works — study at your own pace, learn live with a teacher, ask for a trial class, keep your
+progress in My Minhaj — each saying what needs an account; the catalogue by level and by Topic, with
+counts; the newest learning paths; the teachers the catalogue names; and every Learn menu item (All
+Courses, Learning Paths, Topics, Live classes, Trial classes, Find a Teacher). While nothing is
+published it still says so and offers the Library's books and Watch's lectures (Phase 30-R). All
+Courses (`/learn/courses`) is the same listing as the Quran and Hadith Courses hubs, over the whole
+catalogue with a Topic filter; a Course's page leads on to its learning paths, the Courses studied
+with it and, for a live Course, its next classes.
+
 ### 3.5 Library
 
 | Browse | Written Works | Periodicals | Access |

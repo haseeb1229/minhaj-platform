@@ -113,6 +113,9 @@ export const CLASS_LIMITS = Object.freeze({
 /** One page of classes, students, requests or windows. */
 export const CLASS_PAGE = 24;
 
+/** How many upcoming classes one Course page shows (Learn Part 1). */
+export const COURSE_SESSIONS = 4;
+
 /* ===========================================================================
  * Inputs
  * ========================================================================= */

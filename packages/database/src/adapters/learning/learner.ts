@@ -315,12 +315,18 @@ export function createLearner(): LearnerPort {
       return learnerPathOf(row, completed);
     },
 
+    /** The person's own rows on one Course — never anybody else's, never a body. */
     async courseState(userId, courseId) {
-      const [enrolled, requested] = await Promise.all([
+      const [enrolled, requested, completed] = await Promise.all([
         db.enrolment.count({ where: { userId, courseId } }),
         db.trialClassRequest.count({ where: { userId, courseId } }),
+        db.lessonProgress.count({ where: { userId, courseId } }),
       ]);
-      return { enrolled: enrolled > 0, trialRequested: requested > 0 };
+      return {
+        enrolled: enrolled > 0,
+        trialRequested: requested > 0,
+        completedLessons: enrolled > 0 ? completed : 0,
+      };
     },
 
     /**

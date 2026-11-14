@@ -12,6 +12,7 @@ import {
   coursesPageCount,
   coursesRange,
   coursesReadQuery,
+  catalogueReadQuery,
   levelSteps,
   readCoursesQuery,
 } from '../../apps/web/src/components/topic-hub/courses-view.ts';
@@ -47,6 +48,7 @@ describe('readCoursesQuery', () => {
       }),
     ).toEqual({
       format: 'live',
+      topic: null,
       level: 'intermediate',
       language: 'ur',
       teacher: PERSON,
@@ -224,6 +226,7 @@ describe('coursesReadQuery and paging', () => {
     expect(
       coursesReadQuery(readCoursesQuery({ page: '3', format: 'live' }), TOPIC, 'ur'),
     ).toEqual({
+      scope: 'topic',
       topic: TOPIC,
       format: 'live',
       level: null,
@@ -235,6 +238,39 @@ describe('coursesReadQuery and paging', () => {
       limit: TOPIC_COURSES_PAGE,
     });
     expect(coursesReadQuery(DEFAULT_COURSES_QUERY, null, 'en').topic).toBeNull();
+  });
+
+  it('asks for the whole catalogue by name, with the identifiers Layer 4 resolved — never the slugs', () => {
+    const view = {
+      ...DEFAULT_COURSES_QUERY,
+      topic: 'quran',
+      teacher: 'a-teacher',
+      page: 2,
+    };
+    const read = catalogueReadQuery(view, { topic: TOPIC, teacher: PERSON }, 'ar');
+    expect(read).toEqual({
+      scope: 'catalogue',
+      topic: TOPIC,
+      format: null,
+      level: null,
+      language: null,
+      teacher: PERSON,
+      sort: 'level',
+      titleLocale: 'ar',
+      offset: TOPIC_COURSES_PAGE,
+      limit: TOPIC_COURSES_PAGE,
+    });
+    expect(topicCourseQuerySchema.safeParse(read).success).toBe(true);
+    // Unresolved, a slug never reaches Learning: the identifiers are null.
+    expect(catalogueReadQuery(view, { topic: null, teacher: null }, 'en')).toMatchObject({
+      topic: null,
+      teacher: null,
+    });
+  });
+
+  it('never writes a Topic into a hub’s address: a hub reads none', () => {
+    expect(readCoursesQuery({ topic: 'quran' }).topic).toBeNull();
+    expect(coursesCanonicalRedirect(QURAN, 'en', { topic: 'quran' })).toBeNull();
   });
 
   it('counts pages and states the range a page shows', () => {

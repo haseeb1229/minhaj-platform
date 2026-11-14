@@ -40,16 +40,23 @@ export function createLearningReadService(reader: LearningPublicReaderPort) {
       return validSlug(slug) ? reader.courseCanonicalSlug(slug) : Promise.resolve(null);
     },
 
-    teacherFacets(offset = 0) {
-      return reader.teacherFacets(browseOffset.parse(offset));
+    /**
+     * Learn Part 1 — where one published Course stands: the published paths
+     * holding it and the Courses studied with it. A malformed identifier is
+     * refused here, before any read.
+     */
+    courseRelations(courseId: unknown) {
+      return reader.courseRelations(learningIdSchema.parse(courseId));
     },
 
     /**
      * Quran Part 13 — a Topic's course hub, composed at Layer 4: one bounded
      * page of the published Courses on the named Topic, the aggregates the hub
      * is navigated by, and the published LearningPaths holding one of them.
-     * Every field is parsed here (an unknown level, format or order, a
-     * malformed Topic or teacher, an offset past the bound), before any read.
+     * Since Learn Part 1 the same reads serve the catalogue (`scope:
+     * 'catalogue'`), where the Topic is an optional filter. Every field is
+     * parsed here (an unknown scope, level, format or order, a malformed Topic
+     * or teacher, an offset past the bound), before any read.
      */
     topicCourses(raw: unknown = {}) {
       return reader.topicCourses(topicCourseQuerySchema.parse(raw));

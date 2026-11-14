@@ -3,7 +3,12 @@ import 'server-only';
 import { getTranslations } from 'next-intl/server';
 
 import { localizedPath, type Locale } from '@minhaj/contracts';
-import type { CourseLevel, CourseListing } from '@minhaj/contracts/learning';
+import {
+  TOPIC_COURSE_PATHS,
+  type CourseLevel,
+  type CourseListing,
+  type TopicCoursePage,
+} from '@minhaj/contracts/learning';
 
 import { learningReadRuntime } from '@/composition/learning-read';
 import {
@@ -32,6 +37,7 @@ import {
 import { directionOf } from '@/config/locale';
 import {
   byLevel,
+  catalogueReadQuery,
   coursesFiltered,
   coursesHref,
   coursesPageCount,
@@ -41,18 +47,21 @@ import {
   type CoursesQuery,
   type CoursesScope,
 } from './courses-view';
-import type { HubDomain } from './domain';
+import type { HubDomain, HubLink } from './domain';
 import { ActiveFilters, ExploreFilters, ExploreHero, languageName } from './parts';
 
 /**
  * A SUBJECT'S COURSES HUB (Quran Part 13; shared with Hadith since Hadith Part
- * 1) — `/quran/courses`, `/hadith/courses`.
+ * 1) — `/quran/courses`, `/hadith/courses` — AND, since Learn Part 1, LEARN'S
+ * OWN CATALOGUE, `/learn/courses`: the same listing without a Topic scope.
  *
  * LAYER-4 COMPOSITION OF LEARNING'S OWN PUBLIC READS (DOMAIN_MODEL.md §3.1,
  * §13.4): the courses are Learning's — its published Courses on the subject's
- * Taxonomy Topic — read through Learning's public `topicCourses`,
- * `topicCourseFacets` and `topicCoursePaths`; the names of their teachers are
- * People's, the content languages' names and directions Taxonomy's. No
+ * Taxonomy Topic, or every published Course in the catalogue — read through
+ * Learning's public `topicCourses`, `topicCourseFacets` and `topicCoursePaths`
+ * (the catalogue asks the first two with `scope: 'catalogue'`, where the Topic
+ * is a filter, and names the latest learning paths); the names of their
+ * teachers are People's, of their Topics and content languages Taxonomy's. No
  * subject context imports Learning; only this presentation layer composes
  * them.
  *
@@ -65,18 +74,21 @@ import { ActiveFilters, ExploreFilters, ExploreHero, languageName } from './part
  * Learning records no cover, price, duration, rating or "featured" mark, so
  * none is shown; nothing here enrols or writes anything.
  *
- * In the level order — the hub's own — the list reads from the first steps to
- * the most advanced, grouped by level. The published LearningPaths that hold
- * one of these courses follow, and then the subject's own surfaces a course is
- * read alongside.
+ * In the level order — the listing's own — it reads from the first steps to
+ * the most advanced, grouped by level. The published LearningPaths follow, and
+ * then the surfaces a course is read alongside.
  *
- * ONE ADDRESS PER VIEW (`./courses-view`): a format, a level, a content
- * language, a teacher, an order and a page, each a GET parameter, so the hub
- * works without script and every view can be shared.
+ * ONE ADDRESS PER VIEW (`./courses-view`): a format, a Topic (the catalogue's),
+ * a level, a content language, a teacher, an order and a page, each a GET
+ * parameter, so the listing works without script and every view can be
+ * shared. In the catalogue a filter that is malformed or names nothing lists
+ * nothing and says why — it never broadens.
  */
 
-/** What a subject says on its Courses hub, in its own words. */
+/** What a listing says about itself, in its own words. */
 export interface CoursesCopy {
+  /** Above the title; a hub's is "Learn · Courses". */
+  readonly eyebrow?: string;
   readonly lede: string;
   /** "12 courses on Hadith". */
   readonly stat: (count: number) => string;
@@ -89,7 +101,7 @@ export interface CoursesCopy {
   readonly alongsideIntro: string;
 }
 
-/** One of the subject's own surfaces a course is read alongside. */
+/** One of the surfaces a course is read alongside. */
 export interface AlongsideEntry {
   readonly key: string;
   readonly href: string;
@@ -97,9 +109,32 @@ export interface AlongsideEntry {
   readonly body: string;
 }
 
+/** A Topic or a Person an address named, as its owner resolved it. */
+export interface NamedReference {
+  readonly id: string;
+  readonly slug: string;
+  readonly name: string;
+}
+
+/**
+ * THE CATALOGUE'S VIEW (Learn Part 1): the Topic and the teacher its address
+ * names, resolved at Layer 4 by Taxonomy and People; whether a filter was
+ * malformed or named nothing; and its own ways onward.
+ */
+export interface CatalogueView {
+  readonly topic: NamedReference | null;
+  readonly teacher: NamedReference | null;
+  readonly invalid: boolean;
+  readonly invalidTitle: string;
+  readonly invalidText: string;
+  readonly actions: readonly HubLink[];
+}
+
 type HubTranslator = Awaited<ReturnType<typeof getTranslations<'topicHub'>>>;
 type LearnTranslator = Awaited<ReturnType<typeof getTranslations<'learn'>>>;
 type NameMap = ReadonlyMap<string, { readonly slug: string; readonly name: string }>;
+
+const EMPTY_PAGE: TopicCoursePage = { items: [], total: 0, hasMore: false };
 
 /**
  * A level as three steps, the stated ones filled — beside the level's NAME,
@@ -107,7 +142,7 @@ type NameMap = ReadonlyMap<string, { readonly slug: string; readonly name: strin
  */
 const STEP_HEIGHTS = ['h-1.5', 'h-2.5', 'h-3.5'] as const;
 
-function LevelSteps({ level }: { readonly level: CourseLevel }) {
+export function LevelSteps({ level }: { readonly level: CourseLevel }) {
   const filled = levelSteps(level);
   return (
     <span aria-hidden="true" className="inline-flex shrink-0 items-end gap-0.5">
@@ -262,19 +297,62 @@ function CourseList({
   );
 }
 
+/**
+ * A row of Course cards outside a listing — the Learn landing's newest, a
+ * Course page's related Courses — every teacher on it resolved in ONE People
+ * call and the content languages in ONE Taxonomy call. Nothing when empty.
+ */
+export async function CourseShelf({
+  locale,
+  courses,
+  label,
+  heading = 'h3',
+}: {
+  readonly locale: Locale;
+  readonly courses: readonly CourseListing[];
+  readonly label: string;
+  readonly heading?: 'h3' | 'h4';
+}) {
+  if (courses.length === 0) return null;
+  const [t, l, names, languages] = await Promise.all([
+    getTranslations({ locale, namespace: 'topicHub' }),
+    getTranslations({ locale, namespace: 'learn' }),
+    referenceNames(
+      { personIds: courses.flatMap((course) => course.teacherIds), topicIds: [] },
+      locale,
+    ),
+    contentLanguages(),
+  ]);
+  return (
+    <CourseList
+      label={label}
+      courses={courses}
+      locale={locale}
+      people={names.people}
+      languages={languages}
+      heading={heading}
+      t={t}
+      l={l}
+    />
+  );
+}
+
 export async function CoursesHub({
   domain,
   scope,
   query,
   copy,
   alongside,
+  catalogue,
 }: {
   readonly domain: HubDomain;
   readonly scope: CoursesScope;
   readonly query: CoursesQuery;
   readonly copy: CoursesCopy;
-  /** The subject's own surfaces a course is read alongside; none, no section. */
+  /** The surfaces a course is read alongside; none, no section. */
   readonly alongside: readonly AlongsideEntry[];
+  /** Present for the catalogue only (Learn Part 1). */
+  readonly catalogue?: CatalogueView;
 }) {
   const { locale } = domain;
   const [t, l] = await Promise.all([
@@ -282,11 +360,23 @@ export async function CoursesHub({
     getTranslations({ locale, namespace: 'learn' }),
   ]);
   const learning = learningReadRuntime();
-  const read = coursesReadQuery(query, domain.topicId, locale);
+  const invalid = catalogue?.invalid === true;
+  const read =
+    catalogue === undefined
+      ? coursesReadQuery(query, domain.topicId, locale)
+      : catalogueReadQuery(
+          query,
+          { topic: catalogue.topic?.id ?? null, teacher: catalogue.teacher?.id ?? null },
+          locale,
+        );
   const [page, facets, paths, languages] = await Promise.all([
-    learning.topicCourses(read),
-    learning.topicCourseFacets(read),
-    learning.topicCoursePaths(domain.topicId),
+    // A filter that names nothing lists nothing; the figures stay the whole
+    // catalogue's, and nothing is broadened.
+    invalid ? EMPTY_PAGE : learning.topicCourses(read),
+    learning.topicCourseFacets(invalid ? { scope: 'catalogue' } : read),
+    catalogue === undefined
+      ? learning.topicCoursePaths(domain.topicId)
+      : learning.paths(0).then((result) => result.items.slice(0, TOPIC_COURSE_PATHS)),
     contentLanguages(),
   ]);
   const names = await referenceNames(
@@ -294,9 +384,9 @@ export async function CoursesHub({
       personIds: [
         ...page.items.flatMap((course) => course.teacherIds),
         ...facets.teachers.items.map((facet) => facet.id),
-        ...(query.teacher === null ? [] : [query.teacher]),
+        ...(catalogue === undefined && query.teacher !== null ? [query.teacher] : []),
       ],
-      topicIds: [],
+      topicIds: facets.topics.items.map((facet) => facet.id),
     },
     locale,
   );
@@ -307,34 +397,79 @@ export async function CoursesHub({
   const title = domain.title;
   const hub = facets.hub;
   const filtered = coursesFiltered(query);
-  const base = coursesHref(scope, locale, query, {
+  const neutral = {
     format: null,
+    topic: null,
     level: null,
     language: null,
     teacher: null,
-  });
+  } as const;
+  const base = coursesHref(scope, locale, query, neutral);
   const pages = coursesPageCount(page.total);
   const range = coursesRange(query.page, page.items.length);
   const card = { locale, people: names.people, languages, t, l };
 
+  // A hub's teacher is a People identifier; the catalogue's a People slug.
   const teacherOptions = facets.teachers.items.flatMap((facet) => {
     const person = names.people.get(facet.id);
     return person === undefined
       ? []
-      : [{ id: facet.id, name: person.name, courses: facet.courses }];
+      : [
+          {
+            value: catalogue === undefined ? facet.id : person.slug,
+            name: person.name,
+            courses: facet.courses,
+          },
+        ];
   });
+  const teacherName =
+    catalogue === undefined
+      ? query.teacher === null
+        ? null
+        : (names.people.get(query.teacher)?.name ?? null)
+      : (catalogue.teacher?.name ?? null);
+  // A chosen teacher none of the other filters leaves stays chosen, at nought.
+  if (
+    query.teacher !== null &&
+    teacherName !== null &&
+    !teacherOptions.some((option) => option.value === query.teacher)
+  )
+    teacherOptions.push({ value: query.teacher, name: teacherName, courses: 0 });
+  const topicOptions = facets.topics.items.flatMap((facet) => {
+    const topic = names.topics.get(facet.id);
+    return topic === undefined
+      ? []
+      : [{ value: topic.slug, name: topic.name, courses: facet.courses }];
+  });
+  const chosenTopic = catalogue?.topic ?? null;
+  if (chosenTopic !== null && !topicOptions.some((o) => o.value === chosenTopic.slug))
+    topicOptions.push({ value: chosenTopic.slug, name: chosenTopic.name, courses: 0 });
+
   const levelOptions = (['beginner', 'intermediate', 'advanced'] as const).filter(
     (level) => facets.levels[level] > 0 || query.level === level,
   );
+  const showTopic =
+    catalogue !== undefined && (topicOptions.length > 0 || query.topic !== null);
   const showLevel = levelOptions.length > 1 || query.level !== null;
   const showLanguage = facets.languages.items.length > 1 || query.language !== null;
   const showTeacher = teacherOptions.length > 0 || query.teacher !== null;
-  const showFormats = (hub.live > 0 && hub.selfPaced > 0) || query.format !== null;
-  const teacherName =
-    query.teacher === null ? null : (names.people.get(query.teacher)?.name ?? null);
+  const showFormats =
+    !invalid && ((hub.live > 0 && hub.selfPaced > 0) || query.format !== null);
   const formatKey = query.format ?? 'all';
+  // The catalogue names its learning paths beside the whole catalogue only: a
+  // filtered or explained-empty view is about the filters, and the paths are
+  // not narrowed by them (a hub's are its Topic's, so it always names them).
 
   const active = [
+    ...(chosenTopic === null
+      ? []
+      : [
+          {
+            key: 'topic',
+            text: chosenTopic.name,
+            removeHref: coursesHref(scope, locale, query, { topic: null }),
+          },
+        ]),
     ...(query.level === null
       ? []
       : [
@@ -371,10 +506,20 @@ export async function CoursesHub({
   const grouped = query.sort === 'level';
   const groups = grouped ? byLevel(page.items) : [];
 
+  const actions =
+    catalogue === undefined
+      ? [
+          { href: courseBrowseHref(locale), text: t('courses.catalogue') },
+          ...(hub.live === 0
+            ? []
+            : [{ href: learnPath(locale, 'trial'), text: l('course.trialLink') }]),
+        ]
+      : catalogue.actions;
+
   return domain.frame(
     <>
       <ExploreHero
-        eyebrow={t('courses.eyebrow')}
+        eyebrow={copy.eyebrow ?? t('courses.eyebrow')}
         title={title}
         lede={copy.lede}
         stats={[
@@ -393,21 +538,14 @@ export async function CoursesHub({
                 {
                   value: hub.live,
                   label: t('courses.statLive', { count: hub.live }),
-                  href: coursesHref(scope, locale, query, {
-                    format: 'live',
-                    level: null,
-                    language: null,
-                    teacher: null,
-                  }),
+                  href: coursesHref(scope, locale, query, { ...neutral, format: 'live' }),
                 },
                 {
                   value: hub.selfPaced,
                   label: t('courses.statSelfPaced', { count: hub.selfPaced }),
                   href: coursesHref(scope, locale, query, {
+                    ...neutral,
                     format: 'self-paced',
-                    level: null,
-                    language: null,
-                    teacher: null,
                   }),
                 },
               ]),
@@ -436,19 +574,16 @@ export async function CoursesHub({
                 },
               ]),
         ]}
-        actions={[
-          { href: courseBrowseHref(locale), text: t('courses.catalogue') },
-          ...(hub.live === 0
-            ? []
-            : [{ href: learnPath(locale, 'trial'), text: l('course.trialLink') }]),
-        ]}
+        actions={actions}
       />
 
       {hub.courses === 0 ? (
         <EmptyState
           icon="book"
           title={copy.emptyTitle}
-          action={{ href: courseBrowseHref(locale), text: t('courses.catalogue') }}
+          {...(catalogue === undefined
+            ? { action: { href: courseBrowseHref(locale), text: t('courses.catalogue') } }
+            : {})}
         >
           {copy.empty}
         </EmptyState>
@@ -486,11 +621,30 @@ export async function CoursesHub({
             action={localizedPath(locale, scope.path)}
             label={t('courses.filters')}
             hidden={
-              query.format === null ? [] : [{ name: 'format', value: query.format }]
+              query.format === null || invalid
+                ? []
+                : [{ name: 'format', value: query.format }]
             }
             submit={t('courses.apply')}
-            reset={filtered ? { href: base, text: t('common.reset') } : null}
+            reset={filtered || invalid ? { href: base, text: t('common.reset') } : null}
           >
+            {showTopic ? (
+              <Field id="courses-topic" label={l('filter.topic')}>
+                {(props) => (
+                  <Select {...props} name="topic" defaultValue={query.topic ?? ''}>
+                    <option value="">{l('filter.anyTopic')}</option>
+                    {topicOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {t('common.option', {
+                          name: option.name,
+                          count: option.courses,
+                        })}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+            ) : null}
             {showLevel ? (
               <Field id="courses-level" label={l('filter.level')}>
                 {(props) => (
@@ -531,7 +685,7 @@ export async function CoursesHub({
                   <Select {...props} name="teacher" defaultValue={query.teacher ?? ''}>
                     <option value="">{t('courses.anyTeacher')}</option>
                     {teacherOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
+                      <option key={option.value} value={option.value}>
                         {t('common.option', {
                           name: option.name,
                           count: option.courses,
@@ -553,7 +707,7 @@ export async function CoursesHub({
             </Field>
           </ExploreFilters>
 
-          <ActiveFilters label={t('common.active')} filters={active} />
+          {invalid ? null : <ActiveFilters label={t('common.active')} filters={active} />}
 
           {range === null ? null : (
             <p className="text-sm text-foreground-muted">
@@ -565,7 +719,15 @@ export async function CoursesHub({
             </p>
           )}
 
-          {page.items.length === 0 ? (
+          {invalid ? (
+            <EmptyState
+              icon="search"
+              title={catalogue?.invalidTitle}
+              action={{ href: base, text: t('common.reset') }}
+            >
+              {catalogue?.invalidText}
+            </EmptyState>
+          ) : page.items.length === 0 ? (
             query.page > 1 && page.total > 0 ? (
               <EmptyState
                 title={t('common.pastEndTitle')}
@@ -648,7 +810,7 @@ export async function CoursesHub({
         </section>
       )}
 
-      {paths.length === 0 ? null : (
+      {paths.length === 0 || (catalogue !== undefined && (filtered || invalid)) ? null : (
         <section aria-labelledby={PATHS_ID} className="flex flex-col gap-5">
           <SectionHeader
             id={PATHS_ID}

@@ -6,6 +6,8 @@ import {
   type CourseLevel,
   type TopicCourseSort,
 } from '@minhaj/contracts/learning';
+import { personSlugSchema } from '@minhaj/contracts/people';
+import { topicSlugSchema } from '@minhaj/contracts/taxonomy';
 
 import {
   hubHref,
@@ -36,21 +38,44 @@ import {
  * rather than answered with an error page; what this produces is parsed again
  * by Learning's read service (`topicCourseQuerySchema`), the authoritative
  * boundary, and no parameter can widen what is public.
+ *
+ * LEARN PART 1 — THE CATALOGUE IS THE SAME LISTING WITHOUT A TOPIC SCOPE
+ * (`/learn/courses`, `LEARN_COURSES`). Its address keeps what Learning's
+ * catalogue has always taken (ROUTE_MAP.md §3.5): `?topic` a Topic SLUG and
+ * `?teacher` a People SLUG — slugs, never identifiers, resolved at Layer 4 —
+ * and it keeps the catalogue's own rule that an unknown filter NEVER
+ * BROADENS: a malformed or repeated filter is not dropped but reported
+ * (`readCatalogueQuery`), so the page explains an empty result rather than
+ * redirecting to every Course. A former `?offset=` (24 Courses a page until
+ * Learn Part 1) is one redirect to the page holding the Course it began with.
  */
 
 export interface CoursesScope {
-  /** The hub's locale-free path: `/quran/courses`, `/hadith/courses`. */
+  /** The listing's locale-free path: `/quran/courses`, `/hadith/courses`, `/learn/courses`. */
   readonly path: string;
+  /** The whole catalogue (Learn Part 1): the Topic a filter, slugs in the address. */
+  readonly catalogue?: true;
 }
+
+/** Learning's own catalogue (ROUTE_MAP.md §3.5). */
+export const LEARN_COURSES: CoursesScope = Object.freeze({
+  path: '/learn/courses',
+  catalogue: true,
+});
 
 /** The deepest page an address may name: Learning's offset bound, in pages. */
 export const COURSES_MAX_PAGE = Math.floor(25_000 / TOPIC_COURSES_PAGE) + 1;
 
 export interface CoursesQuery {
   readonly format: CourseFormat | null;
+  /** The catalogue's Topic filter, a Topic slug; always null on a hub. */
+  readonly topic: string | null;
   readonly level: CourseLevel | null;
   readonly language: string | null;
-  /** A People identifier attributed as a teacher. */
+  /**
+   * Attributed as a teacher: a People identifier on a hub, a People slug in
+   * the catalogue (its address's long-standing form).
+   */
   readonly teacher: string | null;
   readonly sort: TopicCourseSort;
   /** 1-based. */
@@ -59,6 +84,7 @@ export interface CoursesQuery {
 
 export const DEFAULT_COURSES_QUERY: CoursesQuery = Object.freeze({
   format: null,
+  topic: null,
   level: null,
   language: null,
   teacher: null,
@@ -72,23 +98,85 @@ function oneOf<T extends string>(values: readonly T[], text: string | null): T |
     : null;
 }
 
+function sortOf(query: Query): TopicCourseSort {
+  const sortText = single(query, 'sort', 16);
+  return sortText === 'newest' || sortText === 'title' ? sortText : 'level';
+}
+
 /** The hub's view from its address — every unknown or malformed value neutral. */
 export function readCoursesQuery(query: Query): CoursesQuery {
-  const sortText = single(query, 'sort', 16);
   return {
     format: oneOf(COURSE_FORMATS, single(query, 'format', 16)),
+    topic: null,
     level: oneOf(COURSE_LEVELS, single(query, 'level', 16)),
     language: language(query),
     teacher: identifier(query, 'teacher'),
-    sort: sortText === 'newest' || sortText === 'title' ? sortText : 'level',
+    sort: sortOf(query),
     page: whole(single(query, 'page', 5), 1, COURSES_MAX_PAGE) ?? 1,
   };
 }
 
-/** Whether anything narrows the hub — a format, a level, a language or a teacher. */
+/** A slug exactly as its owner's grammar writes it — never trimmed into validity. */
+function slugOf(
+  schema: typeof topicSlugSchema | typeof personSlugSchema,
+  text: string,
+): string | null {
+  const parsed = schema.safeParse(text);
+  return parsed.success && parsed.data === text ? text : null;
+}
+
+/** The deepest former `?offset=` an address may carry (Learning's offset bound). */
+const LEGACY_MAX_OFFSET = 25_000;
+
+/**
+ * The page a former `?offset=` named — the page holding the first Course it
+ * showed — or null when there is none or it is not a plain bounded number.
+ */
+function legacyPage(query: Query): number | null {
+  const text = single(query, 'offset', 6);
+  if (text === null || !/^\d{1,6}$/u.test(text)) return null;
+  const offset = Number(text);
+  return offset <= LEGACY_MAX_OFFSET ? Math.floor(offset / TOPIC_COURSES_PAGE) + 1 : null;
+}
+
+/**
+ * The catalogue's view from its address, and whether a filter in it is
+ * malformed or repeated — which the page answers with an explained empty
+ * result, never by dropping the filter (an unknown filter never broadens).
+ * The order and the page stay tolerant, as on a hub: a wrong one is neutral.
+ */
+export function readCatalogueQuery(query: Query): {
+  readonly query: CoursesQuery;
+  readonly invalid: boolean;
+} {
+  let invalid = false;
+  /** One filter: absent (or empty, as a form submits it), a value, or invalid. */
+  const filter = <T>(key: string, parse: (text: string) => T | null): T | null => {
+    const raw = query[key];
+    if (raw === undefined || raw === '') return null;
+    const value = typeof raw === 'string' ? parse(raw) : null;
+    if (value === null) invalid = true;
+    return value;
+  };
+  const view: CoursesQuery = {
+    format: filter('format', (text) => oneOf(COURSE_FORMATS, text)),
+    topic: filter('topic', (text) => slugOf(topicSlugSchema, text)),
+    level: filter('level', (text) => oneOf(COURSE_LEVELS, text)),
+    language: filter('language', (text) => language({ language: text })),
+    teacher: filter('teacher', (text) => slugOf(personSlugSchema, text)),
+    sort: sortOf(query),
+    page:
+      whole(single(query, 'page', 5), 1, COURSES_MAX_PAGE) ??
+      Math.min(legacyPage(query) ?? 1, COURSES_MAX_PAGE),
+  };
+  return { query: view, invalid };
+}
+
+/** Whether anything narrows the view — a format, a Topic, a level, a language or a teacher. */
 export function coursesFiltered(query: CoursesQuery): boolean {
   return (
     query.format !== null ||
+    query.topic !== null ||
     query.level !== null ||
     query.language !== null ||
     query.teacher !== null
@@ -109,6 +197,7 @@ export function coursesHref(
   const page = change.page ?? (Object.keys(change).length === 0 ? query.page : 1);
   const search = new URLSearchParams();
   if (next.format !== null) search.set('format', next.format);
+  if (next.topic !== null) search.set('topic', next.topic);
   if (next.level !== null) search.set('level', next.level);
   if (next.language !== null) search.set('language', next.language);
   if (next.teacher !== null) search.set('teacher', next.teacher);
@@ -127,6 +216,9 @@ const VIEW_KEYS: ReadonlySet<string> = new Set([
   'page',
 ]);
 
+/** …and of the catalogue, which also reads its Topic and its former offset. */
+const CATALOGUE_KEYS: ReadonlySet<string> = new Set([...VIEW_KEYS, 'topic', 'offset']);
+
 /**
  * ONE ADDRESS PER VIEW. A filter form submits every control, so choosing a
  * teacher arrives as `?level=&language=&teacher=…&sort=level`; a typed or old
@@ -136,12 +228,28 @@ const VIEW_KEYS: ReadonlySet<string> = new Set([
  * request already is that address. Parameters the hub does not read (such as
  * the former related view's `?offset=`) are left alone unless a redirect
  * happens anyway.
+ *
+ * In the catalogue a view naming a malformed filter is NOT redirected — it
+ * stays where it was asked and says why it lists nothing — and its former
+ * `?offset=` is one of its own parameters, answered with the page.
  */
 export function coursesCanonicalRedirect(
   scope: CoursesScope,
   locale: string,
   query: Query,
 ): string | null {
+  if (scope.catalogue === true) {
+    const read = readCatalogueQuery(query);
+    return read.invalid
+      ? null
+      : unlessCanonical(
+          locale,
+          scope.path,
+          query,
+          CATALOGUE_KEYS,
+          coursesHref(scope, locale, read.query),
+        );
+  }
   return unlessCanonical(
     locale,
     scope.path,
@@ -151,13 +259,14 @@ export function coursesCanonicalRedirect(
   );
 }
 
-/** What Learning is asked for one view (the Topic resolved at Layer 4). */
+/** What Learning is asked for one hub view (the Topic resolved at Layer 4). */
 export function coursesReadQuery(
   query: CoursesQuery,
   topic: string | null,
   titleLocale: string,
 ): Record<string, unknown> {
   return {
+    scope: 'topic',
     topic,
     format: query.format,
     level: query.level,
@@ -167,6 +276,23 @@ export function coursesReadQuery(
     titleLocale,
     offset: (query.page - 1) * TOPIC_COURSES_PAGE,
     limit: TOPIC_COURSES_PAGE,
+  };
+}
+
+/**
+ * What Learning is asked for one CATALOGUE view: the Topic and the teacher
+ * are the identifiers their owners resolved the address's slugs to at
+ * Layer 4 — never the slugs themselves.
+ */
+export function catalogueReadQuery(
+  query: CoursesQuery,
+  resolved: { readonly topic: string | null; readonly teacher: string | null },
+  titleLocale: string,
+): Record<string, unknown> {
+  return {
+    ...coursesReadQuery(query, resolved.topic, titleLocale),
+    scope: 'catalogue',
+    teacher: resolved.teacher,
   };
 }
 

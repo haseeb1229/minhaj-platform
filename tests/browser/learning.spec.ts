@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { AxeBuilder } from '@axe-core/playwright';
 import type { Browser, BrowserContext, Locator, Page } from '@playwright/test';
 
 import type { SqlSession } from '../../packages/database/src/lifecycle/sql-connection.ts';
@@ -502,7 +503,9 @@ test.describe('the published catalogue', () => {
   });
 
   test('lists every published Course, and never the draft', async ({ page }) => {
-    const response = await page.goto('/learn/courses');
+    // Newest first, so this file's just-published Courses lead the first page
+    // whatever other specs have published (the default order is by level).
+    const response = await page.goto('/learn/courses?sort=newest');
     expect(response?.headers()['set-cookie']).toBeUndefined();
     const list = page.getByRole('list', { name: copy('learn.sections.courses') });
     for (const [title, target] of [
@@ -536,7 +539,7 @@ test.describe('the published catalogue', () => {
   test('every filter narrows, alone, combined and through the form', async ({ page }) => {
     const titles = [TEXT.paced, TEXT.live, TEXT.spare];
     const listed = async (query: string): Promise<string[]> => {
-      await page.goto(`/learn/courses?${query}`);
+      await page.goto(`/learn/courses?${query}&sort=newest`);
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
       const main = await page.getByRole('main').innerText();
       return titles.filter((title) => main.includes(title));
@@ -554,35 +557,184 @@ test.describe('the published catalogue', () => {
     );
 
     // Filters combine — each narrows the others — to an explained nothing.
-    expect(await listed('level=beginner&format=live')).toEqual([]);
+    // (The one teacher here teaches only an intermediate live Course, so no
+    // other spec's Course can fill this view.)
+    expect(
+      await listed(`level=advanced&format=live&teacher=${people.linkedSlug}`),
+    ).toEqual([]);
     await expect(page.getByRole('main')).toContainText(copy('learn.filter.empty'));
     await page
-      .getByRole('link', { name: copy('learn.filter.clear') })
+      .getByRole('link', { name: copy('topicHub.common.reset') })
       .first()
       .click();
-    await expect(page).toHaveURL(/\/learn\/courses$/);
+    // Clearing the filters keeps the chosen order, and nothing else.
+    await expect(page).toHaveURL(/\/learn\/courses\?sort=newest$/);
 
     // A REAL GET FORM: the labelled selects submit a shareable address.
     await page
       .getByLabel(copy('learn.filter.level'), { exact: true })
       .selectOption('beginner');
     await page.getByLabel(copy('learn.filter.teacher'), { exact: true }).selectOption('');
-    await page.getByRole('button', { name: copy('learn.filter.apply') }).click();
-    await expect(page).toHaveURL(/[?&]level=beginner(&|$)/);
+    await page.getByRole('button', { name: copy('topicHub.courses.apply') }).click();
+    // One address per view: the form's empty controls are one redirect away.
+    await expect(page).toHaveURL(/\/learn\/courses\?level=beginner&sort=newest$/);
     const main = page.getByRole('main');
     await expect(main.getByRole('link', { name: TEXT.paced, exact: true })).toBeVisible();
     await expect(main.getByRole('link', { name: TEXT.live, exact: true })).toHaveCount(0);
 
-    // The teacher choice is the one contributor teaching a published Course.
+    // The teacher choice names a contributor by their People slug.
     await page.goto('/learn/courses');
     await page
       .getByLabel(copy('learn.filter.teacher'), { exact: true })
       .selectOption(people.linkedSlug);
-    await page.getByRole('button', { name: copy('learn.filter.apply') }).click();
+    await page.getByRole('button', { name: copy('topicHub.courses.apply') }).click();
+    await expect(page).toHaveURL(new RegExp(`[?&]teacher=${people.linkedSlug}$`));
     await expect(main.getByRole('link', { name: TEXT.live, exact: true })).toBeVisible();
     await expect(main.getByRole('link', { name: TEXT.paced, exact: true })).toHaveCount(
       0,
     );
+  });
+
+  test('Learn Part 1 — the catalogue: figures, ways to study, a Topic filter, steps by level and one address per view', async ({
+    page,
+    request,
+  }) => {
+    // ONE ADDRESS PER VIEW: a form's empty controls, the former filter order
+    // and the former `?offset=` (24 a page) are each ONE redirect.
+    for (const [from, to] of [
+      [
+        '/learn/courses?topic=quran&level=&format=live',
+        '/learn/courses?format=live&topic=quran',
+      ],
+      ['/learn/courses?offset=24', '/learn/courses?page=3'],
+      ['/ur/learn/courses?teacher=&sort=level', '/ur/learn/courses'],
+    ] as const) {
+      const response = await request.get(from, { maxRedirects: 0 });
+      expect([307, 308], from).toContain(response.status());
+      const location = new URL(response.headers()['location'] ?? '', baseUrl());
+      expect(`${location.pathname}${location.search}`, from).toBe(to);
+    }
+
+    const response = await page.goto('/learn/courses');
+    expect(response?.status()).toBe(200);
+    const main = page.getByRole('main');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      copy('learn.sections.courses'),
+    );
+    // The figures the catalogue supports, each counted thing linked where listed.
+    await expect(main.getByRole('link', { name: /^\d+ taught live$/ })).toHaveAttribute(
+      'href',
+      '/learn/courses?format=live',
+    );
+    await expect(main.getByRole('link', { name: /^\d+ self-paced$/ })).toHaveAttribute(
+      'href',
+      '/learn/courses?format=self-paced',
+    );
+    // The ways to study, as tabs; the Topics, as a filter with counts.
+    const formats = main.getByRole('navigation', {
+      name: copy('topicHub.courses.formats'),
+    });
+    await expect(formats.getByRole('link', { name: /^Taught live/ })).toHaveAttribute(
+      'href',
+      '/learn/courses?format=live',
+    );
+    const topic = page.getByLabel(copy('learn.filter.topic'), { exact: true });
+    for (const value of ['quran', 'hadith'])
+      await expect(topic.locator(`option[value="${value}"]`), value).toHaveText(
+        /\(\d+\)$/,
+      );
+    // By level, the listing reads as steps: this file's beginner Course leads
+    // the beginners, the latest publication first.
+    await expect(
+      main
+        .getByRole('region', { name: copy('learn.level.beginner'), exact: true })
+        .getByRole('link', { name: TEXT.paced, exact: true }),
+    ).toHaveAttribute('href', PAGE.paced);
+
+    // A Topic chosen through the form narrows to that Topic, removable alone.
+    await topic.selectOption('hadith');
+    await page
+      .getByLabel(copy('topicHub.common.filterSort'), { exact: true })
+      .selectOption('newest');
+    await page.getByRole('button', { name: copy('topicHub.courses.apply') }).click();
+    await expect(page).toHaveURL(/\/learn\/courses\?topic=hadith&sort=newest$/);
+    await expect(main.getByRole('link', { name: TEXT.live, exact: true })).toBeVisible();
+    await expect(main.getByRole('link', { name: TEXT.paced, exact: true })).toHaveCount(
+      0,
+    );
+    const active = main.getByRole('list', { name: copy('topicHub.common.active') });
+    await expect(active.getByRole('link')).toHaveCount(1);
+    await expect(active.getByRole('link')).toHaveAttribute(
+      'href',
+      '/learn/courses?sort=newest',
+    );
+    // A filtered view names no learning path: those belong beside the whole catalogue.
+    await expect(main).not.toContainText(TEXT.path);
+  });
+
+  test('Learn Part 1 — the landing: figures, the newest Courses, how learning works, the catalogue by level and Topic, its teachers and every part of Learn', async ({
+    page,
+  }) => {
+    const response = await page.goto('/learn');
+    expect(response?.status()).toBe(200);
+    const main = page.getByRole('main');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(copy('learn.title'));
+    await expect(main.getByRole('link', { name: /^\d+ courses?$/ })).toHaveAttribute(
+      'href',
+      '/learn/courses',
+    );
+    await expect(main.getByRole('link', { name: /^\d+ taught live$/ })).toHaveAttribute(
+      'href',
+      '/learn/courses?format=live',
+    );
+    await expect(
+      main
+        .getByRole('list', { name: copy('learn.landing.courses') })
+        .getByRole('link', { name: TEXT.paced, exact: true }),
+    ).toHaveAttribute('href', PAGE.paced);
+
+    const how = main.getByRole('region', { name: copy('learn.landing.how') });
+    await expect(how.getByRole('listitem')).toHaveCount(4);
+    for (const [step, href] of [
+      ['selfPaced', '/learn/courses?format=self-paced'],
+      ['live', '/learn/courses?format=live'],
+      ['trial', '/learn/trial'],
+      ['progress', '/my/learning'],
+    ] as const)
+      await expect(
+        how.getByRole('link', { name: copy(`learn.landing.howSteps.${step}.title`) }),
+        step,
+      ).toHaveAttribute('href', href);
+
+    await expect(
+      main
+        .getByRole('list', { name: copy('learn.landing.byLevel') })
+        .getByRole('link', { name: copy('learn.level.beginner'), exact: true }),
+    ).toHaveAttribute('href', '/learn/courses?level=beginner');
+    await expect(
+      main
+        .getByRole('list', { name: copy('learn.landing.byTopic') })
+        .locator('a[href="/learn/courses?topic=quran"]'),
+    ).toHaveCount(1);
+    // The teachers the catalogue names, each a way into their Courses.
+    const teachers = main.getByRole('list', { name: copy('learn.landing.teachers') });
+    await expect(teachers.getByRole('link').first()).toBeVisible();
+    for (const href of await teachers
+      .getByRole('link')
+      .evaluateAll((links) => links.map((link) => link.getAttribute('href'))))
+      expect(href).toMatch(/^\/learn\/courses\?teacher=[a-z0-9-]+$/);
+
+    // Every part of Learn, as its menu has them.
+    const parts = main.getByRole('region', { name: copy('learn.landing.parts') });
+    for (const href of [
+      '/learn/courses',
+      '/learn/paths',
+      '/topics',
+      '/learn/live',
+      '/learn/trial',
+      '/learn/teachers',
+    ])
+      await expect(parts.locator(`a[href="${href}"]`), href).toHaveCount(1);
   });
 
   test('an unknown filter lists nothing and says why — it never broadens', async ({
@@ -603,8 +755,10 @@ test.describe('the published catalogue', () => {
         page.getByRole('list', { name: copy('learn.sections.courses') }),
         query,
       ).toHaveCount(0);
+      // It is not redirected away into a broader view: it stays, and explains.
+      expect(new URL(page.url()).search, query).toBe(`?${query}`);
       await expect(
-        main.getByRole('link', { name: copy('learn.filter.clear') }).first(),
+        main.getByRole('link', { name: copy('topicHub.common.reset') }).first(),
         query,
       ).toHaveAttribute('href', '/learn/courses');
     }
@@ -649,6 +803,53 @@ test.describe('the published catalogue', () => {
       const html = await (await request.get(target)).text();
       expect(html, target).not.toContain(TEXT.body);
     }
+  });
+
+  test('Learn Part 1 — a Course page counts its syllabus, says what an account adds, and names its paths and the Courses studied with it', async ({
+    page,
+  }) => {
+    await page.goto(PAGE.paced);
+    const main = page.getByRole('main');
+    await expect(
+      main.getByRole('region', { name: copy('learn.course.syllabus') }),
+    ).toContainText('1 module · 2 lessons');
+    await expect(main).toContainText(copy('learn.course.benefitEnrol'));
+    await expect(main).toContainText(copy('learn.course.benefitsFree'));
+    // A self-paced Course offers no trial class, and no class schedule.
+    await expect(main).not.toContainText(copy('learn.course.benefitTrial'));
+    await expect(
+      main.getByRole('region', { name: copy('learn.course.classes') }),
+    ).toHaveCount(0);
+    const paths = main.getByRole('region', { name: copy('learn.course.paths') });
+    await expect(
+      paths.getByRole('link', { name: TEXT.path, exact: true }),
+    ).toHaveAttribute('href', PAGE.path);
+    await expect(paths).toContainText(
+      copy('learn.course.pathStep', { step: 1, total: 2 }),
+    );
+    // Studied with it: the Course sharing its path, the latest such first.
+    await expect(
+      main
+        .getByRole('region', { name: copy('learn.course.related') })
+        .getByRole('link', { name: TEXT.live, exact: true }),
+    ).toHaveAttribute('href', PAGE.live);
+
+    await page.goto(PAGE.live);
+    await expect(
+      main.getByRole('region', { name: copy('learn.course.paths') }),
+    ).toContainText(copy('learn.course.pathStep', { step: 2, total: 2 }));
+    await expect(main).toContainText(copy('learn.course.benefitTrial'));
+    await expect(
+      main
+        .getByRole('region', { name: copy('learn.course.teachersHeading') })
+        .locator(`a[href="/people/${people.linkedSlug}"]`),
+    ).toHaveCount(1);
+    // Live learning is not switched on yet: no schedule is claimed.
+    await expect(
+      main.getByRole('region', { name: copy('learn.course.classes') }),
+    ).toHaveCount(0);
+    // The draft is studied with nothing — it is not published.
+    await expect(main).not.toContainText(TEXT.draft);
   });
 
   test('a draft is a 404 and appears nowhere; there is no sitemap to leak it', async ({
@@ -897,6 +1098,10 @@ test.describe('a learner', () => {
     await expect(
       islandOn(learner).getByRole('button', { name: copy('learningIsland.enrol') }),
     ).toHaveCount(0);
+    // Enrolled: the call to action is the way on, with progress in words.
+    await expect(islandOn(learner)).toContainText(
+      copy('learningIsland.progress', { completed: 0, total: 2 }),
+    );
     expect(
       await scalar(
         `SELECT COUNT_BIG(*) AS [value] FROM [dbo].[Enrolment] WHERE [userId]=N'${learnerId}' AND [courseId]=N'${ids.paced}';`,
@@ -968,6 +1173,17 @@ test.describe('a learner', () => {
     await expect(table.getByRole('row').filter({ hasText: TEXT.paced })).toContainText(
       progressText(1, 2),
     );
+
+    // The Course's public page shows the person their own progress, after it loads.
+    await openWithIsland(learner, PAGE.paced);
+    await expect(islandOn(learner)).toContainText(
+      copy('learningIsland.progress', { completed: 1, total: 2 }),
+    );
+    await expect(
+      islandOn(learner).getByRole('link', {
+        name: copy('learningIsland.continueLearning'),
+      }),
+    ).toHaveAttribute('href', `/my/learning/courses/${slug.paced}`);
   });
 
   test('completing every lesson says “Completed”', async () => {
@@ -988,6 +1204,8 @@ test.describe('a learner', () => {
       .first();
     await expect(item).toContainText(copy('myLearning.progress.completed'));
     await expect(item).not.toContainText('Lessons complete:');
+    await openWithIsland(learner, PAGE.paced);
+    await expect(islandOn(learner)).toContainText(copy('learningIsland.allComplete'));
 
     await learner.goto('/my/progress/courses');
     await expect(
@@ -1166,9 +1384,11 @@ test.describe('another learner', () => {
       .context()
       .request.get(`/api/my/learning/state?course=${ids.paced}`);
     expect(state.status()).toBe(200);
+    // Nothing of the first person's — not their enrolment and, since Learn
+    // Part 1 counts progress, not one of the lessons they completed.
     expect(await state.json()).toEqual({
       signedIn: true,
-      state: { enrolled: false, trialRequested: false },
+      state: { enrolled: false, trialRequested: false, completedLessons: 0 },
     });
 
     // Their own enrolment and request on the live Course, for the counts
@@ -1559,6 +1779,43 @@ test.describe('Learning surfaces', () => {
     await expect(heading.locator('xpath=..')).toHaveAttribute('dir', 'rtl');
   });
 
+  test('Learn Part 1 — the landing, the catalogue and a Course page are axe-clean in en, ur and ar, and fit 390 and 1440 pixels', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(300_000);
+    for (const locale of ['en', 'ur', 'ar'] as const)
+      for (const address of ['/learn', '/learn/courses', PAGE.paced, PAGE.live]) {
+        const target = localizedPath(locale, address);
+        for (const width of [390, 1440]) {
+          await page.setViewportSize({ width, height: 900 });
+          const response = await page.goto(target);
+          expect(response?.status(), target).toBe(200);
+          await expect(page.getByRole('heading', { level: 1 }), target).toBeVisible();
+          expect(
+            await overflowOf(page),
+            `${String(width)}px ${target}`,
+          ).toBeLessThanOrEqual(0);
+        }
+        const results = await new AxeBuilder({ page })
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+          .analyze();
+        const blocking = results.violations.filter(
+          (violation) =>
+            violation.impact === 'serious' || violation.impact === 'critical',
+        );
+        for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+          testInfo.annotations.push({
+            type: 'axe',
+            description: `${target}: ${finding.id} (${String(finding.impact)})`,
+          });
+        expect(
+          blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+          target,
+        ).toEqual([]);
+      }
+    await page.setViewportSize({ width: 1280, height: 800 });
+  });
+
   test('administration is right-to-left in Urdu and Arabic and reflows too', async ({
     browser,
   }) => {
@@ -1606,18 +1863,34 @@ test.describe('Learning surfaces', () => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/learn/courses');
-    for (const label of ['topic', 'level', 'format', 'language', 'teacher'])
-      await expect(
-        page.getByLabel(copy(`learn.filter.${label}`), { exact: true }),
-        label,
-      ).toHaveJSProperty('tagName', 'SELECT');
+    for (const label of [
+      'learn.filter.topic',
+      'learn.filter.level',
+      'topicHub.common.filterLanguage',
+      'learn.filter.teacher',
+      'topicHub.common.filterSort',
+    ])
+      await expect(page.getByLabel(copy(label), { exact: true }), label).toHaveJSProperty(
+        'tagName',
+        'SELECT',
+      );
+    // The format is a row of tabs, each a link to its own view.
+    const formats = page.getByRole('navigation', {
+      name: copy('topicHub.courses.formats'),
+    });
+    await expect(formats.getByRole('link')).toHaveCount(3);
     await expectLabelledControls(page, '/learn/courses');
+    const live = formats.getByRole('link', {
+      name: new RegExp(copy('learn.format.live')),
+    });
+    await tabTo(page, live);
+    await expectVisibleFocus(live, 'the taught-live tab');
     const topic = page.getByLabel(copy('learn.filter.topic'), { exact: true });
     await tabTo(page, topic);
     await expectVisibleFocus(topic, 'the topic filter');
-    const apply = page.getByRole('button', { name: copy('learn.filter.apply') });
+    const apply = page.getByRole('button', { name: copy('topicHub.courses.apply') });
     await tabTo(page, apply);
-    await expectVisibleFocus(apply, 'Apply filters');
+    await expectVisibleFocus(apply, 'Show courses');
 
     // The island's Enrol, for a person not yet enrolled, by Tab alone.
     await other.setViewportSize({ width: 1280, height: 800 });
@@ -2546,6 +2819,17 @@ test.describe('Phase 23 — nobody else reaches a class', () => {
         item.getByRole('link', { name: teacherOne.publicName, exact: true }),
       ).toHaveAttribute('href', `/people/${teacherOne.slug}`);
     }
+
+    // Learn Part 1: the live Course's own page names the same two classes —
+    // the same banner, its teacher's public name and nothing private.
+    await page.goto(PAGE.live);
+    const classes = page.getByRole('list', { name: copy('learn.course.classes') });
+    await expect(classes.getByRole('listitem')).toHaveCount(2);
+    await expect(page.getByRole('note')).toHaveText(copy('learnLive.fixture'));
+    for (const item of await classes.getByRole('listitem').all())
+      await expect(
+        item.getByRole('link', { name: teacherOne.publicName, exact: true }),
+      ).toHaveAttribute('href', `/people/${teacherOne.slug}`);
 
     for (const target of ['/learn/live', '/learn/teachers'])
       for (const visitor of [student, teacherOne]) {

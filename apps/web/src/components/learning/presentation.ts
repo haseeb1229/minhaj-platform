@@ -1,18 +1,14 @@
 import { localizedPath } from '@minhaj/contracts';
 import type { Locale } from '@minhaj/contracts';
-import {
-  COURSE_FORMATS,
-  COURSE_LEVELS,
-  learningLanguageCodeSchema,
-  type CourseFormat,
-  type CourseLabel,
-  type CourseLevel,
-  type OutlineLabel,
-} from '@minhaj/contracts/learning';
-import { personSlugSchema } from '@minhaj/contracts/people';
-import { topicSlugSchema } from '@minhaj/contracts/taxonomy';
+import type { CourseLabel, OutlineLabel } from '@minhaj/contracts/learning';
 
 import { coursePath, learningPathPath } from '@/contexts/learning';
+import {
+  DEFAULT_COURSES_QUERY,
+  LEARN_COURSES,
+  coursesHref,
+  type CoursesQuery,
+} from '@/components/topic-hub/courses-view';
 
 /**
  * Presentation decisions for the public Learn surfaces — PURE and free of React
@@ -27,7 +23,10 @@ import { coursePath, learningPathPath } from '@/contexts/learning';
  * AN UNKNOWN FILTER NEVER BROADENS. A topic, teacher, level, format or language
  * a visitor typed that does not parse is reported as INVALID — never quietly
  * dropped — so the catalogue shows an empty, explained result rather than
- * every Course (the Fatwa precedent, `@/components/fatwa/presentation`).
+ * every Course (the Fatwa precedent, `@/components/fatwa/presentation`). Since
+ * Learn Part 1 the catalogue's own address rules are the Courses listing's
+ * (`@/components/topic-hub/courses-view`, `readCatalogueQuery`), which keep
+ * that rule; this module spells the links into it.
  */
 
 type Query = Record<string, string | string[] | undefined>;
@@ -74,7 +73,7 @@ export function offsetHref(path: string, offset: number): string {
 }
 
 /* ===========================================================================
- * Browsing — `/learn/courses?topic=&level=&language=&format=&teacher=&offset=`
+ * Paged listings and filters
  * ========================================================================= */
 
 /** The deepest page a public Learning read accepts (`courseQuerySchema`). */
@@ -82,51 +81,13 @@ export const LEARNING_MAX_OFFSET = 25_000;
 
 /**
  * One filter as a URL gives it: absent, a well-formed value, or malformed.
- * Malformed is kept distinct from absent so it can never broaden.
+ * Malformed is kept distinct from absent so it can never broaden (the live
+ * directory's filters, `@/components/live-learning/presentation`).
  */
 export type Filter<T> =
   | { readonly state: 'none' }
   | { readonly state: 'value'; readonly value: T }
   | { readonly state: 'invalid' };
-
-export interface CourseBrowseQuery {
-  /** A Topic slug — Taxonomy resolves it, never Learning. */
-  readonly topic: Filter<string>;
-  readonly level: Filter<CourseLevel>;
-  /** A Taxonomy content-language code, never an interface locale. */
-  readonly language: Filter<string>;
-  readonly format: Filter<CourseFormat>;
-  /** A People slug — People resolves it, never Learning. */
-  readonly teacher: Filter<string>;
-  readonly offset: number;
-}
-
-function readFilter<T extends string>(
-  query: Query,
-  name: string,
-  valid: (value: string) => value is T,
-): Filter<T> {
-  const raw = single(query, name);
-  if (raw === null || raw === '') return { state: 'none' };
-  return valid(raw) ? { state: 'value', value: raw } : { state: 'invalid' };
-}
-
-/** A slug exactly as the owner's grammar writes it — no trimming into validity. */
-const slugOk =
-  (schema: typeof topicSlugSchema) =>
-  (value: string): value is string => {
-    const parsed = schema.safeParse(value);
-    return parsed.success && parsed.data === value;
-  };
-
-const levelOk = (value: string): value is CourseLevel =>
-  (COURSE_LEVELS as readonly string[]).includes(value);
-
-const formatOk = (value: string): value is CourseFormat =>
-  (COURSE_FORMATS as readonly string[]).includes(value);
-
-const languageOk = (value: string): value is string =>
-  learningLanguageCodeSchema.safeParse(value).success;
 
 /** A plain `?offset=`, bounded by the reader's ceiling; anything else is 0. */
 export function readLearnOffset(query: Query): number {
@@ -136,63 +97,22 @@ export function readLearnOffset(query: Query): number {
   return value <= LEARNING_MAX_OFFSET ? value : 0;
 }
 
-/** Everything `/learn/courses` reads from its query string, and nothing else. */
-export function readCourseBrowse(query: Query): CourseBrowseQuery {
-  return {
-    topic: readFilter(query, 'topic', slugOk(topicSlugSchema)),
-    level: readFilter(query, 'level', levelOk),
-    language: readFilter(query, 'language', languageOk),
-    format: readFilter(query, 'format', formatOk),
-    teacher: readFilter(query, 'teacher', slugOk(personSlugSchema)),
-    offset: readLearnOffset(query),
-  };
-}
-
-/** Is any filter of this browse query malformed? Then nothing is listed. */
-export function isInvalidCourseBrowse(query: CourseBrowseQuery): boolean {
-  return [query.topic, query.level, query.language, query.format, query.teacher].some(
-    (filter) => filter.state === 'invalid',
-  );
-}
-
-/** Is any filter set? Decides which empty state is true. */
-export function isFilteredCourseBrowse(query: CourseBrowseQuery): boolean {
-  return [query.topic, query.level, query.language, query.format, query.teacher].some(
-    (filter) => filter.state !== 'none',
-  );
-}
-
 /** The value a filter holds, or `null` when it holds none. */
 export function filterValue<T>(filter: Filter<T>): T | null {
   return filter.state === 'value' ? filter.value : null;
 }
 
-/** A catalogue view as the address names it — slugs and codes, never identifiers. */
-export interface CourseView {
-  readonly topic?: string | null;
-  readonly level?: CourseLevel | null;
-  readonly language?: string | null;
-  readonly format?: CourseFormat | null;
-  readonly teacher?: string | null;
-  readonly offset?: number;
-}
-
 /**
- * A catalogue view's address. Filters appear in one fixed order and only when
- * set, and the offset only past the first page, so one view has one spelling.
+ * A view of the catalogue, `/learn/courses` — its ONE address, built by the
+ * catalogue's own rule (`@/components/topic-hub/courses-view`, Learn Part
+ * 1): a Topic and a teacher by slug, filters in one fixed order, neutral values
+ * omitted. Every link into the catalogue is spelled here.
  */
-export function courseBrowseHref(locale: string, view: CourseView = {}): string {
-  const search = new URLSearchParams();
-  if (view.topic) search.set('topic', view.topic);
-  if (view.level) search.set('level', view.level);
-  if (view.language) search.set('language', view.language);
-  if (view.format) search.set('format', view.format);
-  if (view.teacher) search.set('teacher', view.teacher);
-  if (view.offset !== undefined && view.offset > 0)
-    search.set('offset', String(view.offset));
-  const encoded = search.toString();
-  const base = learnPath(locale, 'courses');
-  return encoded === '' ? base : `${base}?${encoded}`;
+export function courseBrowseHref(
+  locale: string,
+  change: Partial<CoursesQuery> = {},
+): string {
+  return coursesHref(LEARN_COURSES, locale, DEFAULT_COURSES_QUERY, change);
 }
 
 /** The previous and next page offsets of a bounded page, or `null` at an end. */

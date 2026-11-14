@@ -34,35 +34,67 @@ import { boundedOffset, PUBLISHED } from './shared.ts';
  * under the public predicate and the Topic again, so an error in the ordering
  * statement could only drop a Course, never admit one.
  *
+ * LEARN PART 1 — THE CATALOGUE. Under `scope: 'catalogue'` the set is every
+ * published Course and the Topic is one more filter, with a facet of its own;
+ * under the default `scope: 'topic'` the Topic is the set's own definition and
+ * with none nothing is read. `scopeOf` decides which, once, for every
+ * statement.
+ *
  * NOTHING PRIVATE IS READ: no Enrolment, Progress, request, class or lesson
  * body — a card is the catalogue's `COURSE_LISTING_SELECT`.
  */
 
 /** Which of the query's filters a statement applies. */
 interface Filters {
+  readonly topic: boolean;
   readonly format: boolean;
   readonly level: boolean;
   readonly language: boolean;
   readonly teacher: boolean;
 }
 
-const ALL_FILTERS: Filters = { format: true, level: true, language: true, teacher: true };
+const ALL_FILTERS: Filters = {
+  topic: true,
+  format: true,
+  level: true,
+  language: true,
+  teacher: true,
+};
 const NO_FILTERS: Filters = {
+  topic: false,
   format: false,
   level: false,
   language: false,
   teacher: false,
 };
 
+/**
+ * What a query is over: the Topic that DEFINES a hub's set (applied by every
+ * statement, whatever the filters), or the catalogue with an optional Topic
+ * FILTER — or `null` when it is a hub's read with no Topic, which reads
+ * nothing.
+ */
+type Scope =
+  | { readonly kind: 'topic'; readonly topic: string }
+  | { readonly kind: 'catalogue'; readonly topic: string | null };
+
+function scopeOf(q: TopicCourseQuery): Scope | null {
+  if (q.scope === 'catalogue') return { kind: 'catalogue', topic: q.topic };
+  return q.topic === null ? null : { kind: 'topic', topic: q.topic };
+}
+
 /** How many facet rows one facet answers with, at most. */
 const FACET_PAGE = 50;
 
 /** The set, as SQL over `[dbo].[Course] c`. */
-function whereOf(topic: string, q: TopicCourseQuery, use: Filters): Prisma.Sql {
-  const conditions = [
-    Prisma.sql`c.[state] = N'published'`,
-    Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[CourseTopic] o WHERE o.[courseId] = c.[id] AND o.[topicId] = ${topic})`,
-  ];
+function whereOf(scope: Scope, q: TopicCourseQuery, use: Filters): Prisma.Sql {
+  const conditions = [Prisma.sql`c.[state] = N'published'`];
+  // A hub's Topic is its set; the catalogue's narrows only while it is a filter.
+  const topic = scope.kind === 'topic' ? scope.topic : use.topic ? scope.topic : null;
+  if (topic !== null)
+    conditions.push(
+      Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[CourseTopic] o WHERE o.[courseId] = c.[id] AND o.[topicId] = ${topic})`,
+    );
   if (use.format && q.format !== null)
     conditions.push(Prisma.sql`c.[format] = ${q.format}`);
   if (use.level && q.level !== null) conditions.push(Prisma.sql`c.[level] = ${q.level}`);
@@ -100,7 +132,7 @@ export function createTopicCourseReader(): Pick<
   const db = getDatabaseClient();
 
   /** How many Courses a filtered set holds, and how many of each format. */
-  async function counts(topic: string, q: TopicCourseQuery, use: Filters) {
+  async function counts(scope: Scope, q: TopicCourseQuery, use: Filters) {
     const [row] = await db.$queryRaw<
       { courses: number; live: number | null; selfPaced: number | null }[]
     >`
@@ -108,7 +140,7 @@ export function createTopicCourseReader(): Pick<
              SUM(CASE WHEN c.[format] = N'live' THEN 1 ELSE 0 END) AS [live],
              SUM(CASE WHEN c.[format] = N'self-paced' THEN 1 ELSE 0 END) AS [selfPaced]
       FROM [dbo].[Course] c
-      WHERE ${whereOf(topic, q, use)};`;
+      WHERE ${whereOf(scope, q, use)};`;
     return {
       courses: Number(row?.courses ?? 0),
       live: Number(row?.live ?? 0),
@@ -118,9 +150,9 @@ export function createTopicCourseReader(): Pick<
 
   return {
     async topicCourses(q) {
-      // With no Topic nothing is "a course on the Topic": empty, never every Course.
-      if (q.topic === null) return { items: [], total: 0, hasMore: false };
-      const topic = q.topic;
+      // A hub with no Topic has no "course on the Topic": empty, never every Course.
+      const scope = scopeOf(q);
+      if (scope === null) return { items: [], total: 0, hasMore: false };
       const page = await db.$queryRaw<{ id: string; total: number }[]>`
         SELECT c.[id], COUNT(*) OVER () AS [total]
         FROM [dbo].[Course] c
@@ -130,7 +162,7 @@ export function createTopicCourseReader(): Pick<
           ORDER BY CASE WHEN x.[locale] = ${q.titleLocale} THEN 0
                         WHEN x.[locale] = c.[primaryLocale] THEN 1 ELSE 2 END, x.[locale]
         ) l
-        WHERE ${whereOf(topic, q, ALL_FILTERS)}
+        WHERE ${whereOf(scope, q, ALL_FILTERS)}
         ORDER BY ${ORDERS[q.sort]}
         OFFSET ${boundedOffset(q.offset)} ROWS FETCH NEXT ${q.limit + 1} ROWS ONLY`;
 
@@ -139,13 +171,18 @@ export function createTopicCourseReader(): Pick<
         page[0] === undefined
           ? q.offset === 0
             ? 0
-            : (await counts(topic, q, ALL_FILTERS)).courses
+            : (await counts(scope, q, ALL_FILTERS)).courses
           : Number(page[0].total);
       const ids = page.slice(0, q.limit).map((row) => row.id);
       if (ids.length === 0) return { items: [], total, hasMore: false };
 
+      const topic = scope.kind === 'topic' ? scope.topic : q.topic;
       const rows = await db.course.findMany({
-        where: { id: { in: ids }, ...PUBLISHED, topics: { some: { topicId: topic } } },
+        where: {
+          id: { in: ids },
+          ...PUBLISHED,
+          ...(topic === null ? {} : { topics: { some: { topicId: topic } } }),
+        },
         select: COURSE_LISTING_SELECT,
       });
       const byId = new Map(rows.map((row) => [row.id, toCourseListing(row)]));
@@ -162,7 +199,8 @@ export function createTopicCourseReader(): Pick<
      * show.
      */
     async topicCourseFacets(q) {
-      if (q.topic === null)
+      const scope = scopeOf(q);
+      if (scope === null)
         return {
           hub: {
             courses: 0,
@@ -176,38 +214,49 @@ export function createTopicCourseReader(): Pick<
           levels: { beginner: 0, intermediate: 0, advanced: 0 },
           languages: EMPTY_FACETS,
           teachers: EMPTY_FACETS,
+          topics: EMPTY_FACETS,
         };
-      const topic = q.topic;
       const without = (key: keyof Filters): Filters => ({ ...ALL_FILTERS, [key]: false });
-      const whole = whereOf(topic, q, NO_FILTERS);
-      const [hub, spread, formats, levels, languages, teachers] = await Promise.all([
-        counts(topic, q, NO_FILTERS),
-        db.$queryRaw<{ lessons: number; teachers: number; languages: number }[]>`
+      const whole = whereOf(scope, q, NO_FILTERS);
+      const [hub, spread, formats, levels, languages, teachers, topics] =
+        await Promise.all([
+          counts(scope, q, NO_FILTERS),
+          db.$queryRaw<{ lessons: number; teachers: number; languages: number }[]>`
           SELECT (SELECT COUNT(*) FROM [dbo].[Lesson] x
                   WHERE x.[courseId] IN (SELECT c.[id] FROM [dbo].[Course] c WHERE ${whole})) AS [lessons],
                  (SELECT COUNT(DISTINCT t.[personId]) FROM [dbo].[CourseTeacher] t
                   WHERE t.[courseId] IN (SELECT c.[id] FROM [dbo].[Course] c WHERE ${whole})) AS [teachers],
                  (SELECT COUNT(DISTINCT c.[languageCode]) FROM [dbo].[Course] c WHERE ${whole}) AS [languages];`,
-        counts(topic, q, without('format')),
-        db.$queryRaw<{ id: string; count: number }[]>`
+          counts(scope, q, without('format')),
+          db.$queryRaw<{ id: string; count: number }[]>`
           SELECT c.[level] AS [id], COUNT(*) AS [count]
           FROM [dbo].[Course] c
-          WHERE ${whereOf(topic, q, without('level'))} AND c.[level] IS NOT NULL
+          WHERE ${whereOf(scope, q, without('level'))} AND c.[level] IS NOT NULL
           GROUP BY c.[level];`,
-        db.$queryRaw<{ id: string; count: number }[]>`
+          db.$queryRaw<{ id: string; count: number }[]>`
           SELECT TOP (${FACET_PAGE + 1}) c.[languageCode] AS [id], COUNT(*) AS [count]
           FROM [dbo].[Course] c
-          WHERE ${whereOf(topic, q, without('language'))}
+          WHERE ${whereOf(scope, q, without('language'))}
           GROUP BY c.[languageCode]
           ORDER BY [count] DESC, [id] ASC;`,
-        db.$queryRaw<{ id: string; count: number }[]>`
+          db.$queryRaw<{ id: string; count: number }[]>`
           SELECT TOP (${FACET_PAGE + 1}) t.[personId] AS [id], COUNT(*) AS [count]
           FROM [dbo].[CourseTeacher] t
           JOIN [dbo].[Course] c ON c.[id] = t.[courseId]
-          WHERE ${whereOf(topic, q, without('teacher'))}
+          WHERE ${whereOf(scope, q, without('teacher'))}
           GROUP BY t.[personId]
           ORDER BY [count] DESC, [id] ASC;`,
-      ]);
+          // A hub has one Topic; only the catalogue is navigated by Topic.
+          scope.kind === 'topic'
+            ? Promise.resolve([])
+            : db.$queryRaw<{ id: string; count: number }[]>`
+          SELECT TOP (${FACET_PAGE + 1}) o.[topicId] AS [id], COUNT(*) AS [count]
+          FROM [dbo].[CourseTopic] o
+          JOIN [dbo].[Course] c ON c.[id] = o.[courseId]
+          WHERE ${whereOf(scope, q, without('topic'))}
+          GROUP BY o.[topicId]
+          ORDER BY [count] DESC, [id] ASC;`,
+        ]);
       const row = spread[0];
       const level = (name: string) =>
         Number(levels.find((entry) => entry.id === name)?.count ?? 0);
@@ -230,6 +279,7 @@ export function createTopicCourseReader(): Pick<
         },
         languages: facetPage(languages),
         teachers: facetPage(teachers),
+        topics: facetPage(topics),
       };
     },
 

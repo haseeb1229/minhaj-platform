@@ -16,6 +16,7 @@ import type {
   LiveLearningAuthority,
   OperationalTeacher,
   PublicSessionPage,
+  PublicSessionView,
   SessionParticipant,
   TeacherStudentDetail,
   TeacherStudentPage,
@@ -384,6 +385,12 @@ export interface ClassLearnerPort {
 export interface ClassPublicReaderPort {
   /** Upcoming scheduled sessions on published live Courses, soonest first, while activated. */
   upcomingSessions(now: Date, offset: number): Promise<PublicSessionPage>;
+  /**
+   * Learn Part 1 — the next upcoming scheduled sessions of ONE published live
+   * Course, soonest first, at most `COURSE_SESSIONS`, while activated; the
+   * same public predicate and the same fields as `upcomingSessions`.
+   */
+  courseSessions(now: Date, courseId: string): Promise<readonly PublicSessionView[]>;
   /** Accounts holding a current scope on a published live Course, with those Courses. Bounded. */
   operationalTeachers(now: Date): Promise<readonly OperationalTeacher[]>;
 }

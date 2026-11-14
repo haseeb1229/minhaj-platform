@@ -23,11 +23,14 @@ export async function LearningControls({
   locale,
   courseId,
   courseSlug,
+  lessons,
   live,
 }: {
   readonly locale: Locale;
   readonly courseId: string;
   readonly courseSlug: string;
+  /** The Course's public lesson count, which progress is counted against. */
+  readonly lessons: number;
   /** A `live` Course also takes trial-class requests. */
   readonly live: boolean;
 }) {
@@ -48,6 +51,8 @@ export async function LearningControls({
     enrolled: t('enrolled'),
     enrolledStatus: t('enrolledStatus'),
     continueLearning: t('continueLearning'),
+    progress: t.raw('progress') as string,
+    allComplete: t('allComplete'),
     requestTrial: t('requestTrial'),
     trialHelp: t('trialHelp'),
     trialRequested: t('trialRequested'),
@@ -68,6 +73,8 @@ export async function LearningControls({
   return (
     <LearningIsland
       courseId={courseId}
+      locale={locale}
+      lessons={lessons}
       live={live}
       signInHref={localizedPath(
         locale,

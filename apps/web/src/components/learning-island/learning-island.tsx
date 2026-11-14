@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState, type ReactNode } from 'react';
 
-import { Button, TextLink } from '@/components/ui';
+import { ActionLink, Button, TextLink } from '@/components/ui';
 import {
   readCourseStanding,
   sendLearning,
@@ -32,8 +32,15 @@ import {
  * booked or confirmed class — it says, in words, that it has not been
  * scheduled.
  *
+ * THE CALL TO ACTION FOLLOWS THE PERSON (Learn Part 1): signed out, the way
+ * to sign in and come back; signed in and not enrolled, Enrol; enrolled, their
+ * progress in words — "Lessons complete: 3 of 8", with a bar beside it that
+ * only repeats the words — and the way on to My Learning.
+ *
  * Labels arrive as a plain object built on the server from the public message
  * catalogue: this module reaches no server code and no translation provider.
+ * The progress line is the catalogue's own message with `{completed}` and
+ * `{total}` left in it, filled here with numbers in the page's locale.
  */
 
 export interface LearningIslandLabels {
@@ -49,6 +56,9 @@ export interface LearningIslandLabels {
   readonly enrolled: string;
   readonly enrolledStatus: string;
   readonly continueLearning: string;
+  /** "Lessons complete: {completed} of {total}", unformatted. */
+  readonly progress: string;
+  readonly allComplete: string;
   readonly requestTrial: string;
   readonly trialHelp: string;
   readonly trialRequested: string;
@@ -74,6 +84,19 @@ const PANEL =
   'flex flex-col gap-4 rounded-panel border border-border ' +
   'bg-surface-raised p-5 shadow-panel';
 
+/** The progress line with its numbers filled in, in the page's locale. */
+function progressText(
+  template: string,
+  locale: string,
+  completed: number,
+  total: number,
+) {
+  const number = new Intl.NumberFormat(locale);
+  return template
+    .replace('{completed}', number.format(completed))
+    .replace('{total}', number.format(total));
+}
+
 const STATUS_TONES: Record<Status['tone'], string> = {
   neutral: 'text-foreground-muted',
   success: 'text-foreground',
@@ -82,6 +105,8 @@ const STATUS_TONES: Record<Status['tone'], string> = {
 
 export function LearningIsland({
   courseId,
+  locale,
+  lessons,
   live,
   signInHref,
   myCourseHref,
@@ -89,6 +114,9 @@ export function LearningIsland({
   labels,
 }: {
   readonly courseId: string;
+  readonly locale: string;
+  /** The Course's public lesson count — what progress is out of. */
+  readonly lessons: number;
   readonly live: boolean;
   /** The sign-in page, returning to this Course's public page. */
   readonly signInHref: string;
@@ -168,8 +196,8 @@ export function LearningIsland({
           {phase.ended ? labels.sessionEnded : labels.signedOutPrompt}
         </p>
         {live ? <p className="text-sm">{labels.signedOutLivePrompt}</p> : null}
-        <p className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-          <TextLink href={signInHref}>{labels.signInToEnrol}</TextLink>
+        <p className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
+          <ActionLink href={signInHref}>{labels.signInToEnrol}</ActionLink>
           {live ? (
             <TextLink href={signInHref}>{labels.signInToRequestTrial}</TextLink>
           ) : null}
@@ -179,6 +207,7 @@ export function LearningIsland({
   }
 
   const { standing } = phase;
+  const completed = Math.min(standing.completedLessons, lessons);
 
   return frame(
     <section aria-labelledby={headingId} className={PANEL}>
@@ -190,13 +219,33 @@ export function LearningIsland({
       </div>
 
       {standing.enrolled ? (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           <p className="text-sm font-medium">
             <span aria-hidden="true">✓ </span>
             {labels.enrolled}
           </p>
-          <p className="text-sm">
-            <TextLink href={myCourseHref}>{labels.continueLearning}</TextLink>
+          {lessons === 0 ? null : (
+            <div className="flex flex-col gap-1.5">
+              <p className="text-sm">
+                {completed >= lessons
+                  ? labels.allComplete
+                  : progressText(labels.progress, locale, completed, lessons)}
+              </p>
+              {/*
+               * The words above carry the meaning; the bar only repeats them.
+               * A native `<progress>`: an inline `style` width is refused by
+               * the platform's `style-src 'self'` CSP, and this needs none.
+               */}
+              <progress
+                aria-hidden="true"
+                value={completed}
+                max={lessons}
+                className="h-2 w-full accent-action"
+              />
+            </div>
+          )}
+          <p>
+            <ActionLink href={myCourseHref}>{labels.continueLearning}</ActionLink>
           </p>
         </div>
       ) : (

@@ -109,9 +109,6 @@ export const LEARNING_LIMITS = Object.freeze({
 /** One public or administrative listing page. */
 export const LEARNING_PAGE = 24;
 
-/** One page of the teacher facet. */
-export const LEARNING_FACET_PAGE = 50;
-
 /** A content-language reference, in the shape Taxonomy's `Language.code` takes. */
 export const learningLanguageCodeSchema = z
   .string()
@@ -388,16 +385,6 @@ export interface LessonRecord {
   readonly labels: readonly LessonLabel[];
 }
 
-export interface TeacherFacet {
-  readonly id: string;
-  readonly courses: number;
-}
-
-export interface TeacherFacetPage {
-  readonly items: readonly TeacherFacet[];
-  readonly hasMore: boolean;
-}
-
 export interface PathListing {
   readonly id: string;
   readonly slug: string;
@@ -528,6 +515,11 @@ export interface LearnerPath {
 export interface LearnerCourseState {
   readonly enrolled: boolean;
   readonly trialRequested: boolean;
+  /**
+   * Learn Part 1: how many of the Course's lessons the person has completed —
+   * their own Progress rows on it, nothing else (0 when not enrolled).
+   */
+  readonly completedLessons: number;
 }
 
 /**

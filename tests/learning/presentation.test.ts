@@ -10,9 +10,6 @@ import {
   courseHref,
   courseLabel,
   coursePathOf,
-  filterValue,
-  isFilteredCourseBrowse,
-  isInvalidCourseBrowse,
   learnPageLinks,
   learnPath,
   learningDescription,
@@ -21,12 +18,21 @@ import {
   learningPathPathOf,
   offsetHref,
   outlineLabel,
-  readCourseBrowse,
   readLearnOffset,
 } from '../../apps/web/src/components/learning/presentation.ts';
+import {
+  DEFAULT_COURSES_QUERY,
+  LEARN_COURSES,
+  coursesCanonicalRedirect,
+  coursesFiltered,
+  readCatalogueQuery,
+} from '../../apps/web/src/components/topic-hub/courses-view.ts';
 
 /**
- * Phase 22 — the public Learn surfaces' pure presentation decisions.
+ * Phase 22 — the public Learn surfaces' pure presentation decisions; since
+ * Learn Part 1 the catalogue's address is the shared Courses listing's
+ * (`readCatalogueQuery`, `LEARN_COURSES`), proved here for what the catalogue
+ * has always promised.
  *
  * The rule these exist to hold: A FILTER NEVER BROADENS. A value a visitor
  * typed that does not parse is INVALID — the catalogue then lists nothing and
@@ -56,52 +62,50 @@ describe('Learn addresses', () => {
 
 describe('the catalogue query', () => {
   it('reads an empty query as the unfiltered first page', () => {
-    const browse = readCourseBrowse({});
-    expect(browse).toEqual({
-      topic: { state: 'none' },
-      level: { state: 'none' },
-      language: { state: 'none' },
-      format: { state: 'none' },
-      teacher: { state: 'none' },
-      offset: 0,
-    });
-    expect(isInvalidCourseBrowse(browse)).toBe(false);
-    expect(isFilteredCourseBrowse(browse)).toBe(false);
+    const read = readCatalogueQuery({});
+    expect(read).toEqual({ query: DEFAULT_COURSES_QUERY, invalid: false });
+    expect(coursesFiltered(read.query)).toBe(false);
   });
 
   it('treats an empty parameter as absent, as a submitted "Any" choice is', () => {
-    const browse = readCourseBrowse({
+    const read = readCatalogueQuery({
       topic: '',
       level: '',
       language: '',
       format: '',
       teacher: '',
     });
-    expect(isFilteredCourseBrowse(browse)).toBe(false);
-    expect(isInvalidCourseBrowse(browse)).toBe(false);
+    expect(read.invalid).toBe(false);
+    expect(coursesFiltered(read.query)).toBe(false);
   });
 
-  it('reads every well-formed filter, and they combine', () => {
-    const browse = readCourseBrowse({
+  it('reads every well-formed filter — a Topic and a teacher by slug — and they combine', () => {
+    const read = readCatalogueQuery({
       topic: 'fiqh',
       level: 'beginner',
       language: 'ur',
       format: 'live',
       teacher: 'a-teacher',
-      offset: '24',
+      sort: 'title',
+      page: '3',
     });
-    expect(filterValue(browse.topic)).toBe('fiqh');
-    expect(filterValue(browse.level)).toBe('beginner');
-    expect(filterValue(browse.language)).toBe('ur');
-    expect(filterValue(browse.format)).toBe('live');
-    expect(filterValue(browse.teacher)).toBe('a-teacher');
-    expect(browse.offset).toBe(24);
-    expect(isInvalidCourseBrowse(browse)).toBe(false);
-    expect(isFilteredCourseBrowse(browse)).toBe(true);
+    expect(read).toEqual({
+      query: {
+        format: 'live',
+        topic: 'fiqh',
+        level: 'beginner',
+        language: 'ur',
+        teacher: 'a-teacher',
+        sort: 'title',
+        page: 3,
+      },
+      invalid: false,
+    });
+    expect(coursesFiltered(read.query)).toBe(true);
   });
 
   it('accepts a regional content-language code', () => {
-    expect(filterValue(readCourseBrowse({ language: 'ur-PK' }).language)).toBe('ur-PK');
+    expect(readCatalogueQuery({ language: 'ur-PK' }).query.language).toBe('ur-PK');
   });
 
   it.each([
@@ -120,24 +124,30 @@ describe('the catalogue query', () => {
     ['teacher', 'a_teacher'],
     ['teacher', 'a teacher'],
   ])('reports a malformed %s (%j) as invalid, never as absent', (name, value) => {
-    const browse = readCourseBrowse({ [name]: value });
-    expect(isInvalidCourseBrowse(browse)).toBe(true);
-    // Still a filtered view: the empty state is the explained one.
-    expect(isFilteredCourseBrowse(browse)).toBe(true);
-    expect(browse[name as 'topic']).toEqual({ state: 'invalid' });
+    const read = readCatalogueQuery({ [name]: value });
+    expect(read.invalid).toBe(true);
+    expect(read.query[name as 'topic']).toBeNull();
+    // Never redirected away into a broader view: it stays, and says why.
+    expect(coursesCanonicalRedirect(LEARN_COURSES, 'en', { [name]: value })).toBeNull();
   });
 
   it('keeps one malformed filter invalid even beside good ones', () => {
-    const browse = readCourseBrowse({ topic: 'fiqh', level: 'master', format: 'live' });
-    expect(isInvalidCourseBrowse(browse)).toBe(true);
+    expect(
+      readCatalogueQuery({ topic: 'fiqh', level: 'master', format: 'live' }).invalid,
+    ).toBe(true);
   });
 
-  it('reads a repeated parameter as its first value', () => {
-    expect(filterValue(readCourseBrowse({ level: ['advanced', 'beginner'] }).level)).toBe(
-      'advanced',
-    );
-    expect(readCourseBrowse({ level: ['nonsense', 'beginner'] }).level).toEqual({
-      state: 'invalid',
+  it('reads a repeated filter as invalid — two values are no one view', () => {
+    // Until Learn Part 1 the first value was read; an address no control can
+    // produce is now explained rather than guessed at.
+    expect(readCatalogueQuery({ level: ['advanced', 'beginner'] }).invalid).toBe(true);
+    expect(readCatalogueQuery({ level: ['nonsense', 'beginner'] }).invalid).toBe(true);
+  });
+
+  it('keeps the order and the page tolerant: a wrong one is the neutral one', () => {
+    expect(readCatalogueQuery({ sort: 'popular', page: '0' })).toEqual({
+      query: DEFAULT_COURSES_QUERY,
+      invalid: false,
     });
   });
 
@@ -162,32 +172,72 @@ describe('the catalogue query', () => {
 describe('catalogue addresses', () => {
   it('is the bare catalogue with no view', () => {
     expect(courseBrowseHref('en')).toBe('/learn/courses');
-    expect(courseBrowseHref('en', { topic: null, offset: 0 })).toBe('/learn/courses');
+    expect(courseBrowseHref('en', { topic: null, page: 1 })).toBe('/learn/courses');
   });
 
   it('writes every filter in one fixed order, whatever order it is given in', () => {
     expect(
       courseBrowseHref('ur', {
-        offset: 48,
+        page: 3,
         teacher: 'a-teacher',
         format: 'self-paced',
         language: 'ar',
         level: 'advanced',
         topic: 'hadith',
+        sort: 'newest',
       }),
     ).toBe(
-      '/ur/learn/courses?topic=hadith&level=advanced&language=ar&format=self-paced&teacher=a-teacher&offset=48',
+      '/ur/learn/courses?format=self-paced&topic=hadith&level=advanced&language=ar&teacher=a-teacher&sort=newest&page=3',
     );
   });
 
   it('round-trips a view through the query reader', () => {
-    const href = courseBrowseHref('en', { topic: 'quran', format: 'live', offset: 24 });
+    const href = courseBrowseHref('en', { topic: 'quran', format: 'live', page: 2 });
     const query = Object.fromEntries(new URL(href, 'https://example.test').searchParams);
-    const browse = readCourseBrowse(query);
-    expect(filterValue(browse.topic)).toBe('quran');
-    expect(filterValue(browse.format)).toBe('live');
-    expect(browse.offset).toBe(24);
-    expect(isInvalidCourseBrowse(browse)).toBe(false);
+    const read = readCatalogueQuery(query);
+    expect(read.invalid).toBe(false);
+    expect(read.query).toMatchObject({ topic: 'quran', format: 'live', page: 2 });
+    expect(coursesCanonicalRedirect(LEARN_COURSES, 'en', query)).toBeNull();
+  });
+
+  it('answers the address the catalogue had until Learn Part 1 with ONE redirect to its view', () => {
+    // The former filter order …
+    expect(
+      coursesCanonicalRedirect(LEARN_COURSES, 'en', {
+        topic: 'quran',
+        level: 'beginner',
+        language: 'ur',
+        format: 'live',
+        teacher: 'a-teacher',
+      }),
+    ).toBe(
+      '/learn/courses?format=live&topic=quran&level=beginner&language=ur&teacher=a-teacher',
+    );
+    // … a form's empty controls …
+    expect(
+      coursesCanonicalRedirect(LEARN_COURSES, 'ar', {
+        topic: '',
+        level: 'advanced',
+        language: '',
+        teacher: '',
+        sort: 'level',
+      }),
+    ).toBe('/ar/learn/courses?level=advanced');
+    // … and a former offset of 24 a page: the page holding its first Course.
+    expect(coursesCanonicalRedirect(LEARN_COURSES, 'en', { offset: '24' })).toBe(
+      '/learn/courses?page=3',
+    );
+    expect(coursesCanonicalRedirect(LEARN_COURSES, 'en', { offset: '0' })).toBe(
+      '/learn/courses',
+    );
+    expect(
+      coursesCanonicalRedirect(LEARN_COURSES, 'ur', { topic: 'quran', offset: '48' }),
+    ).toBe('/ur/learn/courses?topic=quran&page=5');
+    expect(coursesCanonicalRedirect(LEARN_COURSES, 'en', { offset: 'abc' })).toBe(
+      '/learn/courses',
+    );
+    // A parameter the catalogue does not read is not its business.
+    expect(coursesCanonicalRedirect(LEARN_COURSES, 'en', { utm_source: 'x' })).toBeNull();
   });
 
   it('pages within the reader’s ceiling', () => {

@@ -1,11 +1,7 @@
 import 'server-only';
 
 import type { Locale } from '@minhaj/contracts';
-import {
-  LEARNING_FACET_PAGE,
-  LEARNING_PAGE,
-  type LearningPublicReaderPort,
-} from '@minhaj/contracts/learning';
+import { LEARNING_PAGE, type LearningPublicReaderPort } from '@minhaj/contracts/learning';
 
 import { getDatabaseClient } from '../../client.ts';
 import {
@@ -22,6 +18,7 @@ import {
   toPathDetail,
 } from './records.ts';
 import { bounded, boundedOffset, PUBLISHED, stampOf, TARGET_BATCH } from './shared.ts';
+import { createCourseRelationsReader } from './course-relations.ts';
 import { createTopicCourseReader } from './topic-courses.ts';
 
 /**
@@ -55,6 +52,7 @@ export function createLearningPublicReader(): LearningPublicReaderPort {
 
   return {
     ...createTopicCourseReader(),
+    ...createCourseRelationsReader(),
     async courses(query) {
       const rows = await db.course.findMany({
         where: {
@@ -98,24 +96,6 @@ export function createLearningPublicReader(): LearningPublicReaderPort {
         select: { course: { select: { slug: true } } },
       });
       return row?.course.slug ?? null;
-    },
-
-    /** Public attribution counted over published Courses only. Grants nothing. */
-    async teacherFacets(offset) {
-      const rows = await db.courseTeacher.groupBy({
-        by: ['personId'],
-        where: { course: PUBLISHED },
-        _count: { courseId: true },
-        orderBy: [{ _count: { courseId: 'desc' } }, { personId: 'asc' }],
-        skip: boundedOffset(offset),
-        take: LEARNING_FACET_PAGE + 1,
-      });
-      return {
-        items: rows
-          .slice(0, LEARNING_FACET_PAGE)
-          .map((row) => ({ id: row.personId, courses: row._count.courseId })),
-        hasMore: rows.length > LEARNING_FACET_PAGE,
-      };
     },
 
     async paths(offset) {

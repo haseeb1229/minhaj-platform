@@ -21,11 +21,11 @@ import type {
   PathPage,
   PathSearchRecord,
   PathValue,
-  TeacherFacetPage,
   TrialRequestRecord,
   TrialSummaryPage,
 } from './values.ts';
 import type {
+  CourseRelations,
   TopicCourseFacets,
   TopicCoursePage,
   TopicCoursePaths,
@@ -96,8 +96,12 @@ export interface LearningPublicReaderPort {
   course(slug: string): Promise<CourseDetail | null>;
   /** The current slug a current or FORMER slug of a published Course resolves to. */
   courseCanonicalSlug(slug: string): Promise<string | null>;
-  /** The People attributed as teachers on at least one published Course, with counts. */
-  teacherFacets(offset: number): Promise<TeacherFacetPage>;
+  /**
+   * LEARN PART 1 — where one PUBLISHED Course stands: the published paths
+   * holding it (with its step on each) and the published Courses studied with
+   * it. Empty for an identifier that names no published Course.
+   */
+  courseRelations(courseId: string): Promise<CourseRelations>;
 
   /**
    * QURAN PART 13 — A TOPIC'S COURSE HUB. One bounded, ordered page of the

@@ -34,6 +34,13 @@ import {
  *               reader of `titleLocale` is shown). Every order ends on the
  *               slug and the identifier, so it is total.
  *
+ * LEARN PART 1 — THE CATALOGUE IS THE SAME READ WITHOUT A TOPIC SCOPE. With
+ * `scope: 'catalogue'` the set is every PUBLISHED Course, and `topic` becomes
+ * one more narrowing filter (absent: every Topic) with a facet of its own; the
+ * default `scope: 'topic'` is the hubs' read exactly as before (no Topic, no
+ * Course). Which scope a caller asks for is explicit, so a hub whose Topic is
+ * missing can never fall through to the whole catalogue.
+ *
  * NOTHING HERE IS PRIVATE: no learner, enrolment, progress, request, class or
  * lesson body. A card is the catalogue's own `CourseListing`.
  */
@@ -47,8 +54,13 @@ export const TOPIC_COURSE_SORTS = Object.freeze(['level', 'newest', 'title'] as 
 export type TopicCourseSort = (typeof TOPIC_COURSE_SORTS)[number];
 export const topicCourseSortSchema = z.enum(TOPIC_COURSE_SORTS);
 
+/** What a read is over: one Topic's Courses (the hubs), or the whole catalogue. */
+export const TOPIC_COURSE_SCOPES = Object.freeze(['topic', 'catalogue'] as const);
+export type TopicCourseScope = (typeof TOPIC_COURSE_SCOPES)[number];
+
 export const topicCourseQuerySchema = z
   .object({
+    scope: z.enum(TOPIC_COURSE_SCOPES).default('topic'),
     topic: learningIdSchema.nullable().default(null),
     format: courseFormatSchema.nullable().default(null),
     level: courseLevelSchema.nullable().default(null),
@@ -91,7 +103,10 @@ export interface TopicCourseFacetPage {
  *   `formats`    the set under every filter but the format;
  *   `levels`     stated level → Courses, without the level filter;
  *   `languages`  content language → Courses, without the language filter;
- *   `teachers`   Person → Courses, without the teacher filter.
+ *   `teachers`   Person → Courses, without the teacher filter;
+ *   `topics`     Topic → Courses, without the Topic filter — the catalogue's
+ *                only (a Topic's hub has one Topic, so it is always empty
+ *                there).
  */
 export interface TopicCourseFacets {
   readonly hub: {
@@ -114,6 +129,7 @@ export interface TopicCourseFacets {
   };
   readonly languages: TopicCourseFacetPage;
   readonly teachers: TopicCourseFacetPage;
+  readonly topics: TopicCourseFacetPage;
 }
 
 /**
@@ -123,3 +139,35 @@ export interface TopicCourseFacets {
  * Courses, on any Topic, as every public path card counts them.
  */
 export type TopicCoursePaths = readonly PathListing[];
+
+/* ===========================================================================
+ * Learn Part 1 — what a Course page shows beside the Course
+ * ========================================================================= */
+
+/** How many related Courses one Course page names at most. */
+export const COURSE_RELATED = 6;
+
+/** How many LearningPaths one Course page names at most. */
+export const COURSE_PATHS = 6;
+
+/** One published LearningPath holding the Course, and the Course's step on it. */
+export interface CoursePathPlace {
+  readonly path: PathListing;
+  /** 1-based, among the path's PUBLISHED Courses in their order. */
+  readonly step: number;
+}
+
+/**
+ * Where one published Course stands in the catalogue — read only for a
+ * published Course, else empty:
+ *
+ *   `paths`    the published LearningPaths holding it, the latest publication
+ *              first, with its step on each (at most `COURSE_PATHS`);
+ *   `related`  other published Courses studied with it — sharing a Topic or
+ *              a published LearningPath — the most shared first, then the
+ *              latest publication (at most `COURSE_RELATED`).
+ */
+export interface CourseRelations {
+  readonly paths: readonly CoursePathPlace[];
+  readonly related: readonly CourseListing[];
+}
