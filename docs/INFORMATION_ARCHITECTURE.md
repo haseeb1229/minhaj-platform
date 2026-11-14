@@ -435,7 +435,13 @@ language, date, authors, where a paper appeared, the opening of its abstract, it
 to its full text — grouped by decade in the chronological orders and filtered by kind, language,
 author, decade and full text on the platform; no research record is linked to a passage, so it
 links no Surah — no longer the Library listing's mirror. The Quran landing's directory lists all
-three hubs. Quran Articles and Quran Teachers are not yet offered and are not linked
+three hubs. Since Quran Part 13 Quran Courses is a hub of its own (`/quran/courses`, under the
+landing's Learn group): Learn's courses on the `quran` topic for a learner choosing one — taught
+live or self-paced, grouped by level from the first steps, filtered by level, language and teacher,
+each card naming its teachers, language and syllabus size and leading to the course's own Learn
+page (where enrolment stays), with the learning paths that hold them and the reader, Tafsir and
+Tajweed to study alongside — no longer the Learn catalogue's mirror. Quran Articles and Quran
+Teachers are not yet offered and are not linked
 (ROUTE_MAP.md §3.3). While no corpus is active the section says so plainly instead of showing
 empty structure, and Listen's Quran Recitations appear only once a corpus is active. The
 signed-in additions remain Phase 21's. Since Rebaseline R2 a deployment that admits it may show a

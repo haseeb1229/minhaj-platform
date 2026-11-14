@@ -1809,6 +1809,8 @@ SAFEGUARDING / MEET / TEACHER-GRANT GATES      OPEN — OPEN_DECISIONS.md §2.1,
 - **Quran and Hadith related Course views** `/quran/courses` and `/hadith/courses` are delivered as
   Layer-4 compositions of Learning's public by-topic read for the seeded `quran` / `hadith` Topics;
   Quran and Hadith import nothing of Learning. `/quran/teachers` and `/hadith/scholars` stay absent.
+  *(At Phase-22 exit; Quran Part 13 has since made `/quran/courses` the Quran Courses hub, still a
+  Layer-4 composition of Learning's public reads — `/hadith/courses` is unchanged.)*
 - **Learner level and preferred format are still not collected** — the catalogue filters are chosen
   per visit and need no stored preference, so Personalisation gains no field (DOMAIN_MODEL.md §14.6).
 - **Export and closure:** `/api/my/export/learning` returns the person's Learning data as typed
@@ -3684,6 +3686,95 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > re-ordered addresses redirected to their one address; Urdu at 390 px and Arabic right to left,
 > no sideways scroll at 320 and 390 px; axe. *CI and staging evidence are recorded when they
 > exist.*
+>
+> **Quran Part 13 — the Quran Courses hub (owner direction: every Quran menu item built from A to
+> Z, one at a time; the last Quran menu item; on `feature/rebaseline-r2-full-ecosystem-completion`).**
+> Delivered (DOMAIN_MODEL.md §13.4; ROUTE_MAP.md §3.3; INFORMATION_ARCHITECTURE.md). No schema
+> change and no migration (the count stays at its Part-9 value); staging only, the production gates
+> unchanged.
+>
+> - **What the data is (fact).** A public Course (Phase 22) carries a slug, a primary locale,
+>   localised title, summary and description, a **level** (beginner, intermediate, advanced or not
+>   stated), a **format** (self-paced or taught live), a content language, Topics, ordered teachers
+>   (People attribution, granting nothing), its modules and lessons (counted on a card), and the
+>   latest publication instant; LearningPaths order published Courses. It has **no cover, price,
+>   duration, rating, enrolment count, certificate or featured flag**, so none is shown — no
+>   featured shelf, no "free" claim, no invented length. A live Course takes trial-class requests;
+>   enrolment and requests stay on the Course's own Learn page. **What staging will show:** the
+>   operator-run demo data (`docker/staging/bin/demo.sh`, `scripts/demo/content.ts`) publishes two
+>   sample Courses with **no Topic** (`topicIds: []`), so neither is "on the Quran" and the staging
+>   hub shows its honest empty state (with the way to the Learn catalogue) until an operator files a
+>   Course under the `quran` Topic. The local database holds no Course either.
+> - **Which courses, and how they are grouped (decision).** Until now `/quran/courses` was the
+>   Phase-22 related view — one page of Learning's `courses` read on the Topic, canonical to
+>   `/learn/courses`, with title links only. The hub reads the same set — every published Course
+>   on the `quran` Topic (with no Topic, none) — and groups it only as the data allows: by **how it
+>   is studied** (tabs: all, taught live, self-paced — shown only while both exist), and, in the
+>   hub's own **level order** (its neutral order: beginner, intermediate, advanced, then level not
+>   stated; within a level the latest publication first), as **steps grouped by level**. Filters:
+>   level, content language and teacher, each option counted; orders: by level, newest, title.
+> - **Learning reads (Model A).** `topicCourseQuerySchema`, `TOPIC_COURSES_PAGE` (12),
+>   `TOPIC_COURSE_PATHS` (6) and the `TopicCoursePage` and `TopicCourseFacets` shapes in
+>   `@minhaj/contracts/learning` (`topic-courses.ts`); `topicCourses`, `topicCourseFacets` and
+>   `topicCoursePaths` on `LearningPublicReaderPort`, implemented in
+>   `packages/database/src/adapters/learning/topic-courses.ts` — named for the Topic, not the Quran,
+>   because Learning knows only a Topic identifier: one bounded SQL page of identifiers in the
+>   learner's order with `COUNT(*) OVER ()` for the total, then those Courses loaded as the
+>   catalogue's own `CourseListing` cards with the public predicate and the Topic applied again;
+>   grouped facet reads (hub figures, formats, levels, content languages, teachers — each leaving
+>   its own filter out, each bounded); the published paths holding one of the Topic's published
+>   Courses (latest publication first, at most 6); one SQL predicate for every statement and every
+>   value a bound parameter; and Learning's public read service parsing every field first (an
+>   unknown format, level or order, a malformed Topic or teacher, a teacher named by slug, an offset
+>   past 25,000 or a page over 12 refused before any read). Nothing private is read: no enrolment,
+>   progress, request, class or lesson body. Quran imports nothing of Learning: the hub composes the
+>   reads at Layer 4, beside People's names and Taxonomy's content languages.
+> - **The hub** (`apps/web/src/components/quran/courses.tsx` and its pure address rules
+>   `courses-view.ts`, reusing the Explore parts and tolerant readers of Parts 10–12): a header
+>   with the figures the data supports (courses on the Quran; taught live and self-paced, each
+>   linked to its tab, when both exist; lessons; teachers; languages when more than one) and the
+>   ways to the Learn catalogue and — while a live Course exists — how trial classes work; the
+>   format tabs with counts; a GET filter form with removable chips and *Clear filters*;
+>   "1–12 of N courses"; the level steps, each with a three-step level mark beside the level's
+>   name and a line on who it suits; each course a card — how it is studied, its level, the title
+>   and summary in their own language and direction, *Taught by* its teachers, its content language
+>   and its module and lesson counts, and *View course* — both the title and the action linking to
+>   Learning's canonical `/learn/courses/{slug}`, where enrolment stays (no new mutation); a
+>   numbered pager; the **learning paths** holding one of these courses (Learning's own path cards);
+>   a **study-alongside** cue to the reader, the Tafsir hub and, while tajweed guidance or colours
+>   are public, the Tajweed hub; and honest states (unavailable while no corpus is active, no
+>   course yet, nothing matches, past the last page). Every view is a GET address that works
+>   without script, at ONE spelling (`coursesCanonicalRedirect`).
+> - **Canonical (decision).** `/quran/courses` is now canonical to itself (ROUTE_MAP.md §2.3,
+>   §3.3) rather than to `/learn/courses` (its canonical from Phase 22 to Quran Part 12,
+>   historical); every filtered or paged view is canonical to the bare path. While the corpus is not
+>   approved the page claims no canonical at all, like every Quran page.
+> - **The related view is gone.** `apps/web/src/components/quran/related.tsx` (the Phase-22
+>   `QuranCoursesPage`) and its two messages (`quran.relatedEmpty`, `quran.relatedOwner`) are
+>   removed — the hub replaced their last use. The Quran landing still lists Courses under Learn.
+>
+> **Proof:** `tests/quran/courses-view.test.ts` (the address a view reads and builds — tolerant,
+> round-tripping, level as the neutral order, the page bound inside Learning's offset bound; the
+> one redirect for a form's submission, another order, a malformed value, never for an address it
+> built, never for the former `?offset`; ranges; the level grouping and steps),
+> `tests/learning/topic-courses.test.ts` (the read service's defaults, fifteen query refusals and
+> four path-read refusals before any read); on SQL Server, as the runtime principal,
+> `tests/learning/topic-courses.integration.test.ts` (the set — published Courses on the Topic, no
+> draft, no archived Course, no other Topic, nothing without a Topic; format, level, language and
+> teacher alone and combined; the three orders and an Arabic reader's titles; pages and the total
+> past the end; each card's fields and never a lesson body; every facet without its own filter, an
+> unstated level counted by none; the published paths, never a draft path or another Topic's);
+> `tests/config/locale.test.ts` (the new modules, the removed one); the browser journey
+> (`tests/browser/quran.spec.ts`, "Quran Part 13"): the empty state when no other spec has
+> published a Course on the Topic (skipped, and said so, when one has — `learning.spec.ts` does in
+> its own project), the figures (counted on top of whatever other specs published), formats, the
+> level steps, a live and a self-paced card, a page of 12 and the second page with the unstated
+> level last, the learning path and the study-alongside links, never a draft, a course's page
+> reached by keyboard; every filter — teacher over two pages, format, level, language — and the
+> orders without script, chips and *Clear filters*, no results, past the end, malformed and
+> re-ordered addresses redirected to their one address; Urdu at 390 px and Arabic right to left,
+> no sideways scroll at 320 and 390 px; axe. The describe withdraws what it published when it is
+> done. *CI and staging evidence are recorded when they exist.*
 
 ---
 

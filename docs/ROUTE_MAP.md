@@ -297,7 +297,8 @@ it reserves is unpublished. No route changes.
 | `/quran/books` | The **Quran Books hub** (Quran Part 10): Library's public Works on the `quran` Topic together with every public Work that explains a Quran passage — figures, featured books, shelves (`?shelf=explains\|general`), `?surah`, `?language`, `?contributor`, `?sort=newest\|quran`, `?page`; **canonical to itself**, every filtered or paged view canonical to the bare path |
 | `/quran/videos` | The **Quran Videos hub** (Quran Part 11): Media's published Videos on the `quran` Topic together with every published Video that explains a Quran passage — figures, featured videos, lectures by Surah, shelves (`?shelf=explains\|general`), `?surah`, `?language`, `?speaker`, `?series`, `?length=short\|medium\|long`, `?sort=quran\|title` (newest is the neutral order), `?page`; **canonical to itself**, every filtered or paged view canonical to the bare path |
 | `/quran/research` | The **Quran Research hub** (Quran Part 12): Library's published Research and ResearchPaper records on the `quran` Topic — figures, kinds (`?kind=research\|paper`), `?language`, `?contributor`, `?decade` (the decade's first year), `?fulltext=1`, `?sort=oldest\|title` (newest is the neutral order), `?page`; **canonical to itself**, every filtered or paged view canonical to the bare path |
-| `/quran/{articles\|courses\|teachers}` | Related material, canonical to their domain collections (`/quran/research` was one until Quran Part 12 — historical) |
+| `/quran/courses` | The **Quran Courses hub** (Quran Part 13): Learning's published Courses on the `quran` Topic — figures, formats (`?format=live\|self-paced`), `?level`, `?language`, `?teacher` (a People identifier), `?sort=newest\|title` (by level is the neutral order), `?page`; each course links to `/learn/courses/{slug}`, where enrolment stays; **canonical to itself**, every filtered or paged view canonical to the bare path |
+| `/quran/{articles\|teachers}` | Related material, canonical to their domain collections (`/quran/research` was one until Quran Part 12 and `/quran/courses` until Quran Part 13 — historical) |
 
 Translation, tafsir and reciter selections are **query parameters, not path segments**, so a
 citation remains valid regardless of reading preferences.
@@ -361,6 +362,22 @@ Topic (with no `quran` Topic, none — an empty state, never a 404). The address
 The same one-spelling rule as the Books hub applies; the former related view's `?offset` is not a
 view parameter and is ignored.
 
+**Quran Part 13 — the Quran Courses hub (DOMAIN_MODEL.md §13.4).** `/quran/courses` is no longer a
+related-material view canonical to `/learn/courses` (its form from Phase 22 to Quran Part 12,
+historical): like the Books, Videos and Research hubs it is a curated navigational view of its own
+(§2.3), so its canonical address is the bare `/quran/courses`, and every combination of
+`?format`, `?level`, `?language`, `?teacher`, `?sort` and `?page` is a query filter canonical
+to it and never in a sitemap; while the corpus is not approved it claims no canonical at all. Its
+courses are Learning's, composed at Layer 4 from Learning's public `topicCourses`,
+`topicCourseFacets` and `topicCoursePaths` reads: the published Courses on the `quran` Topic
+(with no `quran` Topic, none — an empty state, never a 404), and the published LearningPaths
+holding one of them. `?teacher` names a People identifier, as the other hubs' contributor and
+speaker filters do (Learn's own catalogue names a teacher by People slug — §3.5, unchanged). Each
+course links to its canonical `/learn/courses/{slug}` and each path to `/learn/paths/{slug}`;
+enrolment, progress and trial requests stay on those Learn pages, and the hub has no mutation. The
+same one-spelling rule as the Books hub applies; the former related view's `?offset` is not a view
+parameter and is ignored.
+
 **Delivered in Phase 18 (engineering — no authoritative corpus is supplied; DELIVERY_PLAN.md
 Phase-18 continuity).** Every route above except the three related views named below. Surah, Ayah
 and Juz addresses are numbers; `?translation`, `?transliteration` and `?tafsir` name a public work's
@@ -378,7 +395,8 @@ historical);
 `/quran/articles` and `/quran/teachers` stay absent and unlinked until an owner exposes a
 deterministic by-topic read. **Phase 22:** `/quran/courses` is delivered — Learning's own public
 Course listing for the seeded `quran` topic, composed at Layer 4 and canonical to the Course catalogue
-(Quran imports nothing of Learning).
+(Quran imports nothing of Learning; canonical to the catalogue until Quran Part 13 made it the Quran
+Courses hub above — historical).
 
 **Rebaseline R2 — the reference mode and the reader (OPEN_DECISIONS.md §1.1; DOMAIN_MODEL.md
 §8.4).** A third corpus state joins the two above: a **reference** corpus (a licensed external text

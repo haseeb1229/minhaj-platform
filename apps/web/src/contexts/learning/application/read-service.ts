@@ -2,7 +2,9 @@ import { z } from 'zod';
 
 import {
   courseQuerySchema,
+  learningIdSchema,
   learningSlugSchema,
+  topicCourseQuerySchema,
   type LearningPublicReaderPort,
 } from '@minhaj/contracts/learning';
 
@@ -40,6 +42,25 @@ export function createLearningReadService(reader: LearningPublicReaderPort) {
 
     teacherFacets(offset = 0) {
       return reader.teacherFacets(browseOffset.parse(offset));
+    },
+
+    /**
+     * Quran Part 13 — a Topic's course hub, composed at Layer 4: one bounded
+     * page of the published Courses on the named Topic, the aggregates the hub
+     * is navigated by, and the published LearningPaths holding one of them.
+     * Every field is parsed here (an unknown level, format or order, a
+     * malformed Topic or teacher, an offset past the bound), before any read.
+     */
+    topicCourses(raw: unknown = {}) {
+      return reader.topicCourses(topicCourseQuerySchema.parse(raw));
+    },
+
+    topicCourseFacets(raw: unknown = {}) {
+      return reader.topicCourseFacets(topicCourseQuerySchema.parse(raw));
+    },
+
+    topicCoursePaths(topic: unknown = null) {
+      return reader.topicCoursePaths(learningIdSchema.nullable().parse(topic));
     },
 
     paths(offset = 0) {

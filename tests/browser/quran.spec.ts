@@ -298,7 +298,8 @@ function hrefsIn(page: Page): Promise<string[]> {
 
 /**
  * No Quran page links a teacher surface — none exists (§5). `/quran/courses` is
- * Learning's related view since Phase 22, so it is no longer absent.
+ * Learning's related view since Phase 22 (and the Quran Courses hub since Quran
+ * Part 13), so it is no longer absent.
  */
 async function expectNoLearningLinks(page: Page, where: string): Promise<void> {
   const hrefs = await page
@@ -657,6 +658,28 @@ test.describe('while no corpus is active', () => {
     await expect(main.getByRole('list', { name: 'Research on the Quran' })).toHaveCount(
       0,
     );
+  });
+
+  test('Part 13: the Courses hub is honestly unavailable — no list, no filters', async ({
+    page,
+  }) => {
+    for (const target of ['/quran/courses', '/ur/quran/courses?format=live']) {
+      const response = await page.goto(target);
+      expect(response?.status(), target).toBe(200);
+      expect(response?.headers()['set-cookie'], target).toBeUndefined();
+      const main = page.getByRole('main');
+      await expect(main.getByRole('form'), target).toHaveCount(0);
+      await expect(
+        main.getByRole('navigation', { name: /Pages of courses|کورسز کے صفحات/ }),
+        target,
+      ).toHaveCount(0);
+      await expect(main.locator('a[href^="/learn/courses/"]'), target).toHaveCount(0);
+    }
+    await page.goto('/quran/courses');
+    await expect(page.getByText(UNAVAILABLE)).toBeVisible();
+    await expect(
+      page.getByRole('main').getByRole('list', { name: 'Courses on the Quran' }),
+    ).toHaveCount(0);
   });
 
   test('Listen links no recitation catalogue', async ({ page }) => {
@@ -5949,6 +5972,645 @@ test.describe('Quran Part 12: the Quran Research hub', () => {
           '/quran/research?sort=title',
           '/quran/research?kind=paper&decade=1910',
           '/quran/research?page=900',
+        ]) {
+          await page.setViewportSize({ width, height: 800 });
+          await page.goto(target);
+          const result = await overflowOf(page);
+          expect(
+            result.overflow,
+            `${target} @${String(width)}: ${result.offenders.join(', ')}`,
+          ).toBeLessThanOrEqual(0);
+        }
+    });
+  });
+});
+
+test.describe('Quran Part 13: the Quran Courses hub', () => {
+  const TITLE = 'Courses on the Quran';
+  const part13 = {
+    teacherOne: randomUUID(),
+    teacherTwo: randomUUID(),
+    live: randomUUID(),
+    paced: randomUUID(),
+    advanced: randomUUID(),
+    unstated: randomUUID(),
+    draft: randomUUID(),
+    path: randomUUID(),
+  };
+  const part13Slug = {
+    teacherOne: `fixture-course-teacher-one-${run}`,
+    teacherTwo: `fixture-course-teacher-two-${run}`,
+    live: `fixture-quran-course-live-${run}`,
+    paced: `fixture-quran-course-paced-${run}`,
+    advanced: `fixture-quran-course-advanced-${run}`,
+    unstated: `fixture-quran-course-unstated-${run}`,
+    draft: `fixture-quran-course-draft-${run}`,
+    path: `fixture-quran-course-path-${run}`,
+  };
+  const COURSE = {
+    teacherOne: `Fixture Course Teacher One ${run}`,
+    teacherTwo: `Fixture Course Teacher Two ${run}`,
+    live: `NON_QURAN_FIXTURE Course Tajweed live ${run}`,
+    liveUrdu: `آزمائشی تجوید کورس ${run}`,
+    paced: `NON_QURAN_FIXTURE Course Tafsir self-paced ${run}`,
+    advanced: `NON_QURAN_FIXTURE Course advanced live ${run}`,
+    unstated: `NON_QURAN_FIXTURE Course level unstated ${run}`,
+    draft: `NON_QURAN_FIXTURE Course draft ${run}`,
+    path: `NON_QURAN_FIXTURE Course path ${run}`,
+  };
+  /**
+   * Twelve more Courses taught by the first teacher, four at each level, so
+   * that teacher's view runs to a second page (12 a page) and the hub's first
+   * page shows every stated level. All are published in 2001, so they sort
+   * after every other spec's Courses in Learn's own newest-first listings,
+   * and titled to sort last by title.
+   */
+  const FILLERS = 12;
+  const LEVELS = ['beginner', 'intermediate', 'advanced'] as const;
+
+  /**
+   * Other specs may publish a Course on the `quran` Topic before this one runs
+   * (`learning.spec.ts` publishes one, in its own project). What they publish
+   * is read here, before this describe writes anything, and every figure the
+   * hub states is checked as theirs plus this describe's own.
+   */
+  let base: {
+    courses: number;
+    live: number;
+    selfPaced: number;
+    beginner: number;
+    intermediate: number;
+    advanced: number;
+    arabic: number;
+    lessons: number;
+  };
+  const MINE = {
+    courses: 4 + FILLERS,
+    live: 2,
+    selfPaced: 2 + FILLERS,
+    beginner: 1 + FILLERS / 3,
+    intermediate: 1 + FILLERS / 3,
+    advanced: 1 + FILLERS / 3,
+    arabic: 1,
+    lessons: 3 + 2 + 3 + 1 + FILLERS,
+  };
+  const total = (key: keyof typeof MINE) => base[key] + MINE[key];
+
+  const card = (page: Page, title: string) =>
+    page
+      .getByRole('main')
+      .locator('li', { has: page.getByRole('link', { name: title, exact: true }) });
+  const levelHeadings = (page: Page) =>
+    page.getByRole('main').locator('section[aria-labelledby^="quran-courses-level-"] h3');
+
+  async function axe(page: Page, target: string, testInfo: TestInfo): Promise<void> {
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    const blocking = results.violations.filter(
+      (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+    );
+    for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+      testInfo.annotations.push({
+        type: 'axe',
+        description: `${target}: ${finding.id} (${String(finding.impact)})`,
+      });
+    expect(
+      blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+      target,
+    ).toEqual([]);
+  }
+
+  async function quranTopicId(): Promise<string> {
+    const [quran] = await sql.query<{ id: string }>(
+      `SELECT [id] FROM [dbo].[Topic] WHERE [slug] = N'quran';`,
+    );
+    if (quran === undefined) throw new Error('The seeded quran Topic is missing.');
+    return quran.id;
+  }
+
+  test.beforeAll(async () => {
+    const quran = await quranTopicId();
+    const [row] = await sql.query<Record<string, number | null>>(`
+      SELECT COUNT(*) AS [courses],
+        SUM(CASE WHEN c.[format] = N'live' THEN 1 ELSE 0 END) AS [live],
+        SUM(CASE WHEN c.[format] = N'self-paced' THEN 1 ELSE 0 END) AS [selfPaced],
+        SUM(CASE WHEN c.[level] = N'beginner' THEN 1 ELSE 0 END) AS [beginner],
+        SUM(CASE WHEN c.[level] = N'intermediate' THEN 1 ELSE 0 END) AS [intermediate],
+        SUM(CASE WHEN c.[level] = N'advanced' THEN 1 ELSE 0 END) AS [advanced],
+        SUM(CASE WHEN c.[languageCode] = N'ar' THEN 1 ELSE 0 END) AS [arabic],
+        (SELECT COUNT(*) FROM [dbo].[Lesson] x WHERE x.[courseId] IN (
+          SELECT k.[id] FROM [dbo].[Course] k WHERE k.[state] = N'published'
+            AND EXISTS (SELECT 1 FROM [dbo].[CourseTopic] o WHERE o.[courseId] = k.[id] AND o.[topicId] = N'${quran}'))) AS [lessons]
+      FROM [dbo].[Course] c
+      WHERE c.[state] = N'published'
+        AND EXISTS (SELECT 1 FROM [dbo].[CourseTopic] o WHERE o.[courseId] = c.[id] AND o.[topicId] = N'${quran}');`);
+    base = {
+      courses: Number(row?.['courses'] ?? 0),
+      live: Number(row?.['live'] ?? 0),
+      selfPaced: Number(row?.['selfPaced'] ?? 0),
+      beginner: Number(row?.['beginner'] ?? 0),
+      intermediate: Number(row?.['intermediate'] ?? 0),
+      advanced: Number(row?.['advanced'] ?? 0),
+      arabic: Number(row?.['arabic'] ?? 0),
+      lessons: Number(row?.['lessons'] ?? 0),
+    };
+  });
+
+  test('before any course on the Quran is published: the honest empty state, with the way to Learn', async ({
+    page,
+  }) => {
+    test.skip(
+      base.courses > 0,
+      'Another spec has already published a Course on the quran Topic in this run, so the empty hub cannot exist here.',
+    );
+    await visitFixture(page, '/quran/courses');
+    const main = page.getByRole('main');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(TITLE);
+    await expect(main.getByText('No courses on the Quran yet')).toBeVisible();
+    await expect(
+      main.getByRole('link', { name: 'All courses in Learn' }).first(),
+    ).toHaveAttribute('href', '/learn/courses');
+    await expect(main.getByRole('form', { name: 'Filter the courses' })).toHaveCount(0);
+    await expect(main.getByRole('navigation', { name: 'Pages of courses' })).toHaveCount(
+      0,
+    );
+    await expect(main.getByRole('link', { name: /courses? on the Quran$/ })).toHaveCount(
+      0,
+    );
+    // The study surfaces a course is read alongside are offered all the same.
+    await expect(main.getByRole('link', { name: 'Start reading' })).toHaveAttribute(
+      'href',
+      '/quran/read',
+    );
+  });
+
+  test.describe('with courses on the Quran', () => {
+    test.beforeAll(async () => {
+      test.setTimeout(180_000);
+      const quran = await quranTopicId();
+      const course = (
+        id: string,
+        slug: string,
+        fields: {
+          readonly title: string;
+          readonly urduTitle?: string;
+          readonly summary: string;
+          readonly level: string | null;
+          readonly format: 'live' | 'self-paced';
+          readonly language: string;
+          readonly teachers: readonly string[];
+          readonly lessons: readonly number[];
+          readonly published: string;
+          readonly draft?: boolean;
+        },
+      ) => {
+        const modules = fields.lessons
+          .map((count, position) => {
+            const moduleId = randomUUID();
+            const lessons = Array.from({ length: count }, (_, index) => {
+              const lessonId = randomUUID();
+              return `
+                INSERT INTO [dbo].[Lesson] ([id],[courseId],[moduleId],[position]) VALUES (N'${lessonId}', N'${id}', N'${moduleId}', ${String(index)});
+                INSERT INTO [dbo].[LessonLabel] ([lessonId],[locale],[title],[summary],[body]) VALUES (N'${lessonId}', N'en', N'NON_QURAN_FIXTURE lesson ${run}', N'', N'NON_QURAN_FIXTURE lesson body ${run}');`;
+            }).join('');
+            return `
+              INSERT INTO [dbo].[CourseModule] ([id],[courseId],[position]) VALUES (N'${moduleId}', N'${id}', ${String(position)});
+              INSERT INTO [dbo].[CourseModuleLabel] ([moduleId],[locale],[title],[summary]) VALUES (N'${moduleId}', N'en', N'NON_QURAN_FIXTURE module ${run}', N'');
+              ${lessons}`;
+          })
+          .join('');
+        return `
+          INSERT INTO [dbo].[Course] ([id],[slug],[primaryLocale],[state],[level],[format],[languageCode],[publishedAt],[version],[updatedAt]) VALUES
+            (N'${id}', N'${slug}', N'en', N'draft', ${fields.level === null ? 'NULL' : n(fields.level)}, N'${fields.format}', N'${fields.language}', NULL, 1, SYSUTCDATETIME());
+          INSERT INTO [dbo].[CourseLabel] ([courseId],[locale],[title],[summary],[description]) VALUES
+            (N'${id}', N'en', ${n(fields.title)}, ${n(fields.summary)}, N'')
+            ${fields.urduTitle === undefined ? '' : `, (N'${id}', N'ur', ${n(fields.urduTitle)}, N'', N'')`};
+          INSERT INTO [dbo].[CourseTopic] ([courseId],[topicId]) VALUES (N'${id}', N'${quran}');
+          ${fields.teachers.map((teacher, position) => `INSERT INTO [dbo].[CourseTeacher] ([courseId],[personId],[position]) VALUES (N'${id}', N'${teacher}', ${String(position)});`).join('\n')}
+          ${modules}
+          ${
+            fields.draft === true
+              ? ''
+              : `UPDATE [dbo].[Course] SET [state] = N'published', [publishedAt] = '${fields.published}', [version] = 2, [updatedAt] = SYSUTCDATETIME() WHERE [id] = N'${id}';`
+          }`;
+      };
+      const fillers = Array.from({ length: FILLERS }, (_, index) => {
+        const number = String(index + 1).padStart(2, '0');
+        return course(randomUUID(), `fixture-quran-course-filler-${run}-${number}`, {
+          title: `Zz NON_QURAN_FIXTURE course filler ${run} ${number}`,
+          summary: '',
+          level: LEVELS[index % 3] ?? null,
+          format: 'self-paced',
+          language: 'en',
+          teachers: [part13.teacherOne],
+          lessons: [1],
+          published: `2001-01-${number}T00:00:00`,
+        });
+      });
+      await sql.query(`
+        INSERT INTO [dbo].[Person] ([id],[slug],[primaryLocale],[status]) VALUES
+          (N'${part13.teacherOne}', N'${part13Slug.teacherOne}', N'en', N'published'),
+          (N'${part13.teacherTwo}', N'${part13Slug.teacherTwo}', N'en', N'published');
+        INSERT INTO [dbo].[PersonTranslation] ([personId],[locale],[name],[biography]) VALUES
+          (N'${part13.teacherOne}', N'en', ${n(COURSE.teacherOne)}, NULL),
+          (N'${part13.teacherTwo}', N'en', ${n(COURSE.teacherTwo)}, NULL);
+        ${course(part13.live, part13Slug.live, {
+          title: COURSE.live,
+          urduTitle: COURSE.liveUrdu,
+          summary: `NON_QURAN_FIXTURE summary of a live course ${run}.`,
+          level: 'beginner',
+          format: 'live',
+          language: 'ur',
+          teachers: [part13.teacherOne, part13.teacherTwo],
+          lessons: [1, 2],
+          published: '2002-03-01T00:00:00',
+        })}
+        ${course(part13.paced, part13Slug.paced, {
+          title: COURSE.paced,
+          summary: `NON_QURAN_FIXTURE summary of a self-paced course ${run}.`,
+          level: 'intermediate',
+          format: 'self-paced',
+          language: 'en',
+          teachers: [part13.teacherOne],
+          lessons: [2],
+          published: '2002-06-01T00:00:00',
+        })}
+        ${course(part13.advanced, part13Slug.advanced, {
+          title: COURSE.advanced,
+          summary: '',
+          level: 'advanced',
+          format: 'live',
+          language: 'ar',
+          teachers: [part13.teacherTwo],
+          lessons: [3],
+          published: '2002-01-01T00:00:00',
+        })}
+        ${course(part13.unstated, part13Slug.unstated, {
+          title: COURSE.unstated,
+          summary: '',
+          level: null,
+          format: 'self-paced',
+          language: 'en',
+          teachers: [],
+          lessons: [1],
+          published: '2002-02-01T00:00:00',
+        })}
+        ${course(part13.draft, part13Slug.draft, {
+          title: COURSE.draft,
+          summary: '',
+          level: 'beginner',
+          format: 'self-paced',
+          language: 'en',
+          teachers: [part13.teacherOne],
+          lessons: [1],
+          published: '2002-01-01T00:00:00',
+          draft: true,
+        })}
+        ${fillers.join('\n')}
+
+        INSERT INTO [dbo].[LearningPath] ([id],[slug],[primaryLocale],[state],[publishedAt],[version],[updatedAt]) VALUES
+          (N'${part13.path}', N'${part13Slug.path}', N'en', N'draft', NULL, 1, SYSUTCDATETIME());
+        INSERT INTO [dbo].[LearningPathLabel] ([pathId],[locale],[title],[summary],[description]) VALUES
+          (N'${part13.path}', N'en', ${n(COURSE.path)}, N'NON_QURAN_FIXTURE path summary.', N'');
+        INSERT INTO [dbo].[LearningPathCourse] ([pathId],[courseId],[position]) VALUES
+          (N'${part13.path}', N'${part13.live}', 0),
+          (N'${part13.path}', N'${part13.paced}', 1);
+        UPDATE [dbo].[LearningPath] SET [state] = N'published', [publishedAt] = '2002-07-01T00:00:00', [version] = 2, [updatedAt] = SYSUTCDATETIME()
+          WHERE [id] = N'${part13.path}';
+      `);
+    });
+
+    // What this describe published is withdrawn when it is done, so no spec
+    // after it meets these Courses in Learn's own catalogue.
+    test.afterAll(async () => {
+      await sql.query(`
+        UPDATE [dbo].[LearningPath] SET [state] = N'draft', [version] = [version] + 1, [updatedAt] = SYSUTCDATETIME()
+          WHERE [id] = N'${part13.path}';
+        UPDATE [dbo].[Course] SET [state] = N'archived', [version] = [version] + 1, [updatedAt] = SYSUTCDATETIME()
+          WHERE [state] = N'published' AND [slug] LIKE N'fixture-quran-course-%-${run}%';
+      `);
+    });
+
+    test('the hub: its figures, formats, level steps, cards and paths — never a draft', async ({
+      page,
+    }, testInfo) => {
+      test.setTimeout(180_000);
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await visitFixture(page, '/quran/courses');
+      const main = page.getByRole('main');
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(TITLE);
+
+      // The figures the data supports, each counted thing linked where listed.
+      await expect(
+        main.getByRole('link', {
+          name: new RegExp(`^${String(total('courses'))} courses on the Quran$`),
+        }),
+      ).toHaveAttribute('href', '#quran-courses-list');
+      await expect(
+        main.getByRole('link', {
+          name: new RegExp(`^${String(total('live'))} taught live$`),
+        }),
+      ).toHaveAttribute('href', '/quran/courses?format=live');
+      await expect(
+        main.getByRole('link', {
+          name: new RegExp(`^${String(total('selfPaced'))} self-paced$`),
+        }),
+      ).toHaveAttribute('href', '/quran/courses?format=self-paced');
+      // A figure that lists nothing of its own is stated, not linked.
+      await expect(
+        main
+          .locator('header div')
+          .filter({ hasText: new RegExp(`^${String(total('lessons'))}\\s*lessons$`) }),
+      ).toHaveCount(1);
+      await expect(
+        main.getByRole('link', { name: 'All courses in Learn' }),
+      ).toHaveAttribute('href', '/learn/courses');
+      await expect(
+        main.getByRole('link', { name: 'How trial classes work' }),
+      ).toHaveAttribute('href', '/learn/trial');
+      await expect(main).not.toContainText(COURSE.draft);
+
+      // The ways to study, the current one marked, each counted.
+      const formats = page.getByRole('navigation', { name: 'Ways to study' });
+      await expect(formats.getByRole('link', { name: /^All/ })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+      await expect(formats.getByRole('link', { name: /^Taught live/ })).toHaveAttribute(
+        'href',
+        '/quran/courses?format=live',
+      );
+      await expect(formats.getByRole('link', { name: /^Taught live/ })).toContainText(
+        String(total('live')),
+      );
+
+      // By level, first steps first: the first page opens on the beginners.
+      await expect(levelHeadings(page).first()).toHaveText('Beginner');
+      await expect(levelHeadings(page)).toContainText(['Beginner', 'Intermediate']);
+
+      // A live course: how it is studied, its level, its title in its own
+      // language, its teachers in order, content language, syllabus size and
+      // the way to its page at Learn's canonical address.
+      const live = card(page, COURSE.live);
+      await expect(live).toContainText('Taught live');
+      await expect(live).toContainText('Beginner');
+      await expect(live).toContainText(
+        `NON_QURAN_FIXTURE summary of a live course ${run}.`,
+      );
+      await expect(live).toContainText(
+        `Taught by: ${COURSE.teacherOne} · ${COURSE.teacherTwo}`,
+      );
+      await expect(live.locator('[lang="ur"]').first()).toBeVisible();
+      await expect(live).toContainText('2 modules');
+      await expect(live).toContainText('3 lessons');
+      await expect(
+        live.getByRole('link', { name: COURSE.live, exact: true }),
+      ).toHaveAttribute('href', `/learn/courses/${part13Slug.live}`);
+      await expect(
+        live.getByRole('link', { name: `View course: ${COURSE.live}` }),
+      ).toHaveAttribute('href', `/learn/courses/${part13Slug.live}`);
+
+      // A self-paced course, its one teacher, and no invented level or price.
+      const paced = card(page, COURSE.paced);
+      await expect(paced).toContainText('Self-paced');
+      await expect(paced).toContainText('Intermediate');
+      await expect(paced).toContainText(`Taught by: ${COURSE.teacherOne}`);
+      await expect(paced).toContainText('1 module');
+      await expect(paced).toContainText('2 lessons');
+
+      // A page of 12, said in words.
+      await expect(
+        main.getByText(new RegExp(`^1–12 of ${String(total('courses'))} courses$`)),
+      ).toBeVisible();
+
+      // The learning path holding one of these courses, at Learn's address.
+      const paths = page.getByRole('region', { name: 'Learning paths' });
+      await expect(
+        paths.getByRole('link', { name: COURSE.path, exact: true }),
+      ).toHaveAttribute('href', `/learn/paths/${part13Slug.path}`);
+      await expect(
+        paths.getByRole('link', { name: 'All learning paths' }),
+      ).toHaveAttribute('href', '/learn/paths');
+
+      // The Quran's own study surfaces, alongside.
+      const alongside = page.getByRole('region', { name: 'Study alongside' });
+      await expect(
+        alongside.getByRole('link', { name: 'Start reading' }),
+      ).toHaveAttribute('href', '/quran/read');
+      await expect(alongside.getByRole('link', { name: 'Tafsir' })).toHaveAttribute(
+        'href',
+        '/quran/tafsir',
+      );
+
+      await page.screenshot({
+        path: testInfo.outputPath('part13-hub-en-1440.png'),
+        fullPage: true,
+      });
+      await axe(page, '/quran/courses', testInfo);
+
+      // A second page, by the pager.
+      const pager = page.getByRole('navigation', { name: 'Pages of courses' });
+      await pager.getByRole('link', { name: 'Next page' }).click();
+      await page.waitForURL('**/quran/courses?page=2');
+      await expect(pager.locator('[aria-current="page"]')).toHaveAccessibleName('Page 2');
+      await expect(
+        main.getByText(
+          new RegExp(
+            `^13–${String(total('courses'))} of ${String(total('courses'))} courses$`,
+          ),
+        ),
+      ).toBeVisible();
+      // The last of the levels: a course whose level is not stated, said so.
+      await expect(levelHeadings(page).last()).toHaveText('Level not stated');
+      await expect(card(page, COURSE.unstated)).toHaveCount(1);
+
+      // Keyboard: a course's action is reachable and followed by Enter, to
+      // the course's own Learn page — where enrolment lives.
+      await page.goto('/quran/courses');
+      const view = card(page, COURSE.paced).getByRole('link', {
+        name: `View course: ${COURSE.paced}`,
+      });
+      await view.focus();
+      await expect(view).toBeFocused();
+      await page.keyboard.press('Enter');
+      await page.waitForURL(`**/learn/courses/${part13Slug.paced}`);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(COURSE.paced);
+    });
+
+    test('formats, filters and orders are addresses that work without script — chips, reset and honest empty states', async ({
+      browser,
+    }) => {
+      test.setTimeout(180_000);
+      const plain = await browser.newContext({
+        baseURL: baseUrl(),
+        javaScriptEnabled: false,
+      });
+      contexts.push(plain);
+      const page = await plain.newPage();
+      await page.goto('/quran/courses');
+      const main = page.getByRole('main');
+      const form = page.getByRole('form', { name: 'Filter the courses' });
+
+      // By teacher: exactly that teacher's fourteen, as a removable chip, over
+      // two pages.
+      await form.getByLabel('Teacher', { exact: true }).selectOption(part13.teacherOne);
+      await form.getByRole('button', { name: 'Show courses' }).click();
+      await page.waitForURL(`**/quran/courses?teacher=${part13.teacherOne}`);
+      await expect(main.getByText(/^1–12 of 14 courses$/)).toBeVisible();
+      await expect(page.getByLabel('Teacher', { exact: true })).toHaveValue(
+        part13.teacherOne,
+      );
+      await expect(
+        page
+          .getByRole('list', { name: 'Filters in use' })
+          .getByRole('link', { name: `Remove filter: ${COURSE.teacherOne}` }),
+      ).toHaveAttribute('href', '/quran/courses');
+      await page
+        .getByRole('navigation', { name: 'Pages of courses' })
+        .getByRole('link', { name: 'Next page' })
+        .click();
+      await page.waitForURL(`**/quran/courses?teacher=${part13.teacherOne}&page=2`);
+      await expect(main.getByText(/^13–14 of 14 courses$/)).toBeVisible();
+
+      // A format keeps the teacher, counted within it, and returns to page 1.
+      const formats = page.getByRole('navigation', { name: 'Ways to study' });
+      await expect(formats.getByRole('link', { name: /^Taught live/ })).toHaveText(
+        /^Taught live\s*1$/,
+      );
+      await formats.getByRole('link', { name: /^Taught live/ }).click();
+      await page.waitForURL(`**/quran/courses?format=live&teacher=${part13.teacherOne}`);
+      await expect(card(page, COURSE.live)).toHaveCount(1);
+      await expect(card(page, COURSE.paced)).toHaveCount(0);
+      await expect(main.getByText(/^1–1 of 1 course$/)).toBeVisible();
+
+      // A level, chosen in the form, counted in its option.
+      await page.goto('/quran/courses');
+      await expect(
+        page.getByLabel('Level', { exact: true }).locator('option[value="advanced"]'),
+      ).toHaveText(`Advanced (${String(total('advanced'))})`);
+      await page.getByLabel('Level', { exact: true }).selectOption('advanced');
+      await page.getByRole('button', { name: 'Show courses' }).click();
+      await page.waitForURL('**/quran/courses?level=advanced');
+      await expect(card(page, COURSE.advanced)).toHaveCount(1);
+      await expect(card(page, COURSE.live)).toHaveCount(0);
+      await expect(levelHeadings(page)).toHaveText(['Advanced']);
+
+      // A content language.
+      await page.goto('/quran/courses?language=ar');
+      await expect(card(page, COURSE.advanced)).toHaveCount(1);
+      await expect(card(page, COURSE.paced)).toHaveCount(0);
+      await expect(
+        main.getByText(
+          new RegExp(
+            `^1–${String(total('arabic'))} of ${String(total('arabic'))} courses?$`,
+          ),
+        ),
+      ).toBeVisible();
+
+      // By title: one flat list, no level steps, in title order.
+      await page.goto(`/quran/courses?teacher=${part13.teacherOne}&sort=title`);
+      await expect(page.getByLabel('Order', { exact: true })).toHaveValue('title');
+      const list = page.getByRole('list', { name: TITLE, exact: true });
+      await expect(list.locator(':scope > li')).toHaveCount(12);
+      await expect(levelHeadings(page)).toHaveCount(0);
+      const titles = await list
+        .locator(':scope > li h3')
+        .evaluateAll((nodes) => nodes.map((node) => node.textContent ?? ''));
+      expect(titles.slice(0, 2)).toEqual([COURSE.paced, COURSE.live]);
+
+      // Newest first: the teacher's latest publication opens the list.
+      await page.goto(`/quran/courses?teacher=${part13.teacherOne}&sort=newest`);
+      const newest = await page
+        .getByRole('list', { name: TITLE, exact: true })
+        .locator(':scope > li h3')
+        .first()
+        .textContent();
+      expect(newest).toBe(COURSE.paced);
+
+      // Nothing matches: said, with the way back, and no pager.
+      await page.goto(`/quran/courses?level=intermediate&teacher=${part13.teacherTwo}`);
+      await expect(page.getByText('No course matches these filters')).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: 'Clear filters' }).first(),
+      ).toHaveAttribute('href', '/quran/courses');
+      await expect(
+        page.getByRole('navigation', { name: 'Pages of courses' }),
+      ).toHaveCount(0);
+
+      // Past the last page: said, with the first page offered.
+      await page.goto('/quran/courses?page=900');
+      await expect(page.getByText('This page is empty')).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: 'Go to the first page' }),
+      ).toHaveAttribute('href', '/quran/courses');
+
+      // Anything malformed is ONE redirect to the plain hub, never an error;
+      // another spelling of a view, to that view's one address.
+      for (const target of [
+        '/quran/courses?level=expert',
+        '/quran/courses?teacher=nobody',
+        "/quran/courses?language=x'y",
+        '/quran/courses?format=drafts&sort=random&page=-1',
+        '/quran/courses?sort=level',
+      ]) {
+        const response = await page.goto(target);
+        expect(response?.status(), target).toBe(200);
+        expect(new URL(page.url()).pathname + new URL(page.url()).search, target).toBe(
+          '/quran/courses',
+        );
+        await expect(page.getByRole('heading', { level: 1 }), target).toHaveText(TITLE);
+      }
+      await page.goto('/quran/courses?sort=title&format=live');
+      expect(new URL(page.url()).search).toBe('?format=live&sort=title');
+      // The former related view's offset is no view parameter: left alone.
+      const old = await page.goto('/quran/courses?offset=24');
+      expect(old?.status()).toBe(200);
+      expect(new URL(page.url()).search).toBe('?offset=24');
+    });
+
+    test('Urdu and Arabic read right to left, fit 320 and 390 px, and have no serious accessibility finding', async ({
+      page,
+    }, testInfo) => {
+      test.setTimeout(240_000);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await visitFixture(page, localizedPath('ur', '/quran/courses'), 'ur');
+      await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('قرآن پر کورسز');
+      // A course with Urdu words is named by them, right to left; one with
+      // English words only keeps its own language inside the Urdu page.
+      await expect(
+        page.getByRole('heading', { name: COURSE.liveUrdu, exact: true }),
+      ).toHaveAttribute('dir', 'rtl');
+      const paced = page.getByRole('heading', { name: COURSE.paced, exact: true });
+      await expect(paced).toHaveAttribute('lang', 'en');
+      await expect(paced).toHaveAttribute('dir', 'ltr');
+      const { overflow, offenders } = await overflowOf(page);
+      expect(overflow, offenders.join(', ')).toBeLessThanOrEqual(0);
+      await page.screenshot({
+        path: testInfo.outputPath('part13-hub-ur-390.png'),
+        fullPage: true,
+      });
+      await axe(page, '/ur/quran/courses', testInfo);
+
+      await visitFixture(page, localizedPath('ar', '/quran/courses?format=live'), 'ar');
+      await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+      await axe(page, '/ar/quran/courses?format=live', testInfo);
+
+      await visitFixture(page, '/quran/courses');
+      await page.screenshot({
+        path: testInfo.outputPath('part13-hub-en-390.png'),
+        fullPage: true,
+      });
+      for (const width of [320, 390])
+        for (const target of [
+          '/quran/courses',
+          '/ur/quran/courses',
+          '/ar/quran/courses?format=live',
+          `/quran/courses?teacher=${part13.teacherOne}`,
+          `/quran/courses?teacher=${part13.teacherOne}&sort=title`,
+          `/quran/courses?level=intermediate&teacher=${part13.teacherTwo}`,
+          '/quran/courses?page=900',
         ]) {
           await page.setViewportSize({ width, height: 800 });
           await page.goto(target);

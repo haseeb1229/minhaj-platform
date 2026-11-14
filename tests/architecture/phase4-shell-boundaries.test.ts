@@ -240,7 +240,8 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/quran/videos/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/research/page.tsx',
   // Phase 22: the Quran related view of Learning's published Courses on the
-  // `quran` Topic, composed from Learning's PUBLIC root.
+  // `quran` Topic, composed from Learning's PUBLIC root — since Quran Part 13
+  // the Quran Courses hub, still composed from that public root alone.
   'apps/web/src/app/[locale]/(public)/quran/courses/page.tsx',
   'apps/web/src/app/[locale]/(public)/listen/recitations/page.tsx',
   // Phase 19. Every Hadith surface reads whether a collection is activated, and

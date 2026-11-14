@@ -25,6 +25,12 @@ import type {
   TrialRequestRecord,
   TrialSummaryPage,
 } from './values.ts';
+import type {
+  TopicCourseFacets,
+  TopicCoursePage,
+  TopicCoursePaths,
+  TopicCourseQuery,
+} from './topic-courses.ts';
 
 /**
  * The ports between the Learning context and what it depends on
@@ -92,6 +98,19 @@ export interface LearningPublicReaderPort {
   courseCanonicalSlug(slug: string): Promise<string | null>;
   /** The People attributed as teachers on at least one published Course, with counts. */
   teacherFacets(offset: number): Promise<TeacherFacetPage>;
+
+  /**
+   * QURAN PART 13 — A TOPIC'S COURSE HUB. One bounded, ordered page of the
+   * published Courses on the query's Topic (`topicCourseQuerySchema`), with the
+   * total the query admits; the hub's aggregates (`TopicCourseFacets`), each
+   * leaving its own filter out of its own counts; and the published
+   * LearningPaths holding one of those Courses. The public predicate
+   * throughout; the Topic is an identifier Learning holds, never a Taxonomy
+   * read, and with no Topic every answer is empty.
+   */
+  topicCourses(query: TopicCourseQuery): Promise<TopicCoursePage>;
+  topicCourseFacets(query: TopicCourseQuery): Promise<TopicCourseFacets>;
+  topicCoursePaths(topic: string | null): Promise<TopicCoursePaths>;
 
   /** One bounded page of PUBLISHED LearningPaths, latest publication first. */
   paths(offset: number): Promise<PathPage>;

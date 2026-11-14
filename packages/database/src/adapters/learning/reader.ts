@@ -22,6 +22,7 @@ import {
   toPathDetail,
 } from './records.ts';
 import { bounded, boundedOffset, PUBLISHED, stampOf, TARGET_BATCH } from './shared.ts';
+import { createTopicCourseReader } from './topic-courses.ts';
 
 /**
  * The Learning public reader — the catalogue as anybody may see it
@@ -53,6 +54,7 @@ export function createLearningPublicReader(): LearningPublicReaderPort {
   const db = getDatabaseClient();
 
   return {
+    ...createTopicCourseReader(),
     async courses(query) {
       const rows = await db.course.findMany({
         where: {

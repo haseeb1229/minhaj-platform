@@ -477,14 +477,28 @@ async function wire(
   };
 }
 
-/** A refusal's reason (`MessagingRefusal`, `MessagingDataError`), `accepted`, or `unclassified`. */
+/**
+ * A refusal's reason (`MessagingRefusal`, `MessagingDataError`), `accepted`, or
+ * `unclassified: <name> <code> <message>` — the error's own facts, so a failing
+ * comparison names what was actually thrown (it never matches a reason).
+ */
 export async function reasonOf(promise: Promise<unknown>): Promise<string> {
   try {
     await promise;
   } catch (error) {
-    const named = error as { name?: unknown; reason?: unknown } | null;
+    const named = error as {
+      name?: unknown;
+      reason?: unknown;
+      code?: unknown;
+      number?: unknown;
+      message?: unknown;
+    } | null;
     if (named?.name === 'MessagingDataError') return `data-error:${String(named.reason)}`;
-    return typeof named?.reason === 'string' ? named.reason : 'unclassified';
+    if (typeof named?.reason === 'string') return named.reason;
+    const facts = [named?.name, named?.code ?? named?.number, named?.message]
+      .filter((fact) => fact !== undefined && fact !== null)
+      .map((fact) => String(fact).slice(0, 160));
+    return `unclassified: ${facts.join(' ')}`;
   }
   return 'accepted';
 }

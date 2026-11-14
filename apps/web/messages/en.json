@@ -3336,12 +3336,6 @@
     "topicHub": "Everything on this topic",
     "topicEmpty": "No Ayah has been assigned to this topic yet.",
     "topicAll": "All ayat on this topic",
-    "relatedEmpty": {
-      "courses": "No course on the Quran has been published yet."
-    },
-    "relatedOwner": {
-      "courses": "Browse these courses in Learn"
-    },
     "search": {
       "intro": "Search the Arabic text and every published translation. Arabic is found however it is typed — with or without diacritics, in ordinary or Uthmani spelling. Type a citation such as 2:255 or a Surah’s name to go straight there.",
       "label": "Search the Quran for",
@@ -3866,6 +3860,52 @@
       "libraryResearch": "All research in the Library",
       "libraryPapers": "All research papers in the Library",
       "about": "Every work here is published in Minhaj-ul-Quran’s Library. Titles and summaries describe a work in your language; the abstract and the full text are in the language they were written in."
+    },
+    "coursesHub": {
+      "eyebrow": "Learn · Courses",
+      "lede": "Courses on the Quran from Learn — taught live in classes with a teacher, or studied at your own pace. Every course and its syllabus can be read without an account. Choose by how you want to study, your level, a language or a teacher, and enrol from the course’s own page.",
+      "statCourses": "{count, plural, one {course on the Quran} other {courses on the Quran}}",
+      "statLive": "{count, plural, one {taught live} other {taught live}}",
+      "statSelfPaced": "{count, plural, one {self-paced} other {self-paced}}",
+      "statLessons": "{count, plural, one {lesson} other {lessons}}",
+      "statTeachers": "{count, plural, one {teacher} other {teachers}}",
+      "catalogue": "All courses in Learn",
+      "listHeading": "Choose a course",
+      "formats": "Ways to study",
+      "allFormats": "All",
+      "formatHelp": {
+        "all": "Every course on the Quran, whether taught live or studied on your own.",
+        "live": "Taught in live classes with a teacher, the lessons its syllabus. You can ask for a trial class from the course’s page.",
+        "self-paced": "Work through the lessons on your own, at your own pace, and keep your progress as you go."
+      },
+      "filters": "Filter the courses",
+      "anyLevel": "Any level",
+      "anyTeacher": "Any teacher",
+      "unknownTeacher": "A teacher",
+      "sortLevel": "By level",
+      "apply": "Show courses",
+      "summary": "{from}–{to} of {total, plural, one {# course} other {# courses}}",
+      "levelUnstated": "Level not stated",
+      "levelHelp": {
+        "beginner": "No earlier study assumed — a place to begin.",
+        "intermediate": "For learners with some grounding, ready to build on it.",
+        "advanced": "For learners ready for depth and detail.",
+        "unstated": "Courses whose level has not been given."
+      },
+      "viewCourse": "View course",
+      "viewCourseNamed": "View course: {title}",
+      "emptyTitle": "No courses on the Quran yet",
+      "empty": "Courses appear here as Learn publishes them under the Quran. Every published course is in the Learn catalogue.",
+      "noResultsTitle": "No course matches these filters",
+      "noResults": "Try another level, language or teacher — or clear the filters to see every course on the Quran.",
+      "pastEnd": "There are fewer courses than page {page} would hold.",
+      "pages": "Pages of courses",
+      "pathsHeading": "Learning paths",
+      "pathsIntro": "Courses set out in the order to study them, each path holding at least one course on the Quran.",
+      "allPaths": "All learning paths",
+      "alongsideHeading": "Study alongside",
+      "alongsideIntro": "Read the text itself, its tafsir and the rules of its recitation as you learn.",
+      "about": "Every course here is published in Learn. Reading a course and its syllabus needs no account; to enrol, keep your progress or ask for a trial class, sign in from the course’s page."
     },
     "tajweed": {
       "setting": "Tajweed colours",

@@ -1976,6 +1976,21 @@ the person's Enrolments, Progress and requests as typed identifiers and, after I
 closure, deletes them in bounded, idempotent batches (SECURITY_BASELINE.md §19.1.3); a Course or path
 is never deleted because an editor's account closed.
 
+**A Topic's courses (Quran Part 13).** Which Courses are "courses on a Topic" is Learning's answer:
+every **published** Course filed under a Topic the caller names by identifier (the Quran Courses
+hub names the `quran` Topic, resolved at Layer 4 — Learning holds only the key); with no Topic the
+set is empty, never every Course. `topicCourses` returns one bounded page (12) with the total the
+query admits — narrowed by format, a stated level (an unstated level is matched by none), the
+content language and a teacher (attribution only) and ordered by level (beginner, intermediate,
+advanced, then unstated; the latest publication first within a level), newest or by title (as
+`titleLocale` reads it), each total — as the catalogue's own `CourseListing` cards.
+`topicCourseFacets` returns the hub's figures unfiltered (Courses, taught live, self-paced, their
+lessons, distinct teachers and content languages) and the formats, levels, languages and teachers,
+each counted without its own filter; `topicCoursePaths` the published LearningPaths holding one of
+those Courses (at most 6). All three are the ordinary public predicate, parameterised SQL, bounded,
+and read nothing private — no enrolment, progress, request, class or lesson body; no schema
+change.
+
 **Not delivered, and not owed by Phase 22:** ClassSession, Availability, Attendance, Booking and the
 confirmation of a trial request; teacher authority and the teacher area; My Classes and My Teachers;
 certificates, assessments, grades, payments and entitlements; under-18 rules (OPEN_DECISIONS.md §2.1
