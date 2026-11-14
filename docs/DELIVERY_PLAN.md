@@ -3602,6 +3602,88 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > re-ordered addresses redirected to their one address; Urdu at 390 px and Arabic right to left,
 > no sideways scroll at 320 and 390 px; axe. *CI and staging evidence are recorded when they
 > exist.*
+>
+> **Quran Part 12 — the Quran Research hub (owner direction: every Quran menu item built from A to
+> Z, one at a time; on `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered
+> (DOMAIN_MODEL.md §10.2; ROUTE_MAP.md §3.3; INFORMATION_ARCHITECTURE.md). No schema change and no
+> migration (the count stays at its Part-9 value); staging only, the production gates unchanged.
+>
+> - **What the data is (fact).** Library's scholarly model has two aggregates with the scholarly
+>   apparatus — **Research** and **ResearchPaper** (Phase 9): labels (title and summary per
+>   interface locale), credited People with roles, Topics, a content language, a year and an
+>   optional exact date, an institutional context, an abstract, ordered citations, a readable
+>   document, and for a paper where it appeared and its DOI. Neither carries a Quran passage, a
+>   PDF or a download, and neither has a featured flag. **The staging corpus holds no research**:
+>   no authorised source publishes it (research.com.pk is a deferred host, MIGRATION_STRATEGY.md
+>   §19) and the operator demo data creates none, so on staging the hub shows its honest empty
+>   state until an editor publishes research under the `quran` Topic. The local database holds
+>   none either.
+> - **Which research (decision).** Until now `/quran/research` was the generic related view — one
+>   page of `/library/research` on the `quran` Topic, canonical to it, without research papers.
+>   The hub reads both aggregates on the Topic, side by side and still two aggregates; with no
+>   Topic the set is empty (no passage can make a record "on the Quran"). Every grouping is one the
+>   data has: the kind, the content language, a credited author, the decade of publication (from
+>   the year), and whether the full text is on the platform. **No Surah chips**: there is no
+>   passage model for research, and none is invented.
+> - **Library reads (Model A).** `quranResearchQuerySchema`, `QURAN_RESEARCH_PAGE` (20) and the
+>   `QuranResearchItem`, `QuranResearchPage` and `QuranResearchFacets` shapes in
+>   `@minhaj/contracts/library`; `quranResearch` and `quranResearchFacets` on
+>   `LibraryPublicReaderPort`, implemented in
+>   `packages/database/src/adapters/library/quran-research.ts` — a bounded SQL page of (kind,
+>   identifier) over a `UNION ALL` of the two tables, each under its own public predicate, in the
+>   visitor's order with `COUNT(*) OVER ()` for the total, then those records hydrated per
+>   aggregate with the public predicate and the Topic applied again (the document is never read —
+>   only whether one exists); grouped facet reads, each leaving its own filter out; table names the
+>   adapter's own constants and every value a bound parameter; and Library's public read service
+>   parsing every field first (an unknown kind or order, a year that is no decade, an offset past
+>   25,000 or a page over 20 refused before any read). Quran imports nothing of Library: the hub
+>   composes the reads at Layer 4.
+> - **The hub** (`apps/web/src/components/quran/research.tsx` and its pure address rules
+>   `research-view.ts`, reusing the Explore parts and tolerant readers of Parts 10 and 11 — the
+>   hero's figure may now be a written span of years): a header with the figures the data supports
+>   (works of research, research papers when both kinds exist, those with their full text here,
+>   authors, languages when more than one, the span of publication years) and the ways to the
+>   Tafsir and Books hubs; kind tabs with counts (only when both kinds hold records); a GET filter
+>   form — language, author, decade, full text, order (newest, oldest, title) — with removable
+>   chips and *Clear filters*; "1–20 of N works of research"; in the chronological orders the page
+>   reads as a **timeline grouped by decade** (a heading per decade, sticky beside its records on a
+>   wide screen), by title one flat list; each record a calm catalogue entry — kind, content
+>   language and date, the title in its own language linked to Library's canonical
+>   `/library/research/{slug}` or `/library/research-papers/{slug}`, the credits (a role other
+>   than author named), where a paper appeared, the institutional context, the opening of the
+>   abstract (first paragraph, cut at a word with an ellipsis) in the abstract's own language and
+>   direction (the summary when there is no abstract), then *Read the full text* (where it is on
+>   the platform) or *Abstract and details*, the DOI (to `https://doi.org/`) and how many works it
+>   cites; a numbered pager; honest states (unavailable while no corpus is active, no research
+>   yet, nothing matches, past the last page). Every view is a GET address that works without
+>   script, at ONE spelling (`researchCanonicalRedirect`).
+> - **Canonical (decision).** `/quran/research` is now canonical to itself (ROUTE_MAP.md §2.3,
+>   §3.3); every filtered or paged view is canonical to the bare path. While the corpus is not
+>   approved the page claims no canonical at all, like every Quran page.
+> - **The related view** (`related.tsx`) now holds Courses alone, as a single-purpose
+>   `QuranCoursesPage` (no kind switch left to abstract over); `/quran/courses` is unchanged.
+>   The landing's directory keeps Books, Videos and Research.
+>
+> **Proof:** `tests/quran/research-view.test.ts` (the address a view reads and builds — tolerant,
+> round-tripping, the kind's address spelling, newest as the neutral order, the page bound inside
+> Library's offset bound; the one redirect for a form's submission, another order, a malformed
+> value, never for an address it built, never for the former `?offset`; ranges; the decade
+> timeline; the abstract's excerpt), `tests/library/quran-research.test.ts` (the read service's
+> defaults and eighteen refusals before any read); on SQL Server
+> `tests/library/quran-research.integration.test.ts` (the set — both aggregates on the Topic, no
+> draft, no archived record, no other Topic, nothing without a Topic; kind, language, contributor,
+> decade and full text; the three orders and an Urdu reader's titles; pages and the total past the
+> end; each card's fields and never the document; every facet without its own filter);
+> `tests/config/locale.test.ts` (the new modules); the browser journey
+> (`tests/browser/quran.spec.ts`, "Quran Part 12", and the unavailable state among "while no corpus
+> is active"): the empty state before any research, the figures, kinds, the decade timeline, a
+> paper's kind, language, date, credit, venue, DOI and citations, a study's editor, institution,
+> right-to-left Urdu abstract and full text, a page of 20 and the second page, never a draft, the
+> full text reached by keyboard; every filter — author, kind, decade, full text, language — and
+> the orders without script, chips and *Clear filters*, no results, past the end, malformed and
+> re-ordered addresses redirected to their one address; Urdu at 390 px and Arabic right to left,
+> no sideways scroll at 320 and 390 px; axe. *CI and staging evidence are recorded when they
+> exist.*
 
 ---
 

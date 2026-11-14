@@ -429,7 +429,13 @@ likewise a hub of its own (`/quran/videos`): Media's videos on the `quran` topic
 every lecture that explains a Quran passage, with lectures by Surah, shelved by whether a video
 explains a Surah, filtered by Surah, language, speaker, series and length, each lecture opened at
 the passage where its start is recorded and its Surahs linked to their tafsir — no longer Watch's
-mirror. The Quran landing's directory lists both hubs. Quran Articles and Quran Teachers are not yet offered and are not linked
+mirror. Since Quran Part 12 Quran Research is a hub of its own too (`/quran/research`): the
+Library's research and research papers on the `quran` topic as a catalogue — kind, content
+language, date, authors, where a paper appeared, the opening of its abstract, its DOI and the way
+to its full text — grouped by decade in the chronological orders and filtered by kind, language,
+author, decade and full text on the platform; no research record is linked to a passage, so it
+links no Surah — no longer the Library listing's mirror. The Quran landing's directory lists all
+three hubs. Quran Articles and Quran Teachers are not yet offered and are not linked
 (ROUTE_MAP.md §3.3). While no corpus is active the section says so plainly instead of showing
 empty structure, and Listen's Quran Recitations appear only once a corpus is active. The
 signed-in additions remain Phase 21's. Since Rebaseline R2 a deployment that admits it may show a

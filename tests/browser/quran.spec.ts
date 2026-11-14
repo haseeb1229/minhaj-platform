@@ -645,6 +645,20 @@ test.describe('while no corpus is active', () => {
     ).toEqual([]);
   });
 
+  test('Part 12: the Research hub is honestly unavailable — no list, no filters', async ({
+    page,
+  }) => {
+    const response = await page.goto('/quran/research');
+    expect(response?.status()).toBe(200);
+    expect(response?.headers()['set-cookie']).toBeUndefined();
+    await expect(page.getByText(UNAVAILABLE)).toBeVisible();
+    const main = page.getByRole('main');
+    await expect(main.getByRole('form')).toHaveCount(0);
+    await expect(main.getByRole('list', { name: 'Research on the Quran' })).toHaveCount(
+      0,
+    );
+  });
+
   test('Listen links no recitation catalogue', async ({ page }) => {
     await page.goto('/listen');
     await expect(page.getByRole('heading', { level: 1, name: 'Listen' })).toBeVisible();
@@ -5535,5 +5549,415 @@ test.describe('Quran Part 11: the Quran Videos hub', () => {
           `${target} @${String(width)}: ${result.offenders.join(', ')}`,
         ).toBeLessThanOrEqual(0);
       }
+  });
+});
+
+test.describe('Quran Part 12: the Quran Research hub', () => {
+  const part12 = {
+    author: randomUUID(),
+    paper: randomUUID(),
+    study: randomUUID(),
+    draft: randomUUID(),
+  };
+  const part12Slug = {
+    author: `fixture-research-author-${run}`,
+    paper: `fixture-research-paper-${run}`,
+    study: `fixture-research-study-${run}`,
+    draft: `fixture-research-draft-${run}`,
+  };
+  const RESEARCH = {
+    author: `Fixture Research Author ${run}`,
+    paper: `NON_QURAN_FIXTURE research paper ${run}`,
+    study: `NON_QURAN_FIXTURE research study ${run}`,
+    draft: `NON_QURAN_FIXTURE research draft ${run}`,
+  };
+  /**
+   * Enough Research for a second page (20 a page): dated 1901–1920, so they
+   * sort after every other spec's research in Library's own listings (newest
+   * first) and fall in three decades; titled to sort LAST by title. On the
+   * `quran` Topic, with no text and no credit.
+   */
+  const FILLERS = 20;
+  const ABSTRACT = 'تحقیقی خلاصے کی آزمائشی عبارت '.repeat(20).trim();
+  const TITLE = 'Research on the Quran';
+
+  async function axe(page: Page, target: string, testInfo: TestInfo): Promise<void> {
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    const blocking = results.violations.filter(
+      (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+    );
+    for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+      testInfo.annotations.push({
+        type: 'axe',
+        description: `${target}: ${finding.id} (${String(finding.impact)})`,
+      });
+    expect(
+      blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+      target,
+    ).toEqual([]);
+  }
+
+  /** The entry of one record in the hub's listing, whichever decade holds it. */
+  const entry = (page: Page, title: string) =>
+    page
+      .getByRole('main')
+      .locator('li', { has: page.getByRole('link', { name: title, exact: true }) });
+
+  /** The decade headings of the timeline, in order. */
+  const decadeHeadings = (page: Page) =>
+    page
+      .getByRole('main')
+      .locator('section[aria-labelledby^="quran-research-decade-"] h3');
+
+  test('before any research is published: the honest empty state, with the way to the Library', async ({
+    page,
+  }) => {
+    await visitFixture(page, '/quran/research');
+    const main = page.getByRole('main');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(TITLE);
+    await expect(main.getByText('No research on the Quran yet')).toBeVisible();
+    await expect(
+      main.getByRole('link', { name: 'All research in the Library' }).first(),
+    ).toHaveAttribute('href', '/library/research');
+    // Nothing to filter, page or count.
+    await expect(main.getByRole('form', { name: 'Filter the research' })).toHaveCount(0);
+    await expect(main.getByRole('navigation', { name: 'Pages of research' })).toHaveCount(
+      0,
+    );
+    await expect(
+      main.getByRole('link', { name: /works? of research on the Quran$/ }),
+    ).toHaveCount(0);
+  });
+
+  test.describe('with research on the Quran', () => {
+    test.beforeAll(async () => {
+      test.setTimeout(180_000);
+      const [quran] = await sql.query<{ id: string }>(
+        `SELECT [id] FROM [dbo].[Topic] WHERE [slug] = N'quran';`,
+      );
+      if (quran === undefined) throw new Error('The seeded quran Topic is missing.');
+      const document = JSON.stringify({
+        sections: [
+          {
+            key: 'one',
+            title: 'NON_QURAN_FIXTURE section',
+            paragraphs: ['NON_QURAN_FIXTURE text.'],
+          },
+        ],
+      });
+      const fillers = Array.from({ length: FILLERS }, (_, index) => {
+        const id = randomUUID();
+        const number = String(index + 1).padStart(2, '0');
+        return `
+          INSERT INTO [dbo].[Research] ([id],[slug],[primaryLocale],[languageCode],[state],[publicationYear]) VALUES
+            (N'${id}', N'fixture-research-filler-${run}-${number}', N'en', N'en', N'published', ${String(1900 + index + 1)});
+          INSERT INTO [dbo].[ResearchLabel] ([researchId],[locale],[title],[summary]) VALUES
+            (N'${id}', N'en', N'Zz NON_QURAN_FIXTURE research filler ${run} ${number}', N''),
+            (N'${id}', N'ur', N'ےے NON_QURAN_FIXTURE ${run} ${number}', N'');
+          INSERT INTO [dbo].[ResearchTopic] ([researchId],[topicId]) VALUES (N'${id}', N'${quran.id}');`;
+      }).join('\n');
+      await sql.query(`
+        INSERT INTO [dbo].[Person] ([id],[slug],[primaryLocale],[status]) VALUES (N'${part12.author}', N'${part12Slug.author}', N'en', N'published');
+        INSERT INTO [dbo].[PersonTranslation] ([personId],[locale],[name],[biography]) VALUES (N'${part12.author}', N'en', ${n(RESEARCH.author)}, NULL);
+
+        INSERT INTO [dbo].[ResearchPaper] ([id],[slug],[primaryLocale],[languageCode],[state],[publicationYear],[publishedOn],[venue],[doi]) VALUES
+          (N'${part12.paper}', N'${part12Slug.paper}', N'en', N'ar', N'published', 2024, '2024-05-06', N'NON_QURAN_FIXTURE journal', N'10.1234/fixture.${run}');
+        INSERT INTO [dbo].[ResearchPaperLabel] ([researchPaperId],[locale],[title],[summary]) VALUES
+          (N'${part12.paper}', N'en', ${n(RESEARCH.paper)}, N'NON_QURAN_FIXTURE summary of a paper.');
+        INSERT INTO [dbo].[ResearchPaperTopic] ([researchPaperId],[topicId]) VALUES (N'${part12.paper}', N'${quran.id}');
+        INSERT INTO [dbo].[ResearchPaperContributor] ([researchPaperId],[personId],[role],[position]) VALUES (N'${part12.paper}', N'${part12.author}', N'author', 0);
+        INSERT INTO [dbo].[ResearchPaperCitation] ([researchPaperId],[position],[text],[url],[doi]) VALUES
+          (N'${part12.paper}', 0, N'NON_QURAN_FIXTURE citation one', NULL, NULL),
+          (N'${part12.paper}', 1, N'NON_QURAN_FIXTURE citation two', NULL, NULL);
+
+        INSERT INTO [dbo].[Research] ([id],[slug],[primaryLocale],[languageCode],[state],[publicationYear],[institutionalContext],[abstract],[document]) VALUES
+          (N'${part12.study}', N'${part12Slug.study}', N'en', N'ur', N'published', 2019, N'NON_QURAN_FIXTURE institute', ${n(ABSTRACT)}, ${n(document)});
+        INSERT INTO [dbo].[ResearchLabel] ([researchId],[locale],[title],[summary]) VALUES
+          (N'${part12.study}', N'en', ${n(RESEARCH.study)}, N'');
+        INSERT INTO [dbo].[ResearchTopic] ([researchId],[topicId]) VALUES (N'${part12.study}', N'${quran.id}');
+        INSERT INTO [dbo].[ResearchContributor] ([researchId],[personId],[role],[position]) VALUES (N'${part12.study}', N'${part12.author}', N'editor', 0);
+
+        INSERT INTO [dbo].[Research] ([id],[slug],[primaryLocale],[languageCode],[state],[publicationYear]) VALUES
+          (N'${part12.draft}', N'${part12Slug.draft}', N'en', N'en', N'draft', 2025);
+        INSERT INTO [dbo].[ResearchLabel] ([researchId],[locale],[title],[summary]) VALUES
+          (N'${part12.draft}', N'en', ${n(RESEARCH.draft)}, N'');
+        INSERT INTO [dbo].[ResearchTopic] ([researchId],[topicId]) VALUES (N'${part12.draft}', N'${quran.id}');
+
+        ${fillers}
+      `);
+    });
+
+    test('the hub: its figures, kinds, decade timeline and catalogue entries — never a draft', async ({
+      page,
+    }, testInfo) => {
+      test.setTimeout(180_000);
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await visitFixture(page, '/quran/research');
+      const main = page.getByRole('main');
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(TITLE);
+
+      // The figures the data supports, each counted thing linked where listed.
+      await expect(
+        main.getByRole('link', { name: /^22 works of research on the Quran$/ }),
+      ).toHaveAttribute('href', '#quran-research-list');
+      await expect(
+        main.getByRole('link', { name: /^1 research paper$/ }),
+      ).toHaveAttribute('href', '/quran/research?kind=paper');
+      await expect(
+        main.getByRole('link', { name: /^1 with its full text here$/ }),
+      ).toHaveAttribute('href', '/quran/research?fulltext=1');
+      await expect(main.getByText('1901–2024', { exact: true })).toBeVisible();
+      await expect(main.getByRole('link', { name: 'Tafsir by Surah' })).toHaveAttribute(
+        'href',
+        '/quran/tafsir',
+      );
+      await expect(main).not.toContainText(RESEARCH.draft);
+
+      // The kinds, the current one marked, each counted.
+      const kinds = page.getByRole('navigation', { name: 'Kinds of research' });
+      await expect(kinds.getByRole('link', { name: /^All/ })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+      await expect(kinds.getByRole('link', { name: /^Research papers/ })).toHaveAttribute(
+        'href',
+        '/quran/research?kind=paper',
+      );
+
+      // Newest first, as a timeline by decade.
+      await expect(decadeHeadings(page)).toHaveText([
+        '2020s',
+        '2010s',
+        '1920s',
+        '1910s',
+        '1900s',
+      ]);
+
+      // A paper: kind, content language, date, credit, venue, DOI, citations,
+      // and the way to its details at Library's canonical address.
+      const paper = entry(page, RESEARCH.paper);
+      await expect(paper).toContainText('Research paper');
+      await expect(paper).toContainText('Arabic');
+      await expect(paper.locator('time[datetime="2024-05-06"]')).toBeVisible();
+      await expect(paper).toContainText(RESEARCH.author);
+      await expect(paper).toContainText('Appeared in NON_QURAN_FIXTURE journal');
+      await expect(paper).toContainText('Cites 2 works');
+      await expect(paper.getByRole('link', { name: /^DOI/ })).toHaveAttribute(
+        'href',
+        `https://doi.org/10.1234/fixture.${run}`,
+      );
+      await expect(
+        paper.getByRole('link', { name: `Abstract and details: ${RESEARCH.paper}` }),
+      ).toHaveAttribute('href', `/library/research-papers/${part12Slug.paper}`);
+      // With no abstract, its summary opens it.
+      await expect(paper).toContainText('NON_QURAN_FIXTURE summary of a paper.');
+
+      // Research with its text here: the editor's credit, the institution, the
+      // abstract's opening in its own language and direction, and the text.
+      const study = entry(page, RESEARCH.study);
+      await expect(study).toContainText(`${RESEARCH.author} (editor)`);
+      await expect(study).toContainText('NON_QURAN_FIXTURE institute');
+      const abstract = study.locator('p[lang="ur"]');
+      await expect(abstract).toHaveAttribute('dir', 'rtl');
+      await expect(abstract).toHaveText(/…$/);
+      await expect(
+        study.getByRole('link', { name: `Read the full text: ${RESEARCH.study}` }),
+      ).toHaveAttribute('href', `/library/research/${part12Slug.study}`);
+
+      // A page of 20, said in words, and a second page.
+      await expect(main.getByText(/^1–20 of 22 works of research$/)).toBeVisible();
+      await page.screenshot({
+        path: testInfo.outputPath('part12-hub-en-1440.png'),
+        fullPage: true,
+      });
+      await axe(page, '/quran/research', testInfo);
+
+      const pager = page.getByRole('navigation', { name: 'Pages of research' });
+      await pager.getByRole('link', { name: 'Next page' }).click();
+      await page.waitForURL('**/quran/research?page=2');
+      await expect(pager.locator('[aria-current="page"]')).toHaveAccessibleName('Page 2');
+      await expect(main.getByText(/^21–22 of 22 works of research$/)).toBeVisible();
+      await expect(decadeHeadings(page)).toHaveText(['1900s']);
+
+      // Keyboard: the way to a record's text is reachable and followed by Enter.
+      await page.goto('/quran/research');
+      const read = entry(page, RESEARCH.study).getByRole('link', {
+        name: `Read the full text: ${RESEARCH.study}`,
+      });
+      await read.focus();
+      await expect(read).toBeFocused();
+      await page.keyboard.press('Enter');
+      await page.waitForURL(`**/library/research/${part12Slug.study}`);
+    });
+
+    test('kinds, filters and orders are addresses that work without script — chips, reset and honest empty states', async ({
+      browser,
+    }) => {
+      test.setTimeout(180_000);
+      const plain = await browser.newContext({
+        baseURL: baseUrl(),
+        javaScriptEnabled: false,
+      });
+      contexts.push(plain);
+      const page = await plain.newPage();
+      await page.goto('/quran/research');
+      const main = page.getByRole('main');
+      const form = page.getByRole('form', { name: 'Filter the research' });
+
+      // By author: exactly this author's two records, as a removable chip.
+      await form.getByLabel('Author', { exact: true }).selectOption(part12.author);
+      await form.getByRole('button', { name: 'Show research' }).click();
+      await page.waitForURL(`**/quran/research?contributor=${part12.author}`);
+      await expect(entry(page, RESEARCH.paper)).toHaveCount(1);
+      await expect(entry(page, RESEARCH.study)).toHaveCount(1);
+      await expect(main.getByText(/^1–2 of 2 works of research$/)).toBeVisible();
+      await expect(page.getByLabel('Author', { exact: true })).toHaveValue(part12.author);
+      await expect(
+        page
+          .getByRole('list', { name: 'Filters in use' })
+          .getByRole('link', { name: `Remove filter: ${RESEARCH.author}` }),
+      ).toHaveAttribute('href', '/quran/research');
+
+      // A kind keeps the author; the study leaves it.
+      await page
+        .getByRole('navigation', { name: 'Kinds of research' })
+        .getByRole('link', { name: /^Research papers/ })
+        .click();
+      await page.waitForURL(`**/quran/research?kind=paper&contributor=${part12.author}`);
+      await expect(entry(page, RESEARCH.paper)).toHaveCount(1);
+      await expect(entry(page, RESEARCH.study)).toHaveCount(0);
+
+      // A decade, chosen in the form.
+      await page.goto('/quran/research');
+      await page.getByLabel('Decade', { exact: true }).selectOption('1910');
+      await page.getByRole('button', { name: 'Show research' }).click();
+      await page.waitForURL('**/quran/research?decade=1910');
+      await expect(main.getByText(/^1–10 of 10 works of research$/)).toBeVisible();
+      await expect(entry(page, RESEARCH.study)).toHaveCount(0);
+
+      // Full text on the platform.
+      await page.goto('/quran/research');
+      await page.getByLabel('Full text', { exact: true }).selectOption('1');
+      await page.getByRole('button', { name: 'Show research' }).click();
+      await page.waitForURL('**/quran/research?fulltext=1');
+      await expect(entry(page, RESEARCH.study)).toHaveCount(1);
+      await expect(main.getByText(/^1–1 of 1 work of research$/)).toBeVisible();
+
+      // A content language.
+      await page.goto('/quran/research?language=ar');
+      await expect(entry(page, RESEARCH.paper)).toHaveCount(1);
+      await expect(entry(page, RESEARCH.study)).toHaveCount(0);
+
+      // By title: one flat list, no decades, in title order.
+      await page.goto('/quran/research?sort=title');
+      await expect(page.getByLabel('Order', { exact: true })).toHaveValue('title');
+      const list = page.getByRole('list', { name: TITLE, exact: true });
+      await expect(list.locator(':scope > li')).toHaveCount(20);
+      await expect(decadeHeadings(page)).toHaveCount(0);
+      const titles = await list
+        .locator(':scope > li h3')
+        .evaluateAll((nodes) => nodes.map((node) => node.textContent ?? ''));
+      expect(titles.slice(0, 2)).toEqual([RESEARCH.paper, RESEARCH.study]);
+
+      // Oldest first: the timeline opens on the earliest decade.
+      await page.goto('/quran/research?sort=oldest');
+      await expect(decadeHeadings(page).first()).toHaveText('1900s');
+
+      // Nothing matches: said, with the way back, and no pager.
+      await page.goto('/quran/research?kind=paper&decade=1910');
+      await expect(page.getByText('No research matches these filters')).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: 'Clear filters' }).first(),
+      ).toHaveAttribute('href', '/quran/research');
+      await expect(
+        page.getByRole('navigation', { name: 'Pages of research' }),
+      ).toHaveCount(0);
+
+      // Past the last page: said, with the first page offered.
+      await page.goto('/quran/research?page=900');
+      await expect(page.getByText('This page is empty')).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: 'Go to the first page' }),
+      ).toHaveAttribute('href', '/quran/research');
+
+      // Anything malformed is ONE redirect to the plain hub, never an error;
+      // another spelling of a view, to that view's one address.
+      for (const target of [
+        '/quran/research?decade=1995',
+        '/quran/research?contributor=nobody',
+        "/quran/research?language=x'y",
+        '/quran/research?kind=research-paper&fulltext=yes',
+        '/quran/research?sort=random&kind=drafts&page=-1',
+      ]) {
+        const response = await page.goto(target);
+        expect(response?.status(), target).toBe(200);
+        expect(new URL(page.url()).pathname + new URL(page.url()).search, target).toBe(
+          '/quran/research',
+        );
+        await expect(page.getByRole('heading', { level: 1 }), target).toHaveText(TITLE);
+      }
+      await page.goto('/quran/research?sort=title&kind=paper');
+      expect(new URL(page.url()).search).toBe('?kind=paper&sort=title');
+      // The former related view's offset is no view parameter: left alone.
+      const old = await page.goto('/quran/research?offset=25');
+      expect(old?.status()).toBe(200);
+      expect(new URL(page.url()).search).toBe('?offset=25');
+    });
+
+    test('Urdu and Arabic read right to left, fit 320 and 390 px, and have no serious accessibility finding', async ({
+      page,
+    }, testInfo) => {
+      test.setTimeout(240_000);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await visitFixture(page, localizedPath('ur', '/quran/research'), 'ur');
+      await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('قرآن پر تحقیق');
+      // A record's title keeps its own language inside the Urdu page, and a
+      // DOI reads left to right.
+      const paper = entry(page, RESEARCH.paper);
+      await expect(
+        paper.getByRole('heading', { name: RESEARCH.paper, exact: true }),
+      ).toHaveAttribute('lang', 'en');
+      await expect(
+        paper.locator('bdi[dir="ltr"]', { hasText: '10.1234/' }),
+      ).toBeVisible();
+      const { overflow, offenders } = await overflowOf(page);
+      expect(overflow, offenders.join(', ')).toBeLessThanOrEqual(0);
+      await page.screenshot({
+        path: testInfo.outputPath('part12-hub-ur-390.png'),
+        fullPage: true,
+      });
+      await axe(page, '/ur/quran/research', testInfo);
+
+      await visitFixture(page, localizedPath('ar', '/quran/research?kind=paper'), 'ar');
+      await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+      await axe(page, '/ar/quran/research?kind=paper', testInfo);
+
+      await visitFixture(page, '/quran/research');
+      await page.screenshot({
+        path: testInfo.outputPath('part12-hub-en-390.png'),
+        fullPage: true,
+      });
+      for (const width of [320, 390])
+        for (const target of [
+          '/quran/research',
+          '/ur/quran/research',
+          '/ar/quran/research?kind=paper',
+          `/quran/research?contributor=${part12.author}`,
+          '/quran/research?sort=title',
+          '/quran/research?kind=paper&decade=1910',
+          '/quran/research?page=900',
+        ]) {
+          await page.setViewportSize({ width, height: 800 });
+          await page.goto(target);
+          const result = await overflowOf(page);
+          expect(
+            result.overflow,
+            `${target} @${String(width)}: ${result.offenders.join(', ')}`,
+          ).toBeLessThanOrEqual(0);
+        }
+    });
   });
 });

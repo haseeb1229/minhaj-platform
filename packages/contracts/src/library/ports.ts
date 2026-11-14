@@ -12,6 +12,9 @@ import type {
 import type { PassageQuery, PassageSurahCount, QuranPassage } from '../passage/index.ts';
 import type {
   MagazineIssueRecord,
+  QuranResearchFacets,
+  QuranResearchPage,
+  QuranResearchQuery,
   ScholarlyAdminQuery,
   ScholarlyKind,
   ScholarlyListing,
@@ -301,6 +304,17 @@ export interface LibraryPublicReaderPort {
    */
   quranWorks(query: QuranWorksQuery): Promise<QuranWorkPage>;
   quranWorkFacets(query: QuranWorksQuery): Promise<QuranWorkFacets>;
+
+  /**
+   * QURAN PART 12 — THE QURAN RESEARCH HUB. One bounded, ordered page of the
+   * public Research and ResearchPaper records on the query's Topic
+   * (`quranResearchQuerySchema`), with the total the query admits; and the
+   * hub's aggregates (`QuranResearchFacets`). Each aggregate's ONE public
+   * predicate throughout; the Topic is an identifier Library holds, never a
+   * Taxonomy read, and no record carries a Quran passage.
+   */
+  quranResearch(query: QuranResearchQuery): Promise<QuranResearchPage>;
+  quranResearchFacets(query: QuranResearchQuery): Promise<QuranResearchFacets>;
 
   /* -------------------------------------------------------------------------
    * Phase 9 — Research, ResearchPaper, Publication, Magazine, MagazineIssue and

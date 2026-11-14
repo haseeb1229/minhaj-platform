@@ -296,7 +296,8 @@ it reserves is unpublished. No route changes.
 | `/quran/topics/{slug}` | Filtered view, canonical → `/topics/{slug}` |
 | `/quran/books` | The **Quran Books hub** (Quran Part 10): Library's public Works on the `quran` Topic together with every public Work that explains a Quran passage — figures, featured books, shelves (`?shelf=explains\|general`), `?surah`, `?language`, `?contributor`, `?sort=newest\|quran`, `?page`; **canonical to itself**, every filtered or paged view canonical to the bare path |
 | `/quran/videos` | The **Quran Videos hub** (Quran Part 11): Media's published Videos on the `quran` Topic together with every published Video that explains a Quran passage — figures, featured videos, lectures by Surah, shelves (`?shelf=explains\|general`), `?surah`, `?language`, `?speaker`, `?series`, `?length=short\|medium\|long`, `?sort=quran\|title` (newest is the neutral order), `?page`; **canonical to itself**, every filtered or paged view canonical to the bare path |
-| `/quran/{articles\|research\|courses\|teachers}` | Related material, canonical to their domain collections |
+| `/quran/research` | The **Quran Research hub** (Quran Part 12): Library's published Research and ResearchPaper records on the `quran` Topic — figures, kinds (`?kind=research\|paper`), `?language`, `?contributor`, `?decade` (the decade's first year), `?fulltext=1`, `?sort=oldest\|title` (newest is the neutral order), `?page`; **canonical to itself**, every filtered or paged view canonical to the bare path |
+| `/quran/{articles\|courses\|teachers}` | Related material, canonical to their domain collections (`/quran/research` was one until Quran Part 12 — historical) |
 
 Translation, tafsir and reciter selections are **query parameters, not path segments**, so a
 citation remains valid regardless of reading preferences.
@@ -345,6 +346,21 @@ each Surah it explains links to `/quran/tafsir/surah/{n}`, and each Surah under 
 to `/quran/videos?surah={n}`. The same one-spelling rule as the Books hub applies; the former
 related view's `?offset` is not a view parameter and is ignored.
 
+**Quran Part 12 — the Quran Research hub (DOMAIN_MODEL.md §10.2).** `/quran/research` is no longer
+a related-material view canonical to `/library/research` (its form from Phase 18 to Quran Part 11,
+historical): like the Books and Videos hubs it is a curated navigational view of its own (§2.3),
+so its canonical address is the bare `/quran/research`, and every combination of `?kind`,
+`?language`, `?contributor`, `?decade`, `?fulltext`, `?sort` and `?page` is a query filter
+canonical to it and never in a sitemap; while the corpus is not approved it claims no canonical at
+all. Its records are Library's, composed at Layer 4 from Library's public `quranResearch` and
+`quranResearchFacets` reads: the published Research and ResearchPaper records on the `quran`
+Topic (with no `quran` Topic, none — an empty state, never a 404). The address spells a kind as
+`research` or `paper`, never Library's `research-paper`. Each record links to its canonical
+`/library/research/{slug}` or `/library/research-papers/{slug}`, and a paper's DOI to
+`https://doi.org/{doi}`. No research record carries a Quran passage, so the hub links no Surah.
+The same one-spelling rule as the Books hub applies; the former related view's `?offset` is not a
+view parameter and is ignored.
+
 **Delivered in Phase 18 (engineering — no authoritative corpus is supplied; DELIVERY_PLAN.md
 Phase-18 continuity).** Every route above except the three related views named below. Surah, Ayah
 and Juz addresses are numbers; `?translation`, `?transliteration` and `?tafsir` name a public work's
@@ -356,8 +372,9 @@ honest unavailable state and named resources answer 404; a fixture-mode corpus c
 non-authoritative notice on every page and is `noindex`; only an approved corpus is indexable.
 Related views: `/quran/books`, `/quran/videos` and `/quran/research` are delivered — each the
 owner's own public listing for the seeded `quran` topic, canonical to the owner's collection
-(`/quran/books` until Quran Part 10 and `/quran/videos` until Quran Part 11, which made them the
-Quran Books and Quran Videos hubs above — historical);
+(`/quran/books` until Quran Part 10, `/quran/videos` until Quran Part 11 and `/quran/research`
+until Quran Part 12, which made them the Quran Books, Videos and Research hubs above —
+historical);
 `/quran/articles` and `/quran/teachers` stay absent and unlinked until an owner exposes a
 deterministic by-topic read. **Phase 22:** `/quran/courses` is delivered — Learning's own public
 Course listing for the seeded `quran` topic, composed at Layer 4 and canonical to the Course catalogue

@@ -3139,7 +3139,7 @@
       "recitations": "Recitations by reciters, played Surah by Surah alongside the text.",
       "books": "Books from the Library on the Quran and its sciences, with the Surahs each one explains.",
       "videos": "Lectures and talks on the Quran, with the Surahs each tafsir lecture explains.",
-      "research": "Research from the Library classified under the Quran.",
+      "research": "Research and research papers from the Library on the Quran, with their abstracts, authors and full text where it is available.",
       "topics": "Everything on the platform classified under the Quran, in one place.",
       "courses": "Courses from Learn classified under the Quran.",
       "wordByWord": "Published word-by-word works: each Arabic word with its meaning beneath it."
@@ -3337,11 +3337,9 @@
     "topicEmpty": "No Ayah has been assigned to this topic yet.",
     "topicAll": "All ayat on this topic",
     "relatedEmpty": {
-      "research": "No research on the Quran has been published yet.",
       "courses": "No course on the Quran has been published yet."
     },
     "relatedOwner": {
-      "research": "Browse this research in the Library",
       "courses": "Browse these courses in Learn"
     },
     "search": {
@@ -3815,6 +3813,59 @@
       "pageLabel": "Page {page}",
       "watchLink": "All videos in Watch",
       "about": "Every video here is published in Watch and plays from its provider on its own page. Which Surahs a lecture explains, and where it begins each, is recorded by the editors and may be corrected."
+    },
+    "researchHub": {
+      "eyebrow": "Explore · Research",
+      "lede": "Scholarly research on the Quran published in Minhaj-ul-Quran’s Library — studies and research papers with their abstracts, authors and dates, and the full text where it is on the platform. Choose a kind, a language, an author or a decade.",
+      "statRecords": "{count, plural, one {work of research on the Quran} other {works of research on the Quran}}",
+      "statPapers": "{count, plural, one {research paper} other {research papers}}",
+      "statReadable": "{count, plural, one {with its full text here} other {with their full text here}}",
+      "statContributors": "{count, plural, one {author} other {authors}}",
+      "statSpan": "years of publication",
+      "span": "{from}–{to}",
+      "listHeading": "Browse the research",
+      "kinds": "Kinds of research",
+      "tab": {
+        "all": "All",
+        "research": "Research",
+        "research-paper": "Research papers"
+      },
+      "kindHelp": {
+        "all": "Every work of research on the Quran in the Library, studies and papers together.",
+        "research": "Studies and longer research, with their institutional context and citations.",
+        "research-paper": "Research papers, with where they appeared and their DOI where one is known."
+      },
+      "kind": {
+        "research": "Research",
+        "research-paper": "Research paper"
+      },
+      "filters": "Filter the research",
+      "filterDecade": "Decade",
+      "anyDecade": "Any decade",
+      "decade": "{decade}s",
+      "undated": "Year not recorded",
+      "filterFullText": "Full text",
+      "anyText": "With or without",
+      "fullTextOnly": "Full text on the platform",
+      "sortOldest": "Oldest first",
+      "apply": "Show research",
+      "summary": "{from}–{to} of {total, plural, one {# work of research} other {# works of research}}",
+      "venue": "Appeared in",
+      "doi": "DOI",
+      "citations": "{count, plural, one {Cites # work} other {Cites # works}}",
+      "readFull": "Read the full text",
+      "readFullNamed": "Read the full text: {title}",
+      "details": "Abstract and details",
+      "detailsNamed": "Abstract and details: {title}",
+      "emptyTitle": "No research on the Quran yet",
+      "empty": "Research and research papers appear here as the Library publishes them under the Quran.",
+      "noResultsTitle": "No research matches these filters",
+      "noResults": "Try another kind, language, author or decade — or clear the filters to see all research on the Quran.",
+      "pastEnd": "There is less research than page {page} would hold.",
+      "pages": "Pages of research",
+      "libraryResearch": "All research in the Library",
+      "libraryPapers": "All research papers in the Library",
+      "about": "Every work here is published in Minhaj-ul-Quran’s Library. Titles and summaries describe a work in your language; the abstract and the full text are in the language they were written in."
     },
     "tajweed": {
       "setting": "Tajweed colours",

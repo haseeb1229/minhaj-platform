@@ -1641,6 +1641,25 @@ localized descriptive metadata, never a translation of the text. A citation is b
 text with an HTTPS address and a DOI only where genuinely known. An issue's slug and (volume,
 number) are unique within its Magazine, and an issue is public only while its Magazine is.
 
+**Research on the Quran (Quran Part 12).** Which research is "research on the Quran" is Library's
+answer: every published **Research** and **ResearchPaper** record on a Topic the caller names by
+identifier (the `quran` Topic, resolved at Layer 4 — Library holds only the key). Neither aggregate
+carries a Quran passage (§10.1's passages are a Work's), so membership is the Topic alone, and with
+no Topic the set is empty — never every record. The two stay two aggregates: `quranResearch` reads
+them side by side (`UNION ALL` over each one's own table and its own public predicate, every row
+tagged with its kind) and returns one bounded page (20) with the total the query admits — narrowed
+by kind (`research` or `research-paper`), the record's content language, a credited Person, a
+decade of publication (a year in [decade, decade + 9]; an undated record is in none) and "full text
+on the platform" (a readable document exists); ordered newest (year, then date; undated last),
+oldest (undated last) or by title (as `titleLocale` reads it), each total — and a card's worth per
+record (labels, credits in order, content language, year and date, institutional context, abstract,
+a paper's venue and DOI, the citation count and whether the text is here; never the document
+itself). `quranResearchFacets` returns the hub's figures unfiltered (records, Research, papers,
+those with their text here, content languages, credited People, earliest and latest year), the
+kinds under every other filter, and the languages, contributors, decades and full-text count, each
+counted without its own filter. Both are each aggregate's ordinary public predicate,
+parameterised SQL (table names are the adapter's own constants), bounded; no schema change.
+
 ---
 
 ## 11. Media

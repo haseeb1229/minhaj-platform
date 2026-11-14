@@ -9,7 +9,7 @@ import {
   quranMetadata,
   readQuranTopic,
 } from '@/components/quran/read';
-import { QuranRelatedPage, RELATED_CANONICAL } from '@/components/quran/related';
+import { COURSES_CANONICAL, QuranCoursesPage } from '@/components/quran/related';
 import { requireLocale } from '@/config/route-locale';
 
 /**
@@ -32,7 +32,7 @@ export async function generateMetadata({ params }: RelatedParams): Promise<Metad
   return quranMetadata({
     locale,
     availability: await quranAvailability(),
-    canonicalPath: RELATED_CANONICAL.courses,
+    canonicalPath: COURSES_CANONICAL,
     title: t('sections.courses'),
     description: t('sectionBody.courses'),
   });
@@ -48,10 +48,9 @@ export default async function QuranCoursesRoute({ params, searchParams }: Relate
   const topic = await readQuranTopic(locale);
   if (topic === null) notFound();
   return (
-    <QuranRelatedPage
+    <QuranCoursesPage
       locale={locale}
       availability={availability}
-      kind="courses"
       topic={topic}
       offset={readQuranOffset(await searchParams)}
     />

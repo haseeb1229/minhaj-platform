@@ -4,24 +4,16 @@ import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
 import { LEARNING_PAGE } from '@minhaj/contracts/learning';
-import { SCHOLARLY_PAGE } from '@minhaj/contracts/library';
 import type { QuranAvailability } from '@minhaj/contracts/quran';
 import type { TopicView } from '@minhaj/contracts/taxonomy';
 
 import { learningReadRuntime } from '@/composition/learning-read';
-import { libraryReadRuntime } from '@/composition/library-read';
 import {
   courseBrowseHref,
   courseHref,
   LEARNING_MAX_OFFSET,
   outlineLabel,
 } from '@/components/learning/presentation';
-import { listingHref } from '@/components/library/scholarly';
-import {
-  scholarlyLabel,
-  scholarlyListPath,
-  scholarlyQueryPath,
-} from '@/components/library/scholarly-presentation';
 import { Pagination } from '@/components/media/parts';
 import { EmptyState, PageHeading, Panel, TextLink } from '@/components/ui';
 import { directionOf } from '@/config/locale';
@@ -29,19 +21,19 @@ import { QuranFrame, quranTrail } from './parts';
 import { offsetPathOf, quranPath } from './presentation';
 
 /**
- * Related material — `/quran/research`, `/quran/courses` (ROUTE_MAP.md §3.3:
- * "related material, canonical to their domain collections"). `/quran/books`
- * and `/quran/videos` were among these until Quran Parts 10 and 11 made them
- * the Quran Books and Quran Videos hubs (`./books.tsx`, `./videos.tsx`), each
- * canonical to itself.
+ * Related material — `/quran/courses` (ROUTE_MAP.md §3.3: "related material,
+ * canonical to their domain collections"). `/quran/books`, `/quran/videos`
+ * and `/quran/research` were related views too until Quran Parts 10, 11 and
+ * 12 made them the Quran Books, Videos and Research hubs (`./books.tsx`,
+ * `./videos.tsx`, `./research.tsx`), each canonical to itself — so this
+ * module now holds Courses alone.
  *
- * LAYER-4 COMPOSITION OF THE OWNERS' OWN PUBLIC READS. Each view is ONE bounded,
- * topic-filtered page of the owner's public listing for Taxonomy's `quran`
- * Topic — Library's Research and, since Phase 22, Learning's published Courses
- * — never the search index and never a Quran read. Quran itself imports none
- * of them; only this presentation layer composes them. Each item links to its
- * owner's canonical address, and the page canonicalises to the owner's
- * collection.
+ * LAYER-4 COMPOSITION OF THE OWNER'S OWN PUBLIC READ. The view is ONE bounded,
+ * topic-filtered page of Learning's published Courses for Taxonomy's `quran`
+ * Topic (since Phase 22) — never the search index and never a Quran read.
+ * Quran itself imports nothing of Learning; only this presentation layer
+ * composes it. Each Course links to its canonical address, and the page
+ * canonicalises to Learning's catalogue.
  *
  * WHAT IS ABSENT IS ABSENT. `/quran/articles` has no view because Editorial
  * exposes no public by-topic Article read, and `/quran/teachers` has no
@@ -50,103 +42,30 @@ import { offsetPathOf, quranPath } from './presentation';
  * (ROUTE_MAP.md §5.2).
  */
 
-export type RelatedKind = 'research' | 'courses';
+/** The LOCALE-FREE owner catalogue the view canonicalises to. */
+export const COURSES_CANONICAL = '/learn/courses';
 
-/** The LOCALE-FREE owner collection each related view canonicalises to. */
-export const RELATED_CANONICAL: Readonly<Record<RelatedKind, string>> = Object.freeze({
-  research: '/library/research',
-  courses: '/learn/courses',
-});
-
-interface RelatedRow {
-  readonly key: string;
-  readonly href: string;
-  readonly title: string;
-  readonly locale: Locale;
-}
-
-/** One page of the owner's listing for the Topic, as plain rows. */
-async function relatedPage(
-  kind: RelatedKind,
-  locale: Locale,
-  topic: TopicView,
-  offset: number,
-): Promise<{
-  readonly rows: readonly RelatedRow[];
-  readonly hasMore: boolean;
-  readonly size: number;
-  readonly owner: string;
-}> {
-  switch (kind) {
-    case 'research': {
-      const page = await libraryReadRuntime().scholarlyList('research', {
-        topic: topic.id,
-        offset,
-      });
-      return {
-        rows: page.items.map((row) => {
-          const label = scholarlyLabel(row, locale);
-          return {
-            key: row.id,
-            href: listingHref(locale, row),
-            title: label.title,
-            locale: label.locale,
-          };
-        }),
-        hasMore: page.hasMore,
-        size: SCHOLARLY_PAGE,
-        owner: scholarlyQueryPath(scholarlyListPath(locale, 'research'), {
-          offset: 0,
-          language: null,
-          topic: topic.id,
-          from: null,
-          to: null,
-        }),
-      };
-    }
-    case 'courses': {
-      // Learning's own public catalogue for the Topic, by its identifier; the
-      // address it links to names the Topic by slug, as the catalogue does.
-      const page = await learningReadRuntime().courses({
-        topic: topic.id,
-        offset: Math.min(offset, LEARNING_MAX_OFFSET),
-      });
-      return {
-        rows: page.items.map((course) => {
-          const label = outlineLabel(course.labels, locale, course.primaryLocale);
-          return {
-            key: course.id,
-            href: courseHref(locale, course.slug),
-            title: label.title,
-            locale: label.locale,
-          };
-        }),
-        hasMore: page.hasMore,
-        size: LEARNING_PAGE,
-        owner: courseBrowseHref(locale, { topic: topic.slug }),
-      };
-    }
-  }
-}
-
-export async function QuranRelatedPage({
+export async function QuranCoursesPage({
   locale,
   availability,
-  kind,
   topic,
   offset,
 }: {
   readonly locale: Locale;
   readonly availability: QuranAvailability;
-  readonly kind: RelatedKind;
   readonly topic: TopicView;
   readonly offset: number;
 }) {
   const t = await getTranslations({ locale, namespace: 'quran' });
   const parts = await quranTrail(locale);
-  const page = await relatedPage(kind, locale, topic, offset);
-  const title = t(`sections.${kind}`);
-  const path = quranPath(locale, kind);
+  // Learning's own public catalogue for the Topic, by its identifier; the
+  // address it links to names the Topic by slug, as the catalogue does.
+  const page = await learningReadRuntime().courses({
+    topic: topic.id,
+    offset: Math.min(offset, LEARNING_MAX_OFFSET),
+  });
+  const title = t('sections.courses');
+  const path = quranPath(locale, 'courses');
 
   return (
     <QuranFrame
@@ -156,34 +75,43 @@ export async function QuranRelatedPage({
     >
       <div className="flex flex-col gap-2">
         <PageHeading>{title}</PageHeading>
-        <p className="text-foreground-muted">{t(`sectionBody.${kind}`)}</p>
+        <p className="text-foreground-muted">{t('sectionBody.courses')}</p>
       </div>
-      {page.rows.length === 0 ? (
-        <EmptyState>{t(`relatedEmpty.${kind}`)}</EmptyState>
+      {page.items.length === 0 ? (
+        <EmptyState>{t('relatedEmpty.courses')}</EmptyState>
       ) : (
         <ul aria-label={title} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {page.rows.map((row) => (
-            <Panel key={row.key} as="li">
-              <p
-                className="font-semibold break-words"
-                lang={row.locale}
-                dir={directionOf(row.locale)}
-              >
-                <TextLink href={row.href}>{row.title}</TextLink>
-              </p>
-            </Panel>
-          ))}
+          {page.items.map((course) => {
+            const label = outlineLabel(course.labels, locale, course.primaryLocale);
+            return (
+              <Panel key={course.id} as="li">
+                <p
+                  className="font-semibold break-words"
+                  lang={label.locale}
+                  dir={directionOf(label.locale)}
+                >
+                  <TextLink href={courseHref(locale, course.slug)}>
+                    {label.title}
+                  </TextLink>
+                </p>
+              </Panel>
+            );
+          })}
         </ul>
       )}
       <Pagination
         label={title}
-        previous={offset > 0 ? offsetPathOf(path, Math.max(0, offset - page.size)) : null}
-        next={page.hasMore ? offsetPathOf(path, offset + page.size) : null}
+        previous={
+          offset > 0 ? offsetPathOf(path, Math.max(0, offset - LEARNING_PAGE)) : null
+        }
+        next={page.hasMore ? offsetPathOf(path, offset + LEARNING_PAGE) : null}
         previousLabel={t('previous')}
         nextLabel={t('next')}
       />
       <p>
-        <TextLink href={page.owner}>{t(`relatedOwner.${kind}`)}</TextLink>
+        <TextLink href={courseBrowseHref(locale, { topic: topic.slug })}>
+          {t('relatedOwner.courses')}
+        </TextLink>
       </p>
     </QuranFrame>
   );

@@ -26,6 +26,7 @@ import {
 import { getDatabaseClient } from '../../client.ts';
 import { auditRow } from '../../audit-row.ts';
 import { requestSearchIndexing } from '../../search-intent.ts';
+import { createQuranResearchReader } from './quran-research.ts';
 import { createScholarlyPersistence, createScholarlyPublicReader } from './scholarly.ts';
 
 class LibraryDataError extends Error {
@@ -1164,6 +1165,7 @@ export function createLibraryPublicReader(): LibraryPublicReaderPort {
   return {
     ...createScholarlyPublicReader(),
     ...quranWorksReader(),
+    ...createQuranResearchReader(),
     async contributorFacets(offset) {
       const rows = await db.workContributor.groupBy({
         by: ['personId'],

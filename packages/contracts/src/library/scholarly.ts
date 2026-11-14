@@ -563,3 +563,148 @@ export interface ScholarlyTarget {
   readonly slug: string;
   readonly magazineSlug: string | null;
 }
+
+/* ===========================================================================
+ * Quran Part 12 — the Quran Research read
+ * ========================================================================= */
+
+/**
+ * QURAN PART 12 — WHICH RESEARCH IS "RESEARCH ON THE QURAN". The public
+ * Research and ResearchPaper records on the Topic a caller names (Taxonomy's
+ * `quran` Topic, resolved at Layer 4 — Library holds only its identifier).
+ * The two aggregates with the scholarly apparatus (an abstract, an
+ * institutional context, citations), read side by side and still two
+ * aggregates: every row says which it is.
+ *
+ * NO PASSAGES. Neither aggregate carries a Quran passage (DOMAIN_MODEL.md
+ * §10.2), so membership is the Topic alone, and with no Topic (`topic: null`)
+ * the set is empty — never every record.
+ *
+ *   `kind`         `all`, or one of the two aggregates;
+ *   `language`     the record's CONTENT language;
+ *   `contributor`  a credited Person, in any role;
+ *   `decade`       a publication year in [decade, decade + 9]; an undated
+ *                  record is in no decade;
+ *   `fullText`     only records whose readable text is on the platform;
+ *   `sort`         `newest` (latest year first, then date; undated last),
+ *                  `oldest` (earliest first; undated last) or `title` (A–Z
+ *                  by the title a reader of `titleLocale` is shown). Every
+ *                  order ends on the kind and the identifier.
+ */
+export const QURAN_RESEARCH_PAGE = 20;
+export const QURAN_RESEARCH_KINDS = Object.freeze([
+  'research',
+  'research-paper',
+] as const);
+export type QuranResearchKind = (typeof QURAN_RESEARCH_KINDS)[number];
+export const quranResearchKindSchema = z.enum(['all', ...QURAN_RESEARCH_KINDS]);
+export type QuranResearchShelf = z.infer<typeof quranResearchKindSchema>;
+export const quranResearchSortSchema = z.enum(['newest', 'oldest', 'title']);
+export type QuranResearchSort = z.infer<typeof quranResearchSortSchema>;
+
+export const quranResearchQuerySchema = z
+  .object({
+    topic: libraryIdSchema.nullable().default(null),
+    kind: quranResearchKindSchema.default('all'),
+    language: libraryLanguageCodeSchema.nullable().default(null),
+    contributor: libraryIdSchema.nullable().default(null),
+    /** The first year of a decade: 1990 is 1990–1999. Years run from 1. */
+    decade: z.number().int().min(0).max(9990).multipleOf(10).nullable().default(null),
+    fullText: z.boolean().default(false),
+    sort: quranResearchSortSchema.default('newest'),
+    titleLocale: localeSchema.nullable().default(null),
+    offset: z.number().int().min(0).max(25_000).default(0),
+    limit: z.number().int().min(1).max(QURAN_RESEARCH_PAGE).default(QURAN_RESEARCH_PAGE),
+  })
+  .strict();
+
+export type QuranResearchQuery = z.infer<typeof quranResearchQuerySchema>;
+
+/**
+ * One public record on the Quran Research hub — a card's worth: identity,
+ * address, labels, credits, the content language and date facts, the
+ * institutional context, the abstract (bounded at 4,000 characters), where a
+ * paper appeared and its DOI, how many citations it gives, and whether its
+ * readable text is on the platform. Never the document itself.
+ */
+export interface QuranResearchItem {
+  readonly kind: QuranResearchKind;
+  readonly id: string;
+  readonly slug: string;
+  readonly primaryLocale: Locale;
+  readonly labels: readonly ScholarlyLabel[];
+  readonly contributors: readonly {
+    readonly personId: string;
+    readonly role: ContributionRole;
+  }[];
+  /** The CONTENT language, never the interface locale. */
+  readonly languageCode: string;
+  readonly publicationYear: number | null;
+  /** `YYYY-MM-DD`, a date and not an instant. */
+  readonly publishedOn: string | null;
+  readonly institutionalContext: string | null;
+  readonly abstract: string | null;
+  /** A ResearchPaper's venue and DOI; always null for Research. */
+  readonly venue: string | null;
+  readonly doi: string | null;
+  /** How many citations the record gives. */
+  readonly citations: number;
+  /** Its readable text is on the platform. */
+  readonly readable: boolean;
+}
+
+/** One page of the Quran Research read, with how many records the query admits. */
+export interface QuranResearchPage {
+  readonly items: readonly QuranResearchItem[];
+  readonly total: number;
+  readonly hasMore: boolean;
+}
+
+/** One facet value and how many records choosing it would show. */
+export interface QuranResearchFacet {
+  readonly id: string;
+  readonly records: number;
+}
+
+export interface QuranResearchFacetPage {
+  readonly items: readonly QuranResearchFacet[];
+  readonly hasMore: boolean;
+}
+
+/**
+ * The aggregates the Quran Research hub is navigated by — each ONE grouped,
+ * bounded read counting public records:
+ *
+ *   `hub`          the whole set, unfiltered: records, Research, research
+ *                  papers, those with their text on the platform, distinct
+ *                  content languages and credited People, and the earliest
+ *                  and latest publication years;
+ *   `kinds`        the set under every filter but the kind;
+ *   `languages`    content language → records, without the language filter;
+ *   `contributors` Person → records, without the contributor filter;
+ *   `decades`      decade → records (dated records only, newest decade
+ *                  first), without the decade filter;
+ *   `readable`     records with their text on the platform, without the
+ *                  full-text filter.
+ */
+export interface QuranResearchFacets {
+  readonly hub: {
+    readonly records: number;
+    readonly research: number;
+    readonly papers: number;
+    readonly readable: number;
+    readonly languages: number;
+    readonly contributors: number;
+    readonly earliest: number | null;
+    readonly latest: number | null;
+  };
+  readonly kinds: {
+    readonly all: number;
+    readonly research: number;
+    readonly papers: number;
+  };
+  readonly languages: QuranResearchFacetPage;
+  readonly contributors: QuranResearchFacetPage;
+  readonly decades: readonly { readonly decade: number; readonly records: number }[];
+  readonly readable: number;
+}

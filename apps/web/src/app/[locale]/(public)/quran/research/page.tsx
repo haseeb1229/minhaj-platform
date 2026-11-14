@@ -1,37 +1,49 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
 import { QuranUnavailable } from '@/components/quran/parts';
-import { readQuranOffset } from '@/components/quran/presentation';
+import { quranAvailability, quranMetadata } from '@/components/quran/read';
+import { QuranResearchPage } from '@/components/quran/research';
 import {
-  quranAvailability,
-  quranMetadata,
-  readQuranTopic,
-} from '@/components/quran/read';
-import { QuranRelatedPage, RELATED_CANONICAL } from '@/components/quran/related';
+  RESEARCH_PATH,
+  readResearchQuery,
+  researchCanonicalRedirect,
+} from '@/components/quran/research-view';
 import { requireLocale } from '@/config/route-locale';
 
 /**
- * `/{locale}/quran/research` — Library's public Research on Taxonomy's `quran` Topic, a
- * related-material view canonical to the owner's own collection (ROUTE_MAP.md
- * §3.3). It reads the owner's public listing and nothing of Quran's; without
- * the Topic there is nothing to filter by, and the view does not exist.
+ * `/{locale}/quran/research` — THE QURAN RESEARCH HUB (Quran Part 12;
+ * ROUTE_MAP.md §3.3): Library's public Research and ResearchPaper records on
+ * Taxonomy's `quran` Topic, composed at Layer 4 from Library's own public
+ * reads — a kind, a content language, an author, a decade, "full text on the
+ * platform", an order and a page, each a GET parameter, every view at ONE
+ * address (any other spelling of it is one redirect there).
+ *
+ * CANONICAL TO ITSELF, the bare path, since Part 12: the hub is a curated
+ * navigational view of its own (ROUTE_MAP.md §2.3), no longer a mirror of
+ * `/library/research`; every filtered or paged view canonicalises to it.
+ * While the corpus is not approved the page claims no canonical at all
+ * (`quranMetadata`). Without the `quran` Topic nothing is research on the
+ * Quran: the hub says so, as an empty state, never a 404.
+ *
+ * Signed out and `force-dynamic`: every part is mutable public data. The
+ * honest unavailable state while no corpus is active, as on every Quran page.
  */
 export const dynamic = 'force-dynamic';
 
-interface RelatedParams {
+interface ResearchParams {
   readonly params: Promise<{ readonly locale: string }>;
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export async function generateMetadata({ params }: RelatedParams): Promise<Metadata> {
+export async function generateMetadata({ params }: ResearchParams): Promise<Metadata> {
   const locale = await requireLocale(params);
   const t = await getTranslations({ locale, namespace: 'quran' });
   return quranMetadata({
     locale,
     availability: await quranAvailability(),
-    canonicalPath: RELATED_CANONICAL.research,
+    canonicalPath: RESEARCH_PATH,
     title: t('sections.research'),
     description: t('sectionBody.research'),
   });
@@ -40,22 +52,23 @@ export async function generateMetadata({ params }: RelatedParams): Promise<Metad
 export default async function QuranResearchRoute({
   params,
   searchParams,
-}: RelatedParams) {
+}: ResearchParams) {
   const locale = await requireLocale(params);
   const availability = await quranAvailability();
   if (!availability.active) {
     const t = await getTranslations({ locale, namespace: 'quran' });
     return <QuranUnavailable locale={locale} section={t('sections.research')} />;
   }
-  const topic = await readQuranTopic(locale);
-  if (topic === null) notFound();
+  const query = await searchParams;
+  // One address per view: a form's empty controls, a malformed value or
+  // another order is ONE redirect to the canonical spelling.
+  const canonical = researchCanonicalRedirect(locale, query);
+  if (canonical !== null) redirect(canonical);
   return (
-    <QuranRelatedPage
+    <QuranResearchPage
       locale={locale}
       availability={availability}
-      kind="research"
-      topic={topic}
-      offset={readQuranOffset(await searchParams)}
+      query={readResearchQuery(query)}
     />
   );
 }

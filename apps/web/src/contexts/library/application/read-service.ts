@@ -3,6 +3,7 @@ import {
   libraryIdSchema,
   libraryQuerySchema,
   librarySlugSchema,
+  quranResearchQuerySchema,
   quranWorksQuerySchema,
   scholarlyKindSchema,
   scholarlyQuerySchema,
@@ -207,6 +208,21 @@ export function createLibraryReadService(reader: LibraryPublicReaderPort) {
 
     quranWorkFacets(raw: unknown = {}) {
       return reader.quranWorkFacets(quranWorksQuerySchema.parse(raw));
+    },
+
+    /**
+     * Quran Part 12 — the Quran Research hub, composed at Layer 4: one
+     * bounded page of the public Research and ResearchPaper records on the
+     * named Topic, and the aggregates the hub is navigated by. Every field is
+     * parsed here (an unknown kind or order, a year that is no decade, an
+     * offset past the bound), before any read.
+     */
+    quranResearch(raw: unknown = {}) {
+      return reader.quranResearch(quranResearchQuerySchema.parse(raw));
+    },
+
+    quranResearchFacets(raw: unknown = {}) {
+      return reader.quranResearchFacets(quranResearchQuerySchema.parse(raw));
     },
   };
 }

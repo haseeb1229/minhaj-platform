@@ -50,7 +50,8 @@ export function ExploreHero({
   readonly title: string;
   readonly lede: string;
   readonly stats: readonly {
-    readonly value: number;
+    /** A count, or a figure already written for the reader (a span of years). */
+    readonly value: number | string;
     readonly label: string;
     readonly href?: string;
   }[];
