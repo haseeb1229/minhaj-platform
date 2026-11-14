@@ -14,10 +14,13 @@ import {
   coursesReadQuery,
   levelSteps,
   readCoursesQuery,
-} from '../../apps/web/src/components/quran/courses-view.ts';
+} from '../../apps/web/src/components/topic-hub/courses-view.ts';
+import { QURAN_COURSES as QURAN } from '../../apps/web/src/components/quran/hubs.ts';
+import { HADITH_COURSES as HADITH } from '../../apps/web/src/components/hadith/hubs.ts';
 
 /**
- * Quran Part 13 — the Quran Courses hub's address rules: the view a URL
+ * Quran Part 13 and Hadith Part 1 — a Courses hub's address rules (the Quran's
+ * scope and Hadith's): the view a URL
  * names, the address each control and link builds, the query Learning is
  * asked and the level grouping. Tolerant of anything a visitor or a crawler
  * types; never widening.
@@ -112,31 +115,31 @@ describe('coursesHref', () => {
   });
 
   it('gives the unfiltered hub exactly one address, in every locale', () => {
-    expect(coursesHref('en', DEFAULT_COURSES_QUERY)).toBe('/quran/courses');
-    expect(coursesHref('ur', DEFAULT_COURSES_QUERY)).toBe('/ur/quran/courses');
-    expect(coursesHref('ar', DEFAULT_COURSES_QUERY)).toBe('/ar/quran/courses');
+    expect(coursesHref(QURAN, 'en', DEFAULT_COURSES_QUERY)).toBe('/quran/courses');
+    expect(coursesHref(QURAN, 'ur', DEFAULT_COURSES_QUERY)).toBe('/ur/quran/courses');
+    expect(coursesHref(QURAN, 'ar', DEFAULT_COURSES_QUERY)).toBe('/ar/quran/courses');
   });
 
   it('writes every narrowing value in one fixed order, and the page last', () => {
-    expect(coursesHref('en', view)).toBe(
+    expect(coursesHref(QURAN, 'en', view)).toBe(
       `/quran/courses?format=self-paced&level=beginner&language=ur&teacher=${PERSON}&sort=newest&page=4`,
     );
   });
 
   it('returns to the first page whenever anything but the page changes', () => {
-    expect(coursesHref('en', view, { level: null })).toBe(
+    expect(coursesHref(QURAN, 'en', view, { level: null })).toBe(
       `/quran/courses?format=self-paced&language=ur&teacher=${PERSON}&sort=newest`,
     );
-    expect(coursesHref('en', view, { format: 'live' })).toBe(
+    expect(coursesHref(QURAN, 'en', view, { format: 'live' })).toBe(
       `/quran/courses?format=live&level=beginner&language=ur&teacher=${PERSON}&sort=newest`,
     );
-    expect(coursesHref('en', view, { sort: 'level' })).not.toContain('sort=');
-    expect(coursesHref('en', view, { page: 5 })).toContain('&page=5');
-    expect(coursesHref('en', view, { page: 1 })).not.toContain('page=');
+    expect(coursesHref(QURAN, 'en', view, { sort: 'level' })).not.toContain('sort=');
+    expect(coursesHref(QURAN, 'en', view, { page: 5 })).toContain('&page=5');
+    expect(coursesHref(QURAN, 'en', view, { page: 1 })).not.toContain('page=');
   });
 
   it('round-trips: the address it builds reads back as the same view', () => {
-    const href = coursesHref('en', view);
+    const href = coursesHref(QURAN, 'en', view);
     const params = Object.fromEntries(new URL(href, 'https://x.invalid').searchParams);
     expect(readCoursesQuery(params)).toEqual(view);
   });
@@ -144,19 +147,23 @@ describe('coursesHref', () => {
 
 describe('coursesCanonicalRedirect', () => {
   it('leaves a canonical address, and the bare hub, alone', () => {
-    expect(coursesCanonicalRedirect('en', {})).toBeNull();
+    expect(coursesCanonicalRedirect(QURAN, 'en', {})).toBeNull();
     expect(
-      coursesCanonicalRedirect('ur', { format: 'live', level: 'advanced', page: '2' }),
+      coursesCanonicalRedirect(QURAN, 'ur', {
+        format: 'live',
+        level: 'advanced',
+        page: '2',
+      }),
     ).toBeNull();
     // A parameter the hub does not read — the former related view's offset
     // among them — is not its business.
-    expect(coursesCanonicalRedirect('en', { utm_source: 'x' })).toBeNull();
-    expect(coursesCanonicalRedirect('en', { offset: '24' })).toBeNull();
+    expect(coursesCanonicalRedirect(QURAN, 'en', { utm_source: 'x' })).toBeNull();
+    expect(coursesCanonicalRedirect(QURAN, 'en', { offset: '24' })).toBeNull();
   });
 
   it('sends what a filter form submits — every control, empty ones included — to one address', () => {
     expect(
-      coursesCanonicalRedirect('en', {
+      coursesCanonicalRedirect(QURAN, 'en', {
         level: '',
         language: '',
         teacher: PERSON,
@@ -164,7 +171,7 @@ describe('coursesCanonicalRedirect', () => {
       }),
     ).toBe(`/quran/courses?teacher=${PERSON}`);
     expect(
-      coursesCanonicalRedirect('ar', {
+      coursesCanonicalRedirect(QURAN, 'ar', {
         format: 'live',
         level: 'beginner',
         language: '',
@@ -174,21 +181,27 @@ describe('coursesCanonicalRedirect', () => {
   });
 
   it('sends another order, a malformed or repeated value to the parsed view', () => {
-    expect(coursesCanonicalRedirect('en', { sort: 'title', format: 'live' })).toBe(
+    expect(coursesCanonicalRedirect(QURAN, 'en', { sort: 'title', format: 'live' })).toBe(
       '/quran/courses?format=live&sort=title',
     );
     expect(
-      coursesCanonicalRedirect('en', { level: 'expert', page: '-1', format: 'drafts' }),
+      coursesCanonicalRedirect(QURAN, 'en', {
+        level: 'expert',
+        page: '-1',
+        format: 'drafts',
+      }),
     ).toBe('/quran/courses');
-    expect(coursesCanonicalRedirect('en', { language: ['ur', 'en'] })).toBe(
+    expect(coursesCanonicalRedirect(QURAN, 'en', { language: ['ur', 'en'] })).toBe(
       '/quran/courses',
     );
-    expect(coursesCanonicalRedirect('en', { page: '1' })).toBe('/quran/courses');
-    expect(coursesCanonicalRedirect('en', { sort: 'level' })).toBe('/quran/courses');
+    expect(coursesCanonicalRedirect(QURAN, 'en', { page: '1' })).toBe('/quran/courses');
+    expect(coursesCanonicalRedirect(QURAN, 'en', { sort: 'level' })).toBe(
+      '/quran/courses',
+    );
     // Built from the parsed view, never from the typed text.
-    expect(coursesCanonicalRedirect('en', { teacher: 'https://evil.example/' })).toBe(
-      '/quran/courses',
-    );
+    expect(
+      coursesCanonicalRedirect(QURAN, 'en', { teacher: 'https://evil.example/' }),
+    ).toBe('/quran/courses');
   });
 
   it('never redirects an address it built itself', () => {
@@ -200,9 +213,9 @@ describe('coursesCanonicalRedirect', () => {
       sort: 'title',
       page: '7',
     });
-    const href = coursesHref('en', view);
+    const href = coursesHref(QURAN, 'en', view);
     const params = Object.fromEntries(new URL(href, 'https://x.invalid').searchParams);
-    expect(coursesCanonicalRedirect('en', params)).toBeNull();
+    expect(coursesCanonicalRedirect(QURAN, 'en', params)).toBeNull();
   });
 });
 
@@ -268,5 +281,16 @@ describe('the level grouping', () => {
     expect(levelSteps('beginner')).toBe(1);
     expect(levelSteps('intermediate')).toBe(2);
     expect(levelSteps('advanced')).toBe(3);
+  });
+});
+
+describe('the Hadith Courses hub’s address', () => {
+  it('is its own, in every locale, under the same rules', () => {
+    expect(coursesHref(HADITH, 'en', DEFAULT_COURSES_QUERY)).toBe('/hadith/courses');
+    expect(coursesHref(HADITH, 'ar', DEFAULT_COURSES_QUERY)).toBe('/ar/hadith/courses');
+    expect(coursesCanonicalRedirect(HADITH, 'en', {})).toBeNull();
+    expect(coursesCanonicalRedirect(HADITH, 'ur', { level: '', format: 'live' })).toBe(
+      '/ur/hadith/courses?format=live',
+    );
   });
 });

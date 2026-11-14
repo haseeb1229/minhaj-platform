@@ -5,19 +5,20 @@ import { Prisma } from '@prisma/client';
 import type { Locale } from '@minhaj/contracts';
 import type {
   LibraryPublicReaderPort,
-  QuranResearchFacetPage,
-  QuranResearchItem,
-  QuranResearchKind,
-  QuranResearchQuery,
+  TopicResearchFacetPage,
+  TopicResearchItem,
+  TopicResearchKind,
+  TopicResearchQuery,
 } from '@minhaj/contracts/library';
 import type { ContributionRole } from '@minhaj/contracts/people';
 
 import { getDatabaseClient } from '../../client.ts';
 
 /**
- * QURAN PART 12 — THE QURAN RESEARCH READ: Library's public Research and
- * ResearchPaper records on the Topic a caller names, for the Quran Research
- * hub composed at Layer 4 (DOMAIN_MODEL.md §10.2).
+ * THE TOPIC RESEARCH READ (Quran Part 12; named for the Topic in Hadith Part
+ * 1): Library's public Research and ResearchPaper records on the Topic a
+ * caller names, for a subject's Research hub — the Quran's and Hadith's —
+ * composed at Layer 4 (DOMAIN_MODEL.md §10.2).
  *
  * TWO AGGREGATES, ONE SET. Each keeps its own table, its own relation sets and
  * its own public predicate (published); the set is the two read side by side
@@ -25,7 +26,7 @@ import { getDatabaseClient } from '../../client.ts';
  * names are this module's own constants — never anything a caller supplies —
  * and every value is a bound parameter.
  *
- * TWO READS, THE SECOND AUTHORITATIVE — as the Quran Books read: one bounded
+ * TWO READS, THE SECOND AUTHORITATIVE — as the Topic Works read: one bounded
  * SQL page of (kind, identifier) in the visitor's order with the total the
  * query admits, then those records loaded per aggregate under the public
  * predicate and the Topic again, so an error in the ordering query could only
@@ -42,7 +43,7 @@ interface Tables {
   readonly fk: Prisma.Sql;
 }
 
-const TABLES: Readonly<Record<QuranResearchKind, Tables>> = Object.freeze({
+const TABLES: Readonly<Record<TopicResearchKind, Tables>> = Object.freeze({
   research: {
     record: Prisma.raw('[dbo].[Research]'),
     label: Prisma.raw('[dbo].[ResearchLabel]'),
@@ -59,7 +60,7 @@ const TABLES: Readonly<Record<QuranResearchKind, Tables>> = Object.freeze({
   },
 });
 
-const KINDS: readonly QuranResearchKind[] = ['research', 'research-paper'];
+const KINDS: readonly TopicResearchKind[] = ['research', 'research-paper'];
 
 /** Which of the query's filters a statement applies. */
 interface Filters {
@@ -94,7 +95,7 @@ const boundedOffset = (value: number) =>
   Math.max(0, Math.min(25_000, Math.trunc(value) || 0));
 
 /** The aggregates a statement reads: one, when the kind filter names one. */
-function kindsOf(q: QuranResearchQuery, use: Filters): readonly QuranResearchKind[] {
+function kindsOf(q: TopicResearchQuery, use: Filters): readonly TopicResearchKind[] {
   return use.kind && q.kind !== 'all' ? [q.kind] : KINDS;
 }
 
@@ -105,7 +106,7 @@ function kindsOf(q: QuranResearchQuery, use: Filters): readonly QuranResearchKin
 function whereOf(
   t: Tables,
   topic: string,
-  q: QuranResearchQuery,
+  q: TopicResearchQuery,
   use: Filters,
 ): Prisma.Sql {
   const conditions = [
@@ -133,7 +134,7 @@ function whereOf(
  */
 function setOf(
   topic: string,
-  q: QuranResearchQuery,
+  q: TopicResearchQuery,
   use: Filters,
   withTitle: boolean,
 ): Prisma.Sql {
@@ -161,7 +162,7 @@ function setOf(
 }
 
 /** The credited People of the set: one row per (Person, record). */
-function creditsOf(topic: string, q: QuranResearchQuery, use: Filters): Prisma.Sql {
+function creditsOf(topic: string, q: TopicResearchQuery, use: Filters): Prisma.Sql {
   return Prisma.join(
     kindsOf(q, use).map((kind) => {
       const t = TABLES[kind];
@@ -186,11 +187,11 @@ function isoDate(value: Date | null): string | null {
   return value === null ? null : value.toISOString().slice(0, 10);
 }
 
-const EMPTY_FACETS: QuranResearchFacetPage = { items: [], hasMore: false };
+const EMPTY_FACETS: TopicResearchFacetPage = { items: [], hasMore: false };
 
 function facetPage(
   rows: readonly { id: string; count: number }[],
-): QuranResearchFacetPage {
+): TopicResearchFacetPage {
   return {
     items: rows
       .slice(0, FACET_PAGE)
@@ -212,14 +213,14 @@ const CONTRIBUTOR_SELECT = {
   ],
 };
 
-export function createQuranResearchReader(): Pick<
+export function createTopicResearchReader(): Pick<
   LibraryPublicReaderPort,
-  'quranResearch' | 'quranResearchFacets'
+  'topicResearch' | 'topicResearchFacets'
 > {
   const db = getDatabaseClient();
 
   /** Every record of a filtered set, by kind, with the text on the platform. */
-  async function counts(topic: string, q: QuranResearchQuery, use: Filters) {
+  async function counts(topic: string, q: TopicResearchQuery, use: Filters) {
     const [row] = await db.$queryRaw<
       {
         records: number;
@@ -243,8 +244,8 @@ export function createQuranResearchReader(): Pick<
   }
 
   return {
-    async quranResearch(q) {
-      // With no Topic nothing is "research on the Quran": no record carries a
+    async topicResearch(q) {
+      // With no Topic nothing is research on the subject: no record carries a
       // passage, so the set is empty rather than every record.
       if (q.topic === null) return { items: [], total: 0, hasMore: false };
       const topic = q.topic;
@@ -265,7 +266,7 @@ export function createQuranResearchReader(): Pick<
       const rows = page.slice(0, q.limit);
       if (rows.length === 0) return { items: [], total, hasMore: false };
 
-      const idsOf = (kind: QuranResearchKind) =>
+      const idsOf = (kind: TopicResearchKind) =>
         rows.filter((row) => row.kind === kind).map((row) => row.id);
       const researchIds = idsOf('research');
       const paperIds = idsOf('research-paper');
@@ -332,7 +333,7 @@ export function createQuranResearchReader(): Pick<
         readonly venue?: string | null;
         readonly doi?: string | null;
       };
-      const toItem = (kind: QuranResearchKind, row: Loaded): QuranResearchItem => ({
+      const toItem = (kind: TopicResearchKind, row: Loaded): TopicResearchItem => ({
         kind,
         id: row.id,
         slug: row.slug,
@@ -356,7 +357,7 @@ export function createQuranResearchReader(): Pick<
         citations: row._count.citations,
         readable: withText.has(row.id),
       });
-      const byKey = new Map<string, QuranResearchItem>([
+      const byKey = new Map<string, TopicResearchItem>([
         ...research.map(
           (row) => [`research:${row.id}`, toItem('research', row)] as const,
         ),
@@ -376,7 +377,7 @@ export function createQuranResearchReader(): Pick<
      * own counts, so every option says how many records choosing it would
      * show.
      */
-    async quranResearchFacets(q) {
+    async topicResearchFacets(q) {
       if (q.topic === null)
         return {
           hub: {

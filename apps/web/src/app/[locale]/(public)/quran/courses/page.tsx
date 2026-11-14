@@ -3,11 +3,11 @@ import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
 import { QuranCoursesPage } from '@/components/quran/courses';
+import { QURAN_COURSES } from '@/components/quran/hubs';
 import {
-  COURSES_PATH,
   coursesCanonicalRedirect,
   readCoursesQuery,
-} from '@/components/quran/courses-view';
+} from '@/components/topic-hub/courses-view';
 import { QuranUnavailable } from '@/components/quran/parts';
 import { quranAvailability, quranMetadata } from '@/components/quran/read';
 import { requireLocale } from '@/config/route-locale';
@@ -45,7 +45,7 @@ export async function generateMetadata({ params }: CoursesParams): Promise<Metad
   return quranMetadata({
     locale,
     availability: await quranAvailability(),
-    canonicalPath: COURSES_PATH,
+    canonicalPath: QURAN_COURSES.path,
     title: t('sections.courses'),
     description: t('sectionBody.courses'),
   });
@@ -61,7 +61,7 @@ export default async function QuranCoursesRoute({ params, searchParams }: Course
   const query = await searchParams;
   // One address per view: a form's empty controls, a malformed value or
   // another order is ONE redirect to the canonical spelling.
-  const canonical = coursesCanonicalRedirect(locale, query);
+  const canonical = coursesCanonicalRedirect(QURAN_COURSES, locale, query);
   if (canonical !== null) redirect(canonical);
   return (
     <QuranCoursesPage

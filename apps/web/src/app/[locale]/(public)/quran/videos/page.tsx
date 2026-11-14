@@ -5,11 +5,11 @@ import { getTranslations } from 'next-intl/server';
 import { QuranUnavailable } from '@/components/quran/parts';
 import { quranAvailability, quranMetadata } from '@/components/quran/read';
 import { QuranVideosPage } from '@/components/quran/videos';
+import { QURAN_VIDEOS } from '@/components/quran/hubs';
 import {
-  VIDEOS_PATH,
   readVideosQuery,
   videosCanonicalRedirect,
-} from '@/components/quran/videos-view';
+} from '@/components/topic-hub/videos-view';
 import { requireLocale } from '@/config/route-locale';
 
 /**
@@ -42,7 +42,7 @@ export async function generateMetadata({ params }: VideosParams): Promise<Metada
   return quranMetadata({
     locale,
     availability: await quranAvailability(),
-    canonicalPath: VIDEOS_PATH,
+    canonicalPath: QURAN_VIDEOS.path,
     title: t('sections.videos'),
     description: t('sectionBody.videos'),
   });
@@ -58,13 +58,13 @@ export default async function QuranVideosRoute({ params, searchParams }: VideosP
   const query = await searchParams;
   // One address per view: a form's empty controls, a malformed value or
   // another order is ONE redirect to the canonical spelling.
-  const canonical = videosCanonicalRedirect(locale, query);
+  const canonical = videosCanonicalRedirect(QURAN_VIDEOS, locale, query);
   if (canonical !== null) redirect(canonical);
   return (
     <QuranVideosPage
       locale={locale}
       availability={availability}
-      query={readVideosQuery(query)}
+      query={readVideosQuery(QURAN_VIDEOS, query)}
     />
   );
 }

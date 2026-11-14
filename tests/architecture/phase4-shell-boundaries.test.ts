@@ -263,10 +263,12 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/hadith/sciences/page.tsx',
   'apps/web/src/app/[locale]/(public)/hadith/sciences/[slug]/page.tsx',
   'apps/web/src/app/[locale]/(public)/hadith/commentary/page.tsx',
+  // Hadith Part 1: the Hadith Books, Videos, Research and Courses hubs (the
+  // Phase-19 and Phase-22 related views until then), composed from Library's,
+  // Media's and Learning's PUBLIC roots on the `hadith` Topic.
   'apps/web/src/app/[locale]/(public)/hadith/books/page.tsx',
   'apps/web/src/app/[locale]/(public)/hadith/videos/page.tsx',
   'apps/web/src/app/[locale]/(public)/hadith/research/page.tsx',
-  // Phase 22: the Hadith related view of Learning's published Courses.
   'apps/web/src/app/[locale]/(public)/hadith/courses/page.tsx',
   // Phase 20. Every Fatwa surface reads whether the service is activated, and
   // which rulings are public now, through Fatwa's PUBLIC reader, so none can be

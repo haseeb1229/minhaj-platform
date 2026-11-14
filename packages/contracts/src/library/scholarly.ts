@@ -565,13 +565,14 @@ export interface ScholarlyTarget {
 }
 
 /* ===========================================================================
- * Quran Part 12 — the Quran Research read
+ * Quran Part 12 (Hadith Part 1) — the Topic Research read
  * ========================================================================= */
 
 /**
- * QURAN PART 12 — WHICH RESEARCH IS "RESEARCH ON THE QURAN". The public
- * Research and ResearchPaper records on the Topic a caller names (Taxonomy's
- * `quran` Topic, resolved at Layer 4 — Library holds only its identifier).
+ * QURAN PART 12 (Hadith Part 1) — WHICH RESEARCH IS "RESEARCH ON A SUBJECT".
+ * The public Research and ResearchPaper records on the Topic a caller names
+ * (Taxonomy's `quran` or `hadith` Topic, resolved at Layer 4 — Library holds
+ * only its identifier).
  * The two aggregates with the scholarly apparatus (an abstract, an
  * institutional context, citations), read side by side and still two
  * aggregates: every row says which it is.
@@ -591,44 +592,44 @@ export interface ScholarlyTarget {
  *                  by the title a reader of `titleLocale` is shown). Every
  *                  order ends on the kind and the identifier.
  */
-export const QURAN_RESEARCH_PAGE = 20;
-export const QURAN_RESEARCH_KINDS = Object.freeze([
+export const TOPIC_RESEARCH_PAGE = 20;
+export const TOPIC_RESEARCH_KINDS = Object.freeze([
   'research',
   'research-paper',
 ] as const);
-export type QuranResearchKind = (typeof QURAN_RESEARCH_KINDS)[number];
-export const quranResearchKindSchema = z.enum(['all', ...QURAN_RESEARCH_KINDS]);
-export type QuranResearchShelf = z.infer<typeof quranResearchKindSchema>;
-export const quranResearchSortSchema = z.enum(['newest', 'oldest', 'title']);
-export type QuranResearchSort = z.infer<typeof quranResearchSortSchema>;
+export type TopicResearchKind = (typeof TOPIC_RESEARCH_KINDS)[number];
+export const topicResearchKindSchema = z.enum(['all', ...TOPIC_RESEARCH_KINDS]);
+export type TopicResearchShelf = z.infer<typeof topicResearchKindSchema>;
+export const topicResearchSortSchema = z.enum(['newest', 'oldest', 'title']);
+export type TopicResearchSort = z.infer<typeof topicResearchSortSchema>;
 
-export const quranResearchQuerySchema = z
+export const topicResearchQuerySchema = z
   .object({
     topic: libraryIdSchema.nullable().default(null),
-    kind: quranResearchKindSchema.default('all'),
+    kind: topicResearchKindSchema.default('all'),
     language: libraryLanguageCodeSchema.nullable().default(null),
     contributor: libraryIdSchema.nullable().default(null),
     /** The first year of a decade: 1990 is 1990–1999. Years run from 1. */
     decade: z.number().int().min(0).max(9990).multipleOf(10).nullable().default(null),
     fullText: z.boolean().default(false),
-    sort: quranResearchSortSchema.default('newest'),
+    sort: topicResearchSortSchema.default('newest'),
     titleLocale: localeSchema.nullable().default(null),
     offset: z.number().int().min(0).max(25_000).default(0),
-    limit: z.number().int().min(1).max(QURAN_RESEARCH_PAGE).default(QURAN_RESEARCH_PAGE),
+    limit: z.number().int().min(1).max(TOPIC_RESEARCH_PAGE).default(TOPIC_RESEARCH_PAGE),
   })
   .strict();
 
-export type QuranResearchQuery = z.infer<typeof quranResearchQuerySchema>;
+export type TopicResearchQuery = z.infer<typeof topicResearchQuerySchema>;
 
 /**
- * One public record on the Quran Research hub — a card's worth: identity,
+ * One public record on a Research hub — a card's worth: identity,
  * address, labels, credits, the content language and date facts, the
  * institutional context, the abstract (bounded at 4,000 characters), where a
  * paper appeared and its DOI, how many citations it gives, and whether its
  * readable text is on the platform. Never the document itself.
  */
-export interface QuranResearchItem {
-  readonly kind: QuranResearchKind;
+export interface TopicResearchItem {
+  readonly kind: TopicResearchKind;
   readonly id: string;
   readonly slug: string;
   readonly primaryLocale: Locale;
@@ -653,26 +654,26 @@ export interface QuranResearchItem {
   readonly readable: boolean;
 }
 
-/** One page of the Quran Research read, with how many records the query admits. */
-export interface QuranResearchPage {
-  readonly items: readonly QuranResearchItem[];
+/** One page of the Topic Research read, with how many records the query admits. */
+export interface TopicResearchPage {
+  readonly items: readonly TopicResearchItem[];
   readonly total: number;
   readonly hasMore: boolean;
 }
 
 /** One facet value and how many records choosing it would show. */
-export interface QuranResearchFacet {
+export interface TopicResearchFacet {
   readonly id: string;
   readonly records: number;
 }
 
-export interface QuranResearchFacetPage {
-  readonly items: readonly QuranResearchFacet[];
+export interface TopicResearchFacetPage {
+  readonly items: readonly TopicResearchFacet[];
   readonly hasMore: boolean;
 }
 
 /**
- * The aggregates the Quran Research hub is navigated by — each ONE grouped,
+ * The aggregates a Research hub is navigated by — each ONE grouped,
  * bounded read counting public records:
  *
  *   `hub`          the whole set, unfiltered: records, Research, research
@@ -687,7 +688,7 @@ export interface QuranResearchFacetPage {
  *   `readable`     records with their text on the platform, without the
  *                  full-text filter.
  */
-export interface QuranResearchFacets {
+export interface TopicResearchFacets {
   readonly hub: {
     readonly records: number;
     readonly research: number;
@@ -703,8 +704,8 @@ export interface QuranResearchFacets {
     readonly research: number;
     readonly papers: number;
   };
-  readonly languages: QuranResearchFacetPage;
-  readonly contributors: QuranResearchFacetPage;
+  readonly languages: TopicResearchFacetPage;
+  readonly contributors: TopicResearchFacetPage;
   readonly decades: readonly { readonly decade: number; readonly records: number }[];
   readonly readable: number;
 }

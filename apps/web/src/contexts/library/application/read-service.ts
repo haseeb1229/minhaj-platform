@@ -3,8 +3,8 @@ import {
   libraryIdSchema,
   libraryQuerySchema,
   librarySlugSchema,
-  quranResearchQuerySchema,
-  quranWorksQuerySchema,
+  topicResearchQuerySchema,
+  topicWorksQuerySchema,
   scholarlyKindSchema,
   scholarlyQuerySchema,
   type LibraryFacetPage,
@@ -196,33 +196,34 @@ export function createLibraryReadService(reader: LibraryPublicReaderPort) {
     },
 
     /**
-     * Quran Part 10 — the Quran Books hub, composed at Layer 4: one bounded
-     * page of the public Works on the named Topic or explaining a Quran
-     * passage, and the aggregates the hub is navigated by. Every field is
-     * parsed here (a Surah beside the `general` shelf is refused), before any
-     * read.
+     * The Topic Works read (Quran Part 10; Hadith Part 1) — a subject's Books
+     * hub, composed at Layer 4: one bounded page of the public Works on the
+     * named Topic (and, with the Quran passage parts, those explaining a
+     * Quran passage), and the aggregates the hub is navigated by. Every field
+     * is parsed here (a Surah beside the `general` shelf, or any passage part
+     * without `quranPassages`, is refused), before any read.
      */
-    quranWorks(raw: unknown = {}) {
-      return reader.quranWorks(quranWorksQuerySchema.parse(raw));
+    topicWorks(raw: unknown = {}) {
+      return reader.topicWorks(topicWorksQuerySchema.parse(raw));
     },
 
-    quranWorkFacets(raw: unknown = {}) {
-      return reader.quranWorkFacets(quranWorksQuerySchema.parse(raw));
+    topicWorkFacets(raw: unknown = {}) {
+      return reader.topicWorkFacets(topicWorksQuerySchema.parse(raw));
     },
 
     /**
-     * Quran Part 12 — the Quran Research hub, composed at Layer 4: one
-     * bounded page of the public Research and ResearchPaper records on the
+     * The Topic Research read (Quran Part 12; Hadith Part 1) — a subject's
+     * Research hub, composed at Layer 4: one bounded page of the public Research and ResearchPaper records on the
      * named Topic, and the aggregates the hub is navigated by. Every field is
      * parsed here (an unknown kind or order, a year that is no decade, an
      * offset past the bound), before any read.
      */
-    quranResearch(raw: unknown = {}) {
-      return reader.quranResearch(quranResearchQuerySchema.parse(raw));
+    topicResearch(raw: unknown = {}) {
+      return reader.topicResearch(topicResearchQuerySchema.parse(raw));
     },
 
-    quranResearchFacets(raw: unknown = {}) {
-      return reader.quranResearchFacets(quranResearchQuerySchema.parse(raw));
+    topicResearchFacets(raw: unknown = {}) {
+      return reader.topicResearchFacets(topicResearchQuerySchema.parse(raw));
     },
   };
 }

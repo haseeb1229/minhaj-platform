@@ -1547,6 +1547,14 @@ edition's variant, a conflicting candidate or a translation never becomes a comp
 gradings, commentary and conflict evidence are not indexed. Nothing is indexed while no citation is
 public.
 
+**The Hadith hubs are not Hadith's (Hadith Part 1).** Books, Videos, Research and Courses on Hadith
+(`/hadith/books`, `/hadith/videos`, `/hadith/research`, `/hadith/courses`) are Layer-4 compositions of
+Library's, Media's and Learning's public topic reads (`topicWorks`, `topicVideos`, `topicResearch`,
+`topicCourses` and their facets — §10.1, §10.2, §11, §13.4) on Taxonomy's `hadith` Topic, without
+the Quran passage parts. The Hadith context gains no dependency and no read: no edge is added to
+§3.1, nothing of Hadith's is joined, no hadith text, reference or grading is shown, and there is no
+hadith reference model for a Work or a Video, so none is invented (OPEN_DECISIONS.md §1.3).
+
 ---
 
 ## 10. Library
@@ -1609,6 +1617,16 @@ Owns published works. Corrects the prior revision's conflation of *localized met
   reading, its passages). `quranWorkFacets` returns the hub's figures unfiltered, the shelves under
   the language and contributor, and the languages, contributors and Surahs, each counted without
   its own filter. Both are the ordinary public predicate, parameterised SQL, bounded; no schema.
+- **Books on a subject (Hadith Part 1).** The read is named for the Topic, not the Quran:
+  `topicWorks` and `topicWorkFacets` (`topicWorksQuerySchema`, `TopicWork`, `TopicWorkPage`,
+  `TopicWorkFacets`, `TOPIC_WORKS_PAGE` — `quranWorks` and its shapes until then, historical),
+  because Library knows only a Topic identifier. The Quran passage parts are one explicit flag,
+  `quranPassages` (default off): with it the read is exactly the Quran Books read above; without it
+  the set is the public Works on the named Topic ALONE (with no Topic, none — never every Work), no
+  Work carries passages, nothing explains a Surah, and a shelf, a Surah or the Quran order is
+  refused by the read service before any read. The Quran Books hub sets it; the Hadith Books hub
+  (Taxonomy's `hadith` Topic) does not — there is no hadith reference model for a Work, and none is
+  invented. No schema change.
 - **Listing order (Rebaseline R2).** A public listing of Works is ordered by `sort`: absent, the
   stable catalogue order (by slug), unchanged for every caller that does not ask; `title`, A–Z by
   the title a reader of `titleLocale` is shown (the label in that locale, else the Work's
@@ -1645,7 +1663,11 @@ number) are unique within its Magazine, and an issue is public only while its Ma
 answer: every published **Research** and **ResearchPaper** record on a Topic the caller names by
 identifier (the `quran` Topic, resolved at Layer 4 — Library holds only the key). Neither aggregate
 carries a Quran passage (§10.1's passages are a Work's), so membership is the Topic alone, and with
-no Topic the set is empty — never every record. The two stay two aggregates: `quranResearch` reads
+no Topic the set is empty — never every record. Since Hadith Part 1 the read is named for the Topic
+(`topicResearch`, `topicResearchFacets`, `topicResearchQuerySchema`, `TopicResearchItem`,
+`TOPIC_RESEARCH_PAGE`, in `adapters/library/topic-research.ts` — `quranResearch` and its shapes
+until then, historical), unchanged in substance, and serves the Hadith Research hub on the `hadith`
+Topic as well. The two stay two aggregates: `quranResearch` reads
 them side by side (`UNION ALL` over each one's own table and its own public predicate, every row
 tagged with its kind) and returns one bounded page (20) with the total the query admits — narrowed
 by kind (`research` or `research-paper`), the record's content language, a credited Person, a
@@ -1732,6 +1754,15 @@ hub's figures unfiltered (Videos, those explaining a passage, featured, language
 explained, recorded running time), the shelves under the other filters, and the languages,
 speakers, Series, length bands and Surahs, each counted without its own filter. Both are the
 ordinary public predicate, parameterised SQL, bounded; no schema change.
+
+**Videos on a subject (Hadith Part 1).** As for books (§10.1), the read is named for the Topic:
+`topicVideos` and `topicVideoFacets` (`topicVideosQuerySchema`, `TopicVideo`, `TopicVideoPage`,
+`TopicVideoFacets`, `TOPIC_VIDEO_LENGTHS`, `TOPIC_VIDEOS_PAGE` — `quranVideos` and its shapes until
+then, historical), with the Quran passage parts behind one explicit flag, `quranPassages` (default
+off). Without it the set is the published Videos on the named Topic alone (with no Topic, none), no
+Video carries passages, the explaining and Surah figures are zero, and a shelf, a Surah or the Quran
+order is refused before any read. The Quran Videos hub sets it; the Hadith Videos hub does not. No
+schema change.
 
 As delivered (Phase 11) — AudioTrack and AudioSeries, **non-Quran audio only**:
 

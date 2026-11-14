@@ -2,28 +2,30 @@ import { describe, expect, it } from 'vitest';
 
 import type {
   LibraryPublicReaderPort,
-  QuranWorksQuery,
+  TopicWorksQuery,
 } from '../../packages/contracts/src/library/index.ts';
 import { createLibraryReadService } from '../../apps/web/src/contexts/library/index.ts';
 
 /**
- * Quran Part 10 — the Quran Books read's trust boundary. Every field of the
+ * Quran Part 10 (named for the Topic in Hadith Part 1) — the Topic Works
+ * read's trust boundary. Every field of the
  * query is parsed by Library's public read service BEFORE any read: a value
  * that is malformed, out of range or contradictory reaches no adapter, and an
- * accepted one reaches it with every default stated.
+ * accepted one reaches it with every default stated. The Quran passage parts
+ * (shelves, a Surah, the Quran order) are accepted only with `quranPassages`.
  */
 
 const TOPIC = '0f1e2d3c-4b5a-4968-8776-655443322110';
 
 function recording() {
-  const seen: { method: string; query: QuranWorksQuery }[] = [];
+  const seen: { method: string; query: TopicWorksQuery }[] = [];
   const reader = {
-    quranWorks: async (query: QuranWorksQuery) => {
-      seen.push({ method: 'quranWorks', query });
+    topicWorks: async (query: TopicWorksQuery) => {
+      seen.push({ method: 'topicWorks', query });
       return { items: [], total: 0, hasMore: false };
     },
-    quranWorkFacets: async (query: QuranWorksQuery) => {
-      seen.push({ method: 'quranWorkFacets', query });
+    topicWorkFacets: async (query: TopicWorksQuery) => {
+      seen.push({ method: 'topicWorkFacets', query });
       return {
         hub: { works: 0, explaining: 0, featured: 0, languages: 0 },
         shelves: { all: 0, explaining: 0 },
@@ -36,13 +38,14 @@ function recording() {
   return { service: createLibraryReadService(reader), seen };
 }
 
-describe('Library’s public Quran Books read', () => {
+describe('Library’s public Topic Works read', () => {
   it('states every default for an empty query', async () => {
     const { service, seen } = recording();
-    await service.quranWorks();
-    await service.quranWorkFacets({});
-    const expected: QuranWorksQuery = {
+    await service.topicWorks();
+    await service.topicWorkFacets({});
+    const expected: TopicWorksQuery = {
       topic: null,
+      quranPassages: false,
       shelf: 'all',
       surah: null,
       language: null,
@@ -54,8 +57,8 @@ describe('Library’s public Quran Books read', () => {
       limit: 24,
     };
     expect(seen).toEqual([
-      { method: 'quranWorks', query: expected },
-      { method: 'quranWorkFacets', query: expected },
+      { method: 'topicWorks', query: expected },
+      { method: 'topicWorkFacets', query: expected },
     ]);
   });
 
@@ -63,6 +66,7 @@ describe('Library’s public Quran Books read', () => {
     const { service, seen } = recording();
     const query = {
       topic: TOPIC,
+      quranPassages: true,
       shelf: 'explains',
       surah: 114,
       language: 'ur-PK',
@@ -73,15 +77,42 @@ describe('Library’s public Quran Books read', () => {
       offset: 25_000,
       limit: 1,
     };
-    await service.quranWorks(query);
+    await service.topicWorks(query);
+    expect(seen[0]?.query).toEqual(query);
+  });
+
+  it('passes a full query without the passage parts through unchanged', async () => {
+    const { service, seen } = recording();
+    const query = {
+      topic: TOPIC,
+      quranPassages: false,
+      shelf: 'all',
+      surah: null,
+      language: 'ar',
+      contributor: TOPIC,
+      featured: false,
+      sort: 'newest',
+      titleLocale: 'ur',
+      offset: 24,
+      limit: 24,
+    };
+    await service.topicWorkFacets(query);
     expect(seen[0]?.query).toEqual(query);
   });
 
   it.each([
-    ['a Surah beside the general shelf', { shelf: 'general', surah: 2 }],
-    ['Surah 0', { surah: 0 }],
-    ['Surah 115', { surah: 115 }],
-    ['a fractional Surah', { surah: 1.5 }],
+    [
+      'a Surah beside the general shelf',
+      { quranPassages: true, shelf: 'general', surah: 2 },
+    ],
+    ['Surah 0', { quranPassages: true, surah: 0 }],
+    ['Surah 115', { quranPassages: true, surah: 115 }],
+    ['a fractional Surah', { quranPassages: true, surah: 1.5 }],
+    ['a shelf without the passage parts', { shelf: 'explains' }],
+    ['the general shelf without the passage parts', { shelf: 'general' }],
+    ['a Surah without the passage parts', { surah: 2 }],
+    ['the Quran order without the passage parts', { sort: 'quran' }],
+    ['a passage flag that is not a boolean', { quranPassages: 'true' }],
     ['an unknown shelf', { shelf: 'drafts' }],
     ['an unknown order', { sort: 'popular' }],
     ['a malformed Topic', { topic: 'quran' }],
@@ -95,8 +126,8 @@ describe('Library’s public Quran Books read', () => {
     ['a field it does not know', { state: 'draft' }],
   ])('refuses %s before any read', async (_name, raw) => {
     const { service, seen } = recording();
-    expect(() => service.quranWorks(raw)).toThrow();
-    expect(() => service.quranWorkFacets(raw)).toThrow();
+    expect(() => service.topicWorks(raw)).toThrow();
+    expect(() => service.topicWorkFacets(raw)).toThrow();
     expect(seen).toEqual([]);
   });
 });

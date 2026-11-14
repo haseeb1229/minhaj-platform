@@ -7,14 +7,14 @@ import type {
   LibraryQuery,
   AssetPurpose,
   LibraryCover,
-  QuranWorksQuery,
+  TopicWorksQuery,
 } from './values.ts';
 import type { PassageQuery, PassageSurahCount, QuranPassage } from '../passage/index.ts';
 import type {
   MagazineIssueRecord,
-  QuranResearchFacets,
-  QuranResearchPage,
-  QuranResearchQuery,
+  TopicResearchFacets,
+  TopicResearchPage,
+  TopicResearchQuery,
   ScholarlyAdminQuery,
   ScholarlyKind,
   ScholarlyListing,
@@ -97,13 +97,14 @@ export interface QuranPassageWork {
   readonly passages: readonly QuranPassage[];
 }
 /**
- * Quran Part 10: one PUBLIC Work on the Quran Books hub — a card's worth:
- * identity, address, titles and descriptions, card cover, credits, the
- * content languages of its published Editions, its latest year, whether a
- * published Edition may be read online, and the passages it explains. No
- * file, asset or availability internals.
+ * Quran Part 10 (Hadith Part 1): one PUBLIC Work on a subject's Books hub — a
+ * card's worth: identity, address, titles and descriptions, card cover,
+ * credits, the content languages of its published Editions, its latest year,
+ * whether a published Edition may be read online, and the passages it
+ * explains (always none without `quranPassages`). No file, asset or
+ * availability internals.
  */
-export interface QuranWork {
+export interface TopicWork {
   readonly id: string;
   readonly slug: string;
   readonly primaryLocale: Locale;
@@ -125,16 +126,16 @@ export interface QuranWork {
   readonly passages: readonly QuranPassage[];
 }
 
-/** One page of the Quran Books read, with how many Works the query admits in all. */
-export interface QuranWorkPage {
-  readonly items: readonly QuranWork[];
+/** One page of the Topic Works read, with how many Works the query admits in all. */
+export interface TopicWorkPage {
+  readonly items: readonly TopicWork[];
   readonly total: number;
   readonly hasMore: boolean;
 }
 
 /**
- * Quran Part 10: the aggregates the Quran Books hub is navigated by — each
- * ONE grouped read, each bounded, each counting public Works:
+ * Quran Part 10 (Hadith Part 1): the aggregates a Books hub is navigated by —
+ * each ONE grouped read, each bounded, each counting public Works:
  *
  *   `hub`          the whole set, unfiltered: Works, those explaining a
  *                  passage, the featured, and the distinct content languages;
@@ -146,8 +147,11 @@ export interface QuranWorkPage {
  *   `contributors` Person → Works, under the shelf, Surah and language;
  *   `surahs`       Surah → Works explaining a passage in it, under the
  *                  language and contributor.
+ *
+ * Without `quranPassages` nothing explains a passage: `explaining` is zero
+ * and `surahs` empty.
  */
-export interface QuranWorkFacets {
+export interface TopicWorkFacets {
   readonly hub: {
     readonly works: number;
     readonly explaining: number;
@@ -295,26 +299,28 @@ export interface LibraryPublicReaderPort {
   quranPassageCounts(): Promise<readonly PassageSurahCount[]>;
 
   /**
-   * QURAN PART 10 — THE QURAN BOOKS HUB. One bounded, ordered page of the
-   * public Works on the query's Topic or carrying a Quran passage
-   * (`quranWorksQuerySchema`), with the total the query admits; and the
-   * hub's aggregates (`QuranWorkFacets`). The ordinary public predicate
+   * THE TOPIC WORKS READ (Quran Part 10; Hadith Part 1) — a subject's Books
+   * hub. One bounded, ordered page of the public Works on the query's Topic
+   * or, with `quranPassages`, carrying a Quran passage
+   * (`topicWorksQuerySchema`), with the total the query admits; and the hub's
+   * aggregates (`TopicWorkFacets`). The ordinary public predicate
    * throughout; the Topic is an identifier Library holds, never a Taxonomy
    * read, and the passages are Library's own citation values.
    */
-  quranWorks(query: QuranWorksQuery): Promise<QuranWorkPage>;
-  quranWorkFacets(query: QuranWorksQuery): Promise<QuranWorkFacets>;
+  topicWorks(query: TopicWorksQuery): Promise<TopicWorkPage>;
+  topicWorkFacets(query: TopicWorksQuery): Promise<TopicWorkFacets>;
 
   /**
-   * QURAN PART 12 — THE QURAN RESEARCH HUB. One bounded, ordered page of the
-   * public Research and ResearchPaper records on the query's Topic
-   * (`quranResearchQuerySchema`), with the total the query admits; and the
-   * hub's aggregates (`QuranResearchFacets`). Each aggregate's ONE public
+   * THE TOPIC RESEARCH READ (Quran Part 12; Hadith Part 1) — a subject's
+   * Research hub. One bounded, ordered page of the public Research and
+   * ResearchPaper records on the query's Topic (`topicResearchQuerySchema`),
+   * with the total the query admits; and the hub's aggregates
+   * (`TopicResearchFacets`). Each aggregate's ONE public
    * predicate throughout; the Topic is an identifier Library holds, never a
    * Taxonomy read, and no record carries a Quran passage.
    */
-  quranResearch(query: QuranResearchQuery): Promise<QuranResearchPage>;
-  quranResearchFacets(query: QuranResearchQuery): Promise<QuranResearchFacets>;
+  topicResearch(query: TopicResearchQuery): Promise<TopicResearchPage>;
+  topicResearchFacets(query: TopicResearchQuery): Promise<TopicResearchFacets>;
 
   /* -------------------------------------------------------------------------
    * Phase 9 — Research, ResearchPaper, Publication, Magazine, MagazineIssue and

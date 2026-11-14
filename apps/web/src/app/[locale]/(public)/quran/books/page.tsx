@@ -3,11 +3,11 @@ import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
 import { QuranBooksPage } from '@/components/quran/books';
+import { QURAN_BOOKS } from '@/components/quran/hubs';
 import {
-  BOOKS_PATH,
   booksCanonicalRedirect,
   readBooksQuery,
-} from '@/components/quran/books-view';
+} from '@/components/topic-hub/books-view';
 import { QuranUnavailable } from '@/components/quran/parts';
 import { quranAvailability, quranMetadata } from '@/components/quran/read';
 import { requireLocale } from '@/config/route-locale';
@@ -42,7 +42,7 @@ export async function generateMetadata({ params }: BooksParams): Promise<Metadat
   return quranMetadata({
     locale,
     availability: await quranAvailability(),
-    canonicalPath: BOOKS_PATH,
+    canonicalPath: QURAN_BOOKS.path,
     title: t('sections.books'),
     description: t('sectionBody.books'),
   });
@@ -58,13 +58,13 @@ export default async function QuranBooksRoute({ params, searchParams }: BooksPar
   const query = await searchParams;
   // One address per view: a form's empty controls, a malformed value or
   // another order is ONE redirect to the canonical spelling.
-  const canonical = booksCanonicalRedirect(locale, query);
+  const canonical = booksCanonicalRedirect(QURAN_BOOKS, locale, query);
   if (canonical !== null) redirect(canonical);
   return (
     <QuranBooksPage
       locale={locale}
       availability={availability}
-      query={readBooksQuery(query)}
+      query={readBooksQuery(QURAN_BOOKS, query)}
     />
   );
 }

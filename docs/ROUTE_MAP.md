@@ -323,7 +323,8 @@ historical): it is a curated navigational view of its own (§2.3), so its canoni
 bare `/quran/books`, and every combination of `?shelf`, `?surah`, `?language`, `?contributor`,
 `?sort` and `?page` is a query filter canonical to it and never in a sitemap. Like every Quran page
 it claims no canonical at all while the corpus is not approved. Its books are Library's, composed
-at Layer 4 from Library's public `quranWorks` and `quranWorkFacets` reads: the Works on the `quran`
+at Layer 4 from Library's public `quranWorks` and `quranWorkFacets` reads (named `topicWorks` and
+`topicWorkFacets` since Hadith Part 1, with the Quran passage parts on): the Works on the `quran`
 Topic and every Work carrying a Quran passage (with no `quran` Topic, the latter alone — an empty
 state, never a 404). Each book links to its canonical `/library/books/{slug}`, and each Surah it
 explains to `/quran/tafsir/surah/{n}`. Every view is a GET address that works without script, and
@@ -339,7 +340,8 @@ canonical address is the bare `/quran/videos`, and every combination of `?shelf`
 `?language`, `?speaker`, `?series`, `?length`, `?sort` and `?page` is a query filter canonical to
 it and never in a sitemap; while the corpus is not approved it claims no canonical at all. Its
 videos are Media's, composed at Layer 4 from Media's public `quranVideos` and `quranVideoFacets`
-reads: the Videos on the `quran` Topic and every Video carrying a Quran passage (with no `quran`
+reads (named `topicVideos` and `topicVideoFacets` since Hadith Part 1, with the Quran passage parts
+on): the Videos on the `quran` Topic and every Video carrying a Quran passage (with no `quran`
 Topic, the latter alone — an empty state, never a 404). Each video links to its canonical
 `/watch/videos/{slug}`; where its editor recorded where the lecture begins a passage, the card also
 opens it there at `/watch/videos/{slug}?start={seconds}` (§3.7, Quran Part 8 — no new parameter);
@@ -354,7 +356,8 @@ so its canonical address is the bare `/quran/research`, and every combination of
 `?language`, `?contributor`, `?decade`, `?fulltext`, `?sort` and `?page` is a query filter
 canonical to it and never in a sitemap; while the corpus is not approved it claims no canonical at
 all. Its records are Library's, composed at Layer 4 from Library's public `quranResearch` and
-`quranResearchFacets` reads: the published Research and ResearchPaper records on the `quran`
+`quranResearchFacets` reads (named `topicResearch` and `topicResearchFacets` since Hadith Part 1,
+unchanged in substance): the published Research and ResearchPaper records on the `quran`
 Topic (with no `quran` Topic, none — an empty state, never a 404). The address spells a kind as
 `research` or `paper`, never Library's `research-paper`. Each record links to its canonical
 `/library/research/{slug}` or `/library/research-papers/{slug}`, and a paper's DOI to
@@ -704,11 +707,12 @@ list citations that link to the short form; **no deep Hadith detail route exists
 citation is the only Hadith entity URL. **Corpus states:** while no collection is activated,
 section pages render an honest unavailable state and named resources answer 404; a fixture
 activation carries a visible non-authoritative notice on every Hadith page and is `noindex`; only an
-approved activation is indexable. Related views: `/hadith/books`, `/hadith/videos` and
-`/hadith/research` are delivered — each the owner's own public listing for the seeded `hadith`
-topic, canonical to the owner's collection; `/hadith/articles` and `/hadith/scholars` stay absent and
-unlinked until an owner exposes a deterministic read. **Phase 22:** `/hadith/courses` is delivered —
-Learning's public Course listing for the seeded `hadith` topic, composed at Layer 4.
+approved activation is indexable. Related views (at Phase-19 exit; hubs since Hadith Part 1,
+below): `/hadith/books`, `/hadith/videos` and `/hadith/research` are delivered — each the owner's
+own public listing for the seeded `hadith` topic, canonical to the owner's collection (historical);
+`/hadith/articles` and `/hadith/scholars` stay absent and unlinked until an owner exposes a
+deterministic read. **Phase 22:** `/hadith/courses` is delivered — Learning's public Course listing
+for the seeded `hadith` topic, composed at Layer 4.
 
 **Rebaseline R2 — the Hadith works landing (OPEN_DECISIONS.md §1.3).** No route changes. While no
 collection is activated, `/hadith` presents MQI's own hadith **works** — the Library's public Works
@@ -726,6 +730,35 @@ section is organised, as at Phase-30 exit: Collections and Study each described 
 when a collection is activated" (not linked), Explore and Learn linked to the `hadith` topic hub and
 Learn; and a link back to the home page. It replaces R2's short "elsewhere on the platform" list,
 which repeated those two links. No route changes.
+
+**Hadith Part 1 — the Hadith hubs (DOMAIN_MODEL.md §3.1, §10.1, §10.2, §11, §13.4;
+OPEN_DECISIONS.md §1.3).** `/hadith/books`, `/hadith/videos`, `/hadith/research` and
+`/hadith/courses` are no longer one-page related views canonical to the owner's collection (their
+form from Phase 19 / Phase 22 to Hadith Part 1, historical). Each is now a hub of its own — the same
+shared hubs as the Quran's (§3.3, Quran Parts 10–13) on the seeded `hadith` Topic, composed at
+Layer 4 from Library's `topicWorks`/`topicWorkFacets` and `topicResearch`/`topicResearchFacets`,
+Media's `topicVideos`/`topicVideoFacets` and Learning's `topicCourses`/`topicCourseFacets`/
+`topicCoursePaths` public reads, never a Hadith read. **No passage part:** there is no hadith
+reference model for a Work or a Video and no corpus, so no hub has a shelf, a reference filter, a
+reference order or reference chips — Books takes `?language`, `?contributor`, `?sort`
+(`title`, `newest`) and `?page`; Videos `?language`, `?speaker`, `?series`, `?length`,
+`?sort` (`newest`, `title`) and `?page`; Research and Courses exactly the Quran hubs'
+parameters. A `?shelf`, `?surah` or `?sort=quran` is not a view of a Hadith hub and, like any
+other unknown, malformed, empty or re-ordered spelling, is ONE redirect to the view's canonical
+address, built from the parsed view; the former related views' `?offset` is not a view parameter
+and is ignored. **Canonical (decision):** each hub is canonical to itself, the bare path, and every
+filtered or paged view is canonical to it and never in a sitemap; like every Hadith page it is
+indexable only under an approved activation on an indexable deployment — while no collection is
+approved it is `noindex` and claims no canonical, and under a fixture activation it carries the
+fixture banner. **Stands without a corpus:** the hubs are other owners' published material, so —
+unlike the collection, browse, search and study pages — they render whether or not a collection is
+activated (owner direction: the section presents MQI's own hadith material). Without the `hadith`
+Topic nothing is on Hadith: each hub says so as its empty state, never a 404. Each item links to its
+owner's canonical address; each hub's header leads to the other Explore hubs, the Courses hub reads
+the three alongside, and the trail leads back to `/hadith`. While no collection is activated the
+landing links the four hubs (and the topic hub) under Explore and Learn, and its works shelf's
+"all" leads to `/hadith/books` (until Hadith Part 1 it led to the Library's listing for the Topic,
+historical — the R2 note above already described the hub).
 
 ### 3.5 Learn
 

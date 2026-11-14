@@ -484,6 +484,15 @@ entries. While no collection is activated the section says so plainly instead of
 structure. The signed-in additions remain Phase 21's. Since Rebaseline R2, while no collection is
 activated, the landing presents MQI's own hadith works from the Library (the owner declined
 external hadith corpora — OPEN_DECISIONS.md §1.3) and the shell names it "Hadith works" (§2.2).
+Since Hadith Part 1 the Explore and Learn items — Books, Videos, Research and Courses on Hadith —
+are hubs of their own (`/hadith/books`, `/hadith/videos`, `/hadith/research`, `/hadith/courses`),
+the same shared hubs as the Quran's (Quran Parts 10–13) on the `hadith` Topic without any passage
+part: figures, featured books and videos, filters with counts, orders, kind tabs and a decade
+timeline for research, format tabs and level steps for courses, each view one address. They are
+other owners' material, so — unlike the collections' pages — they are open whether or not a
+collection is activated; the landing links them under Explore and Learn, and each hub leads to the
+others (ROUTE_MAP.md §3.4). Until Hadith Part 1 they were one-page related views canonical to the
+owner's listing, unavailable while no collection was activated (historical).
 
 ### 3.4 Learn
 

@@ -6,7 +6,7 @@ import {
   mediaSlugSchema,
   PHOTO_LIMITS,
   photoArchiveQuerySchema,
-  quranVideosQuerySchema,
+  topicVideosQuerySchema,
   seriesKindSchema,
   videoQuerySchema,
   type MediaPublicReaderPort,
@@ -242,18 +242,19 @@ export function createMediaReadService(reader: MediaPublicReaderPort) {
     },
 
     /**
-     * Quran Part 11 — the Quran Videos hub, composed at Layer 4: one bounded
-     * page of the published Videos on the named Topic or explaining a Quran
-     * passage, and the aggregates the hub is navigated by. Every field is
-     * parsed here (a Surah beside the `general` shelf is refused), before any
-     * read.
+     * The Topic Videos read (Quran Part 11; Hadith Part 1) — a subject's
+     * Videos hub, composed at Layer 4: one bounded page of the published
+     * Videos on the named Topic (and, with the Quran passage parts, those
+     * explaining a Quran passage), and the aggregates the hub is navigated by.
+     * Every field is parsed here (a Surah beside the `general` shelf, or any
+     * passage part without `quranPassages`, is refused), before any read.
      */
-    quranVideos(raw: unknown = {}) {
-      return reader.quranVideos(quranVideosQuerySchema.parse(raw));
+    topicVideos(raw: unknown = {}) {
+      return reader.topicVideos(topicVideosQuerySchema.parse(raw));
     },
 
-    quranVideoFacets(raw: unknown = {}) {
-      return reader.quranVideoFacets(quranVideosQuerySchema.parse(raw));
+    topicVideoFacets(raw: unknown = {}) {
+      return reader.topicVideoFacets(topicVideosQuerySchema.parse(raw));
     },
 
     gallerySitemap(offset: number, limit: number) {

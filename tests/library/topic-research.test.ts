@@ -2,28 +2,29 @@ import { describe, expect, it } from 'vitest';
 
 import type {
   LibraryPublicReaderPort,
-  QuranResearchQuery,
+  TopicResearchQuery,
 } from '../../packages/contracts/src/library/index.ts';
 import { createLibraryReadService } from '../../apps/web/src/contexts/library/index.ts';
 
 /**
- * Quran Part 12 — the Quran Research read's trust boundary. Every field of the
- * query is parsed by Library's public read service BEFORE any read: a value
- * that is malformed, out of range or unknown reaches no adapter, and an
- * accepted one reaches it with every default stated.
+ * Quran Part 12 (named for the Topic in Hadith Part 1) — the Topic Research
+ * read's trust boundary. Every field of the query is parsed by Library's
+ * public read service BEFORE any read: a value that is malformed, out of
+ * range or unknown reaches no adapter, and an accepted one reaches it with
+ * every default stated.
  */
 
 const TOPIC = '0f1e2d3c-4b5a-4968-8776-655443322110';
 
 function recording() {
-  const seen: { method: string; query: QuranResearchQuery }[] = [];
+  const seen: { method: string; query: TopicResearchQuery }[] = [];
   const reader = {
-    quranResearch: async (query: QuranResearchQuery) => {
-      seen.push({ method: 'quranResearch', query });
+    topicResearch: async (query: TopicResearchQuery) => {
+      seen.push({ method: 'topicResearch', query });
       return { items: [], total: 0, hasMore: false };
     },
-    quranResearchFacets: async (query: QuranResearchQuery) => {
-      seen.push({ method: 'quranResearchFacets', query });
+    topicResearchFacets: async (query: TopicResearchQuery) => {
+      seen.push({ method: 'topicResearchFacets', query });
       return {
         hub: {
           records: 0,
@@ -46,12 +47,12 @@ function recording() {
   return { service: createLibraryReadService(reader), seen };
 }
 
-describe('Library’s public Quran Research read', () => {
+describe('Library’s public Topic Research read', () => {
   it('states every default for an empty query', async () => {
     const { service, seen } = recording();
-    await service.quranResearch();
-    await service.quranResearchFacets({});
-    const expected: QuranResearchQuery = {
+    await service.topicResearch();
+    await service.topicResearchFacets({});
+    const expected: TopicResearchQuery = {
       topic: null,
       kind: 'all',
       language: null,
@@ -64,8 +65,8 @@ describe('Library’s public Quran Research read', () => {
       limit: 20,
     };
     expect(seen).toEqual([
-      { method: 'quranResearch', query: expected },
-      { method: 'quranResearchFacets', query: expected },
+      { method: 'topicResearch', query: expected },
+      { method: 'topicResearchFacets', query: expected },
     ]);
   });
 
@@ -83,8 +84,8 @@ describe('Library’s public Quran Research read', () => {
       offset: 25_000,
       limit: 1,
     };
-    await service.quranResearch(query);
-    await service.quranResearchFacets({ ...query, kind: 'research', decade: 0 });
+    await service.topicResearch(query);
+    await service.topicResearchFacets({ ...query, kind: 'research', decade: 0 });
     expect(seen[0]?.query).toEqual(query);
     expect(seen[1]?.query).toEqual({ ...query, kind: 'research', decade: 0 });
   });
@@ -110,8 +111,8 @@ describe('Library’s public Quran Research read', () => {
     ['a field it does not know', { state: 'draft' }],
   ])('refuses %s before any read', async (_name, raw) => {
     const { service, seen } = recording();
-    expect(() => service.quranResearch(raw)).toThrow();
-    expect(() => service.quranResearchFacets(raw)).toThrow();
+    expect(() => service.topicResearch(raw)).toThrow();
+    expect(() => service.topicResearchFacets(raw)).toThrow();
     expect(seen).toEqual([]);
   });
 });

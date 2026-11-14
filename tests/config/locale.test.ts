@@ -245,21 +245,32 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/quran/tajweed.tsx',
     'apps/web/src/components/quran/tajweed-key.tsx',
     'apps/web/src/components/quran/tajweed-layout.ts',
-    // Quran Part 10: the Quran Books hub, the Explore hubs' shared parts and
-    // the hub's pure address rules.
+    // Quran Parts 10–13: the Quran Books, Videos, Research and Courses hubs
+    // (the Phase-22 related Courses view, `related.tsx`, is gone with Part
+    // 13). Since Hadith Part 1 each is the Quran's composition of a shared
+    // topic hub: its scopes, its Surah chips and their pure passage rules (the
+    // former per-hub address modules moved to `components/topic-hub`).
     'apps/web/src/components/quran/books.tsx',
-    'apps/web/src/components/quran/books-view.ts',
     'apps/web/src/components/quran/explore.tsx',
-    // Quran Part 11: the Quran Videos hub and its pure address rules.
+    'apps/web/src/components/quran/explore-view.ts',
+    'apps/web/src/components/quran/hubs.ts',
     'apps/web/src/components/quran/videos.tsx',
-    'apps/web/src/components/quran/videos-view.ts',
-    // Quran Part 12: the Quran Research hub and its pure address rules.
     'apps/web/src/components/quran/research.tsx',
-    'apps/web/src/components/quran/research-view.ts',
-    // Quran Part 13: the Quran Courses hub and its pure address rules (the
-    // Phase-22 related Courses view, `related.tsx`, is gone with it).
     'apps/web/src/components/quran/courses.tsx',
-    'apps/web/src/components/quran/courses-view.ts',
+    // Hadith Part 1: the shared topic hubs — Books, Videos, Research and
+    // Courses — their parts, their subject's frame contract and their pure
+    // address rules, rendered by the Quran's and Hadith's hubs alike.
+    'apps/web/src/components/topic-hub/address.ts',
+    'apps/web/src/components/topic-hub/books.tsx',
+    'apps/web/src/components/topic-hub/books-view.ts',
+    'apps/web/src/components/topic-hub/courses.tsx',
+    'apps/web/src/components/topic-hub/courses-view.ts',
+    'apps/web/src/components/topic-hub/domain.ts',
+    'apps/web/src/components/topic-hub/parts.tsx',
+    'apps/web/src/components/topic-hub/research.tsx',
+    'apps/web/src/components/topic-hub/research-view.ts',
+    'apps/web/src/components/topic-hub/videos.tsx',
+    'apps/web/src/components/topic-hub/videos-view.ts',
     // Phase 19. The public Hadith surfaces, their pure presentation decisions
     // and their request-cached reads, and the one batched current-text read
     // and pure labels the search pages use for Hadith results. The ROUTES that
@@ -270,7 +281,10 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/hadith/parts.tsx',
     'apps/web/src/components/hadith/presentation.ts',
     'apps/web/src/components/hadith/read.ts',
-    'apps/web/src/components/hadith/related.tsx',
+    // Hadith Part 1: the Hadith hubs (replacing the Phase-19 related views,
+    // `related.tsx`) and their scopes.
+    'apps/web/src/components/hadith/hub-pages.tsx',
+    'apps/web/src/components/hadith/hubs.ts',
     'apps/web/src/components/hadith/sciences.tsx',
     'apps/web/src/components/hadith/search.tsx',
     'apps/web/src/components/hadith/structure.tsx',

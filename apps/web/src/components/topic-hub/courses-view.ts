@@ -1,4 +1,3 @@
-import { localizedPath } from '@minhaj/contracts';
 import {
   COURSE_FORMATS,
   COURSE_LEVELS,
@@ -9,27 +8,29 @@ import {
 } from '@minhaj/contracts/learning';
 
 import {
-  LANGUAGE,
-  UUID,
+  hubHref,
+  identifier,
+  language,
   pageCount,
   pageRange,
   single,
   unlessCanonical,
   whole,
   type Query,
-} from './books-view';
+} from './address';
 
 /**
- * THE QURAN COURSES HUB'S RULES (Quran Part 13) — pure, so the address a
- * filter form submits, the address a tab, a chip or a pager link builds and
- * the query Learning is asked are ONE definition, proved by unit test. The
- * tolerant readers and the one-address rule are the Books hub's
- * (`./books-view`).
+ * A COURSES HUB'S RULES (Quran Part 13; any subject's since Hadith Part 1) —
+ * pure, so the address a filter form submits, the address a tab, a chip or a
+ * pager link builds and the query Learning is asked are ONE definition,
+ * proved by unit test. The tolerant readers and the one-address rule are the
+ * hubs' shared ones (`./address`).
  *
- * THE ADDRESS IS THE STATE. Every view of the hub — a format, a level, a
+ * THE ADDRESS IS THE STATE. Every view of a hub — a format, a level, a
  * content language, a teacher, an order, a page — is a GET address that works
  * without script and can be shared; neutral values are omitted, so the
- * unfiltered hub has exactly one address (`/quran/courses`), the canonical one.
+ * unfiltered hub has exactly one address (its scope's `path`), the canonical
+ * one.
  *
  * TOLERANT, NEVER TRUSTING. A malformed or repeated parameter is dropped
  * rather than answered with an error page; what this produces is parsed again
@@ -37,7 +38,10 @@ import {
  * boundary, and no parameter can widen what is public.
  */
 
-export const COURSES_PATH = '/quran/courses';
+export interface CoursesScope {
+  /** The hub's locale-free path: `/quran/courses`, `/hadith/courses`. */
+  readonly path: string;
+}
 
 /** The deepest page an address may name: Learning's offset bound, in pages. */
 export const COURSES_MAX_PAGE = Math.floor(25_000 / TOPIC_COURSES_PAGE) + 1;
@@ -71,13 +75,11 @@ function oneOf<T extends string>(values: readonly T[], text: string | null): T |
 /** The hub's view from its address — every unknown or malformed value neutral. */
 export function readCoursesQuery(query: Query): CoursesQuery {
   const sortText = single(query, 'sort', 16);
-  const language = single(query, 'language', 16);
-  const teacher = single(query, 'teacher', 64);
   return {
     format: oneOf(COURSE_FORMATS, single(query, 'format', 16)),
     level: oneOf(COURSE_LEVELS, single(query, 'level', 16)),
-    language: language !== null && LANGUAGE.test(language) ? language : null,
-    teacher: teacher !== null && UUID.test(teacher) ? teacher.toLowerCase() : null,
+    language: language(query),
+    teacher: identifier(query, 'teacher'),
     sort: sortText === 'newest' || sortText === 'title' ? sortText : 'level',
     page: whole(single(query, 'page', 5), 1, COURSES_MAX_PAGE) ?? 1,
   };
@@ -98,6 +100,7 @@ export function coursesFiltered(query: CoursesQuery): boolean {
  * first page — page 7 of another result set means nothing.
  */
 export function coursesHref(
+  scope: CoursesScope,
   locale: string,
   query: CoursesQuery,
   change: Partial<CoursesQuery> = {},
@@ -111,8 +114,7 @@ export function coursesHref(
   if (next.teacher !== null) search.set('teacher', next.teacher);
   if (next.sort !== 'level') search.set('sort', next.sort);
   if (page > 1) search.set('page', String(page));
-  const text = search.toString();
-  return localizedPath(locale, `${COURSES_PATH}${text === '' ? '' : `?${text}`}`);
+  return hubHref(locale, scope.path, search);
 }
 
 /** The parameters a view of the hub is spelled with. */
@@ -135,13 +137,17 @@ const VIEW_KEYS: ReadonlySet<string> = new Set([
  * the former related view's `?offset=`) are left alone unless a redirect
  * happens anyway.
  */
-export function coursesCanonicalRedirect(locale: string, query: Query): string | null {
+export function coursesCanonicalRedirect(
+  scope: CoursesScope,
+  locale: string,
+  query: Query,
+): string | null {
   return unlessCanonical(
     locale,
-    COURSES_PATH,
+    scope.path,
     query,
     VIEW_KEYS,
-    coursesHref(locale, readCoursesQuery(query)),
+    coursesHref(scope, locale, readCoursesQuery(query)),
   );
 }
 

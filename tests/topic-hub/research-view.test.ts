@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { QURAN_RESEARCH_PAGE, quranResearchQuerySchema } from '@minhaj/contracts/library';
+import { TOPIC_RESEARCH_PAGE, topicResearchQuerySchema } from '@minhaj/contracts/library';
 
 import {
   DEFAULT_RESEARCH_QUERY,
@@ -16,10 +16,13 @@ import {
   researchPageCount,
   researchRange,
   researchReadQuery,
-} from '../../apps/web/src/components/quran/research-view.ts';
+} from '../../apps/web/src/components/topic-hub/research-view.ts';
+import { QURAN_RESEARCH as QURAN } from '../../apps/web/src/components/quran/hubs.ts';
+import { HADITH_RESEARCH as HADITH } from '../../apps/web/src/components/hadith/hubs.ts';
 
 /**
- * Quran Part 12 — the Quran Research hub's address rules: the view a URL
+ * Quran Part 12 and Hadith Part 1 — a Research hub's address rules (the
+ * Quran's scope and Hadith's): the view a URL
  * names, the address each control and link builds, the query Library is
  * asked, the decade timeline and the abstract's excerpt. Tolerant of anything
  * a visitor or a crawler types; never widening.
@@ -103,7 +106,7 @@ describe('readResearchQuery', () => {
       { page: String(RESEARCH_MAX_PAGE), decade: '0', language: 'ar' },
     ])
       expect(
-        quranResearchQuerySchema.safeParse(
+        topicResearchQuerySchema.safeParse(
           researchReadQuery(readResearchQuery(raw), TOPIC, 'en'),
         ).success,
       ).toBe(true);
@@ -122,30 +125,30 @@ describe('researchHref', () => {
   });
 
   it('gives the unfiltered hub exactly one address, in every locale', () => {
-    expect(researchHref('en', DEFAULT_RESEARCH_QUERY)).toBe('/quran/research');
-    expect(researchHref('ur', DEFAULT_RESEARCH_QUERY)).toBe('/ur/quran/research');
-    expect(researchHref('ar', DEFAULT_RESEARCH_QUERY)).toBe('/ar/quran/research');
+    expect(researchHref(QURAN, 'en', DEFAULT_RESEARCH_QUERY)).toBe('/quran/research');
+    expect(researchHref(QURAN, 'ur', DEFAULT_RESEARCH_QUERY)).toBe('/ur/quran/research');
+    expect(researchHref(QURAN, 'ar', DEFAULT_RESEARCH_QUERY)).toBe('/ar/quran/research');
   });
 
   it('writes every narrowing value in one fixed order, and the page last', () => {
-    expect(researchHref('en', view)).toBe(
+    expect(researchHref(QURAN, 'en', view)).toBe(
       `/quran/research?kind=paper&language=ur&contributor=${PERSON}&decade=2010&fulltext=1&sort=title&page=4`,
     );
   });
 
   it('returns to the first page whenever anything but the page changes', () => {
-    expect(researchHref('en', view, { decade: null })).toBe(
+    expect(researchHref(QURAN, 'en', view, { decade: null })).toBe(
       `/quran/research?kind=paper&language=ur&contributor=${PERSON}&fulltext=1&sort=title`,
     );
-    expect(researchHref('en', view, { kind: 'all', fullText: false })).toBe(
+    expect(researchHref(QURAN, 'en', view, { kind: 'all', fullText: false })).toBe(
       `/quran/research?language=ur&contributor=${PERSON}&decade=2010&sort=title`,
     );
-    expect(researchHref('en', view, { page: 5 })).toContain('&page=5');
-    expect(researchHref('en', view, { page: 1 })).not.toContain('page=');
+    expect(researchHref(QURAN, 'en', view, { page: 5 })).toContain('&page=5');
+    expect(researchHref(QURAN, 'en', view, { page: 1 })).not.toContain('page=');
   });
 
   it('round-trips: the address it builds reads back as the same view', () => {
-    const href = researchHref('en', view);
+    const href = researchHref(QURAN, 'en', view);
     const params = Object.fromEntries(new URL(href, 'https://x.invalid').searchParams);
     expect(readResearchQuery(params)).toEqual(view);
   });
@@ -153,19 +156,23 @@ describe('researchHref', () => {
 
 describe('researchCanonicalRedirect', () => {
   it('leaves a canonical address, and the bare hub, alone', () => {
-    expect(researchCanonicalRedirect('en', {})).toBeNull();
+    expect(researchCanonicalRedirect(QURAN, 'en', {})).toBeNull();
     expect(
-      researchCanonicalRedirect('ur', { kind: 'research', decade: '1990', page: '2' }),
+      researchCanonicalRedirect(QURAN, 'ur', {
+        kind: 'research',
+        decade: '1990',
+        page: '2',
+      }),
     ).toBeNull();
     // A parameter the hub does not read — the former related view's offset
     // among them — is not its business.
-    expect(researchCanonicalRedirect('en', { utm_source: 'x' })).toBeNull();
-    expect(researchCanonicalRedirect('en', { offset: '25' })).toBeNull();
+    expect(researchCanonicalRedirect(QURAN, 'en', { utm_source: 'x' })).toBeNull();
+    expect(researchCanonicalRedirect(QURAN, 'en', { offset: '25' })).toBeNull();
   });
 
   it('sends what a filter form submits — every control, empty ones included — to one address', () => {
     expect(
-      researchCanonicalRedirect('en', {
+      researchCanonicalRedirect(QURAN, 'en', {
         language: '',
         contributor: PERSON,
         decade: '',
@@ -174,29 +181,37 @@ describe('researchCanonicalRedirect', () => {
       }),
     ).toBe(`/quran/research?contributor=${PERSON}`);
     expect(
-      researchCanonicalRedirect('ar', { kind: 'paper', fulltext: '1', sort: 'newest' }),
+      researchCanonicalRedirect(QURAN, 'ar', {
+        kind: 'paper',
+        fulltext: '1',
+        sort: 'newest',
+      }),
     ).toBe('/ar/quran/research?kind=paper&fulltext=1');
   });
 
   it('sends another order, a malformed or repeated value to the parsed view', () => {
-    expect(researchCanonicalRedirect('en', { sort: 'title', kind: 'paper' })).toBe(
+    expect(researchCanonicalRedirect(QURAN, 'en', { sort: 'title', kind: 'paper' })).toBe(
       '/quran/research?kind=paper&sort=title',
     );
     expect(
-      researchCanonicalRedirect('en', { decade: '1995', page: '-1', kind: 'drafts' }),
+      researchCanonicalRedirect(QURAN, 'en', {
+        decade: '1995',
+        page: '-1',
+        kind: 'drafts',
+      }),
     ).toBe('/quran/research');
-    expect(researchCanonicalRedirect('en', { language: ['ur', 'en'] })).toBe(
+    expect(researchCanonicalRedirect(QURAN, 'en', { language: ['ur', 'en'] })).toBe(
       '/quran/research',
     );
-    expect(researchCanonicalRedirect('en', { page: '1' })).toBe('/quran/research');
+    expect(researchCanonicalRedirect(QURAN, 'en', { page: '1' })).toBe('/quran/research');
     // The contract's spelling of a kind is not the address's.
-    expect(researchCanonicalRedirect('en', { kind: 'research-paper' })).toBe(
+    expect(researchCanonicalRedirect(QURAN, 'en', { kind: 'research-paper' })).toBe(
       '/quran/research',
     );
     // Built from the parsed view, never from the typed text.
-    expect(researchCanonicalRedirect('en', { language: 'https://evil.example/' })).toBe(
-      '/quran/research',
-    );
+    expect(
+      researchCanonicalRedirect(QURAN, 'en', { language: 'https://evil.example/' }),
+    ).toBe('/quran/research');
   });
 
   it('never redirects an address it built itself', () => {
@@ -209,9 +224,9 @@ describe('researchCanonicalRedirect', () => {
       sort: 'oldest',
       page: '7',
     });
-    const href = researchHref('en', view);
+    const href = researchHref(QURAN, 'en', view);
     const params = Object.fromEntries(new URL(href, 'https://x.invalid').searchParams);
-    expect(researchCanonicalRedirect('en', params)).toBeNull();
+    expect(researchCanonicalRedirect(QURAN, 'en', params)).toBeNull();
   });
 });
 
@@ -228,20 +243,20 @@ describe('researchReadQuery and paging', () => {
       fullText: true,
       sort: 'newest',
       titleLocale: 'ur',
-      offset: 2 * QURAN_RESEARCH_PAGE,
-      limit: QURAN_RESEARCH_PAGE,
+      offset: 2 * TOPIC_RESEARCH_PAGE,
+      limit: TOPIC_RESEARCH_PAGE,
     });
     expect(researchReadQuery(DEFAULT_RESEARCH_QUERY, null, 'en').topic).toBeNull();
   });
 
   it('counts pages and states the range a page shows', () => {
     expect(researchPageCount(0)).toBe(1);
-    expect(researchPageCount(QURAN_RESEARCH_PAGE)).toBe(1);
-    expect(researchPageCount(QURAN_RESEARCH_PAGE + 1)).toBe(2);
+    expect(researchPageCount(TOPIC_RESEARCH_PAGE)).toBe(1);
+    expect(researchPageCount(TOPIC_RESEARCH_PAGE + 1)).toBe(2);
     expect(researchRange(1, 0)).toBeNull();
     expect(researchRange(2, 3)).toEqual({
-      from: QURAN_RESEARCH_PAGE + 1,
-      to: QURAN_RESEARCH_PAGE + 3,
+      from: TOPIC_RESEARCH_PAGE + 1,
+      to: TOPIC_RESEARCH_PAGE + 3,
     });
   });
 });
@@ -298,5 +313,18 @@ describe('excerptOf', () => {
   it('says nothing for an absent or blank text', () => {
     expect(excerptOf(null)).toBeNull();
     expect(excerptOf('   \n\n  ')).toBeNull();
+  });
+});
+
+describe('the Hadith Research hub’s address', () => {
+  it('is its own, in every locale, under the same rules', () => {
+    expect(researchHref(HADITH, 'en', DEFAULT_RESEARCH_QUERY)).toBe('/hadith/research');
+    expect(researchHref(HADITH, 'ur', DEFAULT_RESEARCH_QUERY)).toBe(
+      '/ur/hadith/research',
+    );
+    expect(researchCanonicalRedirect(HADITH, 'en', {})).toBeNull();
+    expect(researchCanonicalRedirect(HADITH, 'ar', { kind: 'paper', language: '' })).toBe(
+      '/ar/hadith/research?kind=paper',
+    );
   });
 });

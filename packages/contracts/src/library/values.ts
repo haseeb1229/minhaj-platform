@@ -354,14 +354,22 @@ export const libraryQuerySchema = z
   .refine((v) => v.from === null || v.to === null || v.from <= v.to);
 
 /**
- * QURAN PART 10 — THE QURAN BOOKS READ. Which public Works are "books on the
- * Quran": every public Work on the Topic a caller names (Taxonomy's `quran`
- * Topic, resolved at Layer 4 — Library holds only its identifier) TOGETHER
- * WITH every public Work that explains a Quran passage (§10.1's citation
- * values, which Library owns). A Work that explains a Surah is a book on the
- * Quran whether or not an editor also filed it under the Topic; with no Topic
- * (`topic: null`) the set is the passage-carrying Works alone.
+ * THE TOPIC WORKS READ (Quran Part 10; generalised in Hadith Part 1). Which
+ * public Works a subject's Books hub shows: every public Work on the Topic a
+ * caller names (Taxonomy's `quran` or `hadith` Topic, resolved at Layer 4 —
+ * Library holds only its identifier), and, ONLY when `quranPassages` is set,
+ * TOGETHER WITH every public Work that explains a Quran passage (§10.1's
+ * citation values, which Library owns) — for the Quran, a Work that explains a
+ * Surah is a book on the Quran whether or not an editor also filed it under
+ * the Topic. With no Topic (`topic: null`) the set is the passage-carrying
+ * Works when `quranPassages` is set, and EMPTY otherwise — never every Work.
  *
+ *   `quranPassages` the Quran passage parts: the passage-carrying Works join
+ *                  the set, and the shelves, a Surah, the Quran order and each
+ *                  Work's passages are answered. Without it none of them is:
+ *                  the shelf is `all`, no Surah or Quran order is accepted,
+ *                  and no Work carries passages (no other subject has a
+ *                  passage model, and none is invented);
  *   `shelf`        `all`; `explains` — the Works carrying a passage (in
  *                  `surah`, when one is named); `general` — the rest.
  *   `language`     a published Edition in that content language;
@@ -373,32 +381,40 @@ export const libraryQuerySchema = z
  *                  Works with none last). Every order ends on the identifier.
  *
  * A Surah is a filter of the `explains` shelf, so it is refused beside
- * `general` rather than quietly answered with nothing.
+ * `general` rather than quietly answered with nothing; and every passage part
+ * is refused without `quranPassages`.
  */
-export const QURAN_WORKS_PAGE = 24;
-export const quranWorksShelfSchema = z.enum(['all', 'explains', 'general']);
-export type QuranWorksShelf = z.infer<typeof quranWorksShelfSchema>;
-export const quranWorksSortSchema = z.enum(['title', 'newest', 'quran']);
-export type QuranWorksSort = z.infer<typeof quranWorksSortSchema>;
+export const TOPIC_WORKS_PAGE = 24;
+export const topicWorksShelfSchema = z.enum(['all', 'explains', 'general']);
+export type TopicWorksShelf = z.infer<typeof topicWorksShelfSchema>;
+export const topicWorksSortSchema = z.enum(['title', 'newest', 'quran']);
+export type TopicWorksSort = z.infer<typeof topicWorksSortSchema>;
 
-export const quranWorksQuerySchema = z
+export const topicWorksQuerySchema = z
   .object({
     topic: libraryIdSchema.nullable().default(null),
-    shelf: quranWorksShelfSchema.default('all'),
+    quranPassages: z.boolean().default(false),
+    shelf: topicWorksShelfSchema.default('all'),
     surah: z.number().int().min(1).max(SURAH_TOTAL).nullable().default(null),
     language: libraryLanguageCodeSchema.nullable().default(null),
     contributor: libraryIdSchema.nullable().default(null),
     featured: z.boolean().default(false),
-    sort: quranWorksSortSchema.default('title'),
+    sort: topicWorksSortSchema.default('title'),
     titleLocale: localeSchema.nullable().default(null),
     offset: z.number().int().min(0).max(25_000).default(0),
-    limit: z.number().int().min(1).max(QURAN_WORKS_PAGE).default(QURAN_WORKS_PAGE),
+    limit: z.number().int().min(1).max(TOPIC_WORKS_PAGE).default(TOPIC_WORKS_PAGE),
   })
   .strict()
   .refine((value) => value.surah === null || value.shelf !== 'general', {
     message: 'A Surah narrows the books that explain one.',
-  });
-export type QuranWorksQuery = z.infer<typeof quranWorksQuerySchema>;
+  })
+  .refine(
+    (value) =>
+      value.quranPassages ||
+      (value.shelf === 'all' && value.surah === null && value.sort !== 'quran'),
+    { message: 'Shelves, a Surah and the Quran order are Quran passage parts.' },
+  );
+export type TopicWorksQuery = z.infer<typeof topicWorksQuerySchema>;
 
 export type WorkInput = z.infer<typeof workInputSchema>;
 export type EditionInput = z.infer<typeof editionInputSchema>;

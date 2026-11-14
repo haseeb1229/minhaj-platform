@@ -5,11 +5,11 @@ import { getTranslations } from 'next-intl/server';
 import { QuranUnavailable } from '@/components/quran/parts';
 import { quranAvailability, quranMetadata } from '@/components/quran/read';
 import { QuranResearchPage } from '@/components/quran/research';
+import { QURAN_RESEARCH } from '@/components/quran/hubs';
 import {
-  RESEARCH_PATH,
   readResearchQuery,
   researchCanonicalRedirect,
-} from '@/components/quran/research-view';
+} from '@/components/topic-hub/research-view';
 import { requireLocale } from '@/config/route-locale';
 
 /**
@@ -43,7 +43,7 @@ export async function generateMetadata({ params }: ResearchParams): Promise<Meta
   return quranMetadata({
     locale,
     availability: await quranAvailability(),
-    canonicalPath: RESEARCH_PATH,
+    canonicalPath: QURAN_RESEARCH.path,
     title: t('sections.research'),
     description: t('sectionBody.research'),
   });
@@ -62,7 +62,7 @@ export default async function QuranResearchRoute({
   const query = await searchParams;
   // One address per view: a form's empty controls, a malformed value or
   // another order is ONE redirect to the canonical spelling.
-  const canonical = researchCanonicalRedirect(locale, query);
+  const canonical = researchCanonicalRedirect(QURAN_RESEARCH, locale, query);
   if (canonical !== null) redirect(canonical);
   return (
     <QuranResearchPage

@@ -32,7 +32,7 @@ import { pathFor, requireRoute } from '@/shell/registry';
 import { FixtureNotice, HadithFrame, hadithTrail } from './parts';
 import { collectionName, collectionPath, hadithPath } from './presentation';
 import { readCollections, readHadithTopic } from './read';
-import { RELATED_KINDS } from './related';
+import { HADITH_HUBS } from './hubs';
 
 /**
  * `/hadith` and `/hadith/introduction` (ROUTE_MAP.md §3.4).
@@ -121,7 +121,7 @@ export async function HadithLandingPage({
     topic === null
       ? []
       : [
-          ...RELATED_KINDS.filter((kind) => kind !== 'courses').map(section),
+          ...HADITH_HUBS.filter((hub) => hub !== 'courses').map(section),
           {
             key: 'topics',
             href: localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`),
@@ -262,13 +262,15 @@ const WORKS_SHELF = 12;
  * hadith sciences. ONE calm sentence says the collections reader awaits an
  * authorised source; there is no disclaimer wall, no count and no link into
  * a part of the section that is not open. Every work links to its own Library
- * page, and "all" to the Library's own listing for the Topic.
+ * page, and "all" to the Hadith Books hub (Hadith Part 1; the Library's own
+ * listing for the Topic until then — historical).
  *
  * Below it, HOW THE SECTION IS ORGANISED: the collections and their study,
  * each described and marked as opening once a collection is activated — words
  * only, never a link into a part that is not open — and exploring and
- * learning, linked to the delivered areas that already serve them (the topic
- * hub, Learn). Then the way back home.
+ * learning, linked to the section's own hubs, which are open now (Hadith Part
+ * 1: Books, Videos and Research, the topic hub, Courses and Learn). Then the
+ * way back home.
  *
  * With no such work (or no Topic) the shelf is simply absent.
  */
@@ -286,12 +288,41 @@ export async function HadithLandingUnavailable({ locale }: { readonly locale: Lo
     ...works.filter((work) => work.cover !== null),
     ...works.filter((work) => work.cover === null),
   ].slice(0, WORKS_SHELF);
-  const structure = [
-    { key: 'collections', href: null },
-    { key: 'study', href: null },
-    { key: 'explore', href: pathFor(locale, requireRoute('topics')) },
-    { key: 'learn', href: pathFor(locale, requireRoute('learn')) },
-  ] as const;
+  // Hadith Part 1: the hubs are open whatever the corpus, and are linked
+  // while there is a Topic for anything to be classified under.
+  const hub = (key: 'books' | 'videos' | 'research' | 'courses') => ({
+    href: hadithPath(locale, key),
+    text: t(`sections.${key}`),
+  });
+  const structure: readonly {
+    readonly key: 'collections' | 'study' | 'explore' | 'learn';
+    readonly links: readonly { readonly href: string; readonly text: string }[] | null;
+  }[] = [
+    { key: 'collections', links: null },
+    { key: 'study', links: null },
+    {
+      key: 'explore',
+      links:
+        topic === null
+          ? []
+          : [
+              hub('books'),
+              hub('videos'),
+              hub('research'),
+              {
+                href: localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`),
+                text: t('sections.topics'),
+              },
+            ],
+    },
+    {
+      key: 'learn',
+      links: [
+        ...(topic === null ? [] : [hub('courses')]),
+        { href: pathFor(locale, requireRoute('learn')), text: t('landing.learnAll') },
+      ],
+    },
+  ];
 
   return (
     <>
@@ -320,10 +351,7 @@ export async function HadithLandingUnavailable({ locale }: { readonly locale: Lo
               id="hadith-works"
               heading={t('works.shelf')}
               action={{
-                href: localizedPath(
-                  locale,
-                  `/library/books?topic=${encodeURIComponent(topic.id)}`,
-                ),
+                href: hadithPath(locale, 'books'),
                 text: t('works.shelfAll'),
               }}
               previousLabel={t('works.showPrevious')}
@@ -362,17 +390,19 @@ export async function HadithLandingUnavailable({ locale }: { readonly locale: Lo
                   <p className="text-sm text-foreground-muted">
                     {t(`unavailable.parts.${part.key}`)}
                   </p>
-                  <p className="mt-auto pt-1 text-sm">
-                    {part.href === null ? (
-                      <span className="text-caption font-medium text-foreground-muted">
-                        {t('unavailable.awaiting')}
-                      </span>
-                    ) : (
-                      <TextLink href={part.href}>
-                        {t(`unavailable.go.${part.key}`)}
-                      </TextLink>
-                    )}
-                  </p>
+                  {part.links === null ? (
+                    <p className="mt-auto pt-1 text-caption font-medium text-foreground-muted">
+                      {t('unavailable.awaiting')}
+                    </p>
+                  ) : part.links.length === 0 ? null : (
+                    <ul className="mt-auto flex list-none flex-col gap-1 p-0 pt-1 text-sm">
+                      {part.links.map((link) => (
+                        <li key={link.href}>
+                          <TextLink href={link.href}>{link.text}</TextLink>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               ))}
             </ul>

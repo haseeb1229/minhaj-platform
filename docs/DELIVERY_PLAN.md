@@ -3776,6 +3776,114 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > no sideways scroll at 320 and 390 px; axe. The describe withdraws what it published when it is
 > done. *CI and staging evidence are recorded when they exist.*
 
+> **Hadith Part 1 — the Hadith Explore and Learn hubs: Books, Videos, Research and Courses (owner
+> direction: every section built from A to Z, one item at a time — the Quran first, now Hadith; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (DOMAIN_MODEL.md §9.1, §10.1, §10.2,
+> §11; ROUTE_MAP.md §3.4; INFORMATION_ARCHITECTURE.md §3.3). No schema change and no migration (the
+> count stays at its Part-9 value); staging only, the production gates unchanged. OPEN_DECISIONS.md
+> §1.3 is unchanged: there is no Hadith corpus, no hadith text or grading is shown, and no grading is
+> invented.
+>
+> - **What the data is (fact).** The four hubs show other owners' published material classified
+>   under Taxonomy's `hadith` Topic: Library Works (with their published Editions), Media Videos,
+>   Library Research and ResearchPapers, and Learning Courses (with the LearningPaths holding them).
+>   None of these has a hadith reference — no collection, number or chain — so nothing can be linked
+>   to a hadith and nothing is: there are no Surah-like chips, shelves or reference orders. **What
+>   staging will show** depends on what is filed under the Topic there: Works only where an operator
+>   confirmed a legacy-category mapping to `hadith` (the same set the R2 works landing shows), and
+>   no Video, research record or Course, since the staging corpus and the operator demo data file
+>   none under `hadith` — so the Videos, Research and Courses hubs show their honest empty states
+>   (each with the way to its owner's catalogue), and the Books hub shows the mapped works or, with
+>   none, its empty state. The local persistent database holds the `hadith` Topic and no published
+>   Work, Video, research record or Course at all, and no Hadith activation.
+> - **The reads are named for the Topic (Model A refactor, one read per owner — no duplicate).**
+>   Library's `quranWorks`/`quranWorkFacets` became `topicWorks`/`topicWorkFacets`
+>   (`topicWorksQuerySchema`, `TopicWork`, `TopicWorkPage`, `TopicWorkFacets`, `TOPIC_WORKS_PAGE`);
+>   Media's `quranVideos`/`quranVideoFacets` became `topicVideos`/`topicVideoFacets`
+>   (`topicVideosQuerySchema`, `TopicVideo`, `TopicVideoSeries`, `TopicVideoPage`,
+>   `TopicVideoFacets`, `TOPIC_VIDEO_LENGTHS`, `TOPIC_VIDEOS_PAGE`); Library's
+>   `quranResearch`/`quranResearchFacets` became `topicResearch`/`topicResearchFacets`
+>   (`topicResearchQuerySchema`, `TopicResearchItem`, `TOPIC_RESEARCH_PAGE`, …; the adapter file
+>   `adapters/library/quran-research.ts` is now `topic-research.ts`); Learning's
+>   `topicCourses`/`topicCourseFacets`/`topicCoursePaths` were already Topic-named and are reused
+>   as they are. Renamed in contract, port, adapter, read service and tests alike. The Quran passage
+>   parts of the Works and Videos reads are ONE explicit, validated flag, `quranPassages` (default
+>   off): with it a read is exactly the Quran hub's read of Parts 10–11; without it the set is the
+>   public Works or Videos on the named Topic ALONE (with no Topic, none — never every record), no
+>   item carries passages (the hydrating read takes none), the explaining and Surah figures are zero
+>   and no Surah facet is read, and the read service refuses a shelf, a Surah or the Quran order
+>   before any read. Every value stays a bound parameter; every field is parsed in the service.
+> - **The hubs are shared (presentation refactor).** The Quran hub components became shared hub
+>   building blocks in `apps/web/src/components/topic-hub/` — `BooksHub`, `VideosHub`,
+>   `ResearchHub`, `CoursesHub`, their shared parts (`parts.tsx`: header, GET filter form,
+>   removable chips, content-language names), their pure address rules (`*-view.ts`, each now taking
+>   a scope: the hub's path and, for Books and Videos, whether the Quran passage parts exist) and the
+>   tolerant readers and one-address rule (`address.ts`). A subject gives a hub only what is its own
+>   (`domain.ts`): its frame (column, trail, notices), its Topic, its title, the hub's element
+>   identifiers and its pager words; its copy in its own namespace; the ways onward; and, for the
+>   Quran only, the passage parts (the shelves, Surah filter and order, "Lectures by Surah", the
+>   lecture start and the Surah chips, which stay in `components/quran/explore*.ts(x)`). The copy
+>   every hub shares moved, word for word in every locale, from `quran.*Hub` to a new `topicHub`
+>   namespace; each subject keeps only its own words (`quran.*Hub`, new `hadith.*Hub`). The Quran
+>   hubs are now thin compositions (`components/quran/{books,videos,research,courses}.tsx`, scopes
+>   in `quran/hubs.ts`) with the same addresses, element identifiers, copy and behaviour.
+> - **The Hadith hubs** (`components/hadith/hub-pages.tsx`, scopes in `hadith/hubs.ts`, routes
+>   `hadith/{books,videos,research,courses}/page.tsx`): each the shared hub on the `hadith` Topic
+>   with no passage part — honest figures (books, videos and hours, works of research, papers, full
+>   texts, authors and the span of years, courses taught live and self-paced, lessons, teachers,
+>   languages — each only when the data has it), featured books and videos, the research kind tabs and
+>   decade timeline, the course format tabs, level steps and learning paths; filters with counts and
+>   orders, removable chips and *Clear filters*; one address per view, every other spelling (a
+>   `?shelf`, `?surah` or `?sort=quran` included) one redirect; empty, no-results and past-the-end
+>   states; en/ur/ar right to left with logical CSS. Each hub's header leads to the other Explore
+>   hubs, the Courses hub reads the three alongside, and the trail leads to `/hadith`.
+> - **They stand without a corpus (decision).** Until now the four routes were one-page related
+>   views canonical to the owner's listing, unavailable while no collection was activated and a 404
+>   without the Topic (historical). Being other owners' material, the hubs now render whether or not
+>   a collection is activated (owner direction: the section presents MQI's own hadith material);
+>   under a fixture activation they carry the fixture banner like every Hadith page. Without the
+>   `hadith` Topic each says, as its empty state, that nothing is on Hadith yet — never a 404.
+> - **Canonical (decision).** Each hub is canonical to itself, the bare path; every filtered or paged
+>   view is canonical to it and never in a sitemap. Like every Hadith page a hub is indexable only
+>   under an approved activation on an indexable deployment; otherwise it is `noindex` with no
+>   canonical claim (ROUTE_MAP.md §3.4).
+> - **The landing.** While no collection is activated the landing links the four hubs (and the
+>   topic hub) under Explore and Learn in "How this section is organised", whose intro now says they
+>   are open; its works shelf's "all" leads to `/hadith/books` (the Library's listing for the Topic
+>   until now, historical). The activated landing's Explore and Learn rails are unchanged. The
+>   related view (`components/hadith/related.tsx`) and its messages (`hadith.relatedEmpty`,
+>   `hadith.relatedOwner`) and the landing's two former link labels (`hadith.unavailable.go`) are
+>   removed; nothing else used them.
+>
+> **Proof:** `tests/topic-hub/{books,videos,research,courses}-view.test.ts` (the Quran hubs' former
+> address tests, every assertion kept, now against the Quran scope, plus the Hadith scope: no passage
+> part read or written, one address per locale, a passage part or another spelling redirected,
+> always a query the owner's schema accepts), `tests/quran/explore-view.test.ts` (the Surah chips
+> and lecture starts, moved unchanged), `tests/library/topic-works.test.ts` and
+> `tests/media/topic-videos.test.ts` (the defaults now state `quranPassages: false`; the Quran
+> refusals kept with the flag on; five new refusals each — a shelf, the general shelf, a Surah or
+> the Quran order without the flag, and a non-boolean flag — and a full query without the flag
+> passed through), `tests/library/topic-research.test.ts` (renamed); on SQL Server, as the runtime
+> principal, `tests/library/topic-works.integration.test.ts` and
+> `tests/media/topic-videos.integration.test.ts` (every Quran assertion kept with the flag on, and
+> the read without it: the Topic's items alone — a passage-carrying item off the Topic absent, an
+> on-Topic item carrying a passage shown with none, nothing at all without a Topic — and the facets
+> with no explaining, Surah or shelf count) and `tests/library/topic-research.integration.test.ts`
+> (renamed, plus the `hadith` Topic's own set and figures); `tests/config/locale.test.ts` and
+> `tests/architecture/phase4-shell-boundaries.test.ts` (the new and moved modules); the browser
+> journey (`tests/browser/hadith.spec.ts`, "Hadith Part 1", while no collection is activated): the
+> inactive landing linking the four hubs, each hub standing with no banner, `noindex` and no
+> canonical claim; each hub's empty state before anything is published (skipped, and said so, when
+> another spec published on the Topic first); then per hub its figures counted on top of that
+> baseline, featured items, cards and their single links, no shelf, Surah filter or Quran order,
+> never a draft, a full page and the second page, a book's page reached by keyboard with a visible
+> focus; every filter and order without script, chips and *Clear filters*, no results, past the
+> end, passage parts and malformed spellings redirected to the one address; Urdu at 390 px and
+> Arabic right to left, no sideways scroll at 320, 390 and 1440 px, axe. The Courses describe
+> withdraws what it published when it is done. The Quran journey (`tests/browser/quran.spec.ts`,
+> Parts 10–13) runs unchanged against the shared hubs. *CI and staging evidence are recorded when
+> they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

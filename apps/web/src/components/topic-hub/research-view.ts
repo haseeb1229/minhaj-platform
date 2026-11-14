@@ -1,53 +1,56 @@
-import { localizedPath } from '@minhaj/contracts';
 import {
-  QURAN_RESEARCH_PAGE,
-  type QuranResearchShelf,
-  type QuranResearchSort,
+  TOPIC_RESEARCH_PAGE,
+  type TopicResearchShelf,
+  type TopicResearchSort,
 } from '@minhaj/contracts/library';
 
 import {
-  LANGUAGE,
-  UUID,
+  hubHref,
+  identifier,
+  language,
   pageCount,
   pageRange,
   single,
   unlessCanonical,
   whole,
   type Query,
-} from './books-view';
+} from './address';
 
 /**
- * THE QURAN RESEARCH HUB'S RULES (Quran Part 12) — pure, so the address a
- * filter form submits, the address a tab, a chip or a pager link builds and
- * the query Library is asked are ONE definition, proved by unit test. The
- * tolerant readers and the one-address rule are the Books hub's
- * (`./books-view`).
+ * A RESEARCH HUB'S RULES (Quran Part 12; any subject's since Hadith Part 1)
+ * — pure, so the address a filter form submits, the address a tab, a chip or
+ * a pager link builds and the query Library is asked are ONE definition,
+ * proved by unit test. The tolerant readers and the one-address rule are the
+ * hubs' shared ones (`./address`).
  *
- * THE ADDRESS IS THE STATE. Every view of the hub — a kind, a content
+ * THE ADDRESS IS THE STATE. Every view of a hub — a kind, a content
  * language, an author, a decade, "full text on the platform", an order, a
  * page — is a GET address that works without script and can be shared;
  * neutral values are omitted, so the unfiltered hub has exactly one address
- * (`/quran/research`), the canonical one.
+ * (its scope's `path`), the canonical one.
  *
  * TOLERANT, NEVER TRUSTING. A malformed or repeated parameter is dropped
  * rather than answered with an error page; what this produces is parsed again
- * by Library's read service (`quranResearchQuerySchema`), the authoritative
+ * by Library's read service (`topicResearchQuerySchema`), the authoritative
  * boundary, and no parameter can widen what is public.
  */
 
-export const RESEARCH_PATH = '/quran/research';
+export interface ResearchScope {
+  /** The hub's locale-free path: `/quran/research`, `/hadith/research`. */
+  readonly path: string;
+}
 
 /** The deepest page an address may name: Library's offset bound, in pages. */
-export const RESEARCH_MAX_PAGE = Math.floor(25_000 / QURAN_RESEARCH_PAGE) + 1;
+export const RESEARCH_MAX_PAGE = Math.floor(25_000 / TOPIC_RESEARCH_PAGE) + 1;
 
 export interface ResearchQuery {
-  readonly kind: QuranResearchShelf;
+  readonly kind: TopicResearchShelf;
   readonly language: string | null;
   readonly contributor: string | null;
   /** The first year of a decade (1990 is 1990–1999). */
   readonly decade: number | null;
   readonly fullText: boolean;
-  readonly sort: QuranResearchSort;
+  readonly sort: TopicResearchSort;
   /** 1-based. */
   readonly page: number;
 }
@@ -67,29 +70,26 @@ export const DEFAULT_RESEARCH_QUERY: ResearchQuery = Object.freeze({
  * for Research — short words a visitor can read, mapped to Library's kinds
  * here and nowhere else.
  */
-export const KIND_WORDS: Readonly<Record<Exclude<QuranResearchShelf, 'all'>, string>> =
+export const KIND_WORDS: Readonly<Record<Exclude<TopicResearchShelf, 'all'>, string>> =
   Object.freeze({ research: 'research', 'research-paper': 'paper' });
 
 /** The hub's view from its address — every unknown or malformed value neutral. */
 export function readResearchQuery(query: Query): ResearchQuery {
   const kindText = single(query, 'kind', 16);
-  const kind: QuranResearchShelf =
+  const kind: TopicResearchShelf =
     kindText === KIND_WORDS.research
       ? 'research'
       : kindText === KIND_WORDS['research-paper']
         ? 'research-paper'
         : 'all';
   const sortText = single(query, 'sort', 16);
-  const sort: QuranResearchSort =
+  const sort: TopicResearchSort =
     sortText === 'oldest' || sortText === 'title' ? sortText : 'newest';
-  const language = single(query, 'language', 16);
-  const contributor = single(query, 'contributor', 64);
   const decade = whole(single(query, 'decade', 4), 0, 9990);
   return {
     kind,
-    language: language !== null && LANGUAGE.test(language) ? language : null,
-    contributor:
-      contributor !== null && UUID.test(contributor) ? contributor.toLowerCase() : null,
+    language: language(query),
+    contributor: identifier(query, 'contributor'),
     decade: decade !== null && decade % 10 === 0 ? decade : null,
     fullText: single(query, 'fulltext', 1) === '1',
     sort,
@@ -113,6 +113,7 @@ export function researchFiltered(query: ResearchQuery): boolean {
  * first page — page 7 of another result set means nothing.
  */
 export function researchHref(
+  scope: ResearchScope,
   locale: string,
   query: ResearchQuery,
   change: Partial<ResearchQuery> = {},
@@ -127,8 +128,7 @@ export function researchHref(
   if (next.fullText) search.set('fulltext', '1');
   if (next.sort !== 'newest') search.set('sort', next.sort);
   if (page > 1) search.set('page', String(page));
-  const text = search.toString();
-  return localizedPath(locale, `${RESEARCH_PATH}${text === '' ? '' : `?${text}`}`);
+  return hubHref(locale, scope.path, search);
 }
 
 /** The parameters a view of the hub is spelled with. */
@@ -152,13 +152,17 @@ const VIEW_KEYS: ReadonlySet<string> = new Set([
  * does not read (such as the former related view's `?offset=`) are left alone
  * unless a redirect happens anyway.
  */
-export function researchCanonicalRedirect(locale: string, query: Query): string | null {
+export function researchCanonicalRedirect(
+  scope: ResearchScope,
+  locale: string,
+  query: Query,
+): string | null {
   return unlessCanonical(
     locale,
-    RESEARCH_PATH,
+    scope.path,
     query,
     VIEW_KEYS,
-    researchHref(locale, readResearchQuery(query)),
+    researchHref(scope, locale, readResearchQuery(query)),
   );
 }
 
@@ -177,14 +181,14 @@ export function researchReadQuery(
     fullText: query.fullText,
     sort: query.sort,
     titleLocale,
-    offset: (query.page - 1) * QURAN_RESEARCH_PAGE,
-    limit: QURAN_RESEARCH_PAGE,
+    offset: (query.page - 1) * TOPIC_RESEARCH_PAGE,
+    limit: TOPIC_RESEARCH_PAGE,
   };
 }
 
 /** How many pages a total fills; at least one. */
 export function researchPageCount(total: number): number {
-  return pageCount(total, QURAN_RESEARCH_PAGE);
+  return pageCount(total, TOPIC_RESEARCH_PAGE);
 }
 
 /** "21–40" of a page, or null when the page holds nothing. */
@@ -192,7 +196,7 @@ export function researchRange(
   page: number,
   shown: number,
 ): { readonly from: number; readonly to: number } | null {
-  return pageRange(page, shown, QURAN_RESEARCH_PAGE);
+  return pageRange(page, shown, TOPIC_RESEARCH_PAGE);
 }
 
 /** The decade a year falls in, or null for an undated record. */
