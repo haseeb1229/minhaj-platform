@@ -4835,11 +4835,11 @@ test.describe('Quran Part 10: the Quran Books hub', () => {
     const edition = (
       workId: string,
       language: string,
-      year: number,
+      year: number | null,
       readable: boolean,
     ) => `
       INSERT INTO [dbo].[Edition] ([id],[workId],[languageCode],[label],[state],[publicationYear],[reading],[download],[document],[contentVersion],[version],[updatedAt]) VALUES
-        (N'${randomUUID()}', N'${workId}', N'${language}', N'NON_QURAN_FIXTURE edition', N'published', ${String(year)},
+        (N'${randomUUID()}', N'${workId}', N'${language}', N'NON_QURAN_FIXTURE edition', N'published', ${year === null ? 'NULL' : String(year)},
          N'${readable ? 'allowed' : 'unavailable'}', N'denied', ${readable ? n(document) : 'NULL'}, ${readable ? `N'${contentVersion}'` : 'NULL'}, 1, SYSUTCDATETIME());`;
     const fillers = Array.from({ length: FILLERS }, (_, index) => {
       const id = randomUUID();
@@ -4849,7 +4849,7 @@ test.describe('Quran Part 10: the Quran Books hub', () => {
         INSERT INTO [dbo].[WorkLabel] ([workId],[locale],[title],[description]) VALUES
           (N'${id}', N'en', N'Zz NON_QURAN_FIXTURE filler ${run} ${number}', N''),
           (N'${id}', N'ur', N'ےے NON_QURAN_FIXTURE ${run} ${number}', N'');
-        ${edition(id, 'en', 2000, false)}
+        ${edition(id, 'en', null, false)}
         INSERT INTO [dbo].[WorkQuranPassage] ([workId],[position],[surahNumber],[ayahFrom],[ayahTo]) VALUES (N'${id}', 0, 3, ${String(index + 10)}, ${String(index + 10)});`;
     }).join('\n');
     await sql.query(`

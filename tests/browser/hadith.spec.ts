@@ -1153,16 +1153,19 @@ test.describe('Hadith Part 1: the Hadith hubs', () => {
       const edition = (
         workId: string,
         language: string,
-        year: number,
+        year: number | null,
         readable: boolean,
       ) => `
         INSERT INTO [dbo].[Edition] ([id],[workId],[languageCode],[label],[state],[publicationYear],[reading],[download],[document],[contentVersion],[version],[updatedAt]) VALUES
-          (N'${randomUUID()}', N'${workId}', N'${language}', N'NON_HADITH_FIXTURE edition', N'published', ${String(year)},
+          (N'${randomUUID()}', N'${workId}', N'${language}', N'NON_HADITH_FIXTURE edition', N'published', ${year === null ? 'NULL' : String(year)},
            N'${readable ? 'allowed' : 'unavailable'}', N'denied', ${readable ? n(document) : 'NULL'}, ${readable ? `N'${contentVersion}'` : 'NULL'}, 1, SYSUTCDATETIME());`;
-      // Every book here is titled "Yy …" or "Zz …" and dated a century ago, so
-      // in each of the Library's own orders (title, newest) it sorts after a
+      // Every book here is titled "Yy …" or "Zz …", and the fillers are
+      // UNDATED, so in each of the Library's own orders it sorts after a
       // concurrently running spec's records (CI runs specs in parallel on one
-      // database) and never crowds them off a first page.
+      // database) and never crowds them off a first page: by title "Zz" comes
+      // last, and newest-first puts every dated edition first and the undated
+      // after it, by title. (Dated fillers, even a century old, sorted BEFORE
+      // an undated record and filled library.spec's newest page; historical.)
       const fillers = Array.from({ length: FILLERS }, (_, index) => {
         const id = randomUUID();
         const number = String(index + 1).padStart(2, '0');
@@ -1172,7 +1175,7 @@ test.describe('Hadith Part 1: the Hadith hubs', () => {
             (N'${id}', N'en', N'Zz NON_HADITH_FIXTURE hub book filler ${run} ${number}', N''),
             (N'${id}', N'ur', N'ےے NON_HADITH_FIXTURE ${run} ${number}', N'');
           INSERT INTO [dbo].[WorkTopic] ([workId],[topicId]) VALUES (N'${id}', N'${hadithTopic}');
-          ${edition(id, 'en', 1900, false)}`;
+          ${edition(id, 'en', null, false)}`;
       }).join('\n');
       await sql.query(`
         INSERT INTO [dbo].[Person] ([id],[slug],[primaryLocale],[status]) VALUES (N'${hub.author}', N'${hubSlug('author')}', N'en', N'published');
