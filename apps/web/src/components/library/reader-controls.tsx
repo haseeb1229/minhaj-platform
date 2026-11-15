@@ -32,8 +32,9 @@ import { useCallback, useEffect, useState } from 'react';
  * edition is read: "section n of m", how far through the text the reader is,
  * the previous and the next section, and the way back to the contents — each
  * a plain in-page link, so it is keyboard-operable with Tab and Enter. The
- * section in view is found by an `IntersectionObserver` and is also marked in
- * the contents with `aria-current="location"`. It is a VISUAL aid and is
+ * section being read is the last whose top has passed a reading line (or the
+ * section just arrived at by its address, while it stays at the top) and is
+ * also marked in the contents with `aria-current="location"`. It is a VISUAL aid and is
  * deliberately NOT a live region: an announcement on every scroll step would
  * talk over the text being read. The structure assistive technology actually
  * navigates by is the server-rendered headings, each of which states its own
@@ -164,26 +165,63 @@ export function ReaderControls({
 
   useEffect(() => {
     const reader = document.getElementById(readerId);
-    if (reader === null || typeof IntersectionObserver === 'undefined') return;
+    if (reader === null) return;
 
     const sections = [...reader.querySelectorAll<HTMLElement>('[data-reader-index]')];
     if (sections.length === 0) return;
+    const indexOf = (element: Element) => {
+      const index = Number(element.getAttribute('data-reader-index'));
+      return Number.isInteger(index) && index >= 1 ? index : null;
+    };
+    // The reading line: a section is being read once its top has passed it.
+    const line = () => Math.max(window.innerHeight * 0.3, 96);
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        // The FIRST intersecting section wins, so scrolling back up moves the
-        // indicator back rather than leaving it at the furthest point reached.
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .map((entry) => Number(entry.target.getAttribute('data-reader-index')))
-          .filter((index) => Number.isInteger(index) && index >= 1);
-        if (visible.length > 0) setCurrent(Math.min(...visible));
-      },
-      { rootMargin: '0px 0px -60% 0px', threshold: 0 },
-    );
+    // Arriving at a section by its address (a contents entry, Next section, a
+    // shared link) marks THAT section while it stays at the top of the view,
+    // even when the end of the one before still shows above it.
+    let pinned: HTMLElement | null = null;
+    const arrive = () => {
+      const id = decodeURIComponent(window.location.hash.slice(1));
+      pinned = sections.find((section) => section.id === id) ?? null;
+      schedule();
+    };
 
-    for (const section of sections) observer.observe(section);
-    return () => observer.disconnect();
+    // The LAST section whose top has passed the line is the one being read:
+    // scrolling back up moves the indicator back, and a section that leaves
+    // while the next is already in view hands over to it.
+    const pick = () => {
+      frame = 0;
+      if (pinned !== null) {
+        const top = pinned.getBoundingClientRect().top;
+        const index = indexOf(pinned);
+        if (index !== null && top >= -1 && top <= line()) {
+          setCurrent(index);
+          return;
+        }
+        pinned = null;
+      }
+      let chosen: number | null = null;
+      for (const section of sections) {
+        if (section.getBoundingClientRect().top > line()) break;
+        chosen = indexOf(section) ?? chosen;
+      }
+      setCurrent(chosen ?? 1);
+    };
+    let frame = 0;
+    const schedule = () => {
+      if (frame === 0) frame = window.requestAnimationFrame(pick);
+    };
+
+    arrive();
+    window.addEventListener('hashchange', arrive);
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      window.removeEventListener('hashchange', arrive);
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      if (frame !== 0) window.cancelAnimationFrame(frame);
+    };
   }, [readerId]);
 
   // How far through the text, recomputed at most once a frame while scrolling.
