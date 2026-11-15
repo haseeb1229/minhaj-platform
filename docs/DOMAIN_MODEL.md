@@ -1642,6 +1642,19 @@ Owns published works. Corrects the prior revision's conflation of *localized met
   primary-locale label); `newest`, the latest publication year among the Work's published
   Editions first, Works with no recorded year last, then A–Z. Every order ends on the identifier,
   so a page never repeats or skips a Work. An order is a query; no year or title is stored for it.
+- **The whole Library (Library Part 1).** `topicWorks`/`topicWorkFacets` take an explicit
+  `scope`: `topic` (the default — the hubs' read exactly as above) or `library`, where the set is
+  every public Work and the Topic is one more narrowing filter; the whole Library has no Quran
+  passage parts (refused before any read). Four filters of any scope join the content language,
+  each a condition on the SAME published Edition, so siblings never combine into a match: `from`
+  and `to` (its publication year, inclusive, `from` never after `to`), `readable` (its stored
+  availability allows reading online) and `downloadable` (it allows a download and a file is
+  recorded — the decision the asset route enforces). A card adds `downloadable`; the facets add
+  the set's `readable` and `downloadable` counts and the span of its publication years
+  (`earliest`, `latest`), `access` (how many Works checking either availability would show under
+  every other filter) and `topics` (Topic → Works without the Topic filter; always empty on a
+  hub). `/library/books` and the Library landing are built on it. Parameterised SQL, bounded, the
+  ordinary public predicate; no schema change.
 
 ### 10.2 Other aggregates
 

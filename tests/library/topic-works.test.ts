@@ -44,12 +44,17 @@ describe('Library’s public Topic Works read', () => {
     await service.topicWorks();
     await service.topicWorkFacets({});
     const expected: TopicWorksQuery = {
+      scope: 'topic',
       topic: null,
       quranPassages: false,
       shelf: 'all',
       surah: null,
       language: null,
       contributor: null,
+      from: null,
+      to: null,
+      readable: false,
+      downloadable: false,
       featured: false,
       sort: 'title',
       titleLocale: null,
@@ -65,12 +70,17 @@ describe('Library’s public Topic Works read', () => {
   it('passes a full, valid query through unchanged', async () => {
     const { service, seen } = recording();
     const query = {
+      scope: 'topic',
       topic: TOPIC,
       quranPassages: true,
       shelf: 'explains',
       surah: 114,
       language: 'ur-PK',
       contributor: TOPIC,
+      from: 1,
+      to: 9999,
+      readable: true,
+      downloadable: true,
       featured: true,
       sort: 'quran',
       titleLocale: 'ar',
@@ -84,12 +94,17 @@ describe('Library’s public Topic Works read', () => {
   it('passes a full query without the passage parts through unchanged', async () => {
     const { service, seen } = recording();
     const query = {
+      scope: 'topic',
       topic: TOPIC,
       quranPassages: false,
       shelf: 'all',
       surah: null,
       language: 'ar',
       contributor: TOPIC,
+      from: 1990,
+      to: 1990,
+      readable: false,
+      downloadable: false,
       featured: false,
       sort: 'newest',
       titleLocale: 'ur',
@@ -98,6 +113,34 @@ describe('Library’s public Topic Works read', () => {
     };
     await service.topicWorkFacets(query);
     expect(seen[0]?.query).toEqual(query);
+  });
+
+  it('passes a whole-Library query (Library Part 1) through unchanged — the Topic a filter', async () => {
+    const { service, seen } = recording();
+    const query = {
+      scope: 'library',
+      topic: null,
+      quranPassages: false,
+      shelf: 'all',
+      surah: null,
+      language: null,
+      contributor: null,
+      from: 1980,
+      to: 2020,
+      readable: true,
+      downloadable: false,
+      featured: false,
+      sort: 'title',
+      titleLocale: 'en',
+      offset: 0,
+      limit: 24,
+    };
+    await service.topicWorks(query);
+    await service.topicWorkFacets({ ...query, topic: TOPIC });
+    expect(seen).toEqual([
+      { method: 'topicWorks', query },
+      { method: 'topicWorkFacets', query: { ...query, topic: TOPIC } },
+    ]);
   });
 
   it.each([
@@ -124,6 +167,18 @@ describe('Library’s public Topic Works read', () => {
     ['a page larger than the hub’s', { limit: 25 }],
     ['an empty page', { limit: 0 }],
     ['a field it does not know', { state: 'draft' }],
+    ['an unknown scope', { scope: 'everything' }],
+    [
+      'the whole Library with the passage parts',
+      { scope: 'library', quranPassages: true },
+    ],
+    ['a shelf in the whole Library', { scope: 'library', shelf: 'explains' }],
+    ['an inverted year range', { from: 2001, to: 2000 }],
+    ['year 0', { from: 0 }],
+    ['year 10000', { to: 10_000 }],
+    ['a fractional year', { from: 1999.5 }],
+    ['an availability flag that is not a boolean', { readable: '1' }],
+    ['a download flag that is not a boolean', { downloadable: 1 }],
   ])('refuses %s before any read', async (_name, raw) => {
     const { service, seen } = recording();
     expect(() => service.topicWorks(raw)).toThrow();

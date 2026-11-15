@@ -4214,6 +4214,119 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > and no sideways scroll at 390 and 1440 px on every Part 2 surface in en, ur and ar, with the path
 > page's way in reached by keyboard, visibly. *CI and staging evidence are recorded when they exist.*
 
+> **Library Part 1 — the Library landing, the Books listing, the book page and the reader (owner
+> direction: every section built from A to Z, one item at a time; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (DOMAIN_MODEL.md §10.1; ROUTE_MAP.md
+> §3.6). No route is added or removed, no schema change and no migration; the reader's document
+> schema and its section identifiers are unchanged; the asset routes, their allow/deny decisions
+> and their headers are untouched (every download link still goes through
+> `/assets/library/editions/{editionId}/download/{assetId}`). Authors, Topics, Languages, the written
+> works, periodicals, Downloads and Sale points are Library Parts 2–3 and keep working as they were.
+>
+> - **The audit (before).** `/library/books` was a side panel of five plain selects with no counts
+>   (the topic and language options counted Editions, not books), no readable-online filter, no
+>   figures, no featured books, no active-filter chips beyond the contributor, 25 a page behind
+>   Previous/Next with no page numbers or "n–m of N", list cards with no availability, and a form
+>   whose empty controls made a second address for every view — while the Quran and Hadith Books
+>   hubs (Quran Part 10, Hadith Part 1) had all of these over the same Works. The book page put the
+>   only calls to action at the bottom of a panel below every Edition, offered no per-Edition read or
+>   download, named a translation's source but never a source's translations, and related books by
+>   Topic only. The reader sat inside the narrow content column: a contents block above the text, no
+>   current-section mark, no position bar that stayed in view, a progress bar that counted sections
+>   only, the font controls overwriting Urdu's own line spacing after hydration (the stylesheet's
+>   Nastaliq leading was lost the moment the island ran), and section jumps that cleared nothing. The
+>   landing had no figures, no featured books and no ways in by Topic, language or author, and did
+>   not cross-link the Quran's and Hadith's Books hubs.
+> - **One listing, two scopes (decision).** `/library/books` is the shared Books listing
+>   (`components/topic-hub/books.tsx`) over the whole Library, as Learn Part 1 did for Courses:
+>   Library's `topicWorks`/`topicWorkFacets` take `scope: 'library'` (every public Work, the Topic a
+>   filter with its own facet; the hubs' default `scope: 'topic'` and their reads and addresses are
+>   unchanged; their cards gain the same Download badge where an Edition allows one). New filters of any scope, each asked of ONE published Edition together with
+>   the language: a publication-year range, readable online and downloadable; new facets: the set's
+>   readable/downloadable counts and year span, `access` (what checking either would show) and
+>   `topics`; a card adds `downloadable` (a "Download" badge beside "Read online"). The address keeps
+>   every parameter it took (`?topic`/`?contributor` identifiers, `?language`, `?from`, `?to`,
+>   `?downloads=1`, `?sort`) and adds `?readable=1` and `?page`; Library's tolerant rule stands (a
+>   malformed value is dropped by one redirect), an inverted range is now read in order (it was
+>   dropped, historical), and a former `?offset=` is one redirect to the page holding its first Work.
+>   Pages hold 24. Every Library link into the listing (Topic and language chips, browse pages,
+>   related shelves, the landing) is built by one function (`libraryBooksHref`); the old
+>   `booksPath` builder and `readLibraryQuery`'s filter parsing lost their consumers and are removed
+>   (the browse pages keep a tolerant `readLibraryOffset`).
+> - **The book page.** The header's calls to action follow the selected Edition's stored availability
+>   — Read online (to the reader), Open PDF, Download PDF — and, when it allows no reading, "Read the
+>   {language} edition" leads to one that does; "All n editions" when there are several. Each Edition
+>   states its language and availability as badges (readable online, readable as a PDF, download
+>   available, not available online), its publisher, year, pages and ISBN, "Translated from" (now a
+>   link to the source) and, on a source, "Translated into" (its translations, linked), and its own
+>   calls to action, each naming the Edition for assistive technology. Topics, Quran passages (to
+>   `/quran/tafsir/surah/{n}`), sale points and Book structured data (only with a genuine ISBN and
+>   author) are as before; related books are two shelves — more on the first Topic and more by the
+>   first author (else the first credited person) — each linked to the listing filtered by it.
+> - **The reader.** It takes the page's full width at `#library-reading` with a container query (so
+>   a scholarly record's narrower column lays it out well too): contents in a column kept in view
+>   beside the text (bounded and scrollable above it on a phone), numbered, the section being read
+>   marked `aria-current="location"`; the reading preferences; and a sticky position bar — "Section n
+>   of m", a native `<progress>` of how far through the text (no inline style, no motion),
+>   previous/next section and Contents, every one a plain link. Script typography: Urdu (Nastaliq)
+>   and Arabic (Naskh) carry their own size and leading as multipliers of the visitor's preferences
+>   (`--reader-script-size`, `--reader-script-leading`), so a preference scales them and never erases
+>   them; English hyphenates; paragraphs, sections and the per-section steps are spaced in the
+>   stylesheet; jumps clear the bar. No position is stored; the edition's `lang`/`dir` and the
+>   interface's stay separate as before.
+> - **The landing.** One read of the whole Library's facets gives "The Library at a glance" (books,
+>   content languages, readable online, downloadable, the span of publication years — each linked to
+>   the view it counts, a zero never stated, kept out of the hero's words), the editors' featured
+>   books, "Find a book" (by Topic, by language and by author as chips with counts, and by kind), and
+>   "Books by subject" (the Quran's and Hadith's Books hubs); the newest shelf, three topic shelves
+>   (now from the same facet), the latest issues and the directory of every Library menu item stay.
+>   Each read still fails closed on its own.
+> - **Messages.** New `library.{readOnline, readEditionIn, allEditions, openPdf, downloadPdf,
+>   editionState.*, translatedInto, readerIntro, readerPosition, startReading, related.byHeading,
+>   related.byAll, booksPage.*, landing.featured, landing.stats.*, landing.find.*,
+>   landing.subjects.*}` and `topicHub.books.{downloadable, libraryHome, unknownTopic, yearSpan,
+>   yearFrom, yearTo, filterTopic, anyTopic, filterFrom, filterTo, filterAvailability,
+>   filterReadable, filterDownloadable, statReadable, statDownloadable, statYears}` in en/ur/ar;
+>   removed as unused: `library.{filters, filterClearOne, filterContributor, filterDownloads, sort.*}`.
+>
+> **Data facts — what staging will show.** The staging Library holds the 102 Minhaj Books Works
+> published in Phase 30-R/30-RD (MIGRATION_STRATEGY.md §19; the §19.1 wider run is planned, not
+> recorded), each with ONE published Edition carrying its first-party WebP cover and whatever the
+> publisher's page stated (publisher, year, pages, ISBN), reading `unavailable` and download `denied`
+> (no PDF is acquired in Stage 1A), no reader text, **no contributor** (no Work ↔ author link) and not
+> featured. So staging shows: the figures books and content languages (and the year span where
+> years were stated) but no readable or downloadable figure; no featured shelf; the listing's Topic
+> (where the operator filed Works under Topics), language and year filters but no author filter and
+> no availability checkboxes; every card a cover without an availability badge; and every book page
+> the honest "not available to read on this platform" and "no download" states, with no header
+> call to read or download, no reader and no "more by" shelf. The demo data adds no Work. The local
+> persistent database was not inspected for this part.
+>
+> **Proof:** `tests/library/topic-works.test.ts` (every new field's default stated; a whole-Library
+> query passed through; an unknown scope, passage parts or a shelf in the whole Library, an inverted
+> or out-of-range year and a non-boolean availability refused before any read);
+> `tests/library/library-books.integration.test.ts` (new: the whole Library's set, never a draft Work
+> or one without a published Edition; the Topic as a filter; language, contributor, featured, year
+> range, readable and downloadable; every Edition filter asked of ONE Edition; both orders; cards;
+> pages and totals; figures and every facet without its own filter) and
+> `tests/library/topic-works.integration.test.ts` (the hubs' facets now stating their readable,
+> downloadable, year-span, access and empty Topic facet; everything else unchanged);
+> `tests/topic-hub/books-view.test.ts` (new: the whole Library's view, address order, redirects of
+> the former form, offset and inverted range, `libraryBooksHref`, the `scope: 'library'` read, and a
+> hub never reading the Library's filters — every hub expectation unchanged);
+> `tests/library/presentation.test.ts` (`readLibraryOffset` in place of `readLibraryQuery`/`booksPath`);
+> `tests/config/locale.test.ts` (the new module declared). `tests/browser/library.spec.ts` — two
+> selectors follow the shared listing (`#books-sort` for `#filter-sort`; a card's title is an `h3`
+> under the listing's `h2`, it was an `h2`), the spec adds one dated Work by its own author ("Zz…",
+> 1901, so it crowds no first page in either order) for the year range; new: the listing's figures,
+> options with counts, availability badges, readable/downloadable/year narrowing (one Edition), a
+> chip removed, the former form and offset redirected; the landing's figures, ways in, subject hubs
+> and every Library menu item; each Edition's own calls to action and "Translated into"; the
+> header's call and the way to a readable Edition; the reader's position bar and current section;
+> and axe (no serious or critical finding) with no sideways scroll at 320 and 1440 px on the landing,
+> the listing and both Edition views in en and ur. *CI and staging evidence are recorded when they
+> exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

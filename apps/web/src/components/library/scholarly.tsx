@@ -556,6 +556,7 @@ function FullText({
         increase: t('increase'),
         reset: t('reset'),
         progressValue: positionTemplate,
+        positionBar: t('readerPosition'),
       }}
     />
   );

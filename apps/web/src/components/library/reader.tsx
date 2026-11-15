@@ -1,10 +1,10 @@
 import type { ReaderDocument } from '@minhaj/contracts/library';
 
-import { SectionHeading } from '@/components/ui';
 import { ReaderControls, type ReaderControlLabels } from './reader-controls';
 
 /**
- * THE LONG-FORM READER (DELIVERY_PLAN.md Phase 8, PRODUCT_SCOPE.md §2.1).
+ * THE LONG-FORM READER (DELIVERY_PLAN.md Phase 8, PRODUCT_SCOPE.md §2.1;
+ * redesigned in Library Part 1).
  *
  * "This phase does not end at metadata pages. A visitor who reaches a Work must
  * be able to READ WHAT IS GENUINELY AVAILABLE." So the edition's text is rendered
@@ -17,11 +17,20 @@ import { ReaderControls, type ReaderControlLabels } from './reader-controls';
  * pipeline it has no requirement for and a sanitiser it would have to keep
  * correct (§46). Every string below is inserted as a TEXT NODE by React, so there
  * is no markup path from stored content into the page — no
- * `dangerouslySetInnerHTML`, and therefore nothing to sanitise.
+ * `dangerouslySetInnerHTML`, and therefore nothing to sanitise. Library Part 1
+ * changes the presentation only: the document schema is untouched.
  *
  * NO LOGIN, AND NO SESSION. This component receives a resolved document and
  * renders it. Nothing in its module graph can read a cookie, and there is no
  * per-visitor state on the server or in this markup (§36, §37).
+ *
+ * THE READING LAYOUT (Library Part 1). Wherever the reader has room (a
+ * container query, so a Work page's full width and a narrower record column
+ * both lay it out well): a contents column kept in view beside the text (above it, bounded
+ * and scrollable, on a phone), the text at a comfortable measure, and above
+ * both the reading preferences and a slim position bar that stays at the top
+ * of the screen while the edition is read — where am I, how far through, the
+ * previous and next section, and the way back to the contents.
  *
  * ACCESSIBILITY IS STRUCTURAL RATHER THAN DECORATED (§48):
  *
@@ -37,24 +46,25 @@ import { ReaderControls, type ReaderControlLabels } from './reader-controls';
  *     chrome is marked with the INTERFACE language and direction, so an Urdu
  *     interface around an Arabic edition is correct in both directions at once;
  *   - a measure in `ch` and a font size in `rem`, so 200% zoom reflows into a
- *     narrower column instead of scrolling sideways;
+ *     narrower column instead of scrolling sideways; logical properties only;
  *   - no motion at all, and no inline `style` attribute — the typography defaults
  *     live in the stylesheet (`.library-reader`) under the platform's
  *     `style-src 'self'` CSP.
  */
 
 interface ReaderLabels extends ReaderControlLabels {
-  readonly contents: string;
   readonly readerHeading: string;
+  /** One line under the heading, where the page has one: the edition and its language. */
+  readonly readerIntro?: string;
   /** "Section {current} of {total}", for the per-heading position. */
   readonly sectionPosition: string;
-  readonly nextSection: string;
-  readonly previousSection: string;
   readonly backToContents: string;
 }
 
 const CONTENTS_ID = 'library-reader-contents';
 const READER_ID = 'library-reader';
+/** The reading section's own address, which a "Read online" call leads to. */
+export const READER_SECTION_ID = 'library-reading';
 
 export function Reader({
   anchorFor,
@@ -101,55 +111,80 @@ export function Reader({
   }));
 
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeading>{labels.readerHeading}</SectionHeading>
+    <section
+      id={READER_SECTION_ID}
+      aria-labelledby={`${READER_SECTION_ID}-heading`}
+      className="@container flex scroll-mt-4 flex-col gap-5"
+    >
+      <div className="flex flex-col gap-1 border-b border-border pb-3">
+        <h2 id={`${READER_SECTION_ID}-heading`} className="text-heading font-semibold">
+          {labels.readerHeading}
+        </h2>
+        {labels.readerIntro === undefined ? null : (
+          <p className="text-sm text-foreground-muted">{labels.readerIntro}</p>
+        )}
+      </div>
 
-      <ReaderControls readerId={READER_ID} sectionCount={total} labels={labels} />
+      <ReaderControls
+        readerId={READER_ID}
+        contentsId={CONTENTS_ID}
+        sectionIds={sections.map((section) => section.id)}
+        labels={labels}
+      />
 
-      <nav
-        id={CONTENTS_ID}
-        aria-label={labels.contents}
-        lang={interfaceLocale}
-        dir={interfaceDirection}
-        className="scroll-mt-8 rounded-panel border border-border bg-surface-sunken px-4 py-3"
-      >
-        <p className="text-caption pb-1 font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
-          {labels.contents}
-        </p>
-        <ol className="flex list-decimal flex-col ps-6 marker:text-foreground-muted">
-          {sections.map((section) => (
-            <li key={section.key}>
-              {/*
-               * The entry is the EDITION's own words appearing inside the
-               * interface's chrome, so it carries the content language and
-               * direction even though its container carries the interface's.
-               */}
-              <a
-                href={`#${section.id}`}
-                lang={languageCode}
-                dir={direction}
-                className="inline-block py-2.5 underline decoration-accent-rule underline-offset-4 hover:decoration-action"
-              >
-                {section.title}
-              </a>
-            </li>
-          ))}
-        </ol>
-      </nav>
+      <div className="grid grid-cols-1 gap-8 @4xl:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] @4xl:gap-12">
+        <nav
+          id={CONTENTS_ID}
+          aria-label={labels.contents}
+          lang={interfaceLocale}
+          dir={interfaceDirection}
+          className="flex min-w-0 scroll-mt-20 flex-col gap-2 rounded-panel border border-border bg-surface-sunken p-3 @4xl:sticky @4xl:top-20 @4xl:max-h-[calc(100dvh-7rem)] @4xl:self-start @4xl:overflow-y-auto @4xl:border-0 @4xl:bg-transparent @4xl:p-0"
+        >
+          <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
+            {labels.contents}
+          </p>
+          <ol className="flex max-h-72 list-none flex-col overflow-y-auto border-s border-border p-0 text-sm @4xl:max-h-none @4xl:overflow-visible">
+            {sections.map((section) => (
+              <li key={section.key} className="flex gap-2">
+                {/*
+                 * The entry is the EDITION's own words appearing inside the
+                 * interface's chrome, so it carries the content language and
+                 * direction even though its container carries the interface's.
+                 * The controls island marks the entry being read with
+                 * `aria-current="location"`.
+                 */}
+                <a
+                  href={`#${section.id}`}
+                  lang={languageCode}
+                  dir={direction}
+                  className="-ms-px flex min-h-11 w-full items-center gap-2 border-s-2 border-transparent py-1.5 ps-3 text-foreground-muted no-underline transition-colors duration-[var(--duration-fast)] hover:border-accent hover:text-foreground aria-[current=location]:border-action aria-[current=location]:font-semibold aria-[current=location]:text-foreground"
+                >
+                  <span
+                    aria-hidden="true"
+                    lang={interfaceLocale}
+                    className="w-6 shrink-0 text-caption text-foreground-muted tabular-nums"
+                  >
+                    {new Intl.NumberFormat(interfaceLocale).format(section.index)}
+                  </span>
+                  <span className="min-w-0 wrap-anywhere">{section.title}</span>
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>
 
-      {/*
-       * `library-reader` carries the typography defaults in the STYLESHEET. There
-       * is no `style` attribute here: the platform's CSP is `style-src 'self'`,
-       * and the controls island changes only the three custom properties, through
-       * the CSSOM, which that policy permits.
-       */}
-      <article
-        id={READER_ID}
-        lang={languageCode}
-        dir={direction}
-        className="library-reader"
-      >
-        <div className="flex flex-col gap-10">
+        {/*
+         * `library-reader` carries the typography defaults in the STYLESHEET. There
+         * is no `style` attribute here: the platform's CSP is `style-src 'self'`,
+         * and the controls island changes only the three custom properties, through
+         * the CSSOM, which that policy permits.
+         */}
+        <article
+          id={READER_ID}
+          lang={languageCode}
+          dir={direction}
+          className="library-reader min-w-0"
+        >
           {sections.map((section, position) => {
             const previous = sections[position - 1];
             const next = sections[position + 1];
@@ -161,10 +196,10 @@ export function Reader({
                 data-reader-index={section.index}
                 aria-labelledby={`${section.id}-heading`}
                 // A block-direction offset, so a jumped-to heading clears the
-                // top edge identically in every reading direction.
-                className="flex scroll-mt-8 flex-col gap-4"
+                // sticky position bar identically in every reading direction.
+                className="library-reader-section scroll-mt-20"
               >
-                <h3 id={`${section.id}-heading`} className="text-xl font-semibold">
+                <h3 id={`${section.id}-heading`}>
                   {section.title}{' '}
                   <span
                     className="sr-only"
@@ -192,36 +227,21 @@ export function Reader({
                   aria-label={section.title}
                   lang={interfaceLocale}
                   dir={interfaceDirection}
-                  className="flex flex-wrap gap-x-6 gap-y-1 border-t border-border pt-2 text-sm"
+                  className="library-reader-steps"
                 >
                   {previous === undefined ? null : (
-                    <a
-                      href={`#${previous.id}`}
-                      className="inline-flex min-h-11 items-center underline underline-offset-4"
-                    >
-                      {labels.previousSection}
-                    </a>
+                    <a href={`#${previous.id}`}>{labels.previousSection}</a>
                   )}
                   {next === undefined ? null : (
-                    <a
-                      href={`#${next.id}`}
-                      className="inline-flex min-h-11 items-center underline underline-offset-4"
-                    >
-                      {labels.nextSection}
-                    </a>
+                    <a href={`#${next.id}`}>{labels.nextSection}</a>
                   )}
-                  <a
-                    href={`#${CONTENTS_ID}`}
-                    className="inline-flex min-h-11 items-center underline underline-offset-4"
-                  >
-                    {labels.backToContents}
-                  </a>
+                  <a href={`#${CONTENTS_ID}`}>{labels.backToContents}</a>
                 </nav>
               </section>
             );
           })}
-        </div>
-      </article>
-    </div>
+        </article>
+      </div>
+    </section>
   );
 }

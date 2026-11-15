@@ -2,7 +2,7 @@ import { localizedPath } from '@minhaj/contracts';
 import { z } from 'zod';
 
 import type { Locale } from '@minhaj/contracts';
-import type { EditionRecord, LibrarySort, WorkRecord } from '@minhaj/contracts/library';
+import type { EditionRecord, WorkRecord } from '@minhaj/contracts/library';
 
 /**
  * Presentation decisions the Library surfaces share.
@@ -26,102 +26,28 @@ export const EDITION_PARAM = 'edition';
 export const WORK_PAGE = 25;
 
 /**
- * Turns a URL's search parameters into the Library's own query shape.
+ * The offset a Library browse page (downloads, sale points, the three facet
+ * browses) is asked for, from its address.
  *
- * TWO LAYERS, AND THE OUTER ONE IS DELIBERATELY TOLERANT. A URL is not a form: a
- * visitor may arrive with `?from=banana` from a mistyped link or a crawler, and
- * answering that with a 500 would be a worse page than answering it with the
- * unfiltered listing. So every field here `catch`es to its neutral value.
- *
- * TOLERANT IS NOT TRUSTING. What this produces is re-validated by
- * `libraryQuerySchema` inside the read service, which is the authoritative
- * boundary (SECURITY_BASELINE.md §9.1) — and neither layer can widen visibility,
- * because `published` is in the query rather than in a filter a parameter could
- * unset.
- *
- * A REPEATED PARAMETER IS NOT A VALUE. `?topic=a&topic=b` arrives as an array and
- * is discarded rather than having one of the two silently chosen for the visitor.
+ * TOLERANT, NEVER TRUSTING. A URL is not a form: a visitor may arrive with
+ * `?offset=banana` from a mistyped link or a crawler, and answering that with a
+ * 500 would be a worse page than the first one. So anything but a whole number
+ * within the read's own bound is the first page; the read service validates it
+ * again, and a repeated parameter is not a value. (`/library/books` reads its
+ * own address through the shared Books listing's rules since Library Part 1,
+ * `@/components/topic-hub/books-view`.)
  */
-export function readLibraryQuery(query: Record<string, string | string[] | undefined>): {
-  offset: number;
-  language: string | null;
-  topic: string | null;
-  contributor: string | null;
-  from: number | null;
-  to: number | null;
-  downloads: boolean;
-  sort: LibrarySort;
-} {
-  const text = (key: string, max: number): string | null => {
-    const raw = query[key];
-    return typeof raw === 'string' && raw !== '' && raw.length <= max ? raw : null;
-  };
-
-  const year = (key: string): number | null =>
-    z.coerce.number().int().min(1).max(9999).nullable().catch(null).parse(text(key, 8));
-
-  const from = year('from');
-  const to = year('to');
-
-  return {
-    offset: z.coerce
-      .number()
-      .int()
-      .min(0)
-      .max(25_000)
-      .catch(0)
-      .parse(text('offset', 8) ?? 0),
-    language: text('language', 16),
-    // A malformed identifier is dropped rather than queried. The domain schema
-    // would refuse it anyway; dropping it here is what turns a bad link into the
-    // unfiltered listing instead of an error page.
-    topic: uuidOrNull(text('topic', 64)),
-    contributor: uuidOrNull(text('contributor', 64)),
-    // AN INVERTED RANGE IS NOT A RANGE. `libraryQuerySchema` refuses `from > to`,
-    // so it is normalised here rather than allowed to throw.
-    ...(from !== null && to !== null && from > to
-      ? { from: null, to: null }
-      : { from, to }),
-    downloads: text('downloads', 8) === '1',
-    // A–Z is the reader's default; anything but a known order is that default.
-    sort: text('sort', 8) === 'newest' ? 'newest' : 'title',
-  };
-}
-
-function uuidOrNull(value: string | null): string | null {
-  return value !== null && z.uuid().safeParse(value).success ? value : null;
-}
-
-/**
- * The listing URL for a set of filters and an offset.
- *
- * ONE BUILDER, so the filter form, the pagination links and the clear-filter
- * links cannot produce three different spellings of the same view. Neutral values
- * are OMITTED rather than written as empty parameters, which keeps the unfiltered
- * listing at exactly one address — `?language=&topic=` is a second URL for the
- * same page, and `canonical to the base` (ROUTE_MAP.md §2.3) is easier to honour
- * when the base is the one the page actually links to.
- */
-export function booksPath(
-  locale: string,
-  filters: ReturnType<typeof readLibraryQuery>,
-  overrides: Partial<ReturnType<typeof readLibraryQuery>> = {},
-): string {
-  const merged = { ...filters, ...overrides };
-  const search = new URLSearchParams();
-
-  if (merged.offset > 0) search.set('offset', String(merged.offset));
-  if (merged.language !== null) search.set('language', merged.language);
-  if (merged.topic !== null) search.set('topic', merged.topic);
-  if (merged.contributor !== null) search.set('contributor', merged.contributor);
-  if (merged.from !== null) search.set('from', String(merged.from));
-  if (merged.to !== null) search.set('to', String(merged.to));
-  if (merged.downloads) search.set('downloads', '1');
-  // The default order is the bare address; only another order is written.
-  if (merged.sort !== 'title') search.set('sort', merged.sort);
-
-  const query = search.toString();
-  return localizedPath(locale, `/library/books${query === '' ? '' : `?${query}`}`);
+export function readLibraryOffset(
+  query: Record<string, string | string[] | undefined>,
+): number {
+  const raw = query['offset'];
+  return z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(25_000)
+    .catch(0)
+    .parse(typeof raw === 'string' && raw !== '' && raw.length <= 8 ? raw : 0);
 }
 
 /** The canonical public address of one Work (ROUTE_MAP.md §5, §9.1). */
@@ -149,7 +75,14 @@ export function workPath(locale: string, slug: string): string {
  *   3. the first label there is, so a page always has a title.
  */
 export function labelFor(
-  work: Pick<WorkRecord, 'labels' | 'primaryLocale'>,
+  work: {
+    readonly labels: readonly {
+      readonly locale: Locale;
+      readonly title: string;
+      readonly description: string;
+    }[];
+    readonly primaryLocale: Locale;
+  },
   locale: Locale,
 ): { locale: Locale; title: string; description: string } {
   const requested = work.labels.find((label) => label.locale === locale);

@@ -123,6 +123,12 @@ export interface TopicWork {
   readonly year: number | null;
   /** A published Edition offers reading online (its availability allows it). */
   readonly readable: boolean;
+  /**
+   * Library Part 1: a published Edition offers a download (its availability
+   * allows it and a file is recorded) — the same decision the asset route
+   * enforces, never inferred from a file's presence alone.
+   */
+  readonly downloadable: boolean;
   /** Its Quran passages, in the order its editor gave them. */
   readonly passages: readonly QuranPassage[];
 }
@@ -151,6 +157,18 @@ export interface TopicWorkPage {
  *
  * Without `quranPassages` nothing explains a passage: `explaining` is zero
  * and `surahs` empty.
+ *
+ * Library Part 1 adds, for every scope:
+ *
+ *   `hub.readable`, `hub.downloadable`  of the whole set, how many Works a
+ *                  published Edition lets one read online, or download;
+ *   `hub.earliest`, `hub.latest`  the span of the set's publication years
+ *                  (null when no published Edition records one);
+ *   `access`       under every filter, how many Works checking "readable
+ *                  online" or "downloadable" would show;
+ *   `topics`       Topic → Works, under every filter but the Topic — the
+ *                  whole Library's only (a hub has one Topic, so it is always
+ *                  empty there).
  */
 export interface TopicWorkFacets {
   readonly hub: {
@@ -158,10 +176,16 @@ export interface TopicWorkFacets {
     readonly explaining: number;
     readonly featured: number;
     readonly languages: number;
+    readonly readable: number;
+    readonly downloadable: number;
+    readonly earliest: number | null;
+    readonly latest: number | null;
   };
   readonly shelves: { readonly all: number; readonly explaining: number };
+  readonly access: { readonly readable: number; readonly downloadable: number };
   readonly languages: LibraryFacetPage;
   readonly contributors: LibraryFacetPage;
+  readonly topics: LibraryFacetPage;
   readonly surahs: readonly PassageSurahCount[];
 }
 

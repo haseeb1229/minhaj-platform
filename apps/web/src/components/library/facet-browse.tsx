@@ -8,9 +8,10 @@ import {
   libraryReadRuntime,
   libraryReferenceNames,
 } from '@/composition/library-read';
+import { libraryBooksHref } from '@/components/topic-hub/books-view';
 import { EmptyState, LinkCard, MetaRow, TextLink } from '@/components/ui';
 import { ListingFrame, Pager } from './frame';
-import { booksPath, readLibraryQuery } from './presentation';
+import { readLibraryOffset } from './presentation';
 
 /**
  * `/library/authors`, `/library/topics` and `/library/languages` — the three
@@ -59,7 +60,7 @@ export async function FacetBrowse({
   const t = await getTranslations({ locale, namespace: 'library' });
   const shell = await getTranslations({ locale, namespace: 'shell' });
 
-  const { offset } = readLibraryQuery(query);
+  const offset = readLibraryOffset(query);
   const reader = libraryReadRuntime();
 
   const page =
@@ -99,9 +100,7 @@ export async function FacetBrowse({
               key: facet.id,
               name: person.name,
               works: facet.works,
-              browse: booksPath(locale, readLibraryQuery({}), {
-                contributor: facet.id,
-              }),
+              browse: libraryBooksHref(locale, { contributor: facet.id }),
               canonical: localizedPath(
                 locale,
                 `/people/${encodeURIComponent(person.slug)}`,
@@ -119,7 +118,7 @@ export async function FacetBrowse({
               key: facet.id,
               name: topic.name,
               works: facet.works,
-              browse: booksPath(locale, readLibraryQuery({}), { topic: facet.id }),
+              browse: libraryBooksHref(locale, { library: { topic: facet.id } }),
               canonical: null,
               lang: null,
               dir: null,
@@ -133,7 +132,7 @@ export async function FacetBrowse({
         // code is a truthful answer; an invented English name would not be.
         name: language?.name ?? facet.id,
         works: facet.works,
-        browse: booksPath(locale, readLibraryQuery({}), { language: facet.id }),
+        browse: libraryBooksHref(locale, { language: facet.id }),
         canonical: null,
         lang: facet.id,
         dir: language?.direction ?? null,

@@ -6,7 +6,7 @@ import { libraryReadRuntime } from '@/composition/library-read';
 import { requireLocale } from '@/config/route-locale';
 import { DetailRow, EmptyState, Panel, TextLink } from '@/components/ui';
 import { ListingFrame, Pager } from '@/components/library/frame';
-import { readLibraryQuery } from '@/components/library/presentation';
+import { readLibraryOffset } from '@/components/library/presentation';
 import { shellMetadata } from '@/seo/metadata';
 import { requireRoute } from '@/shell/registry';
 
@@ -59,7 +59,7 @@ export default async function SalePointsPage({ params, searchParams }: SalePoint
   const t = await getTranslations({ locale, namespace: 'library' });
   const shell = await getTranslations({ locale, namespace: 'shell' });
 
-  const { offset } = readLibraryQuery(query);
+  const offset = readLibraryOffset(query);
   const page = await libraryReadRuntime().salePoints(offset);
 
   return (

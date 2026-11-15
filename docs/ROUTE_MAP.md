@@ -906,6 +906,24 @@ or skip a Work, and an unknown value is the default. The legacy slug order is no
 visitor meets. Like every filter, `?sort` is canonical to the base listing and never a sitemap
 entry. A magazine's issues are grouped by year on its page.
 
+**Library Part 1.** `/library/books` is the shared Books listing over the whole Library
+(DOMAIN_MODEL.md §10.1, `scope: 'library'`): figures, the editors' featured books, filters with
+counts, active-filter chips, two orders and numbered pages of **24** (25 behind Previous/Next until
+Library Part 1, historical). It takes **`?topic, language, contributor, from, to, readable,
+downloads, sort, page`** — every parameter it took before (`topic` and `contributor` identifiers,
+`downloads=1`) plus `readable=1` (an Edition readable online) and `page`; content language, year
+range and availability are asked of ONE published Edition. One address per view: a form's empty
+controls, another order of the same parameters, a malformed or repeated value (dropped, as before)
+and an inverted year range (read in order; it was dropped until now, historical) are one redirect
+to the canonical spelling, and a former `?offset=` is one redirect to the page holding the Work it
+began with. Every view stays canonical to the bare listing and out of the sitemap. A Work's page
+keeps its address and `?edition=`; its header carries the calls to action the selected Edition's
+stored availability allows, each Edition its own (read online, open the PDF, download), and the
+reader takes the page's full width at `#library-reading` (contents beside the text, a sticky
+position bar) — the reader's section identifiers are unchanged. The landing adds the Library's
+figures, featured books, ways in by Topic, language, author and kind, and the Quran's and Hadith's
+Books hubs. No route is added or removed.
+
 **Owner direction 2026-11-08.** `/library` again offers "See every resource type"
 (`/library/resources`) in its hero, lists Books first in its directory, introduces each directory
 group, and carries the Library's metadata notice — as `/library/books` does again. Each of the

@@ -3,14 +3,16 @@
 import { useCallback, useEffect, useState } from 'react';
 
 /**
- * The reader's PRESENTATION controls and its within-document progress.
+ * The reader's PRESENTATION controls and its within-document position bar.
  *
  * THE ONLY CLIENT COMPONENT THE READER HAS, and it is a narrow island by
  * design: the book's text is server-rendered and this component never receives
  * it, never fetches it and never re-renders it. It reaches the reader element by
  * identifier and sets three CSS custom properties on it, so a visitor with
  * JavaScript disabled still gets the whole edition at the server's default
- * typography (ARCHITECTURE.md §7, §13.8).
+ * typography (ARCHITECTURE.md §7, §13.8). It receives the sections' in-page
+ * identifiers only — never their words — so its position bar renders on the
+ * server too and its links work without script.
  *
  * WHAT IT IS ALLOWED TO REMEMBER, AND WHERE. Font size, line height and measure
  * are PRESENTATION PREFERENCES, so they live in `localStorage` — per browser,
@@ -26,12 +28,16 @@ import { useCallback, useEffect, useState } from 'react';
  * the font size. Reads are also validated rather than trusted — stored JSON is
  * data this component wrote, but it is data a person can edit.
  *
- * PROGRESS WITHOUT SERVER STATE. An `IntersectionObserver` reports which section
- * is currently in view and the component says "section n of m". It is a VISUAL
- * aid and is deliberately NOT a live region: an announcement on every scroll
- * step would talk over the text being read. The structure assistive technology
- * actually navigates by is the server-rendered headings, each of which states
- * its own position.
+ * THE POSITION BAR (Library Part 1) stays at the top of the screen while the
+ * edition is read: "section n of m", how far through the text the reader is,
+ * the previous and the next section, and the way back to the contents — each
+ * a plain in-page link, so it is keyboard-operable with Tab and Enter. The
+ * section in view is found by an `IntersectionObserver` and is also marked in
+ * the contents with `aria-current="location"`. It is a VISUAL aid and is
+ * deliberately NOT a live region: an announcement on every scroll step would
+ * talk over the text being read. The structure assistive technology actually
+ * navigates by is the server-rendered headings, each of which states its own
+ * position.
  *
  * NO MOTION AT ALL. The progress indicator is a native `<progress>` with no
  * transition, and nothing here animates — so there is nothing for
@@ -46,8 +52,8 @@ import { useCallback, useEffect, useState } from 'react';
 /** How far the three controls may move, and where they start. */
 const STEPS = {
   font: { min: 0.9375, max: 1.75, step: 0.0625, initial: 1.125 },
-  line: { min: 1.4, max: 2.2, step: 0.1, initial: 1.75 },
-  measure: { min: 40, max: 90, step: 5, initial: 66 },
+  line: { min: 1.4, max: 2.4, step: 0.1, initial: 1.8 },
+  measure: { min: 40, max: 90, step: 5, initial: 68 },
 } as const;
 
 const STORAGE_KEY = 'minhaj.library.reader';
@@ -110,19 +116,37 @@ export interface ReaderControlLabels {
   readonly reset: string;
   /** "Section {current} of {total}" with both placeholders present. */
   readonly progressValue: string;
+  /** The position bar's name ("Reading position"). */
+  readonly positionBar: string;
+  readonly contents: string;
+  readonly nextSection: string;
+  readonly previousSection: string;
+}
+
+/** How far through `element` the top of the viewport is, 0–100. */
+function percentThrough(element: HTMLElement): number {
+  const box = element.getBoundingClientRect();
+  const travel = box.height - window.innerHeight;
+  if (travel <= 0) return box.top <= 0 ? 100 : 0;
+  return Math.round(Math.min(1, Math.max(0, -box.top / travel)) * 100);
 }
 
 export function ReaderControls({
   readerId,
-  sectionCount,
+  contentsId,
+  sectionIds,
   labels,
 }: {
   readonly readerId: string;
-  readonly sectionCount: number;
+  readonly contentsId: string;
+  /** Each section's in-page identifier, in reading order. */
+  readonly sectionIds: readonly string[];
   readonly labels: ReaderControlLabels;
 }) {
   const [preferences, setPreferences] = useState<Preferences>(DEFAULTS);
   const [current, setCurrent] = useState(1);
+  const [percent, setPercent] = useState(0);
+  const total = sectionIds.length;
 
   // Restored AFTER hydration, never during render: reading storage while
   // rendering would make the first client render disagree with the server's.
@@ -162,6 +186,40 @@ export function ReaderControls({
     return () => observer.disconnect();
   }, [readerId]);
 
+  // How far through the text, recomputed at most once a frame while scrolling.
+  useEffect(() => {
+    const reader = document.getElementById(readerId);
+    if (reader === null) return;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      setPercent(percentThrough(reader));
+    };
+    const schedule = () => {
+      if (frame === 0) frame = window.requestAnimationFrame(measure);
+    };
+    measure();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      if (frame !== 0) window.cancelAnimationFrame(frame);
+    };
+  }, [readerId, preferences]);
+
+  // The contents entry of the section in view says so, in the accessibility tree too.
+  useEffect(() => {
+    const contents = document.getElementById(contentsId);
+    if (contents === null) return;
+    const target = sectionIds[current - 1];
+    for (const link of contents.querySelectorAll<HTMLAnchorElement>('a[href^="#"]')) {
+      if (link.getAttribute('href') === `#${target ?? ''}`)
+        link.setAttribute('aria-current', 'location');
+      else link.removeAttribute('aria-current');
+    }
+  }, [contentsId, sectionIds, current]);
+
   const adjust = useCallback((key: keyof Preferences, direction: 1 | -1) => {
     setPreferences((previous) => {
       const range = STEPS[key];
@@ -185,15 +243,18 @@ export function ReaderControls({
 
   const progressText = labels.progressValue
     .replace('{current}', String(current))
-    .replace('{total}', String(sectionCount));
+    .replace('{total}', String(total));
+  const previous = sectionIds[current - 2];
+  const next = sectionIds[current];
 
   return (
-    <div className="flex flex-col gap-3">
+    <>
       <div
         role="group"
         aria-label={labels.heading}
-        className="flex flex-wrap items-center gap-x-4 gap-y-2"
+        className="flex flex-wrap items-center gap-x-5 gap-y-2"
       >
+        <span className="text-sm font-medium">{labels.heading}</span>
         {(
           [
             ['font', labels.fontSize],
@@ -202,7 +263,7 @@ export function ReaderControls({
           ] as const
         ).map(([key, label]) => (
           <div key={key} className="flex items-center gap-1">
-            <span className="text-xs text-foreground-muted">{label}</span>
+            <span className="pe-1 text-xs text-foreground-muted">{label}</span>
             <ControlButton
               label={`${labels.decrease}: ${label}`}
               onClick={() => adjust(key, -1)}
@@ -225,26 +286,51 @@ export function ReaderControls({
       </div>
 
       {/*
-       * A VISUAL indicator of position within THIS document. The bar is hidden
-       * from assistive technology because the text beside it says the same thing
-       * in words, and the headings say it again per section.
+       * THE POSITION BAR, kept at the top of the screen while the edition is
+       * on it. The bar is hidden from assistive technology because the words
+       * beside it say where the reader is, and the headings say it again.
        *
        * A NATIVE `<progress>`, not a styled span with a width: an inline `style`
        * attribute is refused by the platform's `style-src 'self'` CSP, and the
        * native element needs none — and it has no motion to reduce.
        */}
-      <p className="flex items-center gap-3 text-xs text-foreground-muted">
-        <span>{progressText}</span>
-        <progress
-          aria-hidden="true"
-          value={current}
-          max={Math.max(1, sectionCount)}
-          className="h-1 w-24 accent-action"
-        />
-      </p>
-    </div>
+      <nav
+        aria-label={labels.positionBar}
+        className="sticky top-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 border-y border-border bg-surface py-1.5"
+      >
+        <p className="flex min-w-0 grow items-center gap-3 text-sm">
+          <span className="font-medium whitespace-nowrap tabular-nums">
+            {progressText}
+          </span>
+          <progress
+            aria-hidden="true"
+            value={percent}
+            max={100}
+            className="h-1.5 w-full max-w-48 min-w-16 grow accent-action"
+          />
+        </p>
+        <span className="flex items-center gap-1 text-sm">
+          {previous === undefined ? null : (
+            <a href={`#${previous}`} className={STEP_LINK}>
+              {labels.previousSection}
+            </a>
+          )}
+          {next === undefined ? null : (
+            <a href={`#${next}`} className={STEP_LINK}>
+              {labels.nextSection}
+            </a>
+          )}
+          <a href={`#${contentsId}`} className={STEP_LINK}>
+            {labels.contents}
+          </a>
+        </span>
+      </nav>
+    </>
   );
 }
+
+const STEP_LINK =
+  'inline-flex min-h-11 items-center rounded-control px-2.5 font-medium text-action no-underline underline-offset-4 hover:underline';
 
 /**
  * One reader control.

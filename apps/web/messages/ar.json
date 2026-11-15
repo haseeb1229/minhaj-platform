@@ -1858,13 +1858,9 @@
     "facetWorks": "عدد الكتب: {count}",
     "next": "التالي",
     "previous": "السابق",
-    "filters": "تصفية الكتب",
     "filterAny": "أي",
     "filterApply": "تطبيق التصفية",
     "filterClear": "مسح كل التصفيات",
-    "filterClearOne": "إزالة هذه التصفية",
-    "filterContributor": "المساهم",
-    "filterDownloads": "المؤلفات التي لها تنزيل فقط",
     "filterFrom": "منشور من (السنة)",
     "filterLanguage": "لغة المحتوى",
     "filterTo": "منشور حتى (السنة)",
@@ -2153,7 +2149,39 @@
       "latestIssues": "أحدث أعداد المجلات",
       "showPrevious": "عرض السابق",
       "showNext": "عرض التالي",
-      "directory": "طرق أخرى إلى المكتبة"
+      "directory": "طرق أخرى إلى المكتبة",
+      "featured": "كتب مختارة",
+      "stats": {
+        "heading": "المكتبة في لمحة",
+        "books": "{count, plural, one {كتاب} two {كتابان} few {كتب} many {كتابًا} other {كتاب}}",
+        "languages": "{count, plural, one {لغة محتوى} two {لغتا محتوى} few {لغات محتوى} many {لغة محتوى} other {لغة محتوى}}",
+        "readable": "{count, plural, one {كتاب للقراءة على الإنترنت} two {كتابان للقراءة على الإنترنت} few {كتب للقراءة على الإنترنت} many {كتابًا للقراءة على الإنترنت} other {كتاب للقراءة على الإنترنت}}",
+        "downloadable": "{count, plural, one {كتاب للتنزيل} two {كتابان للتنزيل} few {كتب للتنزيل} many {كتابًا للتنزيل} other {كتاب للتنزيل}}",
+        "years": "سنوات النشر"
+      },
+      "find": {
+        "heading": "ابحث عن كتاب",
+        "intro": "ابدأ من موضوع أو لغة أو مؤلف أو نوع العمل الذي تبحث عنه.",
+        "topics": "حسب الموضوع",
+        "languages": "حسب اللغة",
+        "authors": "حسب المؤلف",
+        "kinds": "حسب النوع",
+        "allTopics": "كل المواضيع",
+        "allLanguages": "كل لغات المحتوى",
+        "allAuthors": "كل المؤلفين والمساهمين"
+      },
+      "subjects": {
+        "heading": "كتب حسب المجال",
+        "intro": "يجمع كل من القرآن والحديث كتبه الخاصة، مع عوامل تصفية خاصة به.",
+        "quran": {
+          "title": "كتب عن القرآن",
+          "body": "كل كتاب عن القرآن، وكل كتاب يشرح موضعًا منه، مرتبة حسب السور."
+        },
+        "hadith": {
+          "title": "كتب عن الحديث",
+          "body": "كل كتاب تصنفه المكتبة تحت الحديث."
+        }
+      }
     },
     "kindBook": "كتاب",
     "coverAlt": "غلاف {title}",
@@ -2161,14 +2189,36 @@
     "availabilityReading": "القراءة",
     "availabilityDownload": "التنزيل",
     "readBelow": "يمكن قراءة هذه الطبعة كاملةً في هذه الصفحة.",
-    "sort": {
-      "label": "الترتيب",
-      "title": "العنوان (أ–ي)",
-      "newest": "الأحدث نشرًا أولًا"
-    },
     "related": {
       "heading": "المزيد عن {topic}",
-      "all": "كل الكتب عن {topic}"
+      "all": "كل الكتب عن {topic}",
+      "byHeading": "المزيد من كتب {name}",
+      "byAll": "جميع كتب {name}"
+    },
+    "readOnline": "اقرأ على الإنترنت",
+    "readEditionIn": "اقرأ الطبعة {language}",
+    "allEditions": "جميع الطبعات ({count})",
+    "openPdf": "افتح ملف PDF",
+    "downloadPdf": "نزّل ملف PDF",
+    "editionState": {
+      "readable": "متاحة للقراءة على الإنترنت",
+      "file": "متاحة للقراءة بصيغة PDF",
+      "download": "متاحة للتنزيل",
+      "unavailable": "غير متاحة على الإنترنت"
+    },
+    "translatedInto": "تُرجمت إلى",
+    "readerIntro": "{edition} · {language} · {count, plural, one {قسم واحد} two {قسمان} few {# أقسام} many {# قسمًا} other {# قسم}}",
+    "readerPosition": "موضع القراءة",
+    "startReading": "ابدأ القراءة",
+    "booksPage": {
+      "stat": "{count, plural, one {كتاب في المكتبة} two {كتابان في المكتبة} few {كتب في المكتبة} many {كتابًا في المكتبة} other {كتاب في المكتبة}}",
+      "listIntro": "كل كتاب منشور، بكل لغات المحتوى. ضيّق القائمة حسب الموضوع أو اللغة أو المؤلف أو السنة أو ما يمكنك قراءته أو تنزيله.",
+      "emptyTitle": "لا توجد كتب بعد",
+      "noResults": "لا يطابق أي كتاب جميع عوامل التصفية التي اخترتها. أزل أحدها لترى المزيد.",
+      "about": "كل كتاب هنا عمل منشور له طبعة منشورة واحدة على الأقل. لا تُتاح القراءة على الإنترنت والتنزيل إلا حيث تسمح بذلك الحقوق المسجلة للطبعة.",
+      "quranBooks": "كتب عن القرآن",
+      "hadithBooks": "كتب عن الحديث",
+      "libraryHome": "الصفحة الرئيسية للمكتبة"
     }
   },
   "search": {
@@ -4499,7 +4549,23 @@
       "noResultsTitle": "لا كتب تطابق عوامل التصفية هذه",
       "pastEnd": "عدد الكتب أقل مما تتسع له الصفحة {page}.",
       "pages": "صفحات الكتب",
-      "libraryLink": "كل الكتب في المكتبة"
+      "libraryLink": "كل الكتب في المكتبة",
+      "downloadable": "تنزيل",
+      "libraryHome": "اذهب إلى المكتبة",
+      "unknownTopic": "موضوع",
+      "yearSpan": "{from}–{to}",
+      "yearFrom": "من {year}",
+      "yearTo": "حتى {year}",
+      "filterTopic": "الموضوع",
+      "anyTopic": "أي موضوع",
+      "filterFrom": "منشور من سنة",
+      "filterTo": "منشور حتى سنة",
+      "filterAvailability": "الإتاحة",
+      "filterReadable": "متاح للقراءة على الإنترنت",
+      "filterDownloadable": "متاح للتنزيل",
+      "statReadable": "{count, plural, one {كتاب للقراءة على الإنترنت} two {كتابان للقراءة على الإنترنت} few {كتب للقراءة على الإنترنت} many {كتابًا للقراءة على الإنترنت} other {كتاب للقراءة على الإنترنت}}",
+      "statDownloadable": "{count, plural, one {كتاب للتنزيل} two {كتابان للتنزيل} few {كتب للتنزيل} many {كتابًا للتنزيل} other {كتاب للتنزيل}}",
+      "statYears": "سنوات النشر"
     },
     "videos": {
       "eyebrow": "استكشف · المرئيات",

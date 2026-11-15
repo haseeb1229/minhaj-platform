@@ -37,12 +37,15 @@ export function ExploreHero({
   eyebrow,
   title,
   lede,
+  notice,
   stats,
   actions,
 }: {
   readonly eyebrow: string;
   readonly title: string;
   readonly lede: string;
+  /** A statement the listing makes about what it shows (Library Part 1). */
+  readonly notice?: string;
   readonly stats: readonly {
     /** A count, or a figure already written for the reader (a span of years). */
     readonly value: number | string;
@@ -63,6 +66,12 @@ export function ExploreHero({
         <p className="text-lede max-w-[var(--measure-prose)] text-foreground-muted">
           {lede}
         </p>
+        {notice === undefined ? null : (
+          <p className="flex max-w-[var(--measure-prose)] items-start gap-2 text-sm text-foreground-muted">
+            <Icon name="info" size={16} className="mt-[0.2em] shrink-0 text-accent" />
+            <span>{notice}</span>
+          </p>
+        )}
       </div>
       {stats.length === 0 ? null : (
         <div className="flex flex-wrap gap-x-10 gap-y-4">

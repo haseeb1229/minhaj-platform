@@ -7,11 +7,10 @@ import type {
 import {
   assetPath,
   bibliography,
-  booksPath,
   canClaimBook,
   editionAccess,
   labelFor,
-  readLibraryQuery,
+  readLibraryOffset,
   selectEdition,
   workPath,
 } from '../../apps/web/src/components/library/presentation.ts';
@@ -240,55 +239,26 @@ describe('addresses', () => {
   });
 });
 
-describe('a URL is not a form: the listing query is tolerant, never trusting', () => {
-  it('turns garbage into the unfiltered listing instead of an error', () => {
-    expect(
-      readLibraryQuery({
-        offset: '-4',
-        from: 'banana',
-        topic: 'not-a-uuid',
-        contributor: "'; DROP TABLE Work;--",
-        downloads: 'yes',
-      }),
-    ).toEqual({
-      offset: 0,
-      language: null,
-      topic: null,
-      contributor: null,
-      from: null,
-      to: null,
-      downloads: false,
-      sort: 'title',
-    });
+describe('a URL is not a form: a browse offset is tolerant, never trusting', () => {
+  it('turns garbage, a negative, a fraction or an overflow into the first page', () => {
+    for (const offset of [
+      '-4',
+      'banana',
+      '2.5',
+      '25001',
+      '1e3x',
+      "'; DROP TABLE Work;--",
+    ])
+      expect(readLibraryOffset({ offset }), offset).toBe(0);
+    expect(readLibraryOffset({})).toBe(0);
   });
 
-  it('reads a known order and treats anything else as the default A–Z (R2)', () => {
-    expect(readLibraryQuery({ sort: 'newest' }).sort).toBe('newest');
-    expect(readLibraryQuery({ sort: 'title' }).sort).toBe('title');
-    expect(readLibraryQuery({ sort: 'slug' }).sort).toBe('title');
-    expect(readLibraryQuery({ sort: ['newest', 'title'] }).sort).toBe('title');
+  it('reads a whole number within the read’s own bound', () => {
+    expect(readLibraryOffset({ offset: '25' })).toBe(25);
+    expect(readLibraryOffset({ offset: '25000' })).toBe(25_000);
   });
 
   it('discards a repeated parameter rather than choosing one', () => {
-    expect(readLibraryQuery({ topic: ['a', 'b'] }).topic).toBeNull();
-  });
-
-  it('normalises an inverted year range instead of throwing', () => {
-    expect(readLibraryQuery({ from: '2000', to: '1990' })).toMatchObject({
-      from: null,
-      to: null,
-    });
-  });
-
-  it('keeps the unfiltered listing at exactly one address', () => {
-    const base = readLibraryQuery({});
-    expect(booksPath('en', base)).toBe('/library/books');
-    expect(booksPath('en', base, { language: 'ur', offset: 25 })).toBe(
-      '/library/books?offset=25&language=ur',
-    );
-    // The default order is the bare address; only another order is written.
-    expect(booksPath('ur', base, { sort: 'newest' })).toBe(
-      '/ur/library/books?sort=newest',
-    );
+    expect(readLibraryOffset({ offset: ['25', '50'] })).toBe(0);
   });
 });

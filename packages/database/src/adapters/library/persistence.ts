@@ -870,38 +870,84 @@ function passageWhere(query: PassageQuery): Prisma.WorkQuranPassageWhereInput {
 
 /** Which of the query's filters a statement applies. */
 interface TopicWorksFilters {
+  /** The shelf and the Surah (Quran passage parts only). */
   readonly scope: boolean;
+  /** The whole Library's Topic filter (a hub's Topic is its membership, always applied). */
+  readonly topic: boolean;
   readonly language: boolean;
+  readonly years: boolean;
+  readonly readable: boolean;
+  readonly downloadable: boolean;
   readonly contributor: boolean;
   readonly featured: boolean;
 }
 
 const ALL_FILTERS: TopicWorksFilters = {
   scope: true,
+  topic: true,
   language: true,
+  years: true,
+  readable: true,
+  downloadable: true,
   contributor: true,
   featured: true,
 };
 const NO_FILTERS: TopicWorksFilters = {
   scope: false,
+  topic: false,
   language: false,
+  years: false,
+  readable: false,
+  downloadable: false,
   contributor: false,
   featured: false,
 };
 
+/** Every filter but the ones named: a facet leaves its own out of its own counts. */
+const allBut = (...keys: (keyof TopicWorksFilters)[]): TopicWorksFilters => ({
+  ...ALL_FILTERS,
+  ...Object.fromEntries(keys.map((key) => [key, false])),
+});
+
 /** "Explains a Quran passage", as SQL over `[dbo].[Work] w`. */
 const CARRIES_WORK_PASSAGE = Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[WorkQuranPassage] m WHERE m.[workId] = w.[id])`;
 
+/** "Readable online" and "downloadable", as SQL over one `[dbo].[Edition] e`. */
+const EDITION_READABLE = Prisma.sql`e.[reading] = N'allowed'`;
+const EDITION_DOWNLOADABLE = Prisma.sql`e.[download] = N'allowed' AND e.[downloadAssetId] IS NOT NULL`;
+
 /**
- * MEMBERSHIP, as SQL over `[dbo].[Work] w`: on the Topic — and, only with the
- * Quran passage parts, carrying a passage. With no Topic and no passage parts
- * nothing is a member: the set is empty, never every Work.
+ * The conditions ONE published Edition `e` must meet: published, and
+ * whichever of the content language, the year range and the two availability
+ * decisions `use` names — all on the same Edition, so they narrow which
+ * Edition makes a Work public and never widen it. Bound parameters only.
  */
-function topicWorksMember(q: TopicWorksQuery): Prisma.Sql {
+function editionConditions(q: TopicWorksQuery, use: TopicWorksFilters): Prisma.Sql[] {
+  const conditions = [Prisma.sql`e.[state] = N'published'`];
+  if (use.language && q.language !== null)
+    conditions.push(Prisma.sql`e.[languageCode] = ${q.language}`);
+  if (use.years && q.from !== null)
+    conditions.push(Prisma.sql`e.[publicationYear] >= ${q.from}`);
+  if (use.years && q.to !== null)
+    conditions.push(Prisma.sql`e.[publicationYear] <= ${q.to}`);
+  if (use.readable && q.readable) conditions.push(EDITION_READABLE);
+  if (use.downloadable && q.downloadable) conditions.push(EDITION_DOWNLOADABLE);
+  return conditions;
+}
+
+/**
+ * MEMBERSHIP, as SQL over `[dbo].[Work] w`, or null when every public Work is
+ * a member. On a hub: on the Topic — and, only with the Quran passage parts,
+ * carrying a passage; with no Topic and no passage parts nothing is a member:
+ * the set is empty, never every Work. In the whole Library (Library Part 1):
+ * every public Work, narrowed to the Topic only while `use.topic` applies it.
+ */
+function topicWorksMember(q: TopicWorksQuery, use: TopicWorksFilters): Prisma.Sql | null {
   const onTopic =
     q.topic === null
       ? null
       : Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[WorkTopic] o WHERE o.[workId] = w.[id] AND o.[topicId] = ${q.topic})`;
+  if (q.scope === 'library') return use.topic ? onTopic : null;
   if (q.quranPassages)
     return onTopic === null
       ? CARRIES_WORK_PASSAGE
@@ -911,20 +957,20 @@ function topicWorksMember(q: TopicWorksQuery): Prisma.Sql {
 
 /**
  * THE TOPIC WORKS SET, as SQL over `[dbo].[Work] w`: the ONE public predicate
- * (published, with a published Edition — the language narrows WHICH Edition
- * must be published, never widens it), membership (`topicWorksMember`), and
- * whichever of the query's filters `use` names — the shelf and Surah only with
- * the Quran passage parts. Every value is a bound parameter.
+ * (published, with a published Edition — the Edition filters narrow WHICH
+ * Edition must be published, never widen it), membership
+ * (`topicWorksMember`), and whichever of the query's filters `use` names —
+ * the shelf and Surah only with the Quran passage parts. Every value is a
+ * bound parameter.
  */
 function topicWorksWhere(q: TopicWorksQuery, use: TopicWorksFilters): Prisma.Sql {
-  const edition = [Prisma.sql`e.[workId] = w.[id]`, Prisma.sql`e.[state] = N'published'`];
-  if (use.language && q.language !== null)
-    edition.push(Prisma.sql`e.[languageCode] = ${q.language}`);
+  const edition = [Prisma.sql`e.[workId] = w.[id]`, ...editionConditions(q, use)];
   const carries = CARRIES_WORK_PASSAGE;
+  const member = topicWorksMember(q, use);
   const conditions = [
     Prisma.sql`w.[state] = N'published'`,
     Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[Edition] e WHERE ${Prisma.join(edition, ' AND ')})`,
-    topicWorksMember(q),
+    ...(member === null ? [] : [member]),
   ];
   if (use.scope && q.quranPassages) {
     if (q.surah !== null)
@@ -944,6 +990,8 @@ function topicWorksWhere(q: TopicWorksQuery, use: TopicWorksFilters): Prisma.Sql
 
 /** The same membership as an ORM filter: the hydrating read re-applies it. */
 function topicWorksMembership(q: TopicWorksQuery): Prisma.WorkWhereInput {
+  if (q.scope === 'library')
+    return q.topic === null ? {} : { topics: { some: { topicId: q.topic } } };
   if (!q.quranPassages)
     return q.topic === null
       ? { id: { in: [] } }
@@ -1064,6 +1112,8 @@ function topicWorksReader(): Pick<
               languageCode: true,
               publicationYear: true,
               reading: true,
+              download: true,
+              downloadAssetId: true,
               coverAssetId: true,
               coverWidth: true,
               coverHeight: true,
@@ -1109,6 +1159,9 @@ function topicWorksReader(): Pick<
             ].sort(),
             year: years.length === 0 ? null : Math.max(...years),
             readable: row.editions.some((entry) => entry.reading === 'allowed'),
+            downloadable: row.editions.some(
+              (entry) => entry.download === 'allowed' && entry.downloadAssetId !== null,
+            ),
             passages: row.quranPassages.map(passageOf),
           },
         ];
@@ -1146,62 +1199,137 @@ function topicWorksReader(): Pick<
     },
 
     /**
-     * FIVE GROUPED READS, each bounded: a facet's own filter is left out of its
+     * GROUPED READS, each bounded: a facet's own filter is left out of its
      * own counts, so every option says how many Works choosing it would show.
+     * The featured flag narrows only the featured shelf a page asks for, never
+     * a facet.
      */
     async topicWorkFacets(q) {
-      const scoped = (use: Partial<TopicWorksFilters>) =>
-        topicWorksWhere(q, { ...NO_FILTERS, ...use });
-      const [hub, hubLanguages, shelves, languages, contributors, surahs] =
+      const hubWhere = topicWorksWhere(q, NO_FILTERS);
+      const scoped = (use: TopicWorksFilters) =>
+        topicWorksWhere(q, { ...use, featured: false });
+      const languageEdition = Prisma.join(
+        editionConditions(q, allBut('language', 'featured')),
+        ' AND ',
+      );
+      // "Readable online" counted with every other filter applied — the
+      // download decision too, on the same Edition — and "downloadable" alike.
+      const readableEdition = Prisma.join(
+        [...editionConditions(q, allBut('readable', 'featured')), EDITION_READABLE],
+        ' AND ',
+      );
+      const downloadableEdition = Prisma.join(
+        [
+          ...editionConditions(q, allBut('downloadable', 'featured')),
+          EDITION_DOWNLOADABLE,
+        ],
+        ' AND ',
+      );
+      const [hub, hubEditions, hubAccess, shelves, access, languages, contributors] =
         await Promise.all([
-          counts(q, scoped({})),
-          db.$queryRaw<{ languages: number }[]>`
-            SELECT COUNT(DISTINCT e.[languageCode]) AS [languages]
+          counts(q, hubWhere),
+          db.$queryRaw<
+            { languages: number; earliest: number | null; latest: number | null }[]
+          >`
+            SELECT COUNT(DISTINCT e.[languageCode]) AS [languages],
+                   MIN(e.[publicationYear]) AS [earliest],
+                   MAX(e.[publicationYear]) AS [latest]
             FROM [dbo].[Edition] e
             WHERE e.[state] = N'published'
-              AND e.[workId] IN (SELECT w.[id] FROM [dbo].[Work] w WHERE ${scoped({})});`,
-          counts(q, scoped({ language: true, contributor: true })),
+              AND e.[workId] IN (SELECT w.[id] FROM [dbo].[Work] w WHERE ${hubWhere});`,
+          db.$queryRaw<{ readable: number | null; downloadable: number | null }[]>`
+            WITH s AS (
+              SELECT CASE WHEN EXISTS (SELECT 1 FROM [dbo].[Edition] e
+                                       WHERE e.[workId] = w.[id] AND e.[state] = N'published'
+                                         AND ${EDITION_READABLE}) THEN 1 ELSE 0 END AS [readable],
+                     CASE WHEN EXISTS (SELECT 1 FROM [dbo].[Edition] e
+                                       WHERE e.[workId] = w.[id] AND e.[state] = N'published'
+                                         AND ${EDITION_DOWNLOADABLE}) THEN 1 ELSE 0 END AS [downloadable]
+              FROM [dbo].[Work] w
+              WHERE ${hubWhere}
+            )
+            SELECT SUM(s.[readable]) AS [readable], SUM(s.[downloadable]) AS [downloadable]
+            FROM s;`,
+          counts(q, scoped(allBut('scope'))),
+          db.$queryRaw<{ readable: number | null; downloadable: number | null }[]>`
+            WITH s AS (
+              SELECT CASE WHEN EXISTS (SELECT 1 FROM [dbo].[Edition] e
+                                       WHERE e.[workId] = w.[id] AND ${readableEdition})
+                          THEN 1 ELSE 0 END AS [readable],
+                     CASE WHEN EXISTS (SELECT 1 FROM [dbo].[Edition] e
+                                       WHERE e.[workId] = w.[id] AND ${downloadableEdition})
+                          THEN 1 ELSE 0 END AS [downloadable]
+              FROM [dbo].[Work] w
+              WHERE ${scoped(allBut('readable', 'downloadable'))}
+            )
+            SELECT SUM(s.[readable]) AS [readable], SUM(s.[downloadable]) AS [downloadable]
+            FROM s;`,
+          // Each language counts the Works with an Edition in it that also
+          // meets the year range and the availability filters.
           db.$queryRaw<{ id: string; count: number }[]>`
             SELECT TOP (${FACET_PAGE + 1}) e.[languageCode] AS [id], COUNT(DISTINCT e.[workId]) AS [count]
             FROM [dbo].[Edition] e
-            WHERE e.[state] = N'published'
+            WHERE ${languageEdition}
               AND e.[workId] IN (SELECT w.[id] FROM [dbo].[Work] w
-                                 WHERE ${scoped({ scope: true, contributor: true })})
+                                 WHERE ${scoped(allBut('language'))})
             GROUP BY e.[languageCode]
             ORDER BY [count] DESC, [id] ASC;`,
           db.$queryRaw<{ id: string; count: number }[]>`
             SELECT TOP (${FACET_PAGE + 1}) c.[personId] AS [id], COUNT(DISTINCT c.[workId]) AS [count]
             FROM [dbo].[WorkContributor] c
             WHERE c.[workId] IN (SELECT w.[id] FROM [dbo].[Work] w
-                                 WHERE ${scoped({ scope: true, language: true })})
+                                 WHERE ${scoped(allBut('contributor'))})
             GROUP BY c.[personId]
             ORDER BY [count] DESC, [id] ASC;`,
-          // Without the Quran passage parts no Work explains a Surah.
-          q.quranPassages
-            ? db.$queryRaw<{ surah: number; owners: number }[]>`
+        ]);
+      const [topics, surahs] = await Promise.all([
+        // A hub has one Topic: only the whole Library is browsed by Topic.
+        q.scope === 'library'
+          ? db.$queryRaw<{ id: string; count: number }[]>`
+            SELECT TOP (${FACET_PAGE + 1}) o.[topicId] AS [id], COUNT(DISTINCT o.[workId]) AS [count]
+            FROM [dbo].[WorkTopic] o
+            WHERE o.[workId] IN (SELECT w.[id] FROM [dbo].[Work] w
+                                 WHERE ${scoped(allBut('topic'))})
+            GROUP BY o.[topicId]
+            ORDER BY [count] DESC, [id] ASC;`
+          : Promise.resolve([]),
+        // Without the Quran passage parts no Work explains a Surah.
+        q.quranPassages
+          ? db.$queryRaw<{ surah: number; owners: number }[]>`
             SELECT p.[surahNumber] AS [surah], COUNT(DISTINCT p.[workId]) AS [owners]
             FROM [dbo].[WorkQuranPassage] p
             WHERE p.[workId] IN (SELECT w.[id] FROM [dbo].[Work] w
-                                 WHERE ${scoped({ language: true, contributor: true })})
+                                 WHERE ${scoped(allBut('scope'))})
             GROUP BY p.[surahNumber]
             ORDER BY p.[surahNumber];`
-            : Promise.resolve([]),
-        ]);
+          : Promise.resolve([]),
+      ]);
       const facet = (rows: readonly { id: string; count: number }[]) =>
         facetPage(
           rows.map((row) => ({ id: row.id, count: Number(row.count) })),
           FACET_PAGE,
         );
+      const year = (value: number | null | undefined) =>
+        value === null || value === undefined ? null : Number(value);
       return {
         hub: {
           works: hub.works,
           explaining: hub.explaining,
           featured: hub.featured,
-          languages: Number(hubLanguages[0]?.languages ?? 0),
+          languages: Number(hubEditions[0]?.languages ?? 0),
+          readable: Number(hubAccess[0]?.readable ?? 0),
+          downloadable: Number(hubAccess[0]?.downloadable ?? 0),
+          earliest: year(hubEditions[0]?.earliest),
+          latest: year(hubEditions[0]?.latest),
         },
         shelves: { all: shelves.works, explaining: shelves.explaining },
+        access: {
+          readable: Number(access[0]?.readable ?? 0),
+          downloadable: Number(access[0]?.downloadable ?? 0),
+        },
         languages: facet(languages),
         contributors: facet(contributors),
+        topics: facet(topics),
         surahs: surahs.map((row) => ({
           surah: Number(row.surah),
           owners: Number(row.owners),

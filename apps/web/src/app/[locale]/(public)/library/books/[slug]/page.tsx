@@ -19,6 +19,7 @@ import { requireLocale } from '@/config/route-locale';
 import {
   ActionLink,
   Alert,
+  Badge,
   Cover,
   DetailRow,
   EmptyState,
@@ -33,6 +34,8 @@ import { Shelf } from '@/components/ui/shelf';
 import { WorkCard } from '@/components/library/cards';
 import { editionCoverPath } from '@/components/library/cover';
 import { RecordFrame, RecordSection } from '@/components/library/frame';
+import { libraryBooksHref } from '@/components/topic-hub/books-view';
+import { languageName } from '@/components/topic-hub/parts';
 import { absoluteUrl } from '@/config/origin';
 import {
   assetPath,
@@ -45,7 +48,7 @@ import {
   selectEdition,
   workPath,
 } from '@/components/library/presentation';
-import { Reader } from '@/components/library/reader';
+import { Reader, READER_SECTION_ID } from '@/components/library/reader';
 import { PersonalControls } from '@/components/personal-island/personal-controls';
 import {
   contentMetadata,
@@ -71,6 +74,15 @@ import {
  * an edition is not available to them." So a readable Edition renders its whole
  * text here, and an Edition that is not readable renders an explicit state rather
  * than an empty panel (§21, §38).
+ *
+ * THE BOOK'S LANDING (Library Part 1). The header carries the calls to action
+ * the selected Edition's real availability allows — read online, open its file,
+ * download it — or, when the selected Edition offers none, the way to one that
+ * does; every Edition states its language, year, publisher, pages, ISBN,
+ * translation facts (translated from, and translated into) and its own calls
+ * to action; the reader then takes the page's full width; and the related
+ * shelves follow — more on the book's first Topic and more by its first
+ * author, each the Library's own listing filtered by it.
  *
  * USABLE SIGNED OUT, AND STRUCTURALLY SO. Every read on this page goes through
  * `@/composition/library-read`, `@/composition/people-read` and
@@ -110,6 +122,9 @@ function single(
   return typeof raw === 'string' && raw !== '' ? raw : null;
 }
 
+/** How many related books one shelf holds at most. */
+const RELATED = 12;
+
 export async function generateMetadata({ params }: WorkParams): Promise<Metadata> {
   const locale = await requireLocale(params);
   const { slug } = await params;
@@ -139,6 +154,18 @@ export async function generateMetadata({ params }: WorkParams): Promise<Metadata
   });
 }
 
+/** The address of one Edition on its Work's page, at the reader where it has one. */
+function editionPath(
+  locale: Locale,
+  slug: string,
+  editionId: string,
+  anchor: string | null,
+): string {
+  return `${workPath(locale, slug)}?${EDITION_PARAM}=${encodeURIComponent(editionId)}${
+    anchor === null ? '' : `#${anchor}`
+  }`;
+}
+
 export default async function WorkPage({ params, searchParams }: WorkParams) {
   const locale = await requireLocale(params);
   const { slug } = await params;
@@ -156,10 +183,16 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
   const label = labelFor(record, locale);
   const interfaceDirection = directionOf(locale);
 
-  // RELATED: the Library's own A–Z listing under this Work's first topic — one
-  // bounded read, this Work left out. No topic, no related shelf.
+  // RELATED: the Library's own A–Z listing under this Work's first Topic, and
+  // under its first author (else its first credited person) — one bounded read
+  // each, this Work left out. No Topic or no credit, no such shelf.
   const relatedTopic = record.topicIds[0] ?? null;
-  const [languages, references, related] = await Promise.all([
+  const relatedPerson =
+    (
+      record.contributors.find((contributor) => contributor.role === 'author') ??
+      record.contributors[0]
+    )?.personId ?? null;
+  const [languages, references, byTopic, byPerson] = await Promise.all([
     libraryContentLanguages(),
     libraryReferenceNames(
       {
@@ -180,6 +213,13 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
           sort: 'title',
           titleLocale: locale,
         }),
+    relatedPerson === null
+      ? Promise.resolve(null)
+      : libraryReadRuntime().works({
+          contributor: relatedPerson,
+          sort: 'title',
+          titleLocale: locale,
+        }),
   ]);
 
   const selected = selectEdition(
@@ -188,6 +228,14 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
     record.primaryLocale,
     single(query, EDITION_PARAM),
   );
+  const selectedAccess = selected === null ? null : editionAccess(selected);
+  const contentVersion = selected?.contentVersion ?? null;
+  const readerShown =
+    selected !== null &&
+    selectedAccess !== null &&
+    selectedAccess.reflowable &&
+    selected.document !== null &&
+    contentVersion !== null;
 
   // The Work's authors, by name, for the opening metadata row — the full
   // credit list, with roles and links, is in the aside.
@@ -201,6 +249,9 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
   const editionLanguages = [
     ...new Set(record.editions.map((edition) => edition.languageCode)),
   ];
+  // A content language named in the INTERFACE language, for a sentence in it
+  // ("Read the Arabic edition"); the badges and facts keep Taxonomy's own name.
+  const languageNameOf = (code: string) => languageName(code, locale);
 
   const topics = record.topicIds.flatMap((topicId) => {
     const topic = references.topics.get(topicId);
@@ -217,6 +268,76 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
     shownCover === null
       ? null
       : editionCoverPath(shownCover.editionId, shownCover.assetId);
+
+  // THE CALLS TO ACTION THE SELECTED EDITION'S REAL AVAILABILITY ALLOWS — and
+  // when it allows no reading, the way to the first Edition that does. Never a
+  // call to an action the stored decision refuses.
+  const otherReadable =
+    selectedAccess === null || !selectedAccess.unavailable
+      ? null
+      : (record.editions.find((edition) => !editionAccess(edition).unavailable) ?? null);
+  const actions = [
+    readerShown ? (
+      <ActionLink key="read" href={`#${READER_SECTION_ID}`}>
+        {t('readOnline')}
+      </ActionLink>
+    ) : null,
+    selected !== null &&
+    selectedAccess !== null &&
+    selectedAccess.readableFile !== null ? (
+      <ActionLink
+        key="file"
+        href={assetPath(selected.id, 'read', selectedAccess.readableFile)}
+      >
+        {t('openFile')}
+      </ActionLink>
+    ) : null,
+    otherReadable === null ? null : (
+      <ActionLink
+        key="other"
+        href={editionPath(
+          locale,
+          record.slug,
+          otherReadable.id,
+          editionAccess(otherReadable).reflowable
+            ? READER_SECTION_ID
+            : 'work-availability',
+        )}
+      >
+        {t('readEditionIn', { language: languageNameOf(otherReadable.languageCode) })}
+      </ActionLink>
+    ),
+    selected !== null &&
+    selectedAccess !== null &&
+    selectedAccess.downloadable !== null ? (
+      <ActionLink
+        key="download"
+        tone="secondary"
+        href={assetPath(selected.id, 'download', selectedAccess.downloadable)}
+      >
+        {t('downloadFile')}
+      </ActionLink>
+    ) : null,
+    record.editions.length > 1 ? (
+      <ActionLink key="editions" tone="secondary" href="#work-editions">
+        {t('allEditions', { count: record.editions.length })}
+      </ActionLink>
+    ) : null,
+  ].filter((action) => action !== null);
+
+  const positionTemplate = t('sectionPosition', {
+    current: '{current}',
+    total: '{total}',
+  });
+  const selectedLanguage =
+    selected === null ? undefined : languages.get(selected.languageCode);
+
+  const relatedTopicName =
+    relatedTopic === null ? null : (references.topics.get(relatedTopic)?.name ?? null);
+  const relatedPersonName =
+    relatedPerson === null ? null : (references.people.get(relatedPerson)?.name ?? null);
+  const others = (page: { readonly items: readonly WorkRecord[] } | null) =>
+    (page?.items ?? []).filter((work) => work.id !== record.id).slice(0, RELATED);
 
   return (
     <RecordFrame
@@ -257,6 +378,7 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
           ]}
         />
       }
+      {...(actions.length === 0 ? {} : { actions: <>{actions}</> })}
       /*
        * THE DISTINCTION DOMAIN_MODEL.md §10.1 EXISTS TO PROTECT, said on the
        * page rather than only in a document. The title above is this
@@ -294,15 +416,102 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
               <TopicChips
                 label={t('topics')}
                 topics={topics.map((topic) => ({
-                  href: localizedPath(
-                    locale,
-                    `/library/books?topic=${encodeURIComponent(topic.id)}`,
-                  ),
+                  href: libraryBooksHref(locale, { library: { topic: topic.id } }),
                   text: topic.name,
                 }))}
               />
             </RecordSection>
           )}
+        </>
+      }
+      after={
+        <>
+          {readerShown &&
+          selected !== null &&
+          selected.document !== null &&
+          contentVersion !== null ? (
+            <Reader
+              anchorFor={(key) => readerPosition(selected.id, contentVersion, key)}
+              languageCode={selected.languageCode}
+              direction={selectedLanguage?.direction ?? 'ltr'}
+              interfaceLocale={locale}
+              interfaceDirection={interfaceDirection}
+              document={selected.document}
+              labels={{
+                readerHeading: t('readerHeading'),
+                readerIntro: t('readerIntro', {
+                  edition: selected.label,
+                  language: languageNameOf(selected.languageCode),
+                  count: selected.document.sections.length,
+                }),
+                contents: t('contents'),
+                // The placeholders are handed back AS placeholders: the position is
+                // substituted per section on the server and per scroll step in the
+                // controls island, so the catalogue is formatted once here with its
+                // own tokens rather than once per section.
+                sectionPosition: positionTemplate,
+                nextSection: t('nextSection'),
+                previousSection: t('previousSection'),
+                backToContents: t('backToContents'),
+                heading: t('readerControls'),
+                fontSize: t('fontSize'),
+                lineHeight: t('lineHeight'),
+                measure: t('measure'),
+                decrease: t('decrease'),
+                increase: t('increase'),
+                reset: t('reset'),
+                progressValue: positionTemplate,
+                positionBar: t('readerPosition'),
+              }}
+            />
+          ) : null}
+
+          <RelatedShelf
+            id="work-related-topic"
+            locale={locale}
+            works={others(byTopic)}
+            heading={
+              relatedTopicName === null
+                ? null
+                : t('related.heading', { topic: relatedTopicName })
+            }
+            all={
+              relatedTopic === null || relatedTopicName === null
+                ? null
+                : {
+                    href: libraryBooksHref(locale, { library: { topic: relatedTopic } }),
+                    text: t('related.all', { topic: relatedTopicName }),
+                  }
+            }
+            t={t}
+          />
+          <RelatedShelf
+            id="work-related-person"
+            locale={locale}
+            works={others(byPerson)}
+            heading={
+              relatedPersonName === null
+                ? null
+                : t('related.byHeading', { name: relatedPersonName })
+            }
+            all={
+              relatedPerson === null || relatedPersonName === null
+                ? null
+                : {
+                    href: libraryBooksHref(locale, { contributor: relatedPerson }),
+                    text: t('related.byAll', { name: relatedPersonName }),
+                  }
+            }
+            t={t}
+          />
+
+          <BookStructuredData
+            record={record}
+            edition={selected}
+            label={label}
+            people={references.people}
+            imagePath={coverSrc}
+          />
         </>
       }
     >
@@ -320,37 +529,19 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
       ) : (
         <EditionAccessPanel
           edition={selected}
-          languages={languages}
+          readerShown={readerShown}
+          otherReadable={otherReadable}
+          languageName={languageNameOf}
+          slug={record.slug}
           locale={locale}
-          interfaceDirection={interfaceDirection}
           t={t}
         />
       )}
 
-      <SalePoints record={record} t={t} />
-
       {/* Quran Part 8: the Quran passages this book explains, into the Tafsir hub. */}
       <QuranPassageLinks locale={locale} passages={record.quranPassages} />
 
-      <RelatedWorks
-        locale={locale}
-        works={(related?.items ?? [])
-          .filter((work) => work.id !== record.id)
-          .slice(0, 12)}
-        topic={
-          relatedTopic === null ? null : (references.topics.get(relatedTopic) ?? null)
-        }
-        topicId={relatedTopic}
-        t={t}
-      />
-
-      <BookStructuredData
-        record={record}
-        edition={selected}
-        label={label}
-        people={references.people}
-        imagePath={coverSrc}
-      />
+      <SalePoints record={record} t={t} />
     </RecordFrame>
   );
 }
@@ -425,7 +616,7 @@ function Contributors({
 }
 
 /**
- * Every published Edition, with the selector.
+ * Every published Edition, with the selector and its own calls to action.
  *
  * THE SELECTOR IS A LIST OF LINKS, which is what makes it keyboard-operable
  * without a line of JavaScript: Tab reaches each one, Enter follows it, and the
@@ -436,8 +627,15 @@ function Contributors({
  * different question from which language the page's chrome is in (§9).
  *
  * TRANSLATION IS SHOWN WHERE IT IS A FACT. A `BookTranslation` row names the
- * translators and, where it is known, the source Edition. Where the source is not
- * recorded, the page says it is not recorded rather than guessing at one (§13).
+ * translators and, where it is known, the source Edition — and the source names
+ * the Editions translated from it. Where the source is not recorded, the page
+ * says it is not recorded rather than guessing at one (§13).
+ *
+ * AVAILABILITY IS STATED PER EDITION, in words (Library Part 1): readable
+ * online, readable as a file, a download, or not available online — and each
+ * call to action is the one that Edition's stored decision allows, through
+ * Library's own asset routes (`assetPath`), which decide again on every
+ * request.
  */
 function Editions({
   record,
@@ -456,8 +654,17 @@ function Editions({
 }) {
   if (record.editions.length === 0) return null;
 
+  const showLink = (edition: EditionRecord, text: string, anchor: string | null) => (
+    <a
+      href={editionPath(locale, record.slug, edition.id, anchor)}
+      className="inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-semibold no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border"
+    >
+      {text}
+    </a>
+  );
+
   return (
-    <section aria-labelledby="work-editions" className="flex flex-col gap-4">
+    <section aria-labelledby="work-editions" className="flex scroll-mt-4 flex-col gap-4">
       <h2
         id="work-editions"
         className="border-b border-border pb-3 text-heading font-semibold"
@@ -469,12 +676,16 @@ function Editions({
         {record.editions.map((edition) => {
           const language = languages.get(edition.languageCode);
           const isSelected = selected !== null && selected.id === edition.id;
+          const access = editionAccess(edition);
           const source =
             edition.translation?.sourceEditionId === null || edition.translation === null
               ? null
               : (record.editions.find(
                   (candidate) => candidate.id === edition.translation?.sourceEditionId,
                 ) ?? null);
+          const translations = record.editions.filter(
+            (candidate) => candidate.translation?.sourceEditionId === edition.id,
+          );
 
           return (
             <li
@@ -485,19 +696,39 @@ function Editions({
                   : 'border-border bg-surface-raised'
               }`}
             >
-              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                <h3 className="text-subheading font-semibold wrap-anywhere" dir="auto">
-                  {edition.label}
-                </h3>
+              <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                <div className="flex min-w-0 flex-col gap-2">
+                  <h3 className="text-subheading font-semibold wrap-anywhere" dir="auto">
+                    {edition.label}
+                  </h3>
+                  <span className="flex flex-wrap gap-1.5">
+                    <Badge kind="language" lang={edition.languageCode}>
+                      {language?.name ?? edition.languageCode}
+                    </Badge>
+                    {access.reflowable ? (
+                      <Badge kind="status" tone="positive">
+                        {t('editionState.readable')}
+                      </Badge>
+                    ) : access.readableFile !== null ? (
+                      <Badge kind="status" tone="positive">
+                        {t('editionState.file')}
+                      </Badge>
+                    ) : (
+                      <Badge kind="status" tone="neutral">
+                        {t('editionState.unavailable')}
+                      </Badge>
+                    )}
+                    {access.downloadable === null ? null : (
+                      <Badge kind="status" tone="positive">
+                        {t('editionState.download')}
+                      </Badge>
+                    )}
+                  </span>
+                </div>
                 {isSelected ? (
                   <StatusBadge tone="positive">{t('selectedEdition')}</StatusBadge>
                 ) : (
-                  <a
-                    href={`${workPath(locale, record.slug)}?${EDITION_PARAM}=${encodeURIComponent(edition.id)}`}
-                    className="inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-semibold no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border"
-                  >
-                    {t('showEdition')}
-                  </a>
+                  showLink(edition, t('showEdition'), null)
                 )}
               </div>
 
@@ -517,7 +748,15 @@ function Editions({
                 {edition.translation === null ? null : (
                   <>
                     <DetailRow term={t('translationOf')}>
-                      {source === null ? t('sourceUnknown') : source.label}
+                      {source === null ? (
+                        t('sourceUnknown')
+                      ) : (
+                        <TextLink
+                          href={editionPath(locale, record.slug, source.id, null)}
+                        >
+                          <span dir="auto">{source.label}</span>
+                        </TextLink>
+                      )}
                     </DetailRow>
                     <DetailRow term={t('translators')}>
                       {edition.translation.translatorIds
@@ -527,12 +766,87 @@ function Editions({
                     </DetailRow>
                   </>
                 )}
+
+                {translations.length === 0 ? null : (
+                  <DetailRow term={t('translatedInto')}>
+                    <span className="flex flex-wrap gap-x-3 gap-y-1">
+                      {translations.map((translation) => (
+                        <TextLink
+                          key={translation.id}
+                          href={editionPath(locale, record.slug, translation.id, null)}
+                        >
+                          <span dir="auto">{translation.label}</span>
+                        </TextLink>
+                      ))}
+                    </span>
+                  </DetailRow>
+                )}
               </dl>
+
+              {/*
+               * THIS EDITION'S OWN CALLS TO ACTION, each the one its stored
+               * decision allows. The visible words are short; the Edition they
+               * act on is named for assistive technology, so a list of them
+               * read out of context still says which is which (WCAG 2.4.4).
+               */}
+              {access.unavailable && access.downloadable === null ? null : (
+                <p className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+                  {access.reflowable ? (
+                    <EditionAction
+                      href={editionPath(
+                        locale,
+                        record.slug,
+                        edition.id,
+                        READER_SECTION_ID,
+                      )}
+                      text={t('readOnline')}
+                      edition={edition.label}
+                    />
+                  ) : null}
+                  {access.readableFile === null ? null : (
+                    <EditionAction
+                      href={assetPath(edition.id, 'read', access.readableFile)}
+                      text={t('openPdf')}
+                      edition={edition.label}
+                    />
+                  )}
+                  {access.downloadable === null ? null : (
+                    <EditionAction
+                      href={assetPath(edition.id, 'download', access.downloadable)}
+                      text={t('downloadPdf')}
+                      edition={edition.label}
+                    />
+                  )}
+                </p>
+              )}
             </li>
           );
         })}
       </ul>
     </section>
+  );
+}
+
+/** One Edition's call to action: short visible words, the Edition named for assistive technology. */
+function EditionAction({
+  href,
+  text,
+  edition,
+}: {
+  readonly href: string;
+  readonly text: string;
+  readonly edition: string;
+}) {
+  return (
+    <a
+      href={href}
+      className="inline-flex min-h-11 items-center gap-1 font-semibold text-action underline-offset-4 hover:underline"
+    >
+      {text}
+      <span className="sr-only" dir="auto">
+        {` — ${edition}`}
+      </span>
+    </a>
   );
 }
 
@@ -542,7 +856,7 @@ function Editions({
  *
  * FOUR STATES, AND NONE IS DERIVED FROM ANOTHER (§26, §27, §38):
  *
- *   - REFLOWABLE TEXT exists → the reader renders the edition.
+ *   - REFLOWABLE TEXT exists → the reader renders the edition, below.
  *   - A READABLE FILE and no text → a described link to the file, and a plain
  *     statement that this edition is a file rather than reflowing text. A PDF is
  *     never offered as a substitute for text that exists (§23).
@@ -550,8 +864,9 @@ function Editions({
  *     downloadable and a file existing does not imply either: the availability
  *     decision is Library-owned data, never inferred from file presence, an ISBN,
  *     a publisher or a source URL (§26).
- *   - NOTHING READABLE → an explicit, usable state. Not a 500, not a blank area,
- *     not a broken link (§38).
+ *   - NOTHING READABLE → an explicit, usable state — and, where another Edition
+ *     of the Work can be read, the way to it. Not a 500, not a blank area, not
+ *     a broken link (§38).
  *
  * WHAT THE UNAVAILABLE STATE DOES NOT SAY. It does not state a legal reason,
  * because the data carries none and inventing one would be inventing law. It does
@@ -560,173 +875,151 @@ function Editions({
  */
 function EditionAccessPanel({
   edition,
-  languages,
+  readerShown,
+  otherReadable,
+  languageName,
+  slug,
   locale,
-  interfaceDirection,
   t,
 }: {
   readonly edition: EditionRecord;
-  readonly languages: ReadonlyMap<string, ContentLanguage>;
+  readonly readerShown: boolean;
+  readonly otherReadable: EditionRecord | null;
+  readonly languageName: (code: string) => string;
+  readonly slug: string;
   readonly locale: Locale;
-  readonly interfaceDirection: 'ltr' | 'rtl';
   readonly t: LibraryTranslator;
 }) {
   const access = editionAccess(edition);
-  const language = languages.get(edition.languageCode);
-  const contentVersion = edition.contentVersion;
-  const positionTemplate = t('sectionPosition', {
-    current: '{current}',
-    total: '{total}',
-  });
 
   return (
-    <section aria-labelledby="work-availability" className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4">
-        <h2
-          id="work-availability"
-          className="border-b border-border pb-3 text-heading font-semibold"
-        >
-          {t('availability')}
-        </h2>
-
-        {/*
-         * TWO SEPARATE DECISIONS, shown side by side and never derived from one
-         * another: whether this edition can be read here, and whether a copy
-         * may be taken.
-         */}
-        <dl className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-2 rounded-panel border border-border bg-surface-raised p-4">
-            <dt className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
-              {t('availabilityReading')}
-            </dt>
-            <dd className="flex flex-col gap-3 text-sm">
-              {access.unavailable ? (
-                <Alert tone="info">{t('editionUnavailable')}</Alert>
-              ) : access.readableFile === null ? (
-                <p>{t('readBelow')}</p>
-              ) : (
-                <>
-                  <p className="text-foreground-muted">{t('readableFileNotice')}</p>
-                  <div>
-                    <ActionLink
-                      href={assetPath(edition.id, 'read', access.readableFile)}
-                      tone="secondary"
-                    >
-                      {t('openFile')}
-                    </ActionLink>
-                  </div>
-                </>
-              )}
-            </dd>
-          </div>
-
-          <div className="flex flex-col gap-2 rounded-panel border border-border bg-surface-raised p-4">
-            <dt className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
-              {t('availabilityDownload')}
-            </dt>
-            <dd className="flex flex-col gap-3 text-sm">
-              {access.downloadable === null ? (
-                <p className="text-foreground-muted">{t('downloadUnavailable')}</p>
-              ) : (
-                <div>
-                  <ActionLink
-                    href={assetPath(edition.id, 'download', access.downloadable)}
-                  >
-                    {t('downloadFile')}
-                  </ActionLink>
-                  {/*
-                   * The format is stated in the link's own text rather than left to
-                   * an icon: "no colour-only semantics" applies to shape too, and a
-                   * described link is what §23 asks for.
-                   */}
-                </div>
-              )}
-            </dd>
-          </div>
-        </dl>
-      </div>
+    <section
+      aria-labelledby="work-availability"
+      className="flex scroll-mt-4 flex-col gap-4"
+    >
+      <h2
+        id="work-availability"
+        className="border-b border-border pb-3 text-heading font-semibold"
+      >
+        {t('availability')}
+      </h2>
 
       {/*
-       * `contentVersion` is non-null whenever a document is, by a CHECK
-       * constraint and by the schema — but the reader's position identifier is
-       * built from it, so it is read as a condition rather than asserted. A
-       * position identifier built from an empty digest would be a stable name
-       * for nothing.
+       * TWO SEPARATE DECISIONS, shown side by side and never derived from one
+       * another: whether this edition can be read here, and whether a copy
+       * may be taken.
        */}
-      {access.reflowable && edition.document !== null && contentVersion !== null ? (
-        <Reader
-          anchorFor={(key) => readerPosition(edition.id, contentVersion, key)}
-          languageCode={edition.languageCode}
-          direction={language?.direction ?? 'ltr'}
-          interfaceLocale={locale}
-          interfaceDirection={interfaceDirection}
-          document={edition.document}
-          labels={{
-            readerHeading: t('readerHeading'),
-            contents: t('contents'),
-            // The placeholders are handed back AS placeholders: the position is
-            // substituted per section on the server and per scroll step in the
-            // controls island, so the catalogue is formatted once here with its
-            // own tokens rather than once per section.
-            sectionPosition: positionTemplate,
-            nextSection: t('nextSection'),
-            previousSection: t('previousSection'),
-            backToContents: t('backToContents'),
-            heading: t('readerControls'),
-            fontSize: t('fontSize'),
-            lineHeight: t('lineHeight'),
-            measure: t('measure'),
-            decrease: t('decrease'),
-            increase: t('increase'),
-            reset: t('reset'),
-            progressValue: positionTemplate,
-          }}
-        />
-      ) : null}
+      <dl className="grid gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-2 rounded-panel border border-border bg-surface-raised p-4">
+          <dt className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
+            {t('availabilityReading')}
+          </dt>
+          <dd className="flex flex-col gap-3 text-sm">
+            {access.unavailable ? (
+              <>
+                <Alert tone="info">{t('editionUnavailable')}</Alert>
+                {otherReadable === null ? null : (
+                  <p>
+                    <TextLink
+                      href={editionPath(
+                        locale,
+                        slug,
+                        otherReadable.id,
+                        editionAccess(otherReadable).reflowable
+                          ? READER_SECTION_ID
+                          : 'work-availability',
+                      )}
+                    >
+                      {t('readEditionIn', {
+                        language: languageName(otherReadable.languageCode),
+                      })}
+                    </TextLink>
+                  </p>
+                )}
+              </>
+            ) : access.readableFile === null ? (
+              <>
+                <p>{t('readBelow')}</p>
+                {readerShown ? (
+                  <div>
+                    <ActionLink href={`#${READER_SECTION_ID}`} tone="secondary">
+                      {t('startReading')}
+                    </ActionLink>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <p className="text-foreground-muted">{t('readableFileNotice')}</p>
+                <div>
+                  <ActionLink
+                    href={assetPath(edition.id, 'read', access.readableFile)}
+                    tone="secondary"
+                  >
+                    {t('openFile')}
+                  </ActionLink>
+                </div>
+              </>
+            )}
+          </dd>
+        </div>
+
+        <div className="flex flex-col gap-2 rounded-panel border border-border bg-surface-raised p-4">
+          <dt className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
+            {t('availabilityDownload')}
+          </dt>
+          <dd className="flex flex-col gap-3 text-sm">
+            {access.downloadable === null ? (
+              <p className="text-foreground-muted">{t('downloadUnavailable')}</p>
+            ) : (
+              <div>
+                {/*
+                 * The format is stated in the link's own text rather than left to
+                 * an icon: "no colour-only semantics" applies to shape too, and a
+                 * described link is what §23 asks for.
+                 */}
+                <ActionLink href={assetPath(edition.id, 'download', access.downloadable)}>
+                  {t('downloadFile')}
+                </ActionLink>
+              </div>
+            )}
+          </dd>
+        </div>
+      </dl>
     </section>
   );
 }
 
 /**
- * MORE ON THIS WORK'S TOPIC (R2): the Library's own A–Z listing under the
- * Work's first topic, as a shelf of covers, with the way to the whole topic.
- * Absent when the Work has no topic or the topic holds nothing else.
+ * A SHELF OF RELATED BOOKS (R2; by contributor too since Library Part 1): the
+ * Library's own A–Z listing under the Work's first Topic or its first author,
+ * as covers, with the way to the whole filtered listing. Absent when there is
+ * no such Topic or person, or nothing else under it.
  */
-function RelatedWorks({
+function RelatedShelf({
+  id,
   locale,
   works,
-  topic,
-  topicId,
+  heading,
+  all,
   t,
 }: {
+  readonly id: string;
   readonly locale: Locale;
   readonly works: readonly WorkRecord[];
-  readonly topic: { readonly name: string } | null;
-  readonly topicId: string | null;
+  readonly heading: string | null;
+  readonly all: { readonly href: string; readonly text: string } | null;
   readonly t: LibraryTranslator;
 }) {
-  if (works.length === 0 || topic === null || topicId === null) return null;
-  const heading = t('related.heading', { topic: topic.name });
+  if (works.length === 0 || heading === null || all === null) return null;
   return (
-    <section aria-labelledby="work-related">
+    <section aria-labelledby={id}>
       <Shelf
         label={heading}
         size="cover"
         previousLabel={t('landing.showPrevious')}
         nextLabel={t('landing.showNext')}
-        header={
-          <SectionHeader
-            id="work-related"
-            heading={heading}
-            action={{
-              href: localizedPath(
-                locale,
-                `/library/books?topic=${encodeURIComponent(topicId)}`,
-              ),
-              text: t('related.all', { topic: topic.name }),
-            }}
-          />
-        }
+        header={<SectionHeader id={id} heading={heading} action={all} />}
       >
         {works.map((work) => (
           <WorkCard key={work.id} locale={locale} work={work} />

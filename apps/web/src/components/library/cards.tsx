@@ -1,5 +1,5 @@
 import type { Locale } from '@minhaj/contracts';
-import type { ScholarlyListing, WorkRecord } from '@minhaj/contracts/library';
+import type { ScholarlyListing, TopicWork } from '@minhaj/contracts/library';
 import type { getTranslations } from 'next-intl/server';
 
 import { contentLanguageBadge } from '@/components/content-language';
@@ -30,7 +30,8 @@ export function WorkCard({
   sizes = '11rem',
 }: {
   readonly locale: Locale;
-  readonly work: WorkRecord;
+  /** A Work as any public Library read gives one: `WorkRecord` or `TopicWork`. */
+  readonly work: Pick<TopicWork, 'slug' | 'labels' | 'primaryLocale' | 'cover'>;
   readonly headingLevel?: 'h2' | 'h3';
   readonly sizes?: string;
 }) {

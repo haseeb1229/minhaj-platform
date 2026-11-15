@@ -201,6 +201,9 @@ describe('the render and routing tree stays statically renderable', () => {
     // presentation decisions, on the same anonymous public path.
     'apps/web/src/components/library/scholarly.tsx',
     'apps/web/src/components/library/scholarly-presentation.ts',
+    // Library Part 1: the whole Library's books listing, the shared Books
+    // listing composed with `scope: 'library'`; the route is dynamic for data.
+    'apps/web/src/components/library/books.tsx',
     // Phase 17. A pure highlighter the dynamic search route renders with; the
     // module itself reads no request state.
     'apps/web/src/components/search/highlight.ts',

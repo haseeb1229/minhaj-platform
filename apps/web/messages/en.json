@@ -1858,13 +1858,9 @@
     "facetWorks": "Books: {count}",
     "next": "Next",
     "previous": "Previous",
-    "filters": "Filter books",
     "filterAny": "Any",
     "filterApply": "Apply filters",
     "filterClear": "Clear all filters",
-    "filterClearOne": "Remove this filter",
-    "filterContributor": "Contributor",
-    "filterDownloads": "Only works with a download",
     "filterFrom": "Published from (year)",
     "filterLanguage": "Content language",
     "filterTo": "Published to (year)",
@@ -2153,7 +2149,39 @@
       "latestIssues": "Latest magazine issues",
       "showPrevious": "Show previous",
       "showNext": "Show next",
-      "directory": "More ways into the Library"
+      "directory": "More ways into the Library",
+      "featured": "Featured books",
+      "stats": {
+        "heading": "The Library at a glance",
+        "books": "{count, plural, one {book} other {books}}",
+        "languages": "{count, plural, one {content language} other {content languages}}",
+        "readable": "{count, plural, one {book to read online} other {books to read online}}",
+        "downloadable": "{count, plural, one {book to download} other {books to download}}",
+        "years": "years of publication"
+      },
+      "find": {
+        "heading": "Find a book",
+        "intro": "Start from a topic, a language, an author or the kind of work you are looking for.",
+        "topics": "By topic",
+        "languages": "By language",
+        "authors": "By author",
+        "kinds": "By kind",
+        "allTopics": "Every topic",
+        "allLanguages": "Every content language",
+        "allAuthors": "Every author and contributor"
+      },
+      "subjects": {
+        "heading": "Books by subject",
+        "intro": "The Quran and Hadith each gather their own books, with filters of their own.",
+        "quran": {
+          "title": "Books on the Quran",
+          "body": "Every book on the Quran, and every book that explains a passage of it, by Surah."
+        },
+        "hadith": {
+          "title": "Books on Hadith",
+          "body": "Every book the Library files under Hadith."
+        }
+      }
     },
     "kindBook": "Book",
     "coverAlt": "Cover of {title}",
@@ -2161,14 +2189,36 @@
     "availabilityReading": "Reading",
     "availabilityDownload": "Download",
     "readBelow": "This edition can be read in full on this page.",
-    "sort": {
-      "label": "Order",
-      "title": "Title, A to Z",
-      "newest": "Newest publication first"
-    },
     "related": {
       "heading": "More on {topic}",
-      "all": "All books on {topic}"
+      "all": "All books on {topic}",
+      "byHeading": "More by {name}",
+      "byAll": "All books by {name}"
+    },
+    "readOnline": "Read online",
+    "readEditionIn": "Read the {language} edition",
+    "allEditions": "All {count} editions",
+    "openPdf": "Open PDF",
+    "downloadPdf": "Download PDF",
+    "editionState": {
+      "readable": "Readable online",
+      "file": "Readable as a PDF",
+      "download": "Download available",
+      "unavailable": "Not available online"
+    },
+    "translatedInto": "Translated into",
+    "readerIntro": "{edition} · {language} · {count, plural, one {# section} other {# sections}}",
+    "readerPosition": "Reading position",
+    "startReading": "Start reading",
+    "booksPage": {
+      "stat": "{count, plural, one {book in the Library} other {books in the Library}}",
+      "listIntro": "Every published book, in every content language. Narrow the list by topic, language, author, year or what you can read or download.",
+      "emptyTitle": "No books yet",
+      "noResults": "No book matches every filter you chose. Remove one to see more.",
+      "about": "Every book here is a published work with at least one published edition. Reading online and downloads are offered only where the rights recorded for an edition allow them.",
+      "quranBooks": "Books on the Quran",
+      "hadithBooks": "Books on Hadith",
+      "libraryHome": "The Library’s front page"
     }
   },
   "search": {
@@ -4499,7 +4549,23 @@
       "noResultsTitle": "No books match these filters",
       "pastEnd": "There are fewer books than page {page} would hold.",
       "pages": "Pages of books",
-      "libraryLink": "All books in the Library"
+      "libraryLink": "All books in the Library",
+      "downloadable": "Download",
+      "libraryHome": "Go to the Library",
+      "unknownTopic": "A topic",
+      "yearSpan": "{from}–{to}",
+      "yearFrom": "From {year}",
+      "yearTo": "Until {year}",
+      "filterTopic": "Topic",
+      "anyTopic": "Any topic",
+      "filterFrom": "Published from",
+      "filterTo": "Published until",
+      "filterAvailability": "Availability",
+      "filterReadable": "Readable online",
+      "filterDownloadable": "Downloadable",
+      "statReadable": "{count, plural, one {book to read online} other {books to read online}}",
+      "statDownloadable": "{count, plural, one {book to download} other {books to download}}",
+      "statYears": "years of publication"
     },
     "videos": {
       "eyebrow": "Explore · Videos",

@@ -20,9 +20,11 @@ import {
   ResponsiveImage,
   SectionHeader,
   Select,
+  TextInput,
 } from '@/components/ui';
 import { directionOf } from '@/config/locale';
 import {
+  NO_LIBRARY_FILTERS,
   booksFiltered,
   booksHref,
   booksPageCount,
@@ -30,6 +32,7 @@ import {
   booksReadQuery,
   type BooksQuery,
   type BooksScope,
+  type LibraryBooksFilters,
 } from './books-view';
 import type { HubDomain, HubLink } from './domain';
 import { ActiveFilters, ExploreFilters, ExploreHero, languageName } from './parts';
@@ -51,6 +54,14 @@ import { ActiveFilters, ExploreFilters, ExploreHero, languageName } from './part
  * shared. Nothing is stated that Library did not answer: a filter with no
  * choice is not offered, a figure of zero is not shown, and a book with no
  * cover is a titled tile, never a grey box.
+ *
+ * LIBRARY PART 1 — `/library/books` IS THIS LISTING OVER THE WHOLE LIBRARY
+ * (`LIBRARY_BOOKS`, read with `scope: 'library'`), not a second
+ * implementation: the same cards, figures, featured shelf, filters with
+ * counts, chips, orders and numbered pages, plus the Library's own filters —
+ * a Topic (with counts), a publication-year range, and readable online and
+ * downloadable (each with the count checking it would show). A subject's hub
+ * shows none of those and renders exactly as before.
  */
 
 type HubTranslator = Awaited<ReturnType<typeof getTranslations<'topicHub'>>>;
@@ -67,6 +78,10 @@ export interface BooksCopy {
   readonly empty: string;
   readonly noResults: string;
   readonly about: string;
+  /** The hero's eyebrow, where the listing is not a subject's "Explore · Books". */
+  readonly eyebrow?: string;
+  /** A statement under the hero's lede (the Library's metadata notice). */
+  readonly notice?: string;
 }
 
 /**
@@ -201,11 +216,18 @@ function BookCard({
       >
         <div className={wide ? 'w-24 shrink-0 sm:w-32' : 'w-full'}>{cover}</div>
         <div className="flex min-w-0 flex-col gap-1.5">
-          {work.readable ? (
-            <span className="flex">
-              <Badge kind="status" tone="neutral">
-                {t('books.readable')}
-              </Badge>
+          {work.readable || work.downloadable ? (
+            <span className="flex flex-wrap gap-1.5">
+              {work.readable ? (
+                <Badge kind="status" tone="neutral">
+                  {t('books.readable')}
+                </Badge>
+              ) : null}
+              {work.downloadable ? (
+                <Badge kind="status" tone="neutral">
+                  {t('books.downloadable')}
+                </Badge>
+              ) : null}
             </span>
           ) : null}
           <h3
@@ -294,6 +316,7 @@ export async function BooksHub({
   copy,
   actions,
   passages,
+  onward,
 }: {
   readonly domain: HubDomain;
   readonly scope: BooksScope;
@@ -303,10 +326,17 @@ export async function BooksHub({
   readonly actions: readonly HubLink[];
   /** The Quran passage parts, or null where the subject has none. */
   readonly passages: BooksPassages | null;
+  /**
+   * Where the closing note leads instead of the whole Library — the whole
+   * Library's own listing, which leads on to the subjects' hubs.
+   */
+  readonly onward?: readonly HubLink[];
 }) {
   const { locale } = domain;
   const t = await getTranslations({ locale, namespace: 'topicHub' });
   const library = libraryReadRuntime();
+  const own: LibraryBooksFilters | null =
+    scope.library === true ? (query.library ?? NO_LIBRARY_FILTERS) : null;
   const read = booksReadQuery(scope, query, domain.topicId, locale);
   const opening = !booksFiltered(query) && query.page === 1;
   const [page, facets, featured] = await Promise.all([
@@ -327,7 +357,10 @@ export async function BooksHub({
         ...facets.contributors.items.map((facet) => facet.id),
         ...(query.contributor === null ? [] : [query.contributor]),
       ],
-      topicIds: [],
+      topicIds: [
+        ...facets.topics.items.map((facet) => facet.id),
+        ...(own === null || own.topic === null ? [] : [own.topic]),
+      ],
     },
     locale,
   );
@@ -340,9 +373,20 @@ export async function BooksHub({
   const filtered = booksFiltered(query);
   const href = (change: Partial<BooksQuery> = {}) =>
     booksHref(scope, locale, query, change);
-  const base = href({ shelf: 'all', surah: null, language: null, contributor: null });
+  /** A change to the whole Library's own filters alone. */
+  const ownHref = (change: Partial<LibraryBooksFilters>) =>
+    href({ library: { ...(own ?? NO_LIBRARY_FILTERS), ...change } });
+  const base = href({
+    shelf: 'all',
+    surah: null,
+    language: null,
+    contributor: null,
+    ...(own === null ? {} : { library: NO_LIBRARY_FILTERS }),
+  });
   const pages = booksPageCount(page.total);
   const range = booksRange(query.page, page.items.length);
+  const number = (value: number) =>
+    new Intl.NumberFormat(locale, { useGrouping: false }).format(value);
 
   const languageOptions = facets.languages.items;
   const contributorOptions = facets.contributors.items.flatMap((facet) => {
@@ -351,10 +395,21 @@ export async function BooksHub({
       ? []
       : [{ id: facet.id, name: person.name, works: facet.works }];
   });
+  const topicOptions = facets.topics.items.flatMap((facet) => {
+    const topic = names.topics.get(facet.id);
+    return topic === undefined
+      ? []
+      : [{ id: facet.id, name: topic.name, works: facet.works }];
+  });
   const surahOptions =
     passages === null || query.shelf === 'general' ? [] : facets.surahs;
   const showLanguage = languageOptions.length > 1 || query.language !== null;
   const showContributor = contributorOptions.length > 0 || query.contributor !== null;
+  const showTopic = own !== null && (topicOptions.length > 0 || own.topic !== null);
+  const showYears =
+    own !== null && (hub.earliest !== null || own.from !== null || own.to !== null);
+  const showReadable = own !== null && (hub.readable > 0 || own.readable);
+  const showDownloadable = own !== null && (hub.downloadable > 0 || own.downloadable);
   const showQuranOrder =
     passages !== null && hub.explaining > 0 && query.shelf !== 'general';
   const showShelves = passages !== null && facets.shelves.explaining > 0 && general > 0;
@@ -362,6 +417,23 @@ export async function BooksHub({
     query.contributor === null
       ? null
       : (names.people.get(query.contributor)?.name ?? null);
+  const topicName =
+    own === null || own.topic === null
+      ? null
+      : (names.topics.get(own.topic)?.name ?? null);
+
+  /** A year span in words: both ends, or the one end that is set. */
+  const yearSpan = (from: number | null, to: number | null): string | null =>
+    from !== null && to !== null
+      ? from === to
+        ? number(from)
+        : t('books.yearSpan', { from: number(from), to: number(to) })
+      : from !== null
+        ? t('books.yearFrom', { year: number(from) })
+        : to !== null
+          ? t('books.yearTo', { year: number(to) })
+          : null;
+  const chosenYears = own === null ? null : yearSpan(own.from, own.to);
 
   const active = [
     ...(passages === null || query.surah === null
@@ -371,6 +443,15 @@ export async function BooksHub({
             key: 'surah',
             text: passages.surahOption(query.surah),
             removeHref: href({ surah: null }),
+          },
+        ]),
+    ...(own === null || own.topic === null
+      ? []
+      : [
+          {
+            key: 'topic',
+            text: topicName ?? t('books.unknownTopic'),
+            removeHref: ownHref({ topic: null }),
           },
         ]),
     ...(query.language === null
@@ -391,6 +472,33 @@ export async function BooksHub({
             removeHref: href({ contributor: null }),
           },
         ]),
+    ...(chosenYears === null
+      ? []
+      : [
+          {
+            key: 'years',
+            text: chosenYears,
+            removeHref: ownHref({ from: null, to: null }),
+          },
+        ]),
+    ...(own === null || !own.readable
+      ? []
+      : [
+          {
+            key: 'readable',
+            text: t('books.filterReadable'),
+            removeHref: ownHref({ readable: false }),
+          },
+        ]),
+    ...(own === null || !own.downloadable
+      ? []
+      : [
+          {
+            key: 'downloadable',
+            text: t('books.filterDownloadable'),
+            removeHref: ownHref({ downloadable: false }),
+          },
+        ]),
   ].map((filter) => ({
     ...filter,
     removeLabel: t('common.remove', { name: filter.text }),
@@ -408,39 +516,77 @@ export async function BooksHub({
     />
   );
 
+  const span = yearSpan(hub.earliest, hub.latest);
+  const stats = [
+    ...(hub.works === 0
+      ? []
+      : [{ value: hub.works, label: copy.stat(hub.works), href: `#${listId}` }]),
+    ...(passages === null || hub.explaining === 0
+      ? []
+      : [
+          {
+            value: hub.explaining,
+            label: passages.statExplaining(hub.explaining),
+            href: href({
+              shelf: 'explains',
+              surah: null,
+              language: null,
+              contributor: null,
+            }),
+          },
+        ]),
+    ...(hub.languages < 2
+      ? []
+      : [
+          {
+            value: hub.languages,
+            label: t('common.statLanguages', { count: hub.languages }),
+          },
+        ]),
+    // The whole Library's own figures, each linked to the view it counts.
+    ...(own === null || hub.readable === 0
+      ? []
+      : [
+          {
+            value: hub.readable,
+            label: t('books.statReadable', { count: hub.readable }),
+            href: booksHref(scope, locale, {
+              ...query,
+              language: null,
+              contributor: null,
+              page: 1,
+              library: { ...NO_LIBRARY_FILTERS, readable: true },
+            }),
+          },
+        ]),
+    ...(own === null || hub.downloadable === 0
+      ? []
+      : [
+          {
+            value: hub.downloadable,
+            label: t('books.statDownloadable', { count: hub.downloadable }),
+            href: booksHref(scope, locale, {
+              ...query,
+              language: null,
+              contributor: null,
+              page: 1,
+              library: { ...NO_LIBRARY_FILTERS, downloadable: true },
+            }),
+          },
+        ]),
+    ...(own === null || span === null || hub.earliest === hub.latest
+      ? []
+      : [{ value: span, label: t('books.statYears') }]),
+  ];
+
   return domain.frame(
     <>
       <ExploreHero
-        eyebrow={t('books.eyebrow')}
+        eyebrow={copy.eyebrow ?? t('books.eyebrow')}
         title={title}
         lede={copy.lede}
-        stats={[
-          ...(hub.works === 0
-            ? []
-            : [{ value: hub.works, label: copy.stat(hub.works), href: `#${listId}` }]),
-          ...(passages === null || hub.explaining === 0
-            ? []
-            : [
-                {
-                  value: hub.explaining,
-                  label: passages.statExplaining(hub.explaining),
-                  href: href({
-                    shelf: 'explains',
-                    surah: null,
-                    language: null,
-                    contributor: null,
-                  }),
-                },
-              ]),
-          ...(hub.languages < 2
-            ? []
-            : [
-                {
-                  value: hub.languages,
-                  label: t('common.statLanguages', { count: hub.languages }),
-                },
-              ]),
-        ]}
+        {...(copy.notice === undefined ? {} : { notice: copy.notice })}
+        stats={stats}
         actions={actions}
       />
 
@@ -448,10 +594,14 @@ export async function BooksHub({
         <EmptyState
           icon="book"
           title={copy.emptyTitle}
-          action={{
-            href: localizedPath(locale, '/library/books'),
-            text: t('books.libraryLink'),
-          }}
+          action={
+            own === null
+              ? {
+                  href: localizedPath(locale, '/library/books'),
+                  text: t('books.libraryLink'),
+                }
+              : { href: localizedPath(locale, '/library'), text: t('books.libraryHome') }
+          }
         >
           {copy.empty}
         </EmptyState>
@@ -531,6 +681,20 @@ export async function BooksHub({
                   )}
                 </Field>
               )}
+              {showTopic && own !== null ? (
+                <Field id="books-topic" label={t('books.filterTopic')}>
+                  {(props) => (
+                    <Select {...props} name="topic" defaultValue={own.topic ?? ''}>
+                      <option value="">{t('books.anyTopic')}</option>
+                      {topicOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {t('common.option', { name: option.name, count: option.works })}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+              ) : null}
               {showLanguage ? (
                 <Field id="books-language" label={t('common.filterLanguage')}>
                   {(props) => (
@@ -572,6 +736,69 @@ export async function BooksHub({
                     </Select>
                   )}
                 </Field>
+              ) : null}
+              {showYears && own !== null ? (
+                <>
+                  <Field id="books-from" label={t('books.filterFrom')}>
+                    {(props) => (
+                      <TextInput
+                        {...props}
+                        name="from"
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={9999}
+                        {...(hub.earliest === null
+                          ? {}
+                          : { placeholder: String(hub.earliest) })}
+                        defaultValue={own.from === null ? '' : String(own.from)}
+                      />
+                    )}
+                  </Field>
+                  <Field id="books-to" label={t('books.filterTo')}>
+                    {(props) => (
+                      <TextInput
+                        {...props}
+                        name="to"
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={9999}
+                        {...(hub.latest === null
+                          ? {}
+                          : { placeholder: String(hub.latest) })}
+                        defaultValue={own.to === null ? '' : String(own.to)}
+                      />
+                    )}
+                  </Field>
+                </>
+              ) : null}
+              {(showReadable || showDownloadable) && own !== null ? (
+                <fieldset className="flex min-w-0 flex-col gap-1">
+                  <legend className="pb-1 text-sm font-medium">
+                    {t('books.filterAvailability')}
+                  </legend>
+                  {showReadable ? (
+                    <Check
+                      name="readable"
+                      checked={own.readable}
+                      label={t('common.option', {
+                        name: t('books.filterReadable'),
+                        count: facets.access.readable,
+                      })}
+                    />
+                  ) : null}
+                  {showDownloadable ? (
+                    <Check
+                      name="downloads"
+                      checked={own.downloadable}
+                      label={t('common.option', {
+                        name: t('books.filterDownloadable'),
+                        count: facets.access.downloadable,
+                      })}
+                    />
+                  ) : null}
+                </fieldset>
               ) : null}
               <Field id="books-sort" label={t('common.filterSort')}>
                 {(props) => (
@@ -647,23 +874,66 @@ export async function BooksHub({
         <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
           {copy.about}
         </p>
-        <p className="text-sm">
-          <a
-            href={
-              domain.topicId === null
-                ? localizedPath(locale, '/library/books')
-                : localizedPath(
-                    locale,
-                    `/library/books?topic=${encodeURIComponent(domain.topicId)}`,
-                  )
-            }
-            className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-action underline-offset-4 hover:underline"
-          >
-            {t('books.libraryLink')}
-            <Icon name="arrow-end" size={16} />
-          </a>
-        </p>
+        {onward === undefined ? (
+          <p className="text-sm">
+            <a
+              href={
+                domain.topicId === null
+                  ? localizedPath(locale, '/library/books')
+                  : localizedPath(
+                      locale,
+                      `/library/books?topic=${encodeURIComponent(domain.topicId)}`,
+                    )
+              }
+              className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-action underline-offset-4 hover:underline"
+            >
+              {t('books.libraryLink')}
+              <Icon name="arrow-end" size={16} />
+            </a>
+          </p>
+        ) : (
+          <ul className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+            {onward.map((link) => (
+              <li key={link.href}>
+                <a
+                  href={link.href}
+                  className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-action underline-offset-4 hover:underline"
+                >
+                  {link.text}
+                  <Icon name="arrow-end" size={16} />
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </>,
+  );
+}
+
+/**
+ * One availability choice: a native checkbox submitted as `name=1`, its label
+ * the whole 44-pixel target.
+ */
+function Check({
+  name,
+  checked,
+  label,
+}: {
+  readonly name: string;
+  readonly checked: boolean;
+  readonly label: string;
+}) {
+  return (
+    <label className="flex min-h-11 items-center gap-3 text-sm">
+      <input
+        type="checkbox"
+        name={name}
+        value="1"
+        defaultChecked={checked}
+        className="size-5 shrink-0 accent-action"
+      />
+      <span className="min-w-0 wrap-anywhere">{label}</span>
+    </label>
   );
 }

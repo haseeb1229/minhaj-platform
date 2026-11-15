@@ -104,7 +104,9 @@ export function RecordFrame({
   meta,
   notice,
   cover,
+  actions,
   aside,
+  after,
   children,
 }: {
   readonly breadcrumbLabel: string;
@@ -122,7 +124,14 @@ export function RecordFrame({
   readonly notice?: string;
   /** The record's cover, shown whole beside the title. */
   readonly cover?: ReactNode;
+  /** The record's calls to action, under its description (Library Part 1). */
+  readonly actions?: ReactNode;
   readonly aside?: ReactNode;
+  /**
+   * What takes the page's whole width after the record and its aside — a
+   * Work's reader and its related shelves (Library Part 1).
+   */
+  readonly after?: ReactNode;
   readonly children: ReactNode;
 }) {
   const words = (
@@ -148,6 +157,9 @@ export function RecordFrame({
           {paragraph}
         </p>
       ))}
+      {actions === undefined ? null : (
+        <div className="flex flex-wrap items-center gap-3 pt-1">{actions}</div>
+      )}
       {notice === undefined ? null : <Notice text={notice} />}
     </div>
   );
@@ -191,6 +203,7 @@ export function RecordFrame({
             </div>
           </div>
         )}
+        {after}
       </Body>
     </>
   );

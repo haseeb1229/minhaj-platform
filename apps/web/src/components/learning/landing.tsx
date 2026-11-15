@@ -10,7 +10,7 @@ import { learningReadRuntime } from '@/composition/learning-read';
 import { libraryReadRuntime } from '@/composition/library-read';
 import { referenceNames } from '@/composition/public-references';
 import { CoverImage, CoverTile, editionCoverPath } from '@/components/library/cover';
-import { labelFor, readLibraryQuery, workPath } from '@/components/library/presentation';
+import { labelFor, workPath } from '@/components/library/presentation';
 import { VideoPreview } from '@/components/media/watch';
 import { CourseShelf } from '@/components/topic-hub/courses';
 import { directionOf } from '@/config/locale';
@@ -428,7 +428,7 @@ const LANDING_BOOKS = 6;
  * Library has published nothing.
  */
 async function LearnFromTheLibrary({ locale }: { readonly locale: Locale }) {
-  const works = await libraryReadRuntime().works(readLibraryQuery({}));
+  const works = await libraryReadRuntime().works({ sort: 'title' });
   const books = [
     ...works.items.filter((work) => work.cover !== null),
     ...works.items.filter((work) => work.cover === null),

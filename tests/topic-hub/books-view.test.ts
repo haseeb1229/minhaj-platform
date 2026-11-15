@@ -5,12 +5,16 @@ import { TOPIC_WORKS_PAGE, topicWorksQuerySchema } from '@minhaj/contracts/libra
 import {
   BOOKS_MAX_PAGE,
   DEFAULT_BOOKS_QUERY,
+  DEFAULT_LIBRARY_BOOKS_QUERY,
+  LIBRARY_BOOKS as LIBRARY,
+  NO_LIBRARY_FILTERS,
   booksCanonicalRedirect,
   booksFiltered,
   booksHref,
   booksPageCount,
   booksRange,
   booksReadQuery,
+  libraryBooksHref,
   readBooksQuery,
 } from '../../apps/web/src/components/topic-hub/books-view.ts';
 import { QURAN_BOOKS as QURAN } from '../../apps/web/src/components/quran/hubs.ts';
@@ -319,5 +323,194 @@ describe('a Books hub without the Quran passage parts (Hadith)', () => {
       limit: TOPIC_WORKS_PAGE,
     });
     expect(topicWorksQuerySchema.safeParse(read).success).toBe(true);
+  });
+});
+
+/**
+ * Library Part 1 — the WHOLE LIBRARY as the same listing (`/library/books`):
+ * its own filters (a Topic, a year range, readable online, downloadable), the
+ * parameters its address has always taken, its former `?offset=` and the
+ * `scope: 'library'` read. A subject's hub never reads any of them.
+ */
+describe('the whole Library (Library Part 1)', () => {
+  it('reads every parameter its address has always taken, and the new ones', () => {
+    expect(
+      readBooksQuery(LIBRARY, {
+        topic: TOPIC.toUpperCase(),
+        language: 'ur',
+        contributor: PERSON,
+        from: '1990',
+        to: '2005',
+        readable: '1',
+        downloads: '1',
+        sort: 'newest',
+        page: '2',
+      }),
+    ).toEqual({
+      shelf: 'all',
+      surah: null,
+      language: 'ur',
+      contributor: PERSON,
+      sort: 'newest',
+      page: 2,
+      library: { topic: TOPIC, from: 1990, to: 2005, readable: true, downloadable: true },
+    });
+    expect(readBooksQuery(LIBRARY, {})).toEqual(DEFAULT_LIBRARY_BOOKS_QUERY);
+  });
+
+  it('drops what is malformed or repeated, and reads an inverted year range in order', () => {
+    expect(
+      readBooksQuery(LIBRARY, {
+        topic: 'not-a-uuid',
+        from: 'banana',
+        to: '10000',
+        readable: 'yes',
+        downloads: ['1', '1'],
+        contributor: "'; DROP TABLE Work;--",
+        shelf: 'explains',
+        surah: '2',
+        sort: 'quran',
+      }),
+    ).toEqual(DEFAULT_LIBRARY_BOOKS_QUERY);
+    expect(readBooksQuery(LIBRARY, { from: '2000', to: '1990' }).library).toEqual({
+      ...NO_LIBRARY_FILTERS,
+      from: 1990,
+      to: 2000,
+    });
+  });
+
+  it('writes one address per view, in one fixed order', () => {
+    expect(booksHref(LIBRARY, 'en', DEFAULT_LIBRARY_BOOKS_QUERY)).toBe('/library/books');
+    const view = readBooksQuery(LIBRARY, {
+      downloads: '1',
+      to: '2005',
+      topic: TOPIC,
+      readable: '1',
+      from: '1990',
+      contributor: PERSON,
+      language: 'ar',
+      sort: 'newest',
+      page: '3',
+    });
+    const own = view.library ?? NO_LIBRARY_FILTERS;
+    expect(booksHref(LIBRARY, 'ur', view)).toBe(
+      `/ur/library/books?topic=${TOPIC}&language=ar&contributor=${PERSON}&from=1990&to=2005&readable=1&downloads=1&sort=newest&page=3`,
+    );
+    // Changing a filter of its own returns to the first page.
+    expect(booksHref(LIBRARY, 'en', view, { library: { ...own, readable: false } })).toBe(
+      `/library/books?topic=${TOPIC}&language=ar&contributor=${PERSON}&from=1990&to=2005&downloads=1&sort=newest`,
+    );
+    const params = Object.fromEntries(
+      new URL(booksHref(LIBRARY, 'en', view), 'https://x.invalid').searchParams,
+    );
+    expect(readBooksQuery(LIBRARY, params)).toEqual(view);
+  });
+
+  it('builds every Library link into the listing through the same rules', () => {
+    expect(libraryBooksHref('en')).toBe('/library/books');
+    expect(libraryBooksHref('en', { library: { topic: TOPIC } })).toBe(
+      `/library/books?topic=${TOPIC}`,
+    );
+    expect(libraryBooksHref('ar', { language: 'ur' })).toBe(
+      '/ar/library/books?language=ur',
+    );
+    expect(libraryBooksHref('en', { contributor: PERSON })).toBe(
+      `/library/books?contributor=${PERSON}`,
+    );
+    expect(libraryBooksHref('ur', { sort: 'newest' })).toBe(
+      '/ur/library/books?sort=newest',
+    );
+    expect(libraryBooksHref('en', { library: { readable: true } })).toBe(
+      '/library/books?readable=1',
+    );
+    expect(libraryBooksHref('en', { library: { downloadable: true } })).toBe(
+      '/library/books?downloads=1',
+    );
+  });
+
+  it('keeps the addresses already in the world, and sends every other spelling to one', () => {
+    for (const query of [
+      {},
+      { topic: TOPIC },
+      { language: 'ur' },
+      { contributor: PERSON },
+      { sort: 'newest' },
+      { downloads: '1' },
+      { from: '1990', to: '2000' },
+      { utm_source: 'x' },
+    ])
+      expect(
+        booksCanonicalRedirect(LIBRARY, 'en', query),
+        JSON.stringify(query),
+      ).toBeNull();
+
+    // What the former filter form submitted: every control, empty ones included.
+    expect(
+      booksCanonicalRedirect(LIBRARY, 'en', {
+        sort: 'title',
+        language: '',
+        topic: TOPIC,
+        from: '',
+        to: '',
+      }),
+    ).toBe(`/library/books?topic=${TOPIC}`);
+    // A former offset (25 a page until Library Part 1) is the page holding its first Work.
+    expect(booksCanonicalRedirect(LIBRARY, 'en', { offset: '25', language: 'ur' })).toBe(
+      '/library/books?language=ur&page=2',
+    );
+    expect(booksCanonicalRedirect(LIBRARY, 'en', { offset: '0' })).toBe('/library/books');
+    expect(booksCanonicalRedirect(LIBRARY, 'en', { offset: '75' })).toBe(
+      '/library/books?page=4',
+    );
+    expect(booksCanonicalRedirect(LIBRARY, 'en', { offset: 'x' })).toBe('/library/books');
+    // An inverted range, a malformed value and a part the Library does not have.
+    expect(booksCanonicalRedirect(LIBRARY, 'en', { from: '2000', to: '1990' })).toBe(
+      '/library/books?from=1990&to=2000',
+    );
+    expect(
+      booksCanonicalRedirect(LIBRARY, 'en', { topic: 'nope', shelf: 'explains' }),
+    ).toBe('/library/books');
+    expect(
+      booksCanonicalRedirect(LIBRARY, 'en', { language: 'https://evil.example/' }),
+    ).toBe('/library/books');
+  });
+
+  it('asks Library for the whole Library — always a query its schema accepts', () => {
+    const view = readBooksQuery(LIBRARY, {
+      topic: TOPIC,
+      from: '1990',
+      readable: '1',
+      sort: 'newest',
+      page: String(BOOKS_MAX_PAGE),
+    });
+    const read = booksReadQuery(LIBRARY, view, null, 'ur');
+    expect(read).toEqual({
+      scope: 'library',
+      topic: TOPIC,
+      quranPassages: false,
+      shelf: 'all',
+      surah: null,
+      language: null,
+      contributor: null,
+      from: 1990,
+      to: null,
+      readable: true,
+      downloadable: false,
+      sort: 'newest',
+      titleLocale: 'ur',
+      offset: (BOOKS_MAX_PAGE - 1) * TOPIC_WORKS_PAGE,
+      limit: TOPIC_WORKS_PAGE,
+    });
+    expect(topicWorksQuerySchema.safeParse(read).success).toBe(true);
+  });
+
+  it('never lets a subject’s hub read the Library’s own filters', () => {
+    const view = readBooksQuery(HADITH, { topic: TOPIC, readable: '1', from: '1990' });
+    expect(view).toEqual(DEFAULT_BOOKS_QUERY);
+    expect('library' in view).toBe(false);
+    expect(
+      booksCanonicalRedirect(HADITH, 'en', { topic: TOPIC, offset: '25' }),
+    ).toBeNull();
+    expect(booksFiltered(view)).toBe(false);
   });
 });

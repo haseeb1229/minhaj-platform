@@ -9,7 +9,7 @@ import { CardGrid, EmptyState, LinkCard } from '@/components/ui';
 import { ListingFrame, Pager } from '@/components/library/frame';
 import {
   labelFor,
-  readLibraryQuery,
+  readLibraryOffset,
   workPath,
   WORK_PAGE,
 } from '@/components/library/presentation';
@@ -63,7 +63,7 @@ export default async function DownloadsPage({ params, searchParams }: DownloadsP
   const t = await getTranslations({ locale, namespace: 'library' });
   const shell = await getTranslations({ locale, namespace: 'shell' });
 
-  const { offset } = readLibraryQuery(query);
+  const offset = readLibraryOffset(query);
   const page = await libraryReadRuntime().works({ offset, downloads: true });
 
   return (

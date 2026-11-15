@@ -1858,13 +1858,9 @@
     "facetWorks": "کتب: {count}",
     "next": "اگلا",
     "previous": "پچھلا",
-    "filters": "کتب کو چھانٹیں",
     "filterAny": "کوئی بھی",
     "filterApply": "چھانٹی لاگو کریں",
     "filterClear": "تمام چھانٹیاں ختم کریں",
-    "filterClearOne": "یہ چھانٹی ہٹائیں",
-    "filterContributor": "معاون",
-    "filterDownloads": "صرف ڈاؤن لوڈ والی تصانیف",
     "filterFrom": "اشاعت از (سال)",
     "filterLanguage": "مواد کی زبان",
     "filterTo": "اشاعت تا (سال)",
@@ -2153,7 +2149,39 @@
       "latestIssues": "رسائل کے تازہ شمارے",
       "showPrevious": "پچھلے دکھائیں",
       "showNext": "اگلے دکھائیں",
-      "directory": "کتب خانے تک مزید راستے"
+      "directory": "کتب خانے تک مزید راستے",
+      "featured": "منتخب کتب",
+      "stats": {
+        "heading": "لائبریری ایک نظر میں",
+        "books": "{count, plural, one {کتاب} other {کتب}}",
+        "languages": "{count, plural, one {مواد کی زبان} other {مواد کی زبانیں}}",
+        "readable": "{count, plural, one {کتاب آن لائن پڑھنے کے لیے} other {کتب آن لائن پڑھنے کے لیے}}",
+        "downloadable": "{count, plural, one {کتاب ڈاؤن لوڈ کے لیے} other {کتب ڈاؤن لوڈ کے لیے}}",
+        "years": "سالِ اشاعت"
+      },
+      "find": {
+        "heading": "کتاب تلاش کریں",
+        "intro": "کسی موضوع، زبان، مصنف یا مطلوبہ تصنیف کی قسم سے آغاز کریں۔",
+        "topics": "موضوع کے لحاظ سے",
+        "languages": "زبان کے لحاظ سے",
+        "authors": "مصنف کے لحاظ سے",
+        "kinds": "قسم کے لحاظ سے",
+        "allTopics": "تمام موضوعات",
+        "allLanguages": "مواد کی تمام زبانیں",
+        "allAuthors": "تمام مصنفین اور معاونین"
+      },
+      "subjects": {
+        "heading": "موضوع وار کتب",
+        "intro": "قرآن اور حدیث دونوں اپنی کتب الگ جمع کرتے ہیں، اپنے فلٹرز کے ساتھ۔",
+        "quran": {
+          "title": "قرآن پر کتب",
+          "body": "قرآن پر ہر کتاب، اور ہر وہ کتاب جو اس کے کسی حصے کی وضاحت کرتی ہے، سورت وار۔"
+        },
+        "hadith": {
+          "title": "حدیث پر کتب",
+          "body": "ہر وہ کتاب جو لائبریری میں حدیث کے تحت درج ہے۔"
+        }
+      }
     },
     "kindBook": "کتاب",
     "coverAlt": "{title} کا سرورق",
@@ -2161,14 +2189,36 @@
     "availabilityReading": "مطالعہ",
     "availabilityDownload": "ڈاؤن لوڈ",
     "readBelow": "یہ ایڈیشن اسی صفحے پر مکمل پڑھا جا سکتا ہے۔",
-    "sort": {
-      "label": "ترتیب",
-      "title": "عنوان کے لحاظ سے (الف تا ی)",
-      "newest": "نئی اشاعت پہلے"
-    },
     "related": {
       "heading": "{topic} پر مزید کتب",
-      "all": "{topic} پر تمام کتب"
+      "all": "{topic} پر تمام کتب",
+      "byHeading": "{name} کی مزید کتب",
+      "byAll": "{name} کی تمام کتب"
+    },
+    "readOnline": "آن لائن پڑھیں",
+    "readEditionIn": "{language} ایڈیشن پڑھیں",
+    "allEditions": "تمام {count} ایڈیشن",
+    "openPdf": "PDF کھولیں",
+    "downloadPdf": "PDF ڈاؤن لوڈ کریں",
+    "editionState": {
+      "readable": "آن لائن پڑھا جا سکتا ہے",
+      "file": "PDF کی صورت میں دستیاب",
+      "download": "ڈاؤن لوڈ دستیاب ہے",
+      "unavailable": "آن لائن دستیاب نہیں"
+    },
+    "translatedInto": "جن زبانوں میں ترجمہ ہوا",
+    "readerIntro": "{edition} · {language} · {count, plural, one {# حصہ} other {# حصے}}",
+    "readerPosition": "پڑھنے کا مقام",
+    "startReading": "پڑھنا شروع کریں",
+    "booksPage": {
+      "stat": "{count, plural, one {کتاب لائبریری میں} other {کتب لائبریری میں}}",
+      "listIntro": "ہر شائع شدہ کتاب، ہر مواد کی زبان میں۔ موضوع، زبان، مصنف، سال یا پڑھنے اور ڈاؤن لوڈ کی سہولت کے لحاظ سے فہرست محدود کریں۔",
+      "emptyTitle": "ابھی کوئی کتاب نہیں",
+      "noResults": "کوئی کتاب آپ کے منتخب کردہ تمام فلٹرز پر پوری نہیں اترتی۔ مزید دیکھنے کے لیے کوئی فلٹر ہٹائیں۔",
+      "about": "یہاں ہر کتاب ایک شائع شدہ تصنیف ہے جس کا کم از کم ایک ایڈیشن شائع ہو چکا ہے۔ آن لائن مطالعہ اور ڈاؤن لوڈ صرف وہیں پیش کیے جاتے ہیں جہاں کسی ایڈیشن کے لیے درج حقوق اس کی اجازت دیں۔",
+      "quranBooks": "قرآن پر کتب",
+      "hadithBooks": "حدیث پر کتب",
+      "libraryHome": "لائبریری کا صفحۂ اول"
     }
   },
   "search": {
@@ -4499,7 +4549,23 @@
       "noResultsTitle": "ان فلٹرز سے کوئی کتاب نہیں ملی",
       "pastEnd": "کتب اتنی نہیں کہ صفحہ {page} تک پہنچیں۔",
       "pages": "کتب کے صفحات",
-      "libraryLink": "کتب خانے کی تمام کتب"
+      "libraryLink": "کتب خانے کی تمام کتب",
+      "downloadable": "ڈاؤن لوڈ",
+      "libraryHome": "لائبریری پر جائیں",
+      "unknownTopic": "ایک موضوع",
+      "yearSpan": "{from}–{to}",
+      "yearFrom": "{year} سے",
+      "yearTo": "{year} تک",
+      "filterTopic": "موضوع",
+      "anyTopic": "کوئی بھی موضوع",
+      "filterFrom": "اشاعت از",
+      "filterTo": "اشاعت تا",
+      "filterAvailability": "دستیابی",
+      "filterReadable": "آن لائن پڑھی جا سکے",
+      "filterDownloadable": "ڈاؤن لوڈ کی جا سکے",
+      "statReadable": "{count, plural, one {کتاب آن لائن پڑھنے کے لیے} other {کتب آن لائن پڑھنے کے لیے}}",
+      "statDownloadable": "{count, plural, one {کتاب ڈاؤن لوڈ کے لیے} other {کتب ڈاؤن لوڈ کے لیے}}",
+      "statYears": "سالِ اشاعت"
     },
     "videos": {
       "eyebrow": "دریافت · ویڈیوز",

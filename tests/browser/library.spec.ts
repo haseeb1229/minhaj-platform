@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { AxeBuilder } from '@axe-core/playwright';
 import type { BrowserContext, Page } from '@playwright/test';
 
 import type { SqlSession } from '../../packages/database/src/lifecycle/sql-connection.ts';
@@ -39,6 +40,7 @@ test.describe.configure({ mode: 'serial' });
 
 let sql: SqlSession;
 const contexts: BrowserContext[] = [];
+const people = newPhase5Fixture();
 
 const run = randomUUID().replaceAll('-', '').slice(0, 12);
 const currentSlug = `browser-library-${run}`;
@@ -47,6 +49,9 @@ const draftSlug = `browser-library-draft-${run}`;
 
 const workId = randomUUID();
 const draftWorkId = randomUUID();
+const datedWorkId = randomUUID();
+const datedSlug = `browser-library-dated-${run}`;
+const datedTitle = `Zz synthetic dated library proof ${run}`;
 const arabicId = randomUUID();
 const urduId = randomUUID();
 const draftEditionId = randomUUID();
@@ -87,7 +92,6 @@ test.beforeAll(async () => {
   test.setTimeout(120_000);
   sql = await privilegedSession();
 
-  const people = newPhase5Fixture();
   await writePhase5Fixture(sql, people);
 
   const [topic] = await sql.query<{ id: string }>(
@@ -144,6 +148,22 @@ test.beforeAll(async () => {
     VALUES (N'${draftWorkId}', N'${draftSlug}', N'en', N'draft', 0, 1, SYSUTCDATETIME());
     INSERT INTO [dbo].[WorkLabel] ([workId],[locale],[title],[description])
       VALUES (N'${draftWorkId}', N'en', N'Synthetic hidden draft work', N'');
+
+    -- Library Part 1: a DATED Work by this run's author, so the year-range
+    -- filter has a year to offer and to narrow by, whatever else is published.
+    -- Titled "Zz" and dated a century back, it sorts last by title and after
+    -- every recent Work by date, so it crowds no first page.
+    INSERT INTO [dbo].[Work] ([id],[slug],[primaryLocale],[state],[isFeatured],[version],[updatedAt])
+      VALUES (N'${datedWorkId}', N'${datedSlug}', N'en', N'published', 0, 1, SYSUTCDATETIME());
+    INSERT INTO [dbo].[WorkLabel] ([workId],[locale],[title],[description])
+      VALUES (N'${datedWorkId}', N'en', N'${datedTitle}', N'');
+    INSERT INTO [dbo].[WorkContributor] ([workId],[personId],[role],[position])
+      VALUES (N'${datedWorkId}', N'${people.linkedPersonId}', N'author', 0);
+    INSERT INTO [dbo].[Edition]
+      ([id],[workId],[languageCode],[label],[state],[publicationYear],[reading],[download],[version],[updatedAt])
+    VALUES
+      (N'${randomUUID()}', N'${datedWorkId}', N'en', N'Synthetic dated edition', N'published', 1901,
+       N'unavailable', N'denied', 1, SYSUTCDATETIME());
   `);
 });
 
@@ -176,7 +196,9 @@ test.describe('an anonymous visitor reads the Library', () => {
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     const arabicTitle = page.getByRole('link', { name: 'عمل تجريبي للمتصفح' });
     await expect(arabicTitle).toBeVisible();
-    await expect(page.locator('h2', { has: arabicTitle })).toHaveAttribute('lang', 'ar');
+    // Library Part 1: the shared Books listing's cards head their title with
+    // an h3 under the listing's own h2 (an h2 per card until then).
+    await expect(page.locator('h3', { has: arabicTitle })).toHaveAttribute('lang', 'ar');
 
     // A content-language filter is the visitor's choice and narrows in SQL.
     await page.goto('/library/books?language=ur');
@@ -186,11 +208,119 @@ test.describe('an anonymous visitor reads the Library', () => {
 
     // R2: the reader's order is a choice too, and never admits a draft.
     await page.goto('/library/books?sort=newest');
-    await expect(page.locator('#filter-sort')).toHaveValue('newest');
+    // Library Part 1: the shared Books listing's order control.
+    await expect(page.locator('#books-sort')).toHaveValue('newest');
     await expect(
       page.getByRole('link', { name: 'Synthetic browser proof work' }),
     ).toBeVisible();
     await expect(page.getByText('Synthetic hidden draft work')).toHaveCount(0);
+  });
+
+  test('Library Part 1: the listing filters with counts, chips and one address per view', async ({
+    page,
+  }) => {
+    // This run's own author narrows every view to this run's Work, so the
+    // proofs below hold whatever the parallel specs publish.
+    const mine = `contributor=${people.linkedPersonId}`;
+    const card = () =>
+      page.getByRole('list', { name: 'Books', exact: true }).locator('li', {
+        has: page.getByRole('link', { name: 'Synthetic browser proof work' }),
+      });
+
+    // The listing's figures and its filters, each option with its count.
+    await page.goto('/library/books');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Books');
+    await expect(page.getByText(/books? in the Library$/)).toBeVisible();
+    await expect(page.locator('#books-language option[value="ur"]')).toHaveText(
+      /\(\d+\)$/,
+    );
+    await expect(page.locator('#books-topic option')).not.toHaveCount(0);
+    await expect(page.locator('#books-from')).toBeVisible();
+    await expect(page.locator('#books-to')).toBeVisible();
+    await expect(page.locator('input[name="readable"]')).toBeVisible();
+    await expect(page.locator('input[name="downloads"]')).toBeVisible();
+
+    // The card says what an Edition allows: read online, and a download.
+    await page.goto(`/library/books?${mine}`);
+    await expect(card().getByText('Read online', { exact: true })).toBeVisible();
+    await expect(card().getByText('Download', { exact: true })).toBeVisible();
+
+    // Readable online and downloadable each narrow to an Edition that allows it…
+    await page.goto(`/library/books?${mine}&readable=1&downloads=1`);
+    await expect(card()).toHaveCount(1);
+    for (const name of ['Readable online', 'Downloadable'])
+      await expect(
+        page.getByRole('link', { name: `Remove filter: ${name}` }),
+      ).toBeVisible();
+    // …and every Edition filter is asked of ONE Edition: the Urdu Edition is
+    // neither readable nor in this run's year range, so nothing matches.
+    await page.goto(`/library/books?language=ur&${mine}&readable=1`);
+    await expect(page.getByText('No books match these filters')).toBeVisible();
+    await page.getByRole('link', { name: 'Remove filter: Readable online' }).click();
+    await expect(page).toHaveURL(new RegExp(`/library/books\\?language=ur&${mine}$`));
+    await expect(card()).toHaveCount(1);
+
+    // A year range narrows to an Edition published inside it.
+    await page.goto(`/library/books?${mine}&from=1900&to=1910`);
+    await expect(page.getByRole('link', { name: datedTitle })).toBeVisible();
+    await expect(card()).toHaveCount(0);
+    await expect(
+      page.getByRole('link', { name: 'Remove filter: 1900–1910' }),
+    ).toBeVisible();
+
+    // One address per view: what the former filter form submitted, and a
+    // former offset (25 a page until Library Part 1), are one redirect each.
+    await page.goto(`/library/books?sort=title&language=&topic=&from=&to=&${mine}`);
+    await expect(page).toHaveURL(new RegExp(`/library/books\\?${mine}$`));
+    await page.goto('/library/books?offset=25');
+    await expect(page).toHaveURL(/\/library\/books\?page=2$/);
+  });
+
+  test('Library Part 1: the landing — figures, ways in, subject hubs and every menu item', async ({
+    page,
+  }) => {
+    const response = await page.goto('/library');
+    expect(response?.status()).toBe(200);
+    await expect(
+      page.getByRole('heading', { name: 'The Library at a glance' }),
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: /^\d+\s*books?$/ })).toHaveAttribute(
+      'href',
+      '/library/books',
+    );
+    const find = page.getByRole('region', { name: 'Find a book' });
+    await expect(find.getByRole('heading', { name: 'By topic' })).toBeVisible();
+    await expect(find.getByRole('heading', { name: 'By language' })).toBeVisible();
+    await expect(find.getByRole('link', { name: 'Books', exact: true })).toHaveAttribute(
+      'href',
+      '/library/books',
+    );
+    await expect(page.getByRole('link', { name: 'Books on the Quran' })).toHaveAttribute(
+      'href',
+      '/quran/books',
+    );
+    await expect(page.getByRole('link', { name: 'Books on Hadith' })).toHaveAttribute(
+      'href',
+      '/hadith/books',
+    );
+    // Every item of the Library menu is reachable from its front door.
+    const main = page.getByRole('main');
+    for (const section of [
+      'resources',
+      'books',
+      'authors',
+      'topics',
+      'languages',
+      'articles',
+      'research',
+      'research-papers',
+      'publications',
+      'magazines',
+      'encyclopedias',
+      'downloads',
+      'sale-points',
+    ])
+      await expect(main.locator(`a[href="/library/${section}"]`).first()).toBeAttached();
   });
 
   test('shows the Work with truthful editions, translation and availability', async ({
@@ -220,6 +350,31 @@ test.describe('an anonymous visitor reads the Library', () => {
     await expect(urdu.getByText('Translated from')).toBeVisible();
     await expect(urdu.getByText('Synthetic Arabic edition')).toBeVisible();
     await expect(editions.getByText('Translated from')).toHaveCount(1);
+
+    // Library Part 1: the source names its translation, and each Edition its
+    // own calls to action — only the ones its stored decision allows.
+    const arabic = editions
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('heading', { name: 'Synthetic Arabic edition' }) });
+    await expect(arabic.getByText('Translated into')).toBeVisible();
+    await expect(
+      arabic.getByRole('link', { name: 'Synthetic Urdu translation' }),
+    ).toHaveAttribute('href', `/library/books/${currentSlug}?edition=${urduId}`);
+    await expect(arabic.getByRole('link', { name: /^Download PDF/ })).toHaveAttribute(
+      'href',
+      `/assets/library/editions/${arabicId}/download/${downloadAssetId}`,
+    );
+    await expect(arabic.getByText('Readable online')).toBeVisible();
+    await expect(
+      urdu.getByRole('link', { name: /Download|Read online|Open PDF/ }),
+    ).toHaveCount(0);
+    await expect(urdu.getByText('Not available online')).toBeVisible();
+    // The header's calls follow the selected (Arabic) Edition.
+    await expect(
+      page
+        .getByRole('main')
+        .locator('a[href="#library-reading"]', { hasText: 'Read online' }),
+    ).toBeVisible();
 
     await expect(page.getByText('Synthetic browser sale point')).toBeVisible();
     await expect(
@@ -255,6 +410,14 @@ test.describe('an anonymous visitor reads the Library', () => {
     await contents.getByRole('link', { name: 'Synthetic middle section' }).focus();
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(new RegExp(`#${position('middle')}$`));
+    // Library Part 1: the position bar stays with the reader, and the
+    // contents mark the section being read.
+    await expect(
+      page.getByRole('navigation', { name: 'Reading position' }),
+    ).toBeVisible();
+    await expect(
+      contents.getByRole('link', { name: 'Synthetic middle section' }),
+    ).toHaveAttribute('aria-current', 'location');
 
     // Sequential links, as ordinary links.
     await page
@@ -342,6 +505,52 @@ test.describe('an anonymous visitor reads the Library', () => {
     await expect(page.getByRole('link', { name: /Download this edition/ })).toHaveCount(
       0,
     );
+    // Library Part 1: and it leads to the Edition that can be read.
+    const other = `/library/books/${currentSlug}?edition=${arabicId}#library-reading`;
+    await expect(page.getByRole('main').locator(`a[href="${other}"]`).first()).toHaveText(
+      /^Read the .+ edition$/,
+    );
+  });
+
+  test('Library Part 1: no serious accessibility finding and no sideways scroll, in English and Urdu', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(120_000);
+    for (const locale of ['', '/ur'])
+      for (const target of [
+        '/library',
+        '/library/books',
+        `/library/books/${currentSlug}?edition=${arabicId}`,
+        `/library/books/${currentSlug}?edition=${urduId}`,
+      ])
+        for (const width of [320, 1440]) {
+          const address = `${locale}${target}`;
+          await page.setViewportSize({ width, height: 900 });
+          const response = await page.goto(address);
+          expect(response?.status(), address).toBe(200);
+          const overflow = await page.evaluate(
+            () =>
+              document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          );
+          expect(overflow, `${address} at ${String(width)}px`).toBeLessThanOrEqual(0);
+          if (width !== 1440) continue;
+          const results = await new AxeBuilder({ page })
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+            .analyze();
+          const blocking = results.violations.filter(
+            (violation) =>
+              violation.impact === 'serious' || violation.impact === 'critical',
+          );
+          for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+            testInfo.annotations.push({
+              type: 'axe',
+              description: `${address}: ${finding.id} (${String(finding.impact)})`,
+            });
+          expect(
+            blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+            address,
+          ).toEqual([]);
+        }
   });
 
   test('redirects the old slug with exactly one 301, locale preserved', async ({

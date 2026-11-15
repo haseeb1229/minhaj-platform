@@ -467,20 +467,74 @@ p {
  */
 .library-reader {
   --reader-font-size: 1.125rem;
-  --reader-line-height: 1.75;
-  --reader-measure: 66ch;
-  font-size: var(--reader-font-size);
-  line-height: var(--reader-line-height);
+  --reader-line-height: 1.8;
+  --reader-measure: 68ch;
+  /*
+   * Library Part 1 — THE SCRIPT'S OWN PROPORTIONS, as multipliers of the
+   * visitor's three preferences rather than values the island would overwrite:
+   * Nastaliq stacks diagonally and is set larger with much more room between
+   * lines, Naskh a little less. A preference change scales them; it never
+   * erases them.
+   */
+  --reader-script-size: 1;
+  --reader-script-leading: 1;
+  font-size: calc(var(--reader-font-size) * var(--reader-script-size));
+  line-height: calc(var(--reader-line-height) * var(--reader-script-leading));
   max-inline-size: var(--reader-measure);
   overflow-wrap: anywhere;
+  text-align: start;
+  text-wrap: pretty;
+}
+.library-reader:lang(en) {
+  hyphens: auto;
+}
+.library-reader:lang(ar) {
+  --reader-script-size: 1.08;
+  --reader-script-leading: 1.12;
+}
+.library-reader:lang(ur) {
+  --reader-script-size: 1.12;
+  --reader-script-leading: 1.22;
+}
+/* One section: its heading, its paragraphs and its way on, with room between. */
+.library-reader-section + .library-reader-section {
+  margin-block-start: 3em;
+}
+.library-reader-section > h3 {
+  font-size: 1.3em;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-block-end: 0.8em;
+  text-wrap: balance;
+}
+.library-reader-section > p + p {
+  margin-block-start: 1em;
+}
+.library-reader-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.5rem;
+  margin-block-start: 1.5em;
+  padding-block-start: 0.5rem;
+  border-block-start: 1px solid var(--color-border);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+/* Interface words inside the edition's text: the interface's own face. */
+.library-reader-steps:lang(en) {
+  font-family: var(--font-sans);
+}
+.library-reader-steps > a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2.75rem;
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 /* Long-form Urdu is Nastaliq, which needs more room between lines. */
 .editorial-prose:lang(ur) {
   line-height: 2.15;
-}
-.library-reader:lang(ur) {
-  --reader-line-height: 2.15;
 }
 
 /*

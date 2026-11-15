@@ -199,6 +199,7 @@ live(
         languages: ['ur'],
         year: 2001,
         readable: false,
+        downloadable: false,
         cover: null,
         passages: [
           { surah: 18, ayahFrom: 1, ayahTo: 10 },
@@ -291,8 +292,21 @@ live(
 
     it('counts the hub, its shelves, languages, contributors and Surahs', async () => {
       expect(await reads.topicWorkFacets({ ...QURAN, topic: quranTopic })).toEqual({
-        hub: { works: 4, explaining: 2, featured: 1, languages: 3 },
+        // Library Part 1: Bayan's English Edition is the one readable online;
+        // nothing may be downloaded; the years run from Bayan's Urdu 1999 to
+        // Ghazali's 2020 (Commentary's undated Edition counts for neither).
+        hub: {
+          works: 4,
+          explaining: 2,
+          featured: 1,
+          languages: 3,
+          readable: 1,
+          downloadable: 0,
+          earliest: 1999,
+          latest: 2020,
+        },
         shelves: { all: 4, explaining: 2 },
+        access: { readable: 1, downloadable: 0 },
         // Works per language, most first, then by code.
         languages: {
           items: [
@@ -309,6 +323,8 @@ live(
           ],
           hasMore: false,
         },
+        // A hub has one Topic: it is never browsed by Topic.
+        topics: { items: [], hasMore: false },
         surahs: [
           { surah: 2, owners: 1 },
           { surah: 18, owners: 2 },
@@ -322,7 +338,18 @@ live(
         topic: quranTopic,
         language: 'ur',
       });
-      expect(urdu.hub).toEqual({ works: 4, explaining: 2, featured: 1, languages: 3 });
+      expect(urdu.hub).toEqual({
+        works: 4,
+        explaining: 2,
+        featured: 1,
+        languages: 3,
+        readable: 1,
+        downloadable: 0,
+        earliest: 1999,
+        latest: 2020,
+      });
+      // …while the availability counts honour the language: no Urdu Edition is readable.
+      expect(urdu.access).toEqual({ readable: 0, downloadable: 0 });
       expect(urdu.shelves).toEqual({ all: 2, explaining: 1 });
       // Every language is still offered, with what choosing it would show.
       expect(urdu.languages.items.map((facet) => facet.id)).toEqual(['en', 'ur', 'ar']);
@@ -392,8 +419,18 @@ live(
       });
 
       expect(await reads.topicWorkFacets({ topic: hadithTopic })).toEqual({
-        hub: { works: 2, explaining: 0, featured: 1, languages: 2 },
+        hub: {
+          works: 2,
+          explaining: 0,
+          featured: 1,
+          languages: 2,
+          readable: 0,
+          downloadable: 0,
+          earliest: 2010,
+          latest: 2020,
+        },
         shelves: { all: 2, explaining: 0 },
+        access: { readable: 0, downloadable: 0 },
         languages: {
           items: [
             { id: 'en', works: 1 },
@@ -402,6 +439,7 @@ live(
           hasMore: false,
         },
         contributors: { items: [], hasMore: false },
+        topics: { items: [], hasMore: false },
         surahs: [],
       });
       const quranTopicOnly = await reads.topicWorkFacets({ topic: quranTopic });
@@ -410,14 +448,29 @@ live(
         explaining: 0,
         featured: 0,
         languages: 3,
+        readable: 1,
+        downloadable: 0,
+        earliest: 1999,
+        latest: 2020,
       });
       expect(quranTopicOnly.shelves).toEqual({ all: 3, explaining: 0 });
       expect(quranTopicOnly.surahs).toEqual([]);
       expect(await reads.topicWorkFacets({ topic: null })).toEqual({
-        hub: { works: 0, explaining: 0, featured: 0, languages: 0 },
+        hub: {
+          works: 0,
+          explaining: 0,
+          featured: 0,
+          languages: 0,
+          readable: 0,
+          downloadable: 0,
+          earliest: null,
+          latest: null,
+        },
         shelves: { all: 0, explaining: 0 },
+        access: { readable: 0, downloadable: 0 },
         languages: { items: [], hasMore: false },
         contributors: { items: [], hasMore: false },
+        topics: { items: [], hasMore: false },
         surahs: [],
       });
     });

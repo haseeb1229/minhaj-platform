@@ -383,6 +383,21 @@ export const libraryQuerySchema = z
  * A Surah is a filter of the `explains` shelf, so it is refused beside
  * `general` rather than quietly answered with nothing; and every passage part
  * is refused without `quranPassages`.
+ *
+ * LIBRARY PART 1 — THE WHOLE LIBRARY IS THE SAME READ WITHOUT A TOPIC SCOPE.
+ * With `scope: 'library'` the set is every PUBLIC Work and `topic` becomes one
+ * more narrowing filter (absent: every Topic) with a facet of its own; the
+ * default `scope: 'topic'` is the hubs' read exactly as before (no Topic and
+ * no passage parts, no Work). Which scope a caller asks for is explicit, so a
+ * hub whose Topic is missing can never fall through to the whole Library, and
+ * the whole Library has no passage parts. Four narrowing filters of any scope
+ * — each, with `language`, a condition on ONE published Edition, so "an Urdu
+ * edition from the 1990s that may be downloaded" is one Edition, never three
+ * siblings:
+ *
+ *   `from`, `to`    its publication year, inclusive (`from` never after `to`);
+ *   `readable`      its availability allows reading online;
+ *   `downloadable`  its availability allows a download and a file is recorded.
  */
 export const TOPIC_WORKS_PAGE = 24;
 export const topicWorksShelfSchema = z.enum(['all', 'explains', 'general']);
@@ -390,14 +405,25 @@ export type TopicWorksShelf = z.infer<typeof topicWorksShelfSchema>;
 export const topicWorksSortSchema = z.enum(['title', 'newest', 'quran']);
 export type TopicWorksSort = z.infer<typeof topicWorksSortSchema>;
 
+/** What a read is over: one Topic's Works (the hubs), or the whole Library. */
+export const TOPIC_WORK_SCOPES = Object.freeze(['topic', 'library'] as const);
+export type TopicWorkScope = (typeof TOPIC_WORK_SCOPES)[number];
+
+const publicationYearSchema = z.number().int().min(1).max(9999);
+
 export const topicWorksQuerySchema = z
   .object({
+    scope: z.enum(TOPIC_WORK_SCOPES).default('topic'),
     topic: libraryIdSchema.nullable().default(null),
     quranPassages: z.boolean().default(false),
     shelf: topicWorksShelfSchema.default('all'),
     surah: z.number().int().min(1).max(SURAH_TOTAL).nullable().default(null),
     language: libraryLanguageCodeSchema.nullable().default(null),
     contributor: libraryIdSchema.nullable().default(null),
+    from: publicationYearSchema.nullable().default(null),
+    to: publicationYearSchema.nullable().default(null),
+    readable: z.boolean().default(false),
+    downloadable: z.boolean().default(false),
     featured: z.boolean().default(false),
     sort: topicWorksSortSchema.default('title'),
     titleLocale: localeSchema.nullable().default(null),
@@ -413,7 +439,13 @@ export const topicWorksQuerySchema = z
       value.quranPassages ||
       (value.shelf === 'all' && value.surah === null && value.sort !== 'quran'),
     { message: 'Shelves, a Surah and the Quran order are Quran passage parts.' },
-  );
+  )
+  .refine((value) => value.scope === 'topic' || !value.quranPassages, {
+    message: 'The whole Library has no Quran passage parts.',
+  })
+  .refine((value) => value.from === null || value.to === null || value.from <= value.to, {
+    message: 'A year range starts no later than it ends.',
+  });
 export type TopicWorksQuery = z.infer<typeof topicWorksQuerySchema>;
 
 /**
