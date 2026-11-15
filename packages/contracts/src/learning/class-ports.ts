@@ -15,6 +15,8 @@ import type {
   LearnerTeacherView,
   LiveLearningAuthority,
   OperationalTeacher,
+  PublicScheduleFacets,
+  PublicScheduleQuery,
   PublicSessionPage,
   PublicSessionView,
   SessionParticipant,
@@ -383,8 +385,14 @@ export interface ClassLearnerPort {
  * ========================================================================= */
 
 export interface ClassPublicReaderPort {
-  /** Upcoming scheduled sessions on published live Courses, soonest first, while activated. */
-  upcomingSessions(now: Date, offset: number): Promise<PublicSessionPage>;
+  /**
+   * Upcoming scheduled sessions on published live Courses, soonest first,
+   * while activated — narrowed (Learn Part 2) by the query's Course, teacher
+   * account and content language, one bounded page from its offset.
+   */
+  upcomingSessions(now: Date, query: PublicScheduleQuery): Promise<PublicSessionPage>;
+  /** Learn Part 2 — the schedule's aggregates (`PublicScheduleFacets`); empty while off. */
+  upcomingFacets(now: Date, query: PublicScheduleQuery): Promise<PublicScheduleFacets>;
   /**
    * Learn Part 1 — the next upcoming scheduled sessions of ONE published live
    * Course, soonest first, at most `COURSE_SESSIONS`, while activated; the

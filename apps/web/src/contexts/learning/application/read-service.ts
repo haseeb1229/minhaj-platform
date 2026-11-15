@@ -5,6 +5,7 @@ import {
   learningIdSchema,
   learningSlugSchema,
   topicCourseQuerySchema,
+  topicTotalsInputSchema,
   type LearningPublicReaderPort,
 } from '@minhaj/contracts/learning';
 
@@ -70,8 +71,29 @@ export function createLearningReadService(reader: LearningPublicReaderPort) {
       return reader.topicCoursePaths(learningIdSchema.nullable().parse(topic));
     },
 
+    /**
+     * Learn Part 2 — the Topic index: per asked Topic, how many published
+     * Courses its hub opens with. The Topics are parsed here (identifiers,
+     * distinct, at most `TOPIC_TOTALS_MAX`) before any read; none asked
+     * reads nothing.
+     */
+    async topicCourseTotals(raw: unknown) {
+      const topics = topicTotalsInputSchema.parse(raw);
+      if (topics.length === 0) return [];
+      return reader.topicCourseTotals(topics);
+    },
+
     paths(offset = 0) {
       return reader.paths(browseOffset.parse(offset));
+    },
+
+    /**
+     * Learn Part 2 — the paths catalogue: the same page as `paths`, each path
+     * with what its published Courses hold together, and the catalogue's
+     * figures. The offset is parsed here, before any read.
+     */
+    pathSummaries(offset = 0) {
+      return reader.pathSummaries(browseOffset.parse(offset));
     },
 
     path(slug: string) {

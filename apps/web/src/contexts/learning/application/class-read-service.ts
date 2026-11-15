@@ -1,12 +1,12 @@
-import { z } from 'zod';
-
 import {
   learningIdSchema,
+  publicScheduleQuerySchema,
   TEACHER_AVAILABILITY_FILTERS,
   type ClassPublicReaderPort,
   type LearningActivationPort,
   type LiveLearningAuthority,
   type OperationalTeacher,
+  type PublicScheduleFacets,
   type PublicSessionPage,
   type PublicSessionView,
 } from '@minhaj/contracts/learning';
@@ -28,12 +28,20 @@ import {
  * it is a test state and keep itself out of indexing.
  */
 
-const browseOffset = z.number().int().min(0).max(25_000);
-
 export interface PublicLiveSchedule {
   readonly mode: LiveLearningAuthority | null;
   readonly page: PublicSessionPage;
+  /** Learn Part 2 — the schedule's aggregates; empty while live learning is off. */
+  readonly facets: PublicScheduleFacets;
 }
+
+const NO_FACETS: PublicScheduleFacets = Object.freeze({
+  upcoming: 0,
+  matching: 0,
+  courses: [],
+  teachers: [],
+  languages: [],
+});
 
 /** Learn Part 1 — one live Course's next public classes, on its own page. */
 export interface PublicCourseSchedule {
@@ -54,13 +62,24 @@ export function createClassReadService(deps: {
   const now = deps.clock ?? (() => new Date());
 
   return {
-    async liveSchedule(offset = 0): Promise<PublicLiveSchedule> {
+    /**
+     * The public schedule, narrowed (Learn Part 2) by a Course, a teacher's
+     * account — resolved at Layer 4, never from an address — and a content
+     * language, one page from its offset, with the schedule's aggregates. The
+     * query is parsed before anything is read, an unknown field refused; while
+     * live learning is off nothing else is read at all.
+     */
+    async liveSchedule(raw: unknown = {}): Promise<PublicLiveSchedule> {
+      const query = publicScheduleQuerySchema.parse(raw);
       const mode = await deps.activation.activeMode();
-      if (mode === null) return { mode, page: { items: [], hasMore: false } };
-      return {
-        mode,
-        page: await deps.reader.upcomingSessions(now(), browseOffset.parse(offset)),
-      };
+      if (mode === null)
+        return { mode, page: { items: [], hasMore: false }, facets: NO_FACETS };
+      const at = now();
+      const [page, facets] = await Promise.all([
+        deps.reader.upcomingSessions(at, query),
+        deps.reader.upcomingFacets(at, query),
+      ]);
+      return { mode, page, facets };
     },
 
     /**

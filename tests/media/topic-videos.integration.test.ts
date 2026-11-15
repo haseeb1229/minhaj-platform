@@ -492,5 +492,28 @@ live(
         seconds: 0,
       });
     });
+
+    it('counts each asked Topic’s published Videos for the Topic index — exactly its Videos hub’s total (Learn Part 2)', async () => {
+      const stray = randomUUID();
+      const totals = await reads.topicVideoTotals([quranTopic, hadithTopic, stray]);
+      // Bayan, Fatiha and Commentary on the quran Topic — never the draft
+      // Exegesis, nor Alif and Ghazali, which only explain a passage; Durood and
+      // Fatiha on the hadith Topic.
+      expect(totals).toEqual(
+        [
+          { topic: quranTopic, count: 3 },
+          { topic: hadithTopic, count: 2 },
+        ].sort((x, y) => x.topic.localeCompare(y.topic)),
+      );
+      for (const topic of [quranTopic, hadithTopic])
+        expect(totals.find((entry) => entry.topic === topic)?.count).toBe(
+          (await reads.topicVideos({ topic })).total,
+        );
+      // Only the asked Topics are read.
+      expect(await reads.topicVideoTotals([hadithTopic])).toEqual([
+        { topic: hadithTopic, count: 2 },
+      ]);
+      expect(await reads.topicVideoTotals([stray])).toEqual([]);
+    });
   },
 );

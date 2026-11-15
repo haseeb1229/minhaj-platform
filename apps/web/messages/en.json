@@ -2312,9 +2312,17 @@
     "allCourses": "All courses on this topic",
     "index": {
       "eyebrow": "Browse by subject",
-      "roots": "Top-level topics: {count}",
-      "total": "Topics in all: {count}",
-      "children": "Subtopics: {count}"
+      "children": "Subtopics: {count}",
+      "statTopics": "{count, plural, one {topic} other {topics}}",
+      "statRoots": "{count, plural, one {top-level topic} other {top-level topics}}",
+      "statWithMaterial": "{count, plural, one {topic with material} other {topics with material}}",
+      "countsNote": "Beside each topic: the published courses, books, videos and research filed under it — each counted by its own section, exactly as the topic’s page shows them.",
+      "holds": {
+        "courses": "{count, plural, one {# course} other {# courses}}",
+        "books": "{count, plural, one {# book} other {# books}}",
+        "videos": "{count, plural, one {# video} other {# videos}}",
+        "research": "{count, plural, one {# research item} other {# research items}}"
+      }
     },
     "hub": {
       "eyebrow": "Topic",
@@ -2325,19 +2333,59 @@
       "allTopics": "All topics",
       "bands": {
         "sources": "Primary sources",
-        "guidance": "Rulings and courses",
+        "guidance": "Rulings",
         "library": "Library",
         "media": "Watch and listen",
-        "editorial": "News, events and collections"
+        "editorial": "News, events and collections",
+        "study": "Courses, books and research"
       },
       "count": {
-        "books": "Books: {count}",
-        "research": "Research: {count}",
-        "research-paper": "Research papers: {count}",
         "publication": "Publications: {count}",
         "encyclopedia": "Encyclopedias: {count}",
         "magazine": "Magazines: {count}",
         "magazine-issue": "Magazine issues: {count}"
+      },
+      "stat": {
+        "courses": "{count, plural, one {course} other {courses}}",
+        "books": "{count, plural, one {book} other {books}}",
+        "videos": "{count, plural, one {video} other {videos}}",
+        "research": "{count, plural, one {research item} other {research items}}"
+      },
+      "total": {
+        "courses": "{count, plural, one {# published course on this topic} other {# published courses on this topic}}",
+        "books": "{count, plural, one {# published book on this topic} other {# published books on this topic}}",
+        "videos": "{count, plural, one {# published video on this topic} other {# published videos on this topic}}",
+        "research": "{count, plural, one {# published research item on this topic} other {# published research items on this topic}}"
+      },
+      "subject": {
+        "quran": {
+          "heading": "The Quran section",
+          "intro": "This topic is the Quran’s own. Its section brings its books, videos, research and courses together.",
+          "open": "Open the Quran section",
+          "hubs": {
+            "courses": "Courses on the Quran",
+            "books": "Books on the Quran",
+            "videos": "Videos on the Quran",
+            "research": "Research on the Quran"
+          }
+        },
+        "hadith": {
+          "heading": "The Hadith section",
+          "intro": "This topic is Hadith’s own. Its section brings its books, videos, research and courses together.",
+          "open": "Open the Hadith section",
+          "hubs": {
+            "courses": "Courses on Hadith",
+            "books": "Books on Hadith",
+            "videos": "Videos on Hadith",
+            "research": "Research on Hadith"
+          }
+        },
+        "hubBody": {
+          "courses": "Every published course on it, by level, language, format and teacher.",
+          "books": "Every published book on it, by language and contributor.",
+          "videos": "Every published video on it, by speaker, language and length.",
+          "research": "Research and research papers on it, by kind, language and decade."
+        }
       }
     }
   },
@@ -6094,8 +6142,7 @@
       "teachers": "Taught by",
       "modules": "{count, plural, one {# module} other {# modules}}",
       "lessons": "{count, plural, one {# lesson} other {# lessons}}",
-      "courses": "{count, plural, one {# course} other {# courses}}",
-      "step": "Course {number}"
+      "courses": "{count, plural, one {# course} other {# courses}}"
     },
     "course": {
       "teachers": "Taught by",
@@ -6138,18 +6185,66 @@
       "fallback": "This learning path is described in {language}; its description has not been translated into this language.",
       "courses": "Courses in this path",
       "coursesNote": "Study them in this order. You enrol on each course separately, from its own page.",
-      "empty": "No published course is in this path yet."
+      "empty": "No published course is in this path yet.",
+      "step": "Course {step} of {total}",
+      "start": "Start with course 1",
+      "startWith": "The first course:",
+      "about": "About this path",
+      "teachers": "Teachers on this path",
+      "howHeading": "How this path works",
+      "howOrder": "Study the courses in the order below.",
+      "howEnrol": "Enrol on each course from its own page; there is no enrolment on the path itself.",
+      "howProgress": "Your progress on each course counts towards the path."
     },
     "trial": {
       "intro": "A trial class is a first class on a course taught live, to see whether the course suits you before you commit to it.",
       "notBooked": "Asking for a trial class records your request; it is not a booking. No time is set and no teacher is assigned until a class is confirmed for you, and a confirmed class then appears in My classes.",
       "how": "How a request works",
-      "stepChoose": "Choose a course taught live from the list below and open its page.",
-      "stepSignIn": "Sign in, or create an account, so that the request is yours.",
-      "stepRequest": "Ask for a trial class from the course’s page.",
-      "stepAfter": "The request itself schedules nothing. If a class is confirmed for you, it appears in My classes with its time and teacher.",
       "courses": "Courses taught live",
-      "empty": "No course taught live has been published yet, so there is no course to ask for a trial class on."
+      "empty": "No course taught live has been published yet, so there is no course to ask for a trial class on.",
+      "statCourses": "{count, plural, one {course taught live takes a trial} other {courses taught live take a trial}}",
+      "browseLive": "Browse courses taught live",
+      "schedule": "Live class schedule",
+      "steps": {
+        "choose": {
+          "title": "Choose a course",
+          "body": "Pick a course taught live from the list below and open its page."
+        },
+        "signIn": {
+          "title": "Sign in",
+          "body": "Sign in, or create a free account, so that the request is yours."
+        },
+        "request": {
+          "title": "Ask for a trial class",
+          "body": "On the course’s page, choose “Request a trial class”."
+        },
+        "after": {
+          "title": "Wait for a confirmed class",
+          "body": "The request itself schedules nothing. If a class is confirmed for you, it appears in My classes with its time and teacher."
+        }
+      },
+      "coursesIntro": "Every course here is taught live, so each one takes a trial-class request. The newest are first.",
+      "allLive": "All {count} courses taught live",
+      "next": "What happens after you ask",
+      "nextSteps": {
+        "recorded": {
+          "title": "Your request is recorded",
+          "body": "It is yours alone, and nobody is enrolled or booked by it."
+        },
+        "confirmed": {
+          "title": "A class may be confirmed",
+          "body": "Staff can confirm a request into a class with a teacher and a time. Until then, nothing is arranged."
+        },
+        "join": {
+          "title": "You join from My classes",
+          "body": "A confirmed class appears in My classes, with its Google Meet link. The link is shown only to you, there."
+        },
+        "withdraw": {
+          "title": "You can change your mind",
+          "body": "You can withdraw a request from My Learning at any time."
+        }
+      },
+      "myLearning": "Go to My Learning"
     },
     "catalogue": {
       "lede": "Every course published in Learn — taught live in classes with a teacher, or studied at your own pace. Read any course and its syllabus without an account; choose by how you want to study, a topic, your level, a language or a teacher, and enrol from the course’s own page.",
@@ -6157,6 +6252,31 @@
       "listIntro": "Every published course, whether taught live or studied on your own.",
       "emptyTitle": "No courses yet",
       "alongsideIntro": "Learning with a teacher, beyond the catalogue."
+    },
+    "paths": {
+      "lede": "A learning path sets published courses out in the order to study them in, from the first steps onwards. Open a path to see its courses as one journey.",
+      "statPaths": "{count, plural, one {learning path} other {learning paths}}",
+      "statCourses": "{count, plural, one {course on a path} other {courses on paths}}",
+      "statLessons": "{count, plural, one {lesson} other {lessons}}",
+      "listHeading": "Every learning path",
+      "listIntro": "The newest first. Each card says how many courses the path holds, their lessons, their levels and how they are taught.",
+      "beyond": "There is nothing on this page. Go back to the first page.",
+      "how": "How a learning path works",
+      "howSteps": {
+        "order": {
+          "title": "An order to study in",
+          "body": "A path names its courses in order, each building on the one before it."
+        },
+        "enrol": {
+          "title": "Enrol on each course",
+          "body": "You enrol on each course separately, from its own page, with a free account. Reading a path never needs one."
+        },
+        "progress": {
+          "title": "Your progress across the path",
+          "body": "Once you are signed in, a path shows how far you are along it, and My Learning keeps it for you."
+        }
+      },
+      "levelSpan": "{from} to {to}"
     }
   },
   "learningIsland": {
@@ -6184,7 +6304,17 @@
     "failureDenied": "This was refused. Reload the page and try again.",
     "failureUnavailable": "This can’t be done right now. Try again later.",
     "progress": "Lessons complete: {completed} of {total}",
-    "allComplete": "You have completed every lesson of this course."
+    "allComplete": "You have completed every lesson of this course.",
+    "path": {
+      "heading": "Your progress on this path",
+      "signedOut": "Sign in to see how far you are along this path. Reading it never needs an account.",
+      "signIn": "Sign in to track your progress",
+      "enrolled": "Courses enrolled on: {completed} of {total}",
+      "allComplete": "You have completed every lesson on this path.",
+      "notStarted": "You have not enrolled on any course of this path yet. Start with the first.",
+      "next": "Next, course {completed} of {total}:",
+      "open": "Open this path in My Learning"
+    }
   },
   "myLearning": {
     "title": "My learning",
@@ -7029,8 +7159,7 @@
   "learnLive": {
     "title": "Live learning",
     "description": "Upcoming classes taught live on Minhaj courses.",
-    "intro": "These are the upcoming classes on courses taught live. Joining a class is for learners enrolled on its course or booked on a trial class; open the course to find out more.",
-    "zoneNote": "Each time is shown in the time zone the class was scheduled in, and that zone is named beside it.",
+    "intro": "Upcoming classes on courses taught live, day by day. Joining a class is for learners enrolled on its course or booked on a trial class.",
     "fixture": "Test state: these classes are engineering test data, not a real timetable. Do not rely on them.",
     "unavailable": {
       "body": "Live learning is not available on this site at the moment, so no class schedule is shown.",
@@ -7038,18 +7167,62 @@
     },
     "empty": "No upcoming class is scheduled at the moment.",
     "beyond": "There is nothing on this page. Go back to the first page.",
-    "listLabel": "Upcoming classes",
+    "listLabel": "Upcoming classes, day by day",
     "teacher": "Teacher:",
     "teacherUnnamed": "Teacher",
-    "starts": "Starts:",
     "ends": "Ends:",
     "zone": "Time zone: {zone}",
-    "findTeacher": "Find a teacher"
+    "findTeacher": "Find a teacher",
+    "statClasses": "{count, plural, one {upcoming class} other {upcoming classes}}",
+    "statCourses": "{count, plural, one {course with classes} other {courses with classes}}",
+    "statTeachers": "{count, plural, one {teacher} other {teachers}}",
+    "trialLink": "Ask for a trial class",
+    "listHeading": "Upcoming classes",
+    "filter": {
+      "label": "Filter classes",
+      "course": "Course",
+      "teacher": "Teacher",
+      "language": "Language",
+      "any": "Any",
+      "apply": "Show classes",
+      "option": "{name} ({count})",
+      "active": "Filters in use",
+      "remove": "Remove filter: {name}",
+      "invalid": "These filters name a course, teacher or language that does not exist, so no class is listed. Clear the filters to see every class.",
+      "noResults": "No upcoming class matches these filters."
+    },
+    "days": {
+      "dayList": "Classes on {day}",
+      "today": "Today",
+      "tomorrow": "Tomorrow",
+      "yourZone": "Days, and your own times, are shown in your time zone: {zone}.",
+      "classZones": "Days follow each class’s own time zone, which is named beside its time.",
+      "yourTime": "Your time: {time}"
+    },
+    "join": {
+      "heading": "How to join a class",
+      "intro": "Classes are held on Google Meet. Their meeting links are never shown on public pages.",
+      "steps": {
+        "enrol": {
+          "title": "Enrol on the course",
+          "body": "Open the course and enrol with a free account, or ask for a trial class first."
+        },
+        "classes": {
+          "title": "Find it in My classes",
+          "body": "Your classes appear in My classes in My Minhaj, with their time and teacher."
+        },
+        "meet": {
+          "title": "Join on Google Meet",
+          "body": "The meeting link is shown in My classes, only to you. Open it when the class begins."
+        }
+      },
+      "myClasses": "Go to My classes"
+    }
   },
   "learnTeachers": {
     "title": "Find a teacher",
     "description": "Teachers currently teaching live courses on Minhaj.",
-    "intro": "Teachers listed here are currently teaching at least one course taught live. Open a teacher’s profile to read more about them, or a course to find out how to join it.",
+    "intro": "Teachers listed here are teaching at least one course taught live now. Open a teacher’s profile to read more about them, or a course to find out how to join it.",
     "fixture": "Test state: these teachers and courses are engineering test data, not the real teaching staff. Do not rely on them.",
     "filter": {
       "label": "Filter teachers",
@@ -7058,7 +7231,10 @@
       "availability": "Open times",
       "available": "Has open times",
       "invalid": "These filters name a subject, language or availability that does not exist, so no teacher is listed. Clear the filters to see every teacher.",
-      "empty": "No teacher matches these filters."
+      "empty": "No teacher matches these filters.",
+      "option": "{name} ({count})",
+      "active": "Filters in use",
+      "remove": "Remove filter: {name}"
     },
     "unavailable": {
       "body": "Live learning is not available on this site at the moment, so no teacher is listed.",
@@ -7069,8 +7245,20 @@
     "available": "Has open times for trial classes",
     "subjects": "Subjects:",
     "languages": "Languages:",
-    "courses": "Courses taught",
-    "schedule": "See upcoming live classes"
+    "schedule": "See upcoming live classes",
+    "statTeachers": "{count, plural, one {teacher} other {teachers}}",
+    "statCourses": "{count, plural, one {course taught live} other {courses taught live}}",
+    "statAvailable": "{count, plural, one {with open times} other {with open times}}",
+    "trialLink": "Ask for a trial class",
+    "listHeading": "Teachers",
+    "listIntro": "In name order. Each card shows the live courses the teacher teaches now.",
+    "coursesCount": "{count, plural, one {Teaches # course taught live} other {Teaches # courses taught live}}",
+    "how": {
+      "heading": "Learning with a teacher",
+      "profile": "A teacher’s profile is their public page. It describes them; it does not open a class.",
+      "course": "To be taught by a teacher, enrol on a live course they teach, from the course’s own page.",
+      "trial": "Not sure yet? Ask for a trial class on one of their courses first."
+    }
   },
   "myClasses": {
     "title": "My classes",

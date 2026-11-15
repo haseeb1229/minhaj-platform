@@ -4,6 +4,7 @@ import {
   audioTrackQuerySchema,
   mediaIdSchema,
   mediaSlugSchema,
+  mediaTopicTotalsInputSchema,
   PHOTO_LIMITS,
   photoArchiveQuerySchema,
   topicVideosQuerySchema,
@@ -255,6 +256,18 @@ export function createMediaReadService(reader: MediaPublicReaderPort) {
 
     topicVideoFacets(raw: unknown = {}) {
       return reader.topicVideoFacets(topicVideosQuerySchema.parse(raw));
+    },
+
+    /**
+     * Learn Part 2 — the Topic index: per asked Topic, how many published
+     * Videos its hub opens with. The Topics are parsed here (identifiers,
+     * distinct, at most `MEDIA_TOPIC_TOTALS_MAX`) before any read; none asked
+     * reads nothing.
+     */
+    async topicVideoTotals(raw: unknown) {
+      const topics = mediaTopicTotalsInputSchema.parse(raw);
+      if (topics.length === 0) return [];
+      return reader.topicVideoTotals(topics);
     },
 
     gallerySitemap(offset: number, limit: number) {

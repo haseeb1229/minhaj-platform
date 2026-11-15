@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   libraryIdSchema,
   libraryQuerySchema,
+  libraryTopicTotalsInputSchema,
   librarySlugSchema,
   topicResearchQuerySchema,
   topicWorksQuerySchema,
@@ -224,6 +225,18 @@ export function createLibraryReadService(reader: LibraryPublicReaderPort) {
 
     topicResearchFacets(raw: unknown = {}) {
       return reader.topicResearchFacets(topicResearchQuerySchema.parse(raw));
+    },
+
+    /**
+     * Learn Part 2 — the Topic index: per asked Topic, how many public Works
+     * and Research records its hubs open with. The Topics are parsed here
+     * (identifiers, distinct, at most `LIBRARY_TOPIC_TOTALS_MAX`) before any
+     * read; none asked reads nothing.
+     */
+    async topicTotals(raw: unknown) {
+      const topics = libraryTopicTotalsInputSchema.parse(raw);
+      if (topics.length === 0) return { works: [], research: [] };
+      return reader.topicTotals(topics);
     },
   };
 }

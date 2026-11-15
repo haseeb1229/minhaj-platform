@@ -207,6 +207,14 @@ Every route is localised per §1.1: unprefixed in English, under `/ur` or `/ar` 
 unified content graph, presenting works, videos, articles, research, Fatawa, courses, audio
 and contributors for one topic. It sits at root level because it serves every context.
 
+**Learn Part 2.** `/topics` states, beside every Topic, the published Courses, books, videos and
+research filed under it — each count one grouped read by its owner, under the predicate of the read
+that Topic's hub opens its shelf with. `/topics/{slug}` shelves Courses, books, research and videos
+from the shared topic reads (`topicCourses`, `topicWorks`, `topicResearch`, `topicVideos`) with
+each read's own total in the hero; each shelf leads to its owner's listing filtered by the Topic, or
+— for the `quran` and `hadith` Topics — to that subject's hubs, which the page also names. Layer-4
+composition only; Taxonomy still owns the Topic.
+
 **Rebaseline R2 (2026-11-06).** No root route is added. `/search` offers result-type facets only
 for kinds whose domain has published content (the shell's presence evidence) — the chosen kind is
 always offered, and only the current facet carries a count, the one total the index reports; a
@@ -788,8 +796,10 @@ unless an approved activation is indexable — is unchanged.
 |---|---|
 | `/learn` | Landing |
 | `/learn/courses` · `/learn/courses/{slug}` | Catalogue — `?format, topic, level, language, teacher, sort, page` (Learn Part 1; `?offset` until then, historical, now one redirect) |
-| `/learn/paths` · `/learn/paths/{slug}` | Learning paths |
-| `/learn/live` · `/learn/trial` · `/learn/training` · `/learn/resources` | Learning surfaces |
+| `/learn/paths` · `/learn/paths/{slug}` | Learning paths — `?offset` (24 a page) |
+| `/learn/live` | Live schedule — `?course, teacher, language, offset` (Learn Part 2) |
+| `/learn/trial` | Trial classes — one view (`?offset` until Learn Part 2, historical, now one redirect) |
+| `/learn/training` · `/learn/resources` | Not delivered (no owner contract) |
 | `/learn/teachers` | Teacher directory — `?subject, language, availability` |
 | `/learn/teachers/{slug}` | **301 → `/people/{slug}`** |
 
@@ -844,7 +854,34 @@ classes (as on `/learn/live`: the time in the class's zone and the teacher's pub
 participant or a meeting address). Every Learn page still reads no session; the private island
 renders the visitor's call to action after load (sign in; enrol; or, enrolled, their progress
 "Lessons complete: n of m" and the way on to My Learning) through the unchanged `/api/my/learning/*`
-handlers. Paths, Live, Trial and Teachers are unchanged (Learn Part 2).
+handlers. Paths, Live, Trial and Teachers were unchanged by Learn Part 1 (historical; Learn Part 2
+below).
+
+**Learn Part 2 — Paths, Live classes, Trial classes, Teachers and Topics (DOMAIN_MODEL.md §13.4,
+§13.5).** No public page route is added or removed; one private read is (`/api/my/learning/path-state`,
+§8). `/learn/paths` states the catalogue's figures (published paths, the distinct Courses they hold
+and those Courses' lessons) and each card what its published Courses hold together — how many, their
+lessons, the span of their levels and how they are studied; `?offset` stays canonical to the
+listing. `/learn/paths/{slug}` is a journey: each Course as "Course n of m" with its level, format,
+language, lessons and teachers; the path's totals; its teachers' public profiles; one way in (the
+first Course); and a private island that, after load, shows a signed-in person their own standing
+(Courses enrolled on, lessons complete, the next Course) from Learning's existing learner read — the
+document stays the same for everybody and nothing is written. `/learn/live` groups the upcoming
+classes by day — on the server by each class's own zone, regrouped by the browser in the reader's
+zone after hydration, every time still naming the class's zone — and takes `?course` (a Course's
+current slug), `?teacher` (a People slug, matched at Layer 4 to the accounts teaching a matching
+class — no account identifier is ever in an address) and `?language` (a content-language code),
+each offered with counts only while it can narrow; it says how to join (enrol, then the Google Meet
+link in My classes only). `/learn/trial` explains the request, its steps and what happens next and
+shows the newest Courses taught live, the rest being the catalogue's `?format=live` view; its former
+`?offset` pager is one redirect to `/learn/trial`. `/learn/teachers` cards carry the published
+portrait, the live Courses taught now with their levels and the profile's languages, and its filters
+carry counts. **One address per view** on `/learn/live` and `/learn/teachers`: a form's empty
+controls, another order of the same parameters or a zero offset is one redirect to the canonical
+spelling; **the Phase-22 rule stands** — a malformed or repeated filter, or one naming nothing, is
+answered in place with an explained empty result and never broadens (a repeated teacher-directory
+parameter was read as its first value until Learn Part 2, historical). Both stay `noindex` and
+activation-aware.
 
 ### 3.6 Library
 
@@ -1385,7 +1422,7 @@ owning phase's handlers and tests, not this table.
 | Auth | `/api/auth/*` | Delegated to the authentication library |
 | Search | `/api/search/*` | Search, suggestions, typeahead |
 | Content read | `/api/content/*` | Public read for progressive enhancement |
-| Personal | `/api/my/*` | Authenticated personal actions. Phase 21: `target-state` (GET) and `bookmarks`, `notes`, `collection-items`, `history`, `quran-progress` (POST) serve the private island on public content pages after hydration, and `export` (GET) returns the person's Personalisation data as a JSON download. Phase 22: `learning/state` (GET) and `learning/enrolments`, `learning/trials` (POST) serve a Course page's private island, and `export/learning` (GET) returns the person's Learning data. Phase 26: `export/membership` (GET) returns the person's Membership applications and Memberships. Phase 27: `export/donations` (GET) returns the person's linked donations. Rebaseline R1: `account-state` (GET, same-origin only) answers only `{ signedIn: boolean }` for the shared header's account island, so the public HTML stays identical for everyone. Quran Part 1: `quran-position` (GET, same-origin only, no query) answers only `{ signedIn: false }` or `{ signedIn: true, position: { surah, ayah } | null }` for the session's own account, for the reader's "Continue where you stopped" card. Every response is private and `no-store`; every POST requires the configured origin, `Sec-Fetch-Site: same-origin` where sent and the `x-minhaj-intent: personal` header (SECURITY_BASELINE.md §7.1 rule 6) |
+| Personal | `/api/my/*` | Authenticated personal actions. Phase 21: `target-state` (GET) and `bookmarks`, `notes`, `collection-items`, `history`, `quran-progress` (POST) serve the private island on public content pages after hydration, and `export` (GET) returns the person's Personalisation data as a JSON download. Phase 22: `learning/state` (GET) and `learning/enrolments`, `learning/trials` (POST) serve a Course page's private island (Learn Part 2: `learning/path-state` (GET) serves a path page's, read-only), and `export/learning` (GET) returns the person's Learning data. Phase 26: `export/membership` (GET) returns the person's Membership applications and Memberships. Phase 27: `export/donations` (GET) returns the person's linked donations. Rebaseline R1: `account-state` (GET, same-origin only) answers only `{ signedIn: boolean }` for the shared header's account island, so the public HTML stays identical for everyone. Quran Part 1: `quran-position` (GET, same-origin only, no query) answers only `{ signedIn: false }` or `{ signedIn: true, position: { surah, ayah } | null }` for the session's own account, for the reader's "Continue where you stopped" card. Every response is private and `no-store`; every POST requires the configured origin, `Sec-Fetch-Site: same-origin` where sent and the `x-minhaj-intent: personal` header (SECURITY_BASELINE.md §7.1 rule 6) |
 | Messaging REST | `/api/messaging/*` | Phase 24: `conversations/{id}/messages?after={sequence}` (GET) — durable catch-up after a sequence the reader holds, the source Phase 25 reconnection uses; `conversations/{id}/attachments` (POST) — one attachment's streamed raw body, JPEG, PNG or PDF up to 5 MiB, Class A with `x-minhaj-intent: messaging-attachment`; `attachments/{id}/discard` (POST) — release an unsent upload. Every response private and `no-store`; current access re-decided on every request |
 | Teacher / Admin | `/api/teacher/*` · `/api/admin/*` | Role-gated operations |
 | Migration | `/api/admin/migration/*` | Import control and status. Phase 29 delivers two private reads, GET only: `runs/{id}` — one run's state, discovery, reconciliation and item counts as JSON under `migration.read` (identifiers, states and numbers only); `snapshots/{id}` — one raw snapshot's bytes under `migration.administer`, an audited read sent as an inert attachment (`application/octet-stream`, `nosniff`, `sandbox; default-src 'none'`, `private, no-store`; SECURITY_BASELINE.md §10.5). A cross-site Fetch-Metadata request is refused first and every refusal is the same empty 404. Runs and promotions are started by the command line, mutations are Server Actions; nothing here changes state. Rebaseline R2 adds `assets/{provenanceId}` (GET) — the administrative preview of one acquisition's metadata-stripped **public copy** under a live `migration.administer`, never the acquired evidence bytes or any other asset, served inline with its verified image type, `nosniff`, a sandboxing policy and `private, no-store`; every refusal is the same empty 404 (SECURITY_BASELINE.md §10.11) |

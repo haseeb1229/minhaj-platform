@@ -258,6 +258,51 @@ function ResearchEntry({
   );
 }
 
+/**
+ * A list of research entries outside a hub — a Topic's own page (Learn Part
+ * 2) — every contributor resolved in ONE People call and the content
+ * languages in ONE Taxonomy call. Nothing when empty.
+ */
+export async function ResearchShelf({
+  locale,
+  items,
+  label,
+}: {
+  readonly locale: Locale;
+  readonly items: readonly TopicResearchItem[];
+  readonly label: string;
+}) {
+  if (items.length === 0) return null;
+  const [t, names, languages] = await Promise.all([
+    getTranslations({ locale, namespace: 'topicHub' }),
+    libraryReferenceNames(
+      {
+        personIds: items.flatMap((item) =>
+          item.contributors.map((entry) => entry.personId),
+        ),
+        topicIds: [],
+      },
+      locale,
+    ),
+    libraryContentLanguages(),
+  ]);
+  return (
+    <ul aria-label={label} className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+      {items.map((item) => (
+        <ResearchEntry
+          key={`${item.kind}-${item.id}`}
+          locale={locale}
+          item={item}
+          names={names}
+          languages={languages}
+          heading="h3"
+          t={t}
+        />
+      ))}
+    </ul>
+  );
+}
+
 export async function ResearchHub({
   domain,
   scope,

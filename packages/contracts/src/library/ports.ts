@@ -7,6 +7,7 @@ import type {
   LibraryQuery,
   AssetPurpose,
   LibraryCover,
+  LibraryTopicTotals,
   TopicWorksQuery,
 } from './values.ts';
 import type { PassageQuery, PassageSurahCount, QuranPassage } from '../passage/index.ts';
@@ -321,6 +322,15 @@ export interface LibraryPublicReaderPort {
    */
   topicResearch(query: TopicResearchQuery): Promise<TopicResearchPage>;
   topicResearchFacets(query: TopicResearchQuery): Promise<TopicResearchFacets>;
+
+  /**
+   * LEARN PART 2 — THE TOPIC INDEX. For each named Topic (at most
+   * `LIBRARY_TOPIC_TOTALS_MAX`), how many public Works and how many public
+   * Research and ResearchPaper records are filed under it — grouped reads
+   * under the very predicates of `topicWorks` and `topicResearch`, so each
+   * count is what that Topic's hub opens with.
+   */
+  topicTotals(topics: readonly string[]): Promise<LibraryTopicTotals>;
 
   /* -------------------------------------------------------------------------
    * Phase 9 — Research, ResearchPaper, Publication, Magazine, MagazineIssue and

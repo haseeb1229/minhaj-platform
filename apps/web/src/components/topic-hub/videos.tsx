@@ -266,6 +266,48 @@ function lengthText(length: TopicVideoLength, t: HubTranslator): string {
   return t(`videos.length.${length}`);
 }
 
+/**
+ * A row of video cards outside a hub — a Topic's own page (Learn Part 2) —
+ * every speaker on it resolved in ONE People call. Nothing when empty.
+ */
+export async function VideoShelf({
+  locale,
+  videos,
+  label,
+}: {
+  readonly locale: Locale;
+  readonly videos: readonly TopicVideo[];
+  readonly label: string;
+}) {
+  if (videos.length === 0) return null;
+  const [t, tw, names] = await Promise.all([
+    getTranslations({ locale, namespace: 'topicHub' }),
+    getTranslations({ locale, namespace: 'watch' }),
+    referenceNames(
+      { personIds: videos.flatMap((video) => video.speakerIds), topicIds: [] },
+      locale,
+    ),
+  ]);
+  return (
+    <ul
+      aria-label={label}
+      className="grid grid-cols-1 gap-x-6 gap-y-9 sm:grid-cols-2 lg:grid-cols-3"
+    >
+      {videos.map((video) => (
+        <VideoCard
+          key={video.id}
+          locale={locale}
+          video={video}
+          names={names}
+          t={t}
+          tw={tw}
+          extra={null}
+        />
+      ))}
+    </ul>
+  );
+}
+
 export async function VideosHub({
   domain,
   scope,

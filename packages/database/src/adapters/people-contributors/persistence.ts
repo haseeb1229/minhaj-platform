@@ -417,7 +417,12 @@ function profileDetails(
 }
 
 /** The portrait as a value, or null — the CHECK keeps the four columns together. */
-function portraitOf(row: PersonRow): PersonPortrait | null {
+function portraitOf(
+  row: Pick<
+    PersonRow,
+    'portraitAssetId' | 'portraitWidth' | 'portraitHeight' | 'portraitCredit'
+  >,
+): PersonPortrait | null {
   if (
     row.portraitAssetId === null ||
     row.portraitWidth === null ||
@@ -594,6 +599,11 @@ export function createPeopleReader(): PeopleReaderPort {
           slug: true,
           userId: true,
           primaryLocale: true,
+          // Learn Part 2: the public portrait, as every public card carries it.
+          portraitAssetId: true,
+          portraitWidth: true,
+          portraitHeight: true,
+          portraitCredit: true,
           translations: { select: { locale: true, name: true } },
           teacherProfile: {
             select: {
@@ -628,6 +638,7 @@ export function createPeopleReader(): PeopleReaderPort {
             nameLocale: (label?.locale ?? row.primaryLocale) as Locale,
             subjects: subjects === null || subjects === '' ? null : subjects,
             languages: row.teacherProfile.languages.map((entry) => entry.languageCode),
+            portrait: portraitOf(row),
           },
         ];
       });

@@ -26,7 +26,7 @@ import {
 import { getDatabaseClient } from '../../client.ts';
 import { auditRow } from '../../audit-row.ts';
 import { requestSearchIndexing } from '../../search-intent.ts';
-import { createTopicResearchReader } from './topic-research.ts';
+import { createTopicResearchReader, researchTopicTotals } from './topic-research.ts';
 import { createScholarlyPersistence, createScholarlyPublicReader } from './scholarly.ts';
 
 class LibraryDataError extends Error {
@@ -960,7 +960,7 @@ const TOPIC_WORK_EDITIONS = 50;
 
 function topicWorksReader(): Pick<
   LibraryPublicReaderPort,
-  'topicWorks' | 'topicWorkFacets'
+  'topicWorks' | 'topicWorkFacets' | 'topicTotals'
 > {
   const db = getDatabaseClient();
 
@@ -1114,6 +1114,35 @@ function topicWorksReader(): Pick<
         ];
       });
       return { items, total, hasMore: page.length > q.limit };
+    },
+
+    /**
+     * LEARN PART 2 — THE TOPIC INDEX. Two grouped statements over the asked
+     * Topics only: the Works under the hub's own public predicate (published,
+     * with a published Edition) filed under each — exactly what that Topic's
+     * unfiltered Books hub counts — and the Research and ResearchPaper records
+     * under `topicResearch`'s own predicate. Every Topic a bound parameter.
+     */
+    async topicTotals(topics) {
+      if (topics.length === 0) return { works: [], research: [] };
+      const asked = Prisma.join([...topics]);
+      const [works, research] = await Promise.all([
+        db.$queryRaw<{ topic: string; count: number }[]>`
+          SELECT o.[topicId] AS [topic], COUNT(*) AS [count]
+          FROM [dbo].[WorkTopic] o
+          JOIN [dbo].[Work] w ON w.[id] = o.[workId]
+          WHERE o.[topicId] IN (${asked})
+            AND w.[state] = N'published'
+            AND EXISTS (SELECT 1 FROM [dbo].[Edition] e
+                        WHERE e.[workId] = w.[id] AND e.[state] = N'published')
+          GROUP BY o.[topicId]
+          ORDER BY o.[topicId];`,
+        researchTopicTotals(db, topics),
+      ]);
+      return {
+        works: works.map((row) => ({ topic: row.topic, count: Number(row.count) })),
+        research,
+      };
     },
 
     /**

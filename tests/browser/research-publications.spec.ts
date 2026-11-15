@@ -391,10 +391,11 @@ test.describe('Library-wide surfaces include what Phase 9 delivered', () => {
 
     await page.goto('/topics/education');
     const section = page.getByRole('region', { name: 'Research on this topic' });
-    await expect(section.getByRole('link', { name: RESEARCH_TITLE })).toHaveAttribute(
-      'href',
-      `/library/research/${researchSlug}`,
-    );
+    // Learn Part 2: the shared research entry also names the record in its
+    // details link, so the title link is the EXACT name.
+    await expect(
+      section.getByRole('link', { name: RESEARCH_TITLE, exact: true }),
+    ).toHaveAttribute('href', `/library/research/${researchSlug}`);
   });
 });
 

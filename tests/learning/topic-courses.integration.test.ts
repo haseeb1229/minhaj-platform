@@ -598,4 +598,98 @@ live('Quran Part 13 — the Topic course hub read against real SQL Server', () =
     for (const course of [id.draft, id.archived, randomUUID()])
       expect(await reads.courseRelations(course)).toEqual({ paths: [], related: [] });
   });
+
+  it('counts each asked Topic’s published Courses — exactly its hub’s total, never a draft, an archived Course or an unasked Topic', async () => {
+    const stray = randomUUID();
+    const totals = await reads.topicCourseTotals([quran, hadith, stray]);
+    // A Topic with none is absent; the order is the Topic identifier's.
+    expect(totals).toEqual(
+      [
+        { topic: quran, count: 5 },
+        { topic: hadith, count: 2 },
+      ].sort((a, b) => a.topic.localeCompare(b.topic)),
+    );
+    for (const topic of [quran, hadith])
+      expect(totals.find((entry) => entry.topic === topic)?.count).toBe(
+        (await reads.topicCourses({ topic })).total,
+      );
+    // Only the Topics asked about are read.
+    expect(await reads.topicCourseTotals([hadith])).toEqual([
+      { topic: hadith, count: 2 },
+    ]);
+    expect(await reads.topicCourseTotals([stray])).toEqual([]);
+  });
+
+  it('summarises the published paths — levels, formats and lessons of their published Courses, and the catalogue’s figures', async () => {
+    // The previous test published "together" (daal, baa); one more path here
+    // holds Courses of both formats and an unstated level.
+    const mixed = randomUUID();
+    await db.admin.query(`
+      INSERT INTO [dbo].[LearningPath] ([id],[slug],[primaryLocale],[state],[publishedAt],[version],[updatedAt]) VALUES
+        (N'${mixed}', N'non-learning-fixture-hub-path-mixed-${run}', N'en', N'draft', NULL, 1, SYSUTCDATETIME());
+      INSERT INTO [dbo].[LearningPathLabel] ([pathId],[locale],[title],[summary],[description]) VALUES
+        (N'${mixed}', N'en', ${n(sentinel('PATH', 'mixed'))}, N'', N'');
+      INSERT INTO [dbo].[LearningPathCourse] ([pathId],[courseId],[position]) VALUES
+        (N'${mixed}', N'${id.daal}', 0), (N'${mixed}', N'${id.haa}', 1), (N'${mixed}', N'${id.jeem}', 2);
+      UPDATE [dbo].[LearningPath] SET [state] = N'published', [publishedAt] = '2024-10-01T00:00:00', [version] = 2 WHERE [id] = N'${mixed}';`);
+    const together = (
+      await db.admin.query<{ id: string }>(
+        `SELECT [id] FROM [dbo].[LearningPath] WHERE [slug] = N'non-learning-fixture-hub-path-together-${run}';`,
+      )
+    )[0]?.id;
+    if (together === undefined) throw new Error('The "together" path is missing.');
+
+    const page = await reads.pathSummaries();
+    // The paths catalogue's own order and cards; a draft path is never listed.
+    expect(page.items.map((item) => item.path)).toEqual((await reads.paths()).items);
+    expect(
+      page.items.map(({ path: listing, levels, formats, lessons }) => ({
+        id: listing.id,
+        courses: listing.courses,
+        levels,
+        formats,
+        lessons,
+      })),
+    ).toEqual([
+      {
+        id: mixed,
+        courses: 3,
+        levels: ['intermediate', 'advanced'],
+        formats: ['self-paced', 'live'],
+        lessons: 5,
+      },
+      {
+        id: together,
+        courses: 2,
+        levels: ['beginner', 'advanced'],
+        formats: ['live'],
+        lessons: 6,
+      },
+      {
+        id: path.other,
+        courses: 1,
+        levels: ['beginner'],
+        formats: ['self-paced'],
+        lessons: 1,
+      },
+      {
+        id: path.quran,
+        courses: 2,
+        levels: ['beginner', 'intermediate'],
+        formats: ['self-paced'],
+        lessons: 2,
+      },
+    ]);
+    expect(page.hasMore).toBe(false);
+    // Four published paths; five DISTINCT published Courses between them
+    // (alif is on the draft path only) and those Courses' nine lessons.
+    expect(page.figures).toEqual({ paths: 4, courses: 5, lessons: 9 });
+    expect(JSON.stringify(page)).not.toContain(path.draft);
+    // Past the end: nothing listed, the figures unchanged.
+    expect(await reads.pathSummaries(24)).toEqual({
+      items: [],
+      hasMore: false,
+      figures: { paths: 4, courses: 5, lessons: 9 },
+    });
+  });
 });

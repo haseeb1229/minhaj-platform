@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { SqlSession } from '../../packages/database/src/lifecycle/sql-connection.ts';
@@ -21,6 +23,9 @@ import {
  * for a draft Person, an archived profile or an unlinked account, never
  * leaks a linked account the caller did not name, and resolves the name and
  * subjects in the asked locale with the primary-locale fallback.
+ *
+ * Learn Part 2 adds the Person's public portrait — the reference every public
+ * card carries, or null — so the directory can show a face People publishes.
  */
 
 const describeLive = databaseConfigured ? describe : describe.skip;
@@ -153,6 +158,7 @@ describeLive('Phase 23 — People public teacher facts over a live database', ()
       nameLocale: 'ur',
       subjects: 'تجوید',
       languages: ['ur'],
+      portrait: null,
     });
     // The other published teacher exists but was not asked about.
     expect(answer.some((row) => row.accountId === notAsked)).toBe(false);
@@ -177,5 +183,28 @@ describeLive('Phase 23 — People public teacher facts over a live database', ()
     const [arabic] = await harness.people.publicTeachers([accountId], 'ar');
     expect(arabic?.name).toBe('نام');
     expect(arabic?.nameLocale).toBe('ur');
+  });
+
+  it('carries the Person’s public portrait — its asset, measured box and credit — and nothing else of the asset', async () => {
+    const accountId = await createProofAccount(admin);
+    const teacher = await person('published', 'تصویر');
+    await harness.people.linkAccount(PROOF_ACTOR, { personId: teacher.id, accountId });
+    await teacherProfile(teacher.id, 'active', null);
+    const assetId = randomUUID();
+    await admin.query(`
+      INSERT INTO [dbo].[Asset] ([id],[storageKey],[mediaType],[byteSize],[checksum],[state],[updatedAt])
+      VALUES (N'${assetId}', N'proof-portrait-${assetId}', N'image/jpeg', 10, N'${'a'.repeat(64)}', N'clean', SYSUTCDATETIME());
+      UPDATE [dbo].[Person]
+        SET [portraitAssetId] = N'${assetId}', [portraitWidth] = 600, [portraitHeight] = 800,
+            [portraitCredit] = N'Proof credit'
+        WHERE [id] = N'${teacher.id}';`);
+    const [entry] = await harness.people.publicTeachers([accountId], 'en');
+    expect(entry?.portrait).toEqual({
+      assetId,
+      width: 600,
+      height: 800,
+      credit: 'Proof credit',
+    });
+    expect(JSON.stringify(entry)).not.toContain('proof-portrait-');
   });
 });

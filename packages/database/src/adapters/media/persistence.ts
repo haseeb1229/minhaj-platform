@@ -1055,7 +1055,7 @@ const TOPIC_VIDEO_SERIES_SELECT = {
 
 function topicVideosReader(): Pick<
   MediaPublicReaderPort,
-  'topicVideos' | 'topicVideoFacets'
+  'topicVideos' | 'topicVideoFacets' | 'topicVideoTotals'
 > {
   const db = getDatabaseClient();
 
@@ -1201,6 +1201,23 @@ function topicVideosReader(): Pick<
         ];
       });
       return { items, total, hasMore: page.length > q.limit };
+    },
+
+    /**
+     * LEARN PART 2 — THE TOPIC INDEX: ONE grouped statement, the hub's own
+     * set (published, filed under the Topic) counted per asked Topic. Only the
+     * Topics named are read, each a bound parameter.
+     */
+    async topicVideoTotals(topics) {
+      if (topics.length === 0) return [];
+      const rows = await db.$queryRaw<{ topic: string; count: number }[]>`
+        SELECT o.[topicId] AS [topic], COUNT(*) AS [count]
+        FROM [dbo].[VideoTopic] o
+        JOIN [dbo].[Video] v ON v.[id] = o.[videoId]
+        WHERE v.[state] = N'published' AND o.[topicId] IN (${Prisma.join([...topics])})
+        GROUP BY o.[topicId]
+        ORDER BY o.[topicId];`;
+      return rows.map((row) => ({ topic: row.topic, count: Number(row.count) }));
     },
 
     /**

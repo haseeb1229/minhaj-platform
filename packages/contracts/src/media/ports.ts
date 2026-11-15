@@ -46,6 +46,7 @@ import type {
   TopicVideoFacets,
   TopicVideoPage,
   TopicVideosQuery,
+  TopicVideoTotal,
 } from './values.ts';
 import type {
   PassageQuery,
@@ -188,6 +189,13 @@ export interface MediaPublicReaderPort {
    */
   topicVideos(query: TopicVideosQuery): Promise<TopicVideoPage>;
   topicVideoFacets(query: TopicVideosQuery): Promise<TopicVideoFacets>;
+  /**
+   * LEARN PART 2 — THE TOPIC INDEX. For each named Topic (at most
+   * `MEDIA_TOPIC_TOTALS_MAX`), how many published Videos are filed under it:
+   * ONE grouped read under `topicVideos`' own predicate. Topics with none are
+   * absent.
+   */
+  topicVideoTotals(topics: readonly string[]): Promise<readonly TopicVideoTotal[]>;
 
   /* ---- Phase 11 — AudioTrack and AudioSeries --------------------------- */
 

@@ -4094,6 +4094,126 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > critical finding) with no sideways scroll at 390 and 1440 px on the landing, the catalogue and both
 > Course pages in en, ur and ar. *CI and staging evidence are recorded when they exist.*
 
+> **Learn Part 2 — Paths, Live classes, Trial classes, Teachers and Topics (owner direction: every
+> section built from A to Z, one item at a time; on `feature/rebaseline-r2-full-ecosystem-completion`).**
+> Delivered (DOMAIN_MODEL.md §13.4; ROUTE_MAP.md §3.1, §3.5, §8; INFORMATION_ARCHITECTURE.md §3.4).
+> It completes the Learn menu. No public page route is added or removed, no schema change and no
+> migration; one private GET is added (`/api/my/learning/path-state`), and no mutation. Browsing
+> still never needs an account; enrolment and a trial request stay on a Course page's island,
+> through the same `/api/my/learning/*` handlers, origin and intent checks and rate limits.
+>
+> - **The audit (before).** `/learn/paths`: a grid of cards naming only a path and its Course count —
+>   no figures, no levels, formats or lessons, no explanation. A path page: the Course cards in an
+>   ordered list with "Course n", no totals, no teachers, no way in, nothing for a signed-in learner.
+>   `/learn/live`: a flat list, every time in its class's zone with no grouping by day and nothing
+>   in the reader's zone, no filter, no figures, no "how to join". `/learn/trial`: four unnumbered
+>   sentences and a 24-a-page list of every live Course behind Previous/Next — a second address
+>   for every page. `/learn/teachers`: three selects offering every Topic and every content
+>   language with no counts (most options empty), cards with no portrait and the subject filter
+>   answered by paging over a Topic's live Courses; a repeated parameter read as its first value.
+>   `/topics`: the tree alone — nothing said what a Topic holds. `/topics/{slug}`: books and
+>   research as plain link cards from the old per-kind listings, videos through Watch's preview and
+>   Courses through a catalogue page, with no figures and none of the shared hub reads the Quran
+>   and Hadith hubs use; the `quran` and `hadith` Topics did not lead to their subject's hubs.
+> - **Paths.** The listing states the catalogue's figures (published paths, the distinct Courses
+>   they hold, those Courses' lessons) and each card its Course count, lessons, level span
+>   ("Beginner to Intermediate", with the level steps) and formats; how a path works (an order, an
+>   enrolment per Course, progress). A path page is a journey: a hero with its totals, level span and
+>   formats, "Start with course 1" (naming it), then each Course as "Course n of m" on a numbered
+>   spine with its format, level, language, modules, lessons and teachers, and the path's teachers
+>   linked to their People profiles. New read: Learning's `pathSummaries`.
+> - **Progress across a path (decision).** A learner read already existed — `learner.path`, which
+>   `/my/learning/paths/{slug}` renders — so a path page's private island shows a signed-in person,
+>   after load, the Courses they are enrolled on, the lessons complete across the path (against each
+>   Course's public lesson count) and the next Course, and leads to My Learning; signed out, it
+>   invites a sign-in returning to the path in My Learning (an address the return-to allowlist
+>   already admits). Its transport is a new READ-ONLY GET, `/api/my/learning/path-state?path=<slug>`,
+>   on the same personal transport as `/api/my/learning/state`: exactly one well-formed `path`
+>   parameter, `no-store`, a cross-site fetch refused, signed out answered `{ signedIn: false }`, the
+>   session's own standing only. Nothing is written and the public document is the same for every
+>   visitor.
+> - **Live classes.** The schedule is grouped by day: on the server by the day each class starts in
+>   its OWN zone (the stored wall-clock start), regrouped by the browser after hydration by the
+>   reader's own calendar day — naming today and tomorrow and adding "Your time" beside a class
+>   held in another zone (`./schedule-days`, an external-store island; no zone is sent anywhere).
+>   Every class still names its own zone. Filters with counts — `?course` (a Course slug Learning
+>   resolves), `?teacher` (a People slug, matched at Layer 4 among the public profiles of the
+>   accounts teaching a matching class, so no account identifier is looked up from or written into
+>   an address) and `?language` — each offered only while it can narrow. "How to join": enrol, find
+>   the class in My classes, join on Google Meet from there — the meeting link is never on a public
+>   page. Honest states kept: unavailable while live learning is off, the fixture banner first under
+>   a fixture activation, `noindex`. New reads: the class reader's `upcomingSessions(now, query)`
+>   (narrowed) and `upcomingFacets`.
+> - **Trial classes.** What a trial is, four numbered steps (choose a live Course, sign in, ask on
+>   its page, wait for a confirmed class), "not a booking", what happens next (recorded; staff may
+>   confirm a class; you join from My classes, where alone the link is; withdraw from My Learning),
+>   and the newest Courses taught live with their count, the rest being the catalogue's
+>   `?format=live` view — so the page has one address and its former `?offset=` is one redirect.
+>   Every mutation is unchanged.
+> - **Teachers (what it is gated on).** A listed teacher holds, at once, a current teaching scope
+>   on a published live Course while live learning is activated (Learning), a live
+>   `teaching.perform` (Identity) and a published Person with an active TeacherProfile (People) — a
+>   profile alone grants nothing. Cards now carry the published portrait (People's own route), the
+>   public name linked to the profile, open times, subjects, the profile's languages and the live
+>   Courses taught with their levels. Filters carry counts, each leaving its own filter out; the
+>   subject filter is decided from the teacher's `topicIds` (Learning), replacing the paging over a
+>   Topic's Courses. New reads: `operationalTeachers` adds `topicIds`; People's `publicTeachers`
+>   adds `portrait`.
+> - **One address per view** on `/learn/live` and `/learn/teachers`: empty controls, another order
+>   or a zero offset is one redirect; a malformed, repeated or unknown filter is answered in place,
+>   listing nothing, never broadened (a repeated directory parameter was its first value until now).
+> - **Topics.** `/topics` states beside every Topic (and its figures) the published Courses, books,
+>   videos and research filed under it — one grouped read per owner over the whole tree:
+>   `topicCourseTotals` (Learning), `topicTotals` (Library: Works and Research with ResearchPaper),
+>   `topicVideoTotals` (Media), each under the very predicate of the hub read it mirrors, at most 200
+>   Topics. `/topics/{slug}` shelves Courses, books, research and videos from the shared topic reads
+>   (`topicCourses`, `topicWorks`, `topicResearch`, `topicVideos`; new shelf exports `BookShelf`,
+>   `VideoShelf`, `ResearchShelf` beside `CourseShelf`) with each read's total in the hero; each
+>   shelf leads to the owner's listing filtered by the Topic, or — for `quran` and `hadith` — to the
+>   subject's hub, and those two Topics name their four hubs. Ayat, Hadith, rulings, audio, the other
+>   Library kinds and Editorial keep their sections. Layer-4 composition only.
+> - **Removed as unused:** the Course grid's ordered "Course n" variant and `learn.card.step`, the
+>   trial page's paging, `learn.trial.step{Choose,SignIn,Request,After}`, `learnLive.{zoneNote,
+>   starts}`, `learnTeachers.courses`, `topics.index.{roots,total}`, `topics.hub.count.{books,
+>   research,research-paper}`, `readLiveOffset` and the directory's Topic-paging helper; the
+>   guidance band now holds rulings alone (`topics.hub.bands.guidance`). `LevelSteps` moved to
+>   `components/learning/parts` (no file cycle).
+>
+> **Data facts — what staging will show.** The staging demo data holds two published Courses
+> (*Introduction to Quranic Arabic*, taught live with the demo teacher, filed under `quran`; *Study
+> skills for online learning*, self-paced, no Topic) and **no learning path**, so `/learn/paths` says
+> no path is published yet and no path page exists. Under the staging fixture activation
+> `/learn/live` shows the two demo classes of the Quranic Arabic Course under the test banner,
+> grouped by day, with no filter offered (one Course, one teacher, one language) and the join steps;
+> `/learn/teachers` lists the demo teacher (no portrait is seeded, so the initial tile) with that
+> Course; `/learn/trial` lists that one Course with the count 1. `/topics` shows "1 course" beside
+> the Quran Topic, with whatever books, videos and research staging has filed there, and
+> `/topics/quran` shelves the Course beside them and names the Quran's four hubs. The local
+> persistent database holds no published Course, so locally the Learn pages show their honest
+> empty states.
+>
+> **Proof:** `tests/learning/learn-part2-reads.test.ts` (every new read's input refused before any
+> read — malformed, duplicate or too many Topics, a bad offset, an unknown schedule field; an empty
+> ask reads nothing; the schedule reads nothing while off); integration suites
+> (`tests/learning/topic-courses.integration`, `classes.integration`,
+> `tests/library/topic-works.integration`, `topic-research.integration`,
+> `tests/media/topic-videos.integration`, `tests/people/public-teachers.integration`) — each total
+> equals its hub's, drafts, archived and passage-only records never counted, only the asked Topics;
+> the schedule's filters narrow and never broaden, facets leave their own filter out, nothing while
+> off; `topicIds`; the portrait; path summaries' levels, formats, lessons and figures with a draft
+> excluded. `tests/learning/live-presentation.test.ts` (the schedule's and directory's address
+> rules: exact grammar, repeated is invalid and never redirected, one spelling per view);
+> `tests/identity/protocol.test.ts` and `tests/config/locale.test.ts` (the new route and modules
+> declared). `tests/browser/learning.spec.ts` — the path test reads "Course n of m"; the schedule's
+> classes sit in a labelled region of day groups (the list it used to be is now one per day); new:
+> the paths catalogue's figures and card facts, the path journey (totals, way in, teachers, the
+> signed-out island), the learner's own path progress and the private GET's refusals, the trial page
+> (steps, only live Courses, the former offset one redirect), `/topics` and `/topics/hadith`
+> (counts, shelf, the hadith hubs), the schedule's filters (narrow, empty, invalid, one redirect),
+> the directory's canonical spelling, and axe (no serious or critical finding), headings in order
+> and no sideways scroll at 390 and 1440 px on every Part 2 surface in en, ur and ar, with the path
+> page's way in reached by keyboard, visibly. *CI and staging evidence are recorded when they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

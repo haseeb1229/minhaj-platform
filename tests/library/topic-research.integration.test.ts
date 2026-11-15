@@ -430,5 +430,28 @@ live(
       // With no Topic, nothing at all.
       expect((await reads.topicResearchFacets({ topic: null })).hub.records).toBe(0);
     });
+
+    it('counts each asked Topic’s published Research and papers for the Topic index — exactly its hub’s total (Learn Part 2)', async () => {
+      const stray = randomUUID();
+      const totals = await reads.topicTotals([quranTopic, hadithTopic, stray]);
+      // Both aggregates summed per Topic — never the draft or the archived record.
+      expect(totals.research).toEqual(
+        [
+          { topic: quranTopic, count: 5 },
+          { topic: hadithTopic, count: 2 },
+        ].sort((x, y) => x.topic.localeCompare(y.topic)),
+      );
+      for (const topic of [quranTopic, hadithTopic])
+        expect(totals.research.find((entry) => entry.topic === topic)?.count).toBe(
+          (await reads.topicResearch({ topic })).total,
+        );
+      // No Work is on either Topic in this database.
+      expect(totals.works).toEqual([]);
+      // Only the asked Topics are read.
+      expect((await reads.topicTotals([hadithTopic])).research).toEqual([
+        { topic: hadithTopic, count: 2 },
+      ]);
+      expect(await reads.topicTotals([stray])).toEqual({ works: [], research: [] });
+    });
   },
 );

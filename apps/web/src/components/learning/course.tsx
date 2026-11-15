@@ -17,7 +17,7 @@ import {
   TeacherName,
 } from '@/components/live-learning/parts';
 import { BreadcrumbData } from '@/components/media/parts';
-import { CourseShelf, LevelSteps } from '@/components/topic-hub/courses';
+import { CourseShelf } from '@/components/topic-hub/courses';
 import {
   Alert,
   Badge,
@@ -33,7 +33,7 @@ import {
   TopicChips,
 } from '@/components/ui';
 import { directionOf, endonymOf } from '@/config/locale';
-import { learnTrail } from './parts';
+import { learnTrail, LevelSteps } from './parts';
 import {
   courseBrowseHref,
   courseHref,

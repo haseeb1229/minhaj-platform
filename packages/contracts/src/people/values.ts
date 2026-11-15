@@ -435,6 +435,12 @@ export interface PublicTeacherEntry {
   readonly nameLocale: Locale;
   readonly subjects: string | null;
   readonly languages: readonly string[];
+  /**
+   * Learn Part 2 — the Person's public portrait, or null: the same reference
+   * every public card carries, served only through People's own route while
+   * the Person is published.
+   */
+  readonly portrait: PersonPortrait | null;
 }
 
 /** A Person with everything a PUBLIC profile page renders. */

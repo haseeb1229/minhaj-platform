@@ -919,10 +919,88 @@ test.describe('the published catalogue', () => {
     const courses = page.getByRole('list', { name: copy('learn.path.courses') });
     await expect(courses.getByRole('listitem')).toHaveCount(2);
     await expect(courses.getByRole('listitem').nth(0)).toContainText(
-      copy('learn.card.step', { number: 1 }),
+      copy('learn.path.step', { step: 1, total: 2 }),
     );
     await expect(courses.getByRole('listitem').nth(0)).toContainText(TEXT.paced);
+    await expect(courses.getByRole('listitem').nth(1)).toContainText(
+      copy('learn.path.step', { step: 2, total: 2 }),
+    );
     await expect(courses.getByRole('listitem').nth(1)).toContainText(TEXT.live);
+  });
+
+  test('Learn Part 2 — the paths catalogue states its figures, and each card what its Courses hold', async ({
+    page,
+  }) => {
+    const response = await page.goto('/learn/paths');
+    expect(response?.status()).toBe(200);
+    expect(response?.headers()['set-cookie']).toBeUndefined();
+    const main = page.getByRole('main');
+    // THE FIGURES ARE LEARNING'S OWN COUNTS: this file publishes the only path,
+    // holding two Courses of four lessons between them (other specs publish none).
+    const published = await scalar(
+      "SELECT COUNT_BIG(*) AS [value] FROM [dbo].[LearningPath] WHERE [state]=N'published';",
+    );
+    expect(published).toBe(1);
+    const hero = main.locator('header').first();
+    await expect(hero).toContainText('learning path');
+    await expect(hero).toContainText('courses on paths');
+    await expect(hero).toContainText('lessons');
+    // The card: one link, how many Courses, their lessons, the level span and
+    // both formats — words, never a colour alone.
+    const card = main
+      .getByRole('list', { name: copy('learn.sections.paths') })
+      .getByRole('listitem')
+      .filter({ hasText: TEXT.path });
+    await expect(card.getByRole('link')).toHaveCount(1);
+    await expect(card).toContainText('2 courses');
+    await expect(card).toContainText('4 lessons');
+    await expect(card).toContainText(
+      copy('learn.paths.levelSpan', {
+        from: copy('learn.level.beginner'),
+        to: copy('learn.level.intermediate'),
+      }),
+    );
+    for (const format of ['self-paced', 'live'])
+      await expect(card).toContainText(copy(`learn.format.${format}`));
+    await expect(main).toContainText(copy('learn.paths.how'));
+    // One address: the first page is the bare listing.
+    expect((await page.goto('/learn/paths?offset=0'))?.status()).toBe(200);
+  });
+
+  test('Learn Part 2 — a path page is a journey: totals, teachers, one way in, and the island invites sign-in', async ({
+    page,
+  }) => {
+    const state = page.waitForResponse((answer) =>
+      answer.url().includes('/api/my/learning/path-state'),
+    );
+    const response = await page.goto(PAGE.path);
+    expect(response?.status()).toBe(200);
+    expect(response?.headers()['set-cookie']).toBeUndefined();
+    expect((await state).status()).toBe(200);
+    const main = page.getByRole('main');
+    await expect(main.locator('header').first()).toContainText('2 courses');
+    await expect(main.locator('header').first()).toContainText('4 lessons');
+    // The way in is the first Course.
+    await expect(
+      main.getByRole('link', { name: copy('learn.path.start'), exact: true }),
+    ).toHaveAttribute('href', PAGE.paced);
+    // The live Course's attributed teacher, by their public name and profile.
+    const teachers = page.getByRole('region', { name: copy('learn.path.teachers') });
+    await expect(teachers.locator(`a[href="/people/${people.linkedSlug}"]`)).toHaveCount(
+      1,
+    );
+    // Signed out, the island invites a sign-in that returns to the path in My
+    // Learning — and the document carries nobody's standing.
+    const island = page.getByRole('region', {
+      name: copy('learningIsland.path.heading'),
+    });
+    await expect(island).toContainText(copy('learningIsland.path.signedOut'));
+    await expect(
+      island.getByRole('link', { name: copy('learningIsland.path.signIn') }),
+    ).toHaveAttribute(
+      'href',
+      `/signin?returnTo=${encodeURIComponent(`/my/learning/paths/${slug.path}`)}`,
+    );
   });
 
   test('Quran, Hadith and the topic hub relate Courses only through Learning’s catalogue', async ({
@@ -957,6 +1035,78 @@ test.describe('the published catalogue', () => {
       section.getByRole('link', { name: TEXT.paced, exact: true }),
     ).toHaveAttribute('href', PAGE.paced);
     await expect(section).not.toContainText(TEXT.live);
+  });
+
+  test('Learn Part 2 — the trial page explains a request and lists only Courses taught live', async ({
+    page,
+    request,
+  }) => {
+    const response = await page.goto('/learn/trial');
+    expect(response?.status()).toBe(200);
+    expect(response?.headers()['set-cookie']).toBeUndefined();
+    const main = page.getByRole('main');
+    await expect(main).toContainText(copy('learn.trial.notBooked'));
+    for (const key of ['choose', 'signIn', 'request', 'after'])
+      await expect(main).toContainText(copy(`learn.trial.steps.${key}.title`));
+    for (const key of ['recorded', 'confirmed', 'join', 'withdraw'])
+      await expect(main).toContainText(copy(`learn.trial.nextSteps.${key}.title`));
+    const courses = page.getByRole('list', { name: copy('learn.trial.courses') });
+    await expect(
+      courses.getByRole('link', { name: TEXT.live, exact: true }),
+    ).toHaveAttribute('href', PAGE.live);
+    await expect(courses).not.toContainText(TEXT.paced);
+    await expect(main).not.toContainText('meet.google.com');
+    // The former pager is ONE redirect to the page's one address.
+    const former = await request.get('/learn/trial?offset=24', { maxRedirects: 0 });
+    expect([307, 308]).toContain(former.status());
+    expect(new URL(former.headers()['location'] ?? '', baseUrl()).pathname).toBe(
+      '/learn/trial',
+    );
+  });
+
+  test('Learn Part 2 — /topics states what each Topic holds, and a Topic hub shelves it with its own total', async ({
+    page,
+  }) => {
+    // THE PRECONDITION, PROVED: the live Course is the only published Course
+    // on the hadith Topic (no other spec publishes a Course).
+    expect(
+      await scalar(`SELECT COUNT_BIG(*) AS [value] FROM [dbo].[CourseTopic] o
+        JOIN [dbo].[Course] c ON c.[id]=o.[courseId]
+        JOIN [dbo].[Topic] t ON t.[id]=o.[topicId]
+        WHERE t.[slug]=N'hadith' AND c.[state]=N'published';`),
+    ).toBe(1);
+
+    const response = await page.goto('/topics');
+    expect(response?.status()).toBe(200);
+    const hadith = page
+      .getByRole('list', { name: copy('topics.title') })
+      .locator('a[href="/topics/hadith"]')
+      .locator('xpath=ancestor::li[1]');
+    await expect(hadith).toContainText('1 course');
+    await expect(hadith).not.toContainText('2 courses');
+
+    await page.goto('/topics/hadith');
+    const main = page.getByRole('main');
+    // The hero figure is the shelf's own total, and leads to the shelf.
+    await expect(main.locator('a[href="#topic-courses"]')).toContainText('course');
+    const shelf = page.getByRole('region', { name: copy('topics.courses') });
+    await expect(
+      shelf.getByRole('link', { name: TEXT.live, exact: true }),
+    ).toHaveAttribute('href', PAGE.live);
+    await expect(shelf).not.toContainText(TEXT.paced);
+    // A subject's own Topic leads to that subject's hubs.
+    await expect(
+      shelf.getByRole('link', { name: copy('topics.allCourses') }),
+    ).toHaveAttribute('href', '/hadith/courses');
+    const subject = page.getByRole('region', {
+      name: copy('topics.hub.subject.hadith.heading'),
+    });
+    for (const hub of ['courses', 'books', 'videos', 'research'])
+      await expect(
+        subject.getByRole('link', {
+          name: copy(`topics.hub.subject.hadith.hubs.${hub}`),
+        }),
+      ).toHaveAttribute('href', `/hadith/${hub}`);
   });
 });
 
@@ -1132,6 +1282,72 @@ test.describe('a learner', () => {
     await expect(learner.getByRole('main')).toContainText(
       copy('myLearning.trials.empty'),
     );
+  });
+
+  test('Learn Part 2 — the path page shows the learner their own progress, and a stranger none of it', async ({
+    request,
+  }) => {
+    const state = learner.waitForResponse((answer) =>
+      answer.url().includes('/api/my/learning/path-state'),
+    );
+    await learner.goto(PAGE.path);
+    expect((await state).status()).toBe(200);
+    const island = learner.getByRole('region', {
+      name: copy('learningIsland.path.heading'),
+    });
+    await expect(island).toContainText(
+      copy('learningIsland.path.enrolled', { completed: 1, total: 2 }),
+    );
+    await expect(island).toContainText(progressText(0, 4));
+    await expect(island).toContainText(TEXT.paced);
+    await expect(
+      island.getByRole('link', { name: copy('learningIsland.path.open') }),
+    ).toHaveAttribute('href', `/my/learning/paths/${slug.path}`);
+
+    // The private answer: the session's own standing, GET only, refused to
+    // another site and to a malformed or extra parameter; signed out says so.
+    const own = await learner
+      .context()
+      .request.get(`/api/my/learning/path-state?path=${slug.path}`);
+    expect(own.status()).toBe(200);
+    expect(own.headers()['cache-control']).toContain('no-store');
+    const body = (await own.json()) as {
+      signedIn: boolean;
+      path: { courses: { courseId: string; enrolled: boolean }[] };
+    };
+    expect(body.signedIn).toBe(true);
+    expect(body.path.courses.map((entry) => [entry.courseId, entry.enrolled])).toEqual([
+      [ids.paced, true],
+      [ids.live, false],
+    ]);
+    expect(JSON.stringify(body)).not.toContain(learnerId);
+    const anonymous = await request.get(`/api/my/learning/path-state?path=${slug.path}`);
+    expect(await anonymous.json()).toEqual({ signedIn: false });
+    for (const query of [
+      '',
+      '?path=Not%20A%20Slug',
+      `?path=${slug.path}&account=${learnerId}`,
+      `?path=${slug.path}&path=${slug.path}`,
+    ])
+      expect(
+        (
+          await learner.context().request.get(`/api/my/learning/path-state${query}`)
+        ).status(),
+        query,
+      ).toBe(400);
+    const crossSite = await learner
+      .context()
+      .request.get(`/api/my/learning/path-state?path=${slug.path}`, {
+        headers: { 'sec-fetch-site': 'cross-site' },
+      });
+    expect(crossSite.status()).toBe(403);
+    // A read, never a mutation.
+    const posted = await learner
+      .context()
+      .request.post(`/api/my/learning/path-state?path=${slug.path}`, {
+        headers: intentHeaders(),
+      });
+    expect(posted.status()).toBe(405);
   });
 
   test('reads a lesson and marks it complete; progress moves in words', async () => {
@@ -2809,7 +3025,8 @@ test.describe('Phase 23 — nobody else reaches a class', () => {
       /noindex/,
     );
     await expect(page.getByRole('note')).toHaveText(copy('learnLive.fixture'));
-    const schedule = page.getByRole('list', { name: copy('learnLive.listLabel') });
+    // Learn Part 2: the classes sit in day groups inside one labelled region.
+    const schedule = page.getByRole('region', { name: copy('learnLive.listLabel') });
     await expect(schedule.getByRole('listitem')).toHaveCount(2);
     for (const item of await schedule.getByRole('listitem').all()) {
       await expect(
@@ -2849,6 +3066,87 @@ test.describe('Phase 23 — nobody else reaches a class', () => {
         ).toBe('identical');
         expect(signedInHtml, target).not.toContain(visitor.id);
       }
+  });
+});
+
+test.describe('Learn Part 2 — the live schedule', () => {
+  test('groups by day, narrows by Course, teacher and language with counts, and never broadens', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const region = () =>
+      page.getByRole('region', { name: copy('learnLive.listLabel'), exact: true });
+    const main = page.getByRole('main');
+    const shows = async (query: string, classes: number): Promise<void> => {
+      const response = await page.goto(`/learn/live${query}`);
+      expect(response?.status(), query).toBe(200);
+      if (classes === 0) {
+        await expect(region(), query).toHaveCount(0);
+        return;
+      }
+      await expect(region().getByRole('listitem'), query).toHaveCount(classes);
+    };
+
+    // Unfiltered: the two classes, each day a heading, and how to join — the
+    // meeting link is My classes' alone.
+    await shows('', 2);
+    await expect(region().getByRole('heading', { level: 2 }).first()).toBeVisible();
+    await expect(main).toContainText(copy('learnLive.join.heading'));
+    await expect(
+      main.getByRole('link', { name: copy('learnLive.join.myClasses') }),
+    ).toHaveAttribute('href', '/my/classes');
+
+    // The filters a visitor can use, each a real GET control.
+    await expect(main.getByLabel(copy('learnLive.filter.course'))).toHaveCount(0);
+
+    // Each filter keeps the classes while it is true of them…
+    for (const query of [
+      `?course=${slug.live}`,
+      `?teacher=${teacherOne.slug}`,
+      '?language=ur',
+      `?course=${slug.live}&teacher=${teacherOne.slug}&language=ur`,
+    ])
+      await shows(query, 2);
+    // …and empties the list, explained, when it is not.
+    for (const query of [
+      `?course=${slug.paced}`,
+      `?teacher=${teacherTwo.slug}`,
+      '?language=en',
+    ]) {
+      await shows(query, 0);
+      await expect(main, query).toContainText(copy('learnLive.filter.noResults'));
+    }
+
+    // A value naming nothing, malformed or repeated lists NOTHING and says why.
+    for (const query of [
+      `?course=non-learning-fixture-none-${run}`,
+      `?teacher=non-learning-fixture-nobody-${run}`,
+      '?language=zz',
+      '?course=Not%20A%20Slug',
+      `?course=${slug.live}&course=${slug.live}`,
+    ]) {
+      await shows(query, 0);
+      await expect(main, query).toContainText(copy('learnLive.filter.invalid'));
+      // Nothing is LISTED: no class links its Course or its teacher (the filter
+      // controls may still name them, so the view can be corrected).
+      for (const href of [PAGE.live, `/people/${teacherOne.slug}`])
+        await expect(main.locator(`a[href="${href}"]`), query).toHaveCount(0);
+    }
+
+    // One address per view: another order or an empty control is ONE redirect.
+    for (const [from, to] of [
+      [
+        `/learn/live?language=ur&course=${slug.live}`,
+        `/learn/live?course=${slug.live}&language=ur`,
+      ],
+      ['/learn/live?course=&teacher=', '/learn/live'],
+      ['/ur/learn/live?offset=0', '/ur/learn/live'],
+    ] as const) {
+      const answer = await page.request.get(from, { maxRedirects: 0 });
+      expect([307, 308], from).toContain(answer.status());
+      const location = new URL(answer.headers()['location'] ?? '', baseUrl());
+      expect(`${location.pathname}${location.search}`, from).toBe(to);
+    }
   });
 });
 
@@ -2897,7 +3195,8 @@ test.describe('Phase 23 — Find a teacher', () => {
       .getByLabel(copy('learnTeachers.filter.availability'), { exact: true })
       .selectOption('available');
     await page.getByRole('button', { name: copy('learn.filter.apply') }).click();
-    await expect(page).toHaveURL(/\/learn\/teachers\?(.*&)?availability=available(&|$)/);
+    // Learn Part 2: the form's empty controls are ONE redirect to the canonical view.
+    await expect(page).toHaveURL(/\/learn\/teachers\?availability=available$/);
     await expect(listing().getByRole('heading', { level: 2 })).toHaveText([
       teacherOne.publicName,
     ]);
@@ -3224,6 +3523,66 @@ test.describe('Phase 23 — every locale, every width, the keyboard', () => {
         await expect(viewer.locator('html'), target).toHaveAttribute('dir', 'rtl');
         await expect(viewer.locator('html'), target).toHaveAttribute('lang', locale);
       }
+  });
+
+  test('Learn Part 2 — paths, a path, trial, live, teachers and the topics are axe-clean in en, ur and ar, fit 390 and 1440 pixels, and keep their headings in order', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(1_200_000);
+    for (const locale of ['en', 'ur', 'ar'] as const)
+      for (const address of [
+        '/learn/paths',
+        PAGE.path,
+        '/learn/trial',
+        '/learn/live',
+        '/learn/teachers',
+        '/topics',
+        '/topics/hadith',
+      ]) {
+        const target = localizedPath(locale, address);
+        for (const width of [390, 1440]) {
+          await page.setViewportSize({ width, height: 900 });
+          const response = await page.goto(target);
+          expect(response?.status(), target).toBe(200);
+          await expect(page.getByRole('heading', { level: 1 }), target).toBeVisible();
+          await expect(page.locator('html'), target).toHaveAttribute(
+            'dir',
+            locale === 'en' ? 'ltr' : 'rtl',
+          );
+          expect(
+            await overflowOf(page),
+            `${String(width)}px ${target}`,
+          ).toBeLessThanOrEqual(0);
+        }
+        await expectHeadingsInOrder(page, target);
+        const results = await new AxeBuilder({ page })
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+          .analyze();
+        const blocking = results.violations.filter(
+          (violation) =>
+            violation.impact === 'serious' || violation.impact === 'critical',
+        );
+        for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+          testInfo.annotations.push({
+            type: 'axe',
+            description: `${target}: ${finding.id} (${String(finding.impact)})`,
+          });
+        expect(
+          blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+          target,
+        ).toEqual([]);
+      }
+
+    // The path page's one way in is reached by keyboard, visibly. (Which
+    // directory filters show depends on the teachers this file has left
+    // current by now; they are proved, by label and form, with the directory.)
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(PAGE.path);
+    const start = page
+      .getByRole('main')
+      .getByRole('link', { name: copy('learn.path.start'), exact: true });
+    await tabTo(page, start);
+    await expectVisibleFocus(start, `${PAGE.path} start`);
   });
 
   test('they reflow at 320px and at 200% zoom, with headings in order', async () => {

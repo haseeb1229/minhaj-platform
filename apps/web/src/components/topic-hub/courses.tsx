@@ -16,7 +16,7 @@ import {
   referenceNames,
   type ContentLanguage,
 } from '@/composition/public-references';
-import { PathGrid } from '@/components/learning/parts';
+import { LevelSteps, PathGrid } from '@/components/learning/parts';
 import {
   courseBrowseHref,
   courseHref,
@@ -43,7 +43,6 @@ import {
   coursesPageCount,
   coursesRange,
   coursesReadQuery,
-  levelSteps,
   type CoursesQuery,
   type CoursesScope,
 } from './courses-view';
@@ -135,28 +134,6 @@ type LearnTranslator = Awaited<ReturnType<typeof getTranslations<'learn'>>>;
 type NameMap = ReadonlyMap<string, { readonly slug: string; readonly name: string }>;
 
 const EMPTY_PAGE: TopicCoursePage = { items: [], total: 0, hasMore: false };
-
-/**
- * A level as three steps, the stated ones filled — beside the level's NAME,
- * which carries the meaning; the steps are decoration and hidden.
- */
-const STEP_HEIGHTS = ['h-1.5', 'h-2.5', 'h-3.5'] as const;
-
-export function LevelSteps({ level }: { readonly level: CourseLevel }) {
-  const filled = levelSteps(level);
-  return (
-    <span aria-hidden="true" className="inline-flex shrink-0 items-end gap-0.5">
-      {STEP_HEIGHTS.map((height, index) => (
-        <span
-          key={height}
-          className={`w-1 rounded-full ${height} ${
-            index < filled ? 'bg-accent' : 'bg-border'
-          }`}
-        />
-      ))}
-    </span>
-  );
-}
 
 function LevelMark({
   level,

@@ -505,6 +505,9 @@ describe('the mutation surface', () => {
         // two Class-A mutations (enrol, request a trial class) and Learning's
         // own export. None authenticates anybody.
         'apps/web/src/app/api/my/learning/state/route.ts',
+        // Learn Part 2: the person's standing on one published path — a GET of
+        // Learning's existing learner read, through the same transport.
+        'apps/web/src/app/api/my/learning/path-state/route.ts',
         'apps/web/src/app/api/my/learning/enrolments/route.ts',
         'apps/web/src/app/api/my/learning/trials/route.ts',
         'apps/web/src/app/api/my/export/learning/route.ts',
@@ -612,7 +615,8 @@ describe('the mutation surface', () => {
       /if \(!isSameOriginMutation\(request, \w+\)\) return failed\('denied'\)/u,
     );
     const personal = routes.filter((entry) => entry.includes('/api/my/'));
-    expect(personal).toHaveLength(16);
+    // Learn Part 2 adds the path-state GET: seventeen.
+    expect(personal).toHaveLength(17);
     for (const route of personal) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');
       for (const verb of ['PUT', 'PATCH', 'DELETE'])

@@ -421,5 +421,31 @@ live(
         surahs: [],
       });
     });
+
+    it('counts each asked Topic’s public Works for the Topic index — exactly its Books hub’s total (Learn Part 2)', async () => {
+      const stray = randomUUID();
+      const totals = await reads.topicTotals([quranTopic, hadithTopic, stray]);
+      // Bayan, Commentary and Ghazali on the quran Topic — never the draft
+      // Exegesis, Fatiha with no published Edition, nor Alif, which only
+      // explains a passage; Durood and Ghazali on the hadith Topic.
+      expect(totals.works).toEqual(
+        [
+          { topic: quranTopic, count: 3 },
+          { topic: hadithTopic, count: 2 },
+        ].sort((x, y) => x.topic.localeCompare(y.topic)),
+      );
+      for (const topic of [quranTopic, hadithTopic])
+        expect(totals.works.find((entry) => entry.topic === topic)?.count).toBe(
+          (await reads.topicWorks({ topic })).total,
+        );
+      // No Research record is on either Topic here (`topic-research` proves the counts).
+      expect(totals.research).toEqual([]);
+      // Only the asked Topics are read.
+      expect(await reads.topicTotals([hadithTopic])).toEqual({
+        works: [{ topic: hadithTopic, count: 2 }],
+        research: [],
+      });
+      expect(await reads.topicTotals([stray])).toEqual({ works: [], research: [] });
+    });
   },
 );

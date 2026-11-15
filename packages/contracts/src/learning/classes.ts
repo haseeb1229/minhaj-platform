@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { foldSchema, localTimeSchema, timeZoneSchema } from '../platform/time.ts';
 import { MEETING_PROVIDERS, type MeetingProviderKey } from './meeting.ts';
 import {
+  learningAccountIdSchema,
   learningIdSchema,
+  learningLanguageCodeSchema,
   learningVersionSchema,
   type CourseListing,
   type LearningExport,
@@ -424,10 +426,62 @@ export interface PublicSessionPage {
   readonly hasMore: boolean;
 }
 
+/**
+ * LEARN PART 2 — THE PUBLIC SCHEDULE'S NARROWING. One published live Course,
+ * one teacher's ACCOUNT (resolved at Layer 4 from a People slug the address
+ * names — the account identifier never reaches an address or a page), and
+ * one CONTENT language (the Course's, never the interface locale); each
+ * absent means every one. Filters only narrow the public predicate.
+ */
+export const publicScheduleQuerySchema = z
+  .object({
+    course: learningIdSchema.nullable().default(null),
+    teacher: learningAccountIdSchema.nullable().default(null),
+    language: learningLanguageCodeSchema.nullable().default(null),
+    offset: z.number().int().min(0).max(25_000).default(0),
+  })
+  .strict();
+export type PublicScheduleQuery = z.output<typeof publicScheduleQuerySchema>;
+
+/** How many rows one schedule facet answers with, at most. */
+export const SCHEDULE_FACET_PAGE = 50;
+
+/**
+ * The public schedule's aggregates, each ONE grouped, bounded read of the
+ * upcoming public classes (the schedule's own predicate):
+ *
+ *   `upcoming`   every upcoming class, unfiltered;
+ *   `matching`   those every filter admits — what the listing pages through;
+ *   `courses`    Course → classes, without the Course filter (the Course's
+ *                own public card);
+ *   `teachers`   teacher ACCOUNT → classes, without the teacher filter — for
+ *                Layer 4 to resolve to People's public names, never printed;
+ *   `languages`  content language → classes, without the language filter.
+ *
+ * Each facet is ordered most classes first, then by identifier, and holds at
+ * most `SCHEDULE_FACET_PAGE` rows.
+ */
+export interface PublicScheduleFacets {
+  readonly upcoming: number;
+  readonly matching: number;
+  readonly courses: readonly {
+    readonly course: CourseListing;
+    readonly classes: number;
+  }[];
+  readonly teachers: readonly { readonly accountId: string; readonly classes: number }[];
+  readonly languages: readonly { readonly code: string; readonly classes: number }[];
+}
+
 /** An operational teacher as Learning knows them: an account and the Courses it currently teaches. */
 export interface OperationalTeacher {
   readonly accountId: string;
   readonly courses: readonly CourseListing[];
+  /**
+   * Learn Part 2 — the Taxonomy Topics those Courses are filed under,
+   * distinct, in identifier order: what the directory's subject filter and
+   * its counts are decided from.
+   */
+  readonly topicIds: readonly string[];
   /** At least one future open window nobody has booked. */
   readonly available: boolean;
 }

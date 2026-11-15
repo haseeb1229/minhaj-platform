@@ -137,6 +137,9 @@ function schedule(
   };
 }
 
+/** The public schedule unfiltered, from its first class (Learn Part 2). */
+const EVERY_CLASS = { course: null, teacher: null, language: null, offset: 0 } as const;
+
 const identity = (teacher: TeacherFixture): TeacherIdentity => ({
   accountId: teacher.accountId,
   assignmentIds: [teacher.roleAssignmentId],
@@ -217,6 +220,8 @@ live(
       options: {
         readonly format?: 'self-paced' | 'live';
         readonly publish?: boolean;
+        /** Learn Part 2: the content language, English unless stated. */
+        readonly language?: string;
       } = {},
     ): Promise<CourseDetail> {
       const slug = freshSlug();
@@ -229,7 +234,7 @@ live(
           primaryLocale: 'en',
           level: 'beginner',
           format: options.format ?? 'live',
-          languageCode: 'en',
+          languageCode: options.language ?? 'en',
           labels: [
             {
               locale: 'en',
@@ -361,7 +366,16 @@ live(
             }),
           ),
         ).toBe('not-activated');
-        expect((await reader.upcomingSessions(new Date(), 0)).items).toEqual([]);
+        expect((await reader.upcomingSessions(new Date(), EVERY_CLASS)).items).toEqual(
+          [],
+        );
+        expect(await reader.upcomingFacets(new Date(), EVERY_CLASS)).toEqual({
+          upcoming: 0,
+          matching: 0,
+          courses: [],
+          teachers: [],
+          languages: [],
+        });
         expect(await reader.courseSessions(new Date(), live.id)).toEqual([]);
         expect(await reader.operationalTeachers(new Date())).toEqual([]);
         expect(await teaching.availability(identity(teacher), 0)).toEqual({
@@ -1785,7 +1799,7 @@ live(
         });
         const now = new Date();
 
-        const page = await reader.upcomingSessions(now, 0);
+        const page = await reader.upcomingSessions(now, EVERY_CLASS);
         const mine = page.items.filter((item) => item.course.id === live.id);
         expect(mine.map((item) => item.id).sort()).toEqual(
           [shown.session.id, trialled.session.session.id].sort(),
@@ -1843,6 +1857,108 @@ live(
         expect(JSON.stringify(await reader.operationalTeachers(now))).not.toContain(
           'startsLocal',
         );
+      });
+
+      it('narrows by Course, teacher and content language — never broadening — and counts each facet without its own filter (Learn Part 2)', async () => {
+        const before = (await reader.upcomingFacets(new Date(), EVERY_CLASS)).upcoming;
+        const english = await course();
+        const urdu = await course({ language: 'ur' });
+        const first = await scoped(english.id);
+        const second = await scoped(english.id);
+        const firstOnUrdu = await scoped(urdu.id, first.teacher);
+        const a = await createSession(first.scopeId, first.teacher, schedule(300));
+        const b = await createSession(second.scopeId, second.teacher, schedule(302));
+        const c = await createSession(first.scopeId, first.teacher, schedule(304));
+        const d = await createSession(firstOnUrdu.scopeId, first.teacher, schedule(306));
+        const x = await createSession(firstOnUrdu.scopeId, first.teacher, schedule(308));
+        await teaching.cancel({
+          teacher: identity(first.teacher),
+          sessionId: x.session.id,
+          expectedVersion: 1,
+        });
+        const now = new Date();
+        const ids = async (query: Record<string, unknown>) =>
+          (await reader.upcomingSessions(now, { ...EVERY_CLASS, ...query })).items.map(
+            (item) => item.id,
+          );
+        const one = first.teacher.accountId;
+        const two = second.teacher.accountId;
+
+        // Each filter alone, then together — in start order, never a cancelled class.
+        expect(await ids({ course: english.id })).toEqual([
+          a.session.id,
+          b.session.id,
+          c.session.id,
+        ]);
+        expect(await ids({ teacher: one })).toEqual([
+          a.session.id,
+          c.session.id,
+          d.session.id,
+        ]);
+        expect(await ids({ language: 'ur' })).toEqual([d.session.id]);
+        expect(await ids({ course: english.id, teacher: one })).toEqual([
+          a.session.id,
+          c.session.id,
+        ]);
+        expect(await ids({ course: urdu.id, language: 'en' })).toEqual([]);
+        // A value naming nothing narrows to nothing — it never broadens.
+        expect(await ids({ course: (await course()).id })).toEqual([]);
+        expect(await ids({ teacher: 'not-an-account' })).toEqual([]);
+        expect(await ids({ language: 'ar' })).toEqual([]);
+        // Pages from the query's offset.
+        expect(await ids({ course: english.id, offset: 1 })).toEqual([
+          b.session.id,
+          c.session.id,
+        ]);
+
+        const facets = await reader.upcomingFacets(now, {
+          ...EVERY_CLASS,
+          course: english.id,
+          teacher: one,
+        });
+        // The whole schedule grew by the four public classes, cancelled one aside.
+        expect(facets.upcoming).toBe(before + 4);
+        expect(facets.matching).toBe(2);
+        // Courses without the Course filter: the teacher's own two Courses.
+        expect(facets.courses.map((entry) => [entry.course.id, entry.classes])).toEqual([
+          [english.id, 2],
+          [urdu.id, 1],
+        ]);
+        expect(facets.courses[0]?.course).toMatchObject({
+          id: english.id,
+          state: 'published',
+          format: 'live',
+          languageCode: 'en',
+        });
+        // Teachers without the teacher filter: everybody teaching the Course.
+        expect(facets.teachers).toEqual([
+          { accountId: one, classes: 2 },
+          { accountId: two, classes: 1 },
+        ]);
+        // Languages under both filters.
+        expect(facets.languages).toEqual([{ code: 'en', classes: 2 }]);
+        // The language facet without its own filter, and the matching count with it.
+        const urduFacets = await reader.upcomingFacets(now, {
+          ...EVERY_CLASS,
+          teacher: one,
+          language: 'ur',
+        });
+        expect(urduFacets.matching).toBe(1);
+        expect(urduFacets.languages).toEqual([
+          { code: 'en', classes: 2 },
+          { code: 'ur', classes: 1 },
+        ]);
+        expect(JSON.stringify(facets)).not.toContain('meet.google.com');
+        expect(JSON.stringify(facets)).not.toContain('startsLocal');
+
+        // The directory's subject filter reads the Topics a teacher's Courses are filed under.
+        const listed = (await reader.operationalTeachers(now)).find(
+          (entry) => entry.accountId === one,
+        );
+        expect(listed?.courses.map((entry) => entry.id).sort()).toEqual(
+          [english.id, urdu.id].sort(),
+        );
+        expect(listed?.topicIds).toEqual([topicId]);
       });
     });
 

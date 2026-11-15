@@ -416,6 +416,37 @@ export const topicWorksQuerySchema = z
   );
 export type TopicWorksQuery = z.infer<typeof topicWorksQuerySchema>;
 
+/**
+ * LEARN PART 2 — THE TOPIC INDEX. The most Topics one totals read answers for:
+ * the Taxonomy tree's own row bound, so the index asks once for the tree.
+ */
+export const LIBRARY_TOPIC_TOTALS_MAX = 200;
+
+/** The Topics a totals read is asked about: identifiers, distinct, bounded. */
+export const libraryTopicTotalsInputSchema = z
+  .array(libraryIdSchema)
+  .max(LIBRARY_TOPIC_TOTALS_MAX)
+  .refine((ids) => new Set(ids).size === ids.length, {
+    message: 'A Topic is asked about once.',
+  });
+
+/** How many public records of one kind are filed under one Topic. */
+export interface LibraryTopicTotal {
+  readonly topic: string;
+  readonly count: number;
+}
+
+/**
+ * Per Topic: the public Works — exactly the `total` of `topicWorks({ topic })`
+ * on that Topic's unfiltered Books hub — and the public Research and
+ * ResearchPaper records together — exactly the `total` of
+ * `topicResearch({ topic })`. A Topic with none is absent from that list.
+ */
+export interface LibraryTopicTotals {
+  readonly works: readonly LibraryTopicTotal[];
+  readonly research: readonly LibraryTopicTotal[];
+}
+
 export type WorkInput = z.infer<typeof workInputSchema>;
 export type EditionInput = z.infer<typeof editionInputSchema>;
 export type ReaderDocument = z.infer<typeof readerDocumentSchema>;

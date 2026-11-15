@@ -401,6 +401,29 @@ export const TOPIC_VIDEO_LENGTHS = Object.freeze({
 export type TopicVideoLength = keyof typeof TOPIC_VIDEO_LENGTHS;
 export const topicVideoLengthSchema = z.enum(['short', 'medium', 'long']);
 
+/**
+ * LEARN PART 2 — THE TOPIC INDEX. The most Topics one totals read answers for:
+ * the Taxonomy tree's own row bound.
+ */
+export const MEDIA_TOPIC_TOTALS_MAX = 200;
+
+/** The Topics a totals read is asked about: identifiers, distinct, bounded. */
+export const mediaTopicTotalsInputSchema = z
+  .array(mediaIdSchema)
+  .max(MEDIA_TOPIC_TOTALS_MAX)
+  .refine((ids) => new Set(ids).size === ids.length, {
+    message: 'A Topic is asked about once.',
+  });
+
+/**
+ * How many published Videos are filed under one Topic — exactly the `total`
+ * of `topicVideos({ topic })` on that Topic's unfiltered Videos hub.
+ */
+export interface TopicVideoTotal {
+  readonly topic: string;
+  readonly count: number;
+}
+
 export const topicVideosQuerySchema = z
   .object({
     topic: mediaIdSchema.nullable().default(null),

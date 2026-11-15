@@ -6,6 +6,8 @@ import {
   courseLevelSchema,
   learningIdSchema,
   learningLanguageCodeSchema,
+  type CourseFormat,
+  type CourseLevel,
   type CourseListing,
   type PathListing,
 } from './values.ts';
@@ -170,4 +172,61 @@ export interface CoursePathPlace {
 export interface CourseRelations {
   readonly paths: readonly CoursePathPlace[];
   readonly related: readonly CourseListing[];
+}
+
+/* ===========================================================================
+ * Learn Part 2 — the paths catalogue and the Topic index
+ * ========================================================================= */
+
+/**
+ * One published LearningPath as the paths catalogue shows it: its card, and
+ * what its PUBLISHED Courses hold together — the levels they state (in level
+ * order, an unstated level not named), the ways they are studied (in
+ * `COURSE_FORMATS` order) and their lessons. Nothing private.
+ */
+export interface PathSummary {
+  readonly path: PathListing;
+  readonly levels: readonly CourseLevel[];
+  readonly formats: readonly CourseFormat[];
+  readonly lessons: number;
+}
+
+/**
+ * One bounded page of published LearningPaths (the latest publication first,
+ * as `paths`), and the catalogue's figures: how many paths are published, and
+ * the DISTINCT published Courses they hold between them with those Courses'
+ * lessons — a Course on two paths counted once.
+ */
+export interface PathSummaryPage {
+  readonly items: readonly PathSummary[];
+  readonly hasMore: boolean;
+  readonly figures: {
+    readonly paths: number;
+    readonly courses: number;
+    readonly lessons: number;
+  };
+}
+
+/**
+ * The most Topics one totals read answers for — the Taxonomy tree's own row
+ * bound, so the Topic index asks once for the whole tree.
+ */
+export const TOPIC_TOTALS_MAX = 200;
+
+/** The Topics a totals read is asked about: identifiers, distinct, bounded. */
+export const topicTotalsInputSchema = z
+  .array(learningIdSchema)
+  .max(TOPIC_TOTALS_MAX)
+  .refine((ids) => new Set(ids).size === ids.length, {
+    message: 'A Topic is asked about once.',
+  });
+
+/**
+ * How many published Courses are filed under one Topic — exactly the `total`
+ * of `topicCourses({ topic })` on that Topic's unfiltered hub. A Topic with
+ * none is absent from the answer.
+ */
+export interface TopicCourseTotal {
+  readonly topic: string;
+  readonly count: number;
 }

@@ -26,10 +26,12 @@ import type {
 } from './values.ts';
 import type {
   CourseRelations,
+  PathSummaryPage,
   TopicCourseFacets,
   TopicCoursePage,
   TopicCoursePaths,
   TopicCourseQuery,
+  TopicCourseTotal,
 } from './topic-courses.ts';
 
 /**
@@ -115,9 +117,23 @@ export interface LearningPublicReaderPort {
   topicCourses(query: TopicCourseQuery): Promise<TopicCoursePage>;
   topicCourseFacets(query: TopicCourseQuery): Promise<TopicCourseFacets>;
   topicCoursePaths(topic: string | null): Promise<TopicCoursePaths>;
+  /**
+   * LEARN PART 2 — THE TOPIC INDEX. For each of the named Topics (at most
+   * `TOPIC_TOTALS_MAX`), how many published Courses are filed under it: ONE
+   * grouped read under the same predicate as `topicCourses`, so each count is
+   * exactly the total that Topic's hub opens with. Topics with none are absent.
+   */
+  topicCourseTotals(topics: readonly string[]): Promise<readonly TopicCourseTotal[]>;
 
   /** One bounded page of PUBLISHED LearningPaths, latest publication first. */
   paths(offset: number): Promise<PathPage>;
+  /**
+   * LEARN PART 2 — the same page as `paths`, each path with what its
+   * PUBLISHED Courses hold together (levels, formats, lessons), and the
+   * catalogue's figures (`PathSummaryPage`). Grouped, bounded reads; the
+   * public predicate on the path and on every Course counted.
+   */
+  pathSummaries(offset: number): Promise<PathSummaryPage>;
   /** One published LearningPath by its CURRENT slug, with its published Courses in order. */
   path(slug: string): Promise<PathDetail | null>;
   pathCanonicalSlug(slug: string): Promise<string | null>;

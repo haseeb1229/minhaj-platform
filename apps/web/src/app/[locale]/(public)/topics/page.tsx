@@ -4,8 +4,19 @@ import { getTranslations } from 'next-intl/server';
 
 import type { TopicView } from '@minhaj/contracts/taxonomy';
 
+import { learningReadRuntime } from '@/composition/learning-read';
+import { libraryReadRuntime } from '@/composition/library-read';
+import { mediaReadRuntime } from '@/composition/media-read';
 import { taxonomyRuntime } from '@/composition/taxonomy';
-import { Breadcrumbs, Container, EmptyState, MetaRow, PageHero } from '@/components/ui';
+import {
+  Breadcrumbs,
+  Container,
+  EmptyState,
+  Icon,
+  PageHero,
+  Stat,
+  type IconName,
+} from '@/components/ui';
 import { directionOf } from '@/config/locale';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
@@ -18,12 +29,21 @@ import { requireRoute } from '@/shell/registry';
  * its accepted depth and row bound in one call per level, already ordered; this
  * page only nests it. Each topic links to its hub.
  *
+ * WHAT EACH TOPIC HOLDS, PER OWNER (Learn Part 2). Beside every topic, the
+ * published Courses, books, videos and research filed under it — each count
+ * one grouped read by its OWNER over the whole tree (Learning's
+ * `topicCourseTotals`, Library's `topicTotals`, Media's `topicVideoTotals`),
+ * under the very predicate of the read that topic's hub opens its shelf with,
+ * so the number here is the number there. A topic's count is of what is filed
+ * under IT, never summed from its narrower topics; a topic with nothing filed
+ * says nothing. Taxonomy decides which topics exist; nothing here does.
+ *
  * PRESENTED AS STRUCTURE. Every top-level topic is a branch with its own
  * heading, and its descendants hang beneath it on a rule, so the shape of the
- * taxonomy is visible at a glance. The figures are counts of the tree this page
- * already holds — nothing is estimated.
+ * taxonomy is visible at a glance.
  *
- * DYNAMIC, because topics are records an administrator changes.
+ * DYNAMIC, because topics are records an administrator changes and material is
+ * published and withdrawn.
  */
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +63,19 @@ export async function generateMetadata({ params }: TopicsParams): Promise<Metada
   });
 }
 
+/** The owners counted beside each topic, in the order a learner reaches for them. */
+const OWNERS = ['courses', 'books', 'videos', 'research'] as const;
+type Owner = (typeof OWNERS)[number];
+const OWNER_ICONS: Readonly<Record<Owner, IconName>> = {
+  courses: 'calendar',
+  books: 'book',
+  videos: 'video',
+  research: 'news',
+};
+
+/** What one topic holds, per owner; absent owners hold nothing. */
+type Holdings = Readonly<Partial<Record<Owner, number>>>;
+
 /** The address of one topic's hub. */
 function hubPath(locale: string, topic: TopicView): string {
   return localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`);
@@ -57,9 +90,30 @@ export default async function TopicsPage({ params }: TopicsParams) {
     locale,
     includeArchived: false,
   });
+  const ids = tree.map((topic) => topic.id);
+  const [courses, library, videos] = await Promise.all([
+    learningReadRuntime().topicCourseTotals(ids),
+    libraryReadRuntime().topicTotals(ids),
+    mediaReadRuntime().topicVideoTotals(ids),
+  ]);
+  const holdings = new Map<string, Record<string, number>>();
+  const add = (owner: Owner, rows: readonly { topic: string; count: number }[]) => {
+    for (const row of rows) {
+      const entry = holdings.get(row.topic) ?? {};
+      entry[owner] = row.count;
+      holdings.set(row.topic, entry);
+    }
+  };
+  add('courses', courses);
+  add('books', library.works);
+  add('videos', videos);
+  add('research', library.research);
+  const holdingsOf = (topic: TopicView): Holdings => holdings.get(topic.id) ?? {};
+
   const childrenOf = (parentId: string | null) =>
     tree.filter((topic) => topic.parentId === parentId);
   const roots = childrenOf(null);
+  const withMaterial = tree.filter((topic) => holdings.has(topic.id)).length;
 
   return (
     <>
@@ -77,12 +131,27 @@ export default async function TopicsPage({ params }: TopicsParams) {
 
       <PageHero eyebrow={t('index.eyebrow')} title={t('title')} lede={t('intro')}>
         {roots.length === 0 ? null : (
-          <MetaRow
-            items={[
-              t('index.roots', { count: roots.length }),
-              t('index.total', { count: tree.length }),
-            ]}
-          />
+          <div className="flex flex-wrap gap-x-10 gap-y-4">
+            <Stat
+              value={tree.length}
+              label={t('index.statTopics', { count: tree.length })}
+            />
+            <Stat
+              value={roots.length}
+              label={t('index.statRoots', { count: roots.length })}
+            />
+            {withMaterial === 0 ? null : (
+              <Stat
+                value={withMaterial}
+                label={t('index.statWithMaterial', { count: withMaterial })}
+              />
+            )}
+          </div>
+        )}
+        {roots.length === 0 ? null : (
+          <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
+            {t('index.countsNote')}
+          </p>
         )}
       </PageHero>
 
@@ -121,11 +190,12 @@ export default async function TopicsPage({ params }: TopicsParams) {
                         {root.label.description}
                       </p>
                     )}
+                    <HoldingsRow holdings={holdingsOf(root)} t={t} />
                     {children.length === 0 ? null : (
                       <>
-                        <MetaRow
-                          items={[t('index.children', { count: children.length })]}
-                        />
+                        <p className="text-caption text-foreground-muted">
+                          {t('index.children', { count: children.length })}
+                        </p>
                         <ul className="flex list-none flex-col border-s-2 border-accent-rule p-0 ps-3">
                           {children.map((child) => (
                             <Branch
@@ -133,6 +203,8 @@ export default async function TopicsPage({ params }: TopicsParams) {
                               topic={child}
                               locale={locale}
                               tree={tree}
+                              holdingsOf={holdingsOf}
+                              t={t}
                             />
                           ))}
                         </ul>
@@ -149,19 +221,59 @@ export default async function TopicsPage({ params }: TopicsParams) {
   );
 }
 
+type TopicsTranslator = Awaited<ReturnType<typeof getTranslations<'topics'>>>;
+
+/**
+ * What a topic holds, owner by owner — each count in words with its icon, so
+ * the meaning is never in the icon alone. Nothing for a topic that holds none.
+ */
+function HoldingsRow({
+  holdings,
+  t,
+  compact = false,
+}: {
+  readonly holdings: Holdings;
+  readonly t: TopicsTranslator;
+  readonly compact?: boolean;
+}) {
+  const present = OWNERS.flatMap((owner) => {
+    const count = holdings[owner];
+    return count === undefined || count === 0 ? [] : [{ owner, count }];
+  });
+  if (present.length === 0) return null;
+  return (
+    <ul
+      className={`flex list-none flex-wrap gap-x-3 gap-y-1 p-0 text-caption ${
+        compact ? 'text-foreground-muted' : 'font-medium text-foreground'
+      }`}
+    >
+      {present.map(({ owner, count }) => (
+        <li key={owner} className="inline-flex items-center gap-1.5">
+          <Icon name={OWNER_ICONS[owner]} size={16} className="shrink-0 text-accent" />
+          {t(`index.holds.${owner}`, { count })}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** One topic and its descendants, nested by the tree Taxonomy already ordered. */
 function Branch({
   topic,
   locale,
   tree,
+  holdingsOf,
+  t,
 }: {
   readonly topic: TopicView;
   readonly locale: string;
   readonly tree: readonly TopicView[];
+  readonly holdingsOf: (topic: TopicView) => Holdings;
+  readonly t: TopicsTranslator;
 }) {
   const children = tree.filter((entry) => entry.parentId === topic.id);
   return (
-    <li className="flex min-w-0 flex-col">
+    <li className="flex min-w-0 flex-col pb-1">
       <a
         href={hubPath(locale, topic)}
         lang={topic.label.resolvedLocale}
@@ -170,10 +282,18 @@ function Branch({
       >
         {topic.label.name}
       </a>
+      <HoldingsRow holdings={holdingsOf(topic)} t={t} compact />
       {children.length === 0 ? null : (
         <ul className="flex list-none flex-col border-s border-border p-0 ps-3">
           {children.map((child) => (
-            <Branch key={child.id} topic={child} locale={locale} tree={tree} />
+            <Branch
+              key={child.id}
+              topic={child}
+              locale={locale}
+              tree={tree}
+              holdingsOf={holdingsOf}
+              t={t}
+            />
           ))}
         </ul>
       )}

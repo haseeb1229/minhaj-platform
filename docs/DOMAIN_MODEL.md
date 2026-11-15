@@ -2048,6 +2048,26 @@ enrolled), read only through the private island's `/api/my/learning/state`. The 
 teacher facet of `topicCourseFacets` (historical). Every value is a bound parameter; nothing private
 is public; no schema change and no migration.
 
+**Paths, the schedule, the directory and the Topic index (Learn Part 2).** New public reads, each
+parameterised SQL, bounded, under the ordinary public predicate and reading nothing private:
+`pathSummaries(offset)` — the same page as `paths`, each path with the levels (level order, an
+unstated level not named), formats and lessons of its **published** Courses, and the catalogue's
+figures (published paths, the distinct published Courses on them, those Courses' lessons);
+`topicCourseTotals(topicIds)` (at most 200 Topics) — per Topic, exactly the `total` its
+`topicCourses` hub opens with, Topics with none absent. The class public reader's
+`upcomingSessions(now, query)` now takes `publicScheduleQuerySchema` — a Course, a teacher
+**account** (resolved at Layer 4 from a People slug matched among the accounts teaching a matching
+class; never from an address) and a content language, each only narrowing — and
+`upcomingFacets(now, query)` answers the schedule's aggregates (upcoming, matching, and Course,
+teacher-account and language counts, each without its own filter; at most 50 rows each; empty while
+off); `operationalTeachers` adds each teacher's `topicIds` (the Topics of the live Courses they
+teach), from which Layer 4 now decides the directory's subject filter and its counts (the former
+paging over a Topic's live Courses is removed, historical). The learner's existing `path` read now
+also answers the private `/api/my/learning/path-state` GET a path page's island calls — no new
+learner read and no mutation. Library's `topicTotals` and Media's `topicVideoTotals` (§10, §11)
+answer the same per-Topic totals for their hubs' reads, and People's `publicTeachers` adds the
+published portrait. No schema change and no migration.
+
 **Not delivered, and not owed by Phase 22:** ClassSession, Availability, Attendance, Booking and the
 confirmation of a trial request; teacher authority and the teacher area; My Classes and My Teachers;
 certificates, assessments, grades, payments and entitlements; under-18 rules (OPEN_DECISIONS.md §2.1

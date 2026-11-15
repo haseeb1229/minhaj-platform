@@ -323,6 +323,8 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/learning/paths.tsx',
     'apps/web/src/components/learning/presentation.ts',
     'apps/web/src/components/learning/read.ts',
+    // Learn Part 2: the Trial classes page, out of the landing's module.
+    'apps/web/src/components/learning/trial.tsx',
     // Phase 22. The Course page's private island (session-free by
     // construction: it reads a learner's state only through `/api/my/learning/*`
     // after hydration), and the My Learning parts, which read the session only
@@ -330,6 +332,10 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/learning-island/learning-controls.tsx',
     'apps/web/src/components/learning-island/learning-island.tsx',
     'apps/web/src/components/learning-island/requests.ts',
+    // Learn Part 2: the path page's private island, session-free by the same
+    // construction — it reads the learner's standing only through
+    // `/api/my/learning/path-state` after hydration.
+    'apps/web/src/components/learning-island/path-progress.tsx',
     'apps/web/src/components/my-learning/action-support.ts',
     'apps/web/src/components/my-learning/nav.ts',
     'apps/web/src/components/my-learning/parts.tsx',
@@ -344,6 +350,9 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/live-learning/parts.tsx',
     'apps/web/src/components/live-learning/presentation.ts',
     'apps/web/src/components/live-learning/schedule.tsx',
+    // Learn Part 2: the schedule's day grouping, regrouped in the reader's own
+    // zone by the browser after hydration; it reads no request state.
+    'apps/web/src/components/live-learning/schedule-days.tsx',
     'apps/web/src/components/my-classes/parts.tsx',
     'apps/web/src/components/teacher/action-support.ts',
     'apps/web/src/components/teacher/attendance-marks.tsx',

@@ -4,14 +4,20 @@ import 'server-only';
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
-import type { CourseListing, PathListing } from '@minhaj/contracts/learning';
+import type {
+  CourseLevel,
+  CourseListing,
+  PathListing,
+  PathSummary,
+} from '@minhaj/contracts/learning';
 
 import {
   contentLanguages,
   referenceNames,
   type ContentLanguage,
 } from '@/composition/public-references';
-import { CardGrid, LinkCard, MetaRow } from '@/components/ui';
+import { levelSteps } from '@/components/topic-hub/courses-view';
+import { Badge, CardGrid, Icon, LinkCard, MetaRow } from '@/components/ui';
 import { directionOf } from '@/config/locale';
 import { courseHref, learnPath, learningPathHref, outlineLabel } from './presentation';
 
@@ -35,6 +41,28 @@ import { courseHref, learnPath, learningPathHref, outlineLabel } from './present
 
 export type LearnTranslator = Awaited<ReturnType<typeof getTranslations<'learn'>>>;
 type NameMap = ReadonlyMap<string, { readonly slug: string; readonly name: string }>;
+
+/**
+ * A level as three steps, the stated ones filled — beside the level's NAME,
+ * which carries the meaning; the steps are decoration and hidden.
+ */
+const STEP_HEIGHTS = ['h-1.5', 'h-2.5', 'h-3.5'] as const;
+
+export function LevelSteps({ level }: { readonly level: CourseLevel }) {
+  const filled = levelSteps(level);
+  return (
+    <span aria-hidden="true" className="inline-flex shrink-0 items-end gap-0.5">
+      {STEP_HEIGHTS.map((height, index) => (
+        <span
+          key={height}
+          className={`w-1 rounded-full ${height} ${
+            index < filled ? 'bg-accent' : 'bg-border'
+          }`}
+        />
+      ))}
+    </span>
+  );
+}
 
 /** Home / Learn / … — the trail every Learn page starts with. */
 export async function learnTrail(locale: Locale) {
@@ -68,7 +96,6 @@ function CourseCard({
   languages,
   t,
   headingLevel,
-  step,
 }: {
   readonly locale: Locale;
   readonly course: CourseListing;
@@ -76,8 +103,6 @@ function CourseCard({
   readonly languages: ReadonlyMap<string, ContentLanguage>;
   readonly t: LearnTranslator;
   readonly headingLevel: 'h2' | 'h3';
-  /** The Course's place on a LearningPath, counting from 1. */
-  readonly step: number | null;
 }) {
   const label = outlineLabel(course.labels, locale, course.primaryLocale);
   const language = languages.get(course.languageCode);
@@ -90,7 +115,7 @@ function CourseCard({
   return (
     <LinkCard
       href={courseHref(locale, course.slug)}
-      eyebrow={step === null ? kind : `${t('card.step', { number: step })} · ${kind}`}
+      eyebrow={kind}
       title={label.title}
       description={label.summary}
       headingLevel={headingLevel}
@@ -123,21 +148,17 @@ function CourseCard({
 /**
  * A page of Course cards with every teacher on it resolved in ONE People call
  * and the content languages in ONE Taxonomy call — never a call per card.
- * `ordered` is for a LearningPath, whose order is its meaning: an ordered list,
- * one Course to a row, each numbered.
  */
 export async function CourseGrid({
   locale,
   courses,
   label,
   headingLevel = 'h2',
-  ordered = false,
 }: {
   readonly locale: Locale;
   readonly courses: readonly CourseListing[];
   readonly label: string;
   readonly headingLevel?: 'h2' | 'h3';
-  readonly ordered?: boolean;
 }) {
   const t = await getTranslations({ locale, namespace: 'learn' });
   const [references, languages] = await Promise.all([
@@ -147,32 +168,46 @@ export async function CourseGrid({
     ),
     contentLanguages(),
   ]);
-  const cards = courses.map((course, index) => (
-    <CourseCard
-      key={course.id}
-      locale={locale}
-      course={course}
-      people={references.people}
-      languages={languages}
-      t={t}
-      headingLevel={headingLevel}
-      step={ordered ? index + 1 : null}
-    />
-  ));
-
-  return ordered ? (
-    <ol
-      aria-label={label}
-      className="grid max-w-3xl list-none grid-cols-1 gap-4 p-0 *:min-w-0"
-    >
-      {cards}
-    </ol>
-  ) : (
-    <CardGrid label={label}>{cards}</CardGrid>
+  return (
+    <CardGrid label={label}>
+      {courses.map((course) => (
+        <CourseCard
+          key={course.id}
+          locale={locale}
+          course={course}
+          people={references.people}
+          languages={languages}
+          t={t}
+          headingLevel={headingLevel}
+        />
+      ))}
+    </CardGrid>
   );
 }
 
-/** A page of LearningPath cards: words and how many published Courses each holds. */
+/**
+ * A LearningPath's levels as WORDS: one stated level, or the first and the
+ * last ("Beginner to Advanced"). Nothing when no Course on it states one.
+ */
+export function levelSpan(
+  levels: readonly CourseLevel[],
+  t: LearnTranslator,
+): string | null {
+  const first = levels[0];
+  const last = levels.at(-1);
+  if (first === undefined || last === undefined) return null;
+  return first === last
+    ? t(`level.${first}`)
+    : t('paths.levelSpan', { from: t(`level.${first}`), to: t(`level.${last}`) });
+}
+
+/**
+ * A page of LearningPath cards. Every card names the path and how many
+ * published Courses it holds; a card built from a `PathSummary` (the paths
+ * catalogue, the Learn landing) also states what those Courses hold together —
+ * their lessons, the span of their levels and how they are studied. One link
+ * per card, the title, stretched over it.
+ */
 export async function PathGrid({
   locale,
   paths,
@@ -180,30 +215,87 @@ export async function PathGrid({
   headingLevel = 'h2',
 }: {
   readonly locale: Locale;
-  readonly paths: readonly PathListing[];
+  readonly paths: readonly PathListing[] | readonly PathSummary[];
   readonly label: string;
   readonly headingLevel?: 'h2' | 'h3';
 }) {
   const t = await getTranslations({ locale, namespace: 'learn' });
+  const Heading = headingLevel;
 
   return (
-    <CardGrid label={label}>
-      {paths.map((path) => {
+    <ul
+      aria-label={label}
+      className="grid list-none grid-cols-1 gap-4 p-0 *:min-w-0 sm:grid-cols-2 xl:grid-cols-3"
+    >
+      {paths.map((entry: PathListing | PathSummary) => {
+        const summary = 'path' in entry ? entry : null;
+        const path = summary === null ? (entry as PathListing) : summary.path;
         const words = outlineLabel(path.labels, locale, path.primaryLocale);
+        const content = { lang: words.locale, dir: directionOf(words.locale) };
+        const span = summary === null ? null : levelSpan(summary.levels, t);
+        const top = summary?.levels.at(-1);
         return (
-          <LinkCard
+          <li
             key={path.id}
-            href={learningPathHref(locale, path.slug)}
-            eyebrow={t('path.type')}
-            title={words.title}
-            description={words.summary}
-            headingLevel={headingLevel}
-            lang={words.locale}
-            dir={directionOf(words.locale)}
-            meta={<MetaRow items={[t('card.courses', { count: path.courses })]} />}
-          />
+            className="card-surface relative flex min-w-0 flex-col gap-4 rounded-panel border border-border bg-surface-raised p-4 hover:border-accent sm:p-5"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="inline-flex items-center gap-2 text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
+                <Icon name="list" size={16} />
+                {t('path.type')}
+              </span>
+              <span className="text-caption font-medium text-foreground-muted">
+                {t('card.courses', { count: path.courses })}
+              </span>
+            </div>
+            <div className="flex min-w-0 flex-col gap-2">
+              <Heading
+                className="font-serif text-subheading font-semibold text-balance wrap-anywhere"
+                {...content}
+              >
+                <a
+                  href={learningPathHref(locale, path.slug)}
+                  className="card-link text-foreground no-underline"
+                >
+                  {words.title}
+                </a>
+              </Heading>
+              {words.summary === '' ? null : (
+                <p
+                  className="line-clamp-3 text-sm leading-relaxed wrap-anywhere text-foreground-muted"
+                  {...content}
+                >
+                  {words.summary}
+                </p>
+              )}
+            </div>
+            {summary === null ? null : (
+              <div className="mt-auto flex flex-col gap-2 border-t border-border pt-3">
+                {summary.formats.length === 0 ? null : (
+                  <p className="flex flex-wrap gap-2">
+                    {summary.formats.map((format) => (
+                      <Badge key={format}>{t(`format.${format}`)}</Badge>
+                    ))}
+                  </p>
+                )}
+                <MetaRow
+                  items={[
+                    span === null || top === undefined ? null : (
+                      <span key="levels" className="inline-flex items-center gap-2">
+                        <LevelSteps level={top} />
+                        {span}
+                      </span>
+                    ),
+                    summary.lessons === 0
+                      ? null
+                      : t('card.lessons', { count: summary.lessons }),
+                  ]}
+                />
+              </div>
+            )}
+          </li>
         );
       })}
-    </CardGrid>
+    </ul>
   );
 }

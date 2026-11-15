@@ -127,7 +127,7 @@ function facetPage(rows: readonly { id: string; count: number }[]): TopicCourseF
 
 export function createTopicCourseReader(): Pick<
   LearningPublicReaderPort,
-  'topicCourses' | 'topicCourseFacets' | 'topicCoursePaths'
+  'topicCourses' | 'topicCourseFacets' | 'topicCoursePaths' | 'topicCourseTotals'
 > {
   const db = getDatabaseClient();
 
@@ -281,6 +281,23 @@ export function createTopicCourseReader(): Pick<
         teachers: facetPage(teachers),
         topics: facetPage(topics),
       };
+    },
+
+    /**
+     * LEARN PART 2 — THE TOPIC INDEX: ONE grouped statement, the hub's own
+     * set (published, filed under the Topic) counted per asked Topic. Only the
+     * Topics named are read, each a bound parameter.
+     */
+    async topicCourseTotals(topics) {
+      if (topics.length === 0) return [];
+      const rows = await db.$queryRaw<{ topic: string; count: number }[]>`
+        SELECT o.[topicId] AS [topic], COUNT(*) AS [count]
+        FROM [dbo].[CourseTopic] o
+        JOIN [dbo].[Course] c ON c.[id] = o.[courseId]
+        WHERE c.[state] = N'published' AND o.[topicId] IN (${Prisma.join([...topics])})
+        GROUP BY o.[topicId]
+        ORDER BY o.[topicId];`;
+      return rows.map((row) => ({ topic: row.topic, count: Number(row.count) }));
     },
 
     async topicCoursePaths(topic) {

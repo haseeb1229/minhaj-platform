@@ -242,6 +242,51 @@ function BookCard({
   );
 }
 
+/**
+ * A row of book cards outside a hub — a Topic's own page (Learn Part 2) —
+ * every contributor on it resolved in ONE People call. Nothing when empty.
+ */
+export async function BookShelf({
+  locale,
+  works,
+  label,
+}: {
+  readonly locale: Locale;
+  readonly works: readonly TopicWork[];
+  readonly label: string;
+}) {
+  if (works.length === 0) return null;
+  const [t, names] = await Promise.all([
+    getTranslations({ locale, namespace: 'topicHub' }),
+    libraryReferenceNames(
+      {
+        personIds: works.flatMap((work) =>
+          work.contributors.map((entry) => entry.personId),
+        ),
+        topicIds: [],
+      },
+      locale,
+    ),
+  ]);
+  return (
+    <ul
+      aria-label={label}
+      className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-6"
+    >
+      {works.map((work) => (
+        <BookCard
+          key={work.id}
+          locale={locale}
+          work={work}
+          names={names}
+          t={t}
+          extra={null}
+        />
+      ))}
+    </ul>
+  );
+}
+
 export async function BooksHub({
   domain,
   scope,

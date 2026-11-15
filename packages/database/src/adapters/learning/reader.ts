@@ -1,7 +1,12 @@
 import 'server-only';
 
 import type { Locale } from '@minhaj/contracts';
-import { LEARNING_PAGE, type LearningPublicReaderPort } from '@minhaj/contracts/learning';
+import {
+  COURSE_FORMATS,
+  COURSE_LEVELS,
+  LEARNING_PAGE,
+  type LearningPublicReaderPort,
+} from '@minhaj/contracts/learning';
 
 import { getDatabaseClient } from '../../client.ts';
 import {
@@ -16,6 +21,7 @@ import {
   PUBLIC_PATH_LISTING_SELECT,
   toCourseDetail,
   toPathDetail,
+  toPathListing,
 } from './records.ts';
 import { bounded, boundedOffset, PUBLISHED, stampOf, TARGET_BATCH } from './shared.ts';
 import { createCourseRelationsReader } from './course-relations.ts';
@@ -107,6 +113,79 @@ export function createLearningPublicReader(): LearningPublicReaderPort {
         take: LEARNING_PAGE + 1,
       });
       return pathPage(rows);
+    },
+
+    /**
+     * LEARN PART 2 — the paths catalogue. The page is `paths`' own (the same
+     * predicate, order and bound); each path's PUBLISHED Courses ride with it
+     * as level, format and per-module lesson counts — one batched relation
+     * read, at most thirty Courses a path by CHECK — and the figures are ONE
+     * grouped statement over the published paths' distinct published Courses.
+     */
+    async pathSummaries(offset) {
+      const [rows, figures] = await Promise.all([
+        db.learningPath.findMany({
+          where: PUBLISHED,
+          select: {
+            ...PUBLIC_PATH_LISTING_SELECT,
+            courses: {
+              where: { course: PUBLISHED },
+              select: {
+                course: {
+                  select: {
+                    level: true,
+                    format: true,
+                    modules: { select: { _count: { select: { lessons: true } } } },
+                  },
+                },
+              },
+            },
+          },
+          orderBy: [...LATEST],
+          skip: boundedOffset(offset),
+          take: LEARNING_PAGE + 1,
+        }),
+        db.$queryRaw<{ paths: number; courses: number; lessons: number }[]>`
+          WITH k AS (
+            SELECT DISTINCT m.[courseId] AS [id]
+            FROM [dbo].[LearningPathCourse] m
+            JOIN [dbo].[LearningPath] p ON p.[id] = m.[pathId] AND p.[state] = N'published'
+            JOIN [dbo].[Course] c ON c.[id] = m.[courseId] AND c.[state] = N'published'
+          )
+          SELECT (SELECT COUNT(*) FROM [dbo].[LearningPath] p WHERE p.[state] = N'published') AS [paths],
+                 (SELECT COUNT(*) FROM k) AS [courses],
+                 (SELECT COUNT(*) FROM [dbo].[Lesson] x WHERE x.[courseId] IN (SELECT k.[id] FROM k)) AS [lessons];`,
+      ]);
+      const row = figures[0];
+      return {
+        items: rows.slice(0, LEARNING_PAGE).map((path) => {
+          const members = path.courses.map((entry) => entry.course);
+          return {
+            path: toPathListing(path),
+            levels: COURSE_LEVELS.filter((level) =>
+              members.some((course) => course.level === level),
+            ),
+            formats: COURSE_FORMATS.filter((format) =>
+              members.some((course) => course.format === format),
+            ),
+            lessons: members.reduce(
+              (sum, course) =>
+                sum +
+                course.modules.reduce(
+                  (inner, module) => inner + module._count.lessons,
+                  0,
+                ),
+              0,
+            ),
+          };
+        }),
+        hasMore: rows.length > LEARNING_PAGE,
+        figures: {
+          paths: Number(row?.paths ?? 0),
+          courses: Number(row?.courses ?? 0),
+          lessons: Number(row?.lessons ?? 0),
+        },
+      };
     },
 
     async path(slug) {

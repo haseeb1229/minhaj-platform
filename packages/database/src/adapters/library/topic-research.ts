@@ -213,6 +213,35 @@ const CONTRIBUTOR_SELECT = {
   ],
 };
 
+/**
+ * LEARN PART 2 — THE TOPIC INDEX: how many public Research and ResearchPaper
+ * records are filed under each asked Topic — each aggregate under its own
+ * public predicate, read side by side and summed per Topic, so each count is
+ * the `total` of `topicResearch` on that Topic with no filter. Only the asked
+ * Topics are read, each a bound parameter.
+ */
+export async function researchTopicTotals(
+  db: ReturnType<typeof getDatabaseClient>,
+  topics: readonly string[],
+): Promise<readonly { readonly topic: string; readonly count: number }[]> {
+  if (topics.length === 0) return [];
+  const asked = Prisma.join([...topics]);
+  const parts = KINDS.map((kind) => {
+    const t = TABLES[kind];
+    return Prisma.sql`SELECT o.[topicId] AS [topic]
+      FROM ${t.topic} o
+      JOIN ${t.record} r ON r.[id] = o.${t.fk}
+      WHERE r.[state] = N'published' AND o.[topicId] IN (${asked})`;
+  });
+  const rows = await db.$queryRaw<{ topic: string; count: number }[]>`
+    WITH s AS (${Prisma.join(parts, ' UNION ALL ')})
+    SELECT s.[topic], COUNT(*) AS [count]
+    FROM s
+    GROUP BY s.[topic]
+    ORDER BY s.[topic];`;
+  return rows.map((row) => ({ topic: row.topic, count: Number(row.count) }));
+}
+
 export function createTopicResearchReader(): Pick<
   LibraryPublicReaderPort,
   'topicResearch' | 'topicResearchFacets'

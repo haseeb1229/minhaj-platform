@@ -540,6 +540,17 @@ Courses (`/learn/courses`) is the same listing as the Quran and Hadith Courses h
 catalogue with a Topic filter; a Course's page leads on to its learning paths, the Courses studied
 with it and, for a live Course, its next classes.
 
+Since Learn Part 2 every other Learn menu item is a destination of its own. Learning Paths states
+how many paths, Courses and lessons there are and, per path, its Courses, lessons, level span and
+formats; a path's page is its journey — "Course n of m", the totals, its teachers, "Start with
+course 1" and, for a signed-in learner, their own progress across it. Live classes groups the
+upcoming classes by day in the reader's own time zone, filters them by Course, teacher and language
+(with counts) and says how to join — enrol, then the meeting link in My classes only. Trial classes
+explains a request step by step and what happens after it, beside the Courses taught live. Find a
+Teacher shows each teacher's portrait, live Courses and languages, with counted filters. Topics
+(`/topics`) states what each Topic holds — Courses, books, videos and research — and a Topic's page
+shelves them, leading to each owner's listing or, for the Quran and Hadith Topics, to their hubs.
+
 ### 3.5 Library
 
 | Browse | Written Works | Periodicals | Access |

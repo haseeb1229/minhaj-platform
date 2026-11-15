@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
-import { TrialPage } from '@/components/learning/landing';
-import { readLearnOffset } from '@/components/learning/presentation';
+import { TrialPage } from '@/components/learning/trial';
+import { learnPath } from '@/components/learning/presentation';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
 import { requireRoute } from '@/shell/registry';
@@ -10,11 +11,15 @@ import { requireRoute } from '@/shell/registry';
 /**
  * `/{locale}/learn/trial` — Trial Classes (ROUTE_MAP.md §3.5).
  *
- * An explanation, and the published Courses taught live, each linking to its
- * own page where the private island offers the request. A request is recorded
- * and NOTHING IS BOOKED: confirming a class is Phase 23's and is not offered,
- * and the page says so. `?offset=` pages the Courses and is canonical to this
- * address. `force-dynamic` because Courses are published and withdrawn.
+ * How a trial class is asked for and what happens next, and the newest
+ * published Courses taught live, each linking to its own page where the
+ * private island offers the request. A request is recorded and NOTHING IS
+ * BOOKED, and the page says so. `force-dynamic` because Courses are published
+ * and withdrawn.
+ *
+ * ONE ADDRESS (Learn Part 2). The page holds one view; the rest of the
+ * Courses taught live are the catalogue's own `?format=live` view. The former
+ * `?offset=` pager (until Learn Part 2) is ONE redirect to this address.
  */
 export const dynamic = 'force-dynamic';
 
@@ -36,5 +41,6 @@ export async function generateMetadata({ params }: TrialParams): Promise<Metadat
 
 export default async function TrialRoute({ params, searchParams }: TrialParams) {
   const locale = await requireLocale(params);
-  return <TrialPage locale={locale} offset={readLearnOffset(await searchParams)} />;
+  if ('offset' in (await searchParams)) redirect(learnPath(locale, 'trial'));
+  return <TrialPage locale={locale} />;
 }

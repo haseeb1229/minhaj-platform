@@ -75,6 +75,69 @@ export async function readCourseStanding(
   }
 }
 
+/** Learn Part 2 — the signed-in person's standing on one Course of a path. */
+export interface PathCourseStanding {
+  readonly courseId: string;
+  readonly enrolled: boolean;
+  readonly completedLessons: number;
+}
+
+export type PathRead =
+  | { readonly state: 'signed-out' }
+  | { readonly state: 'signed-in'; readonly courses: readonly PathCourseStanding[] }
+  | { readonly state: 'failed' };
+
+/** One Course's standing with exactly the three answers the path island renders, or `null`. */
+function pathCourseOf(value: unknown): PathCourseStanding | null {
+  if (
+    !isRecord(value) ||
+    typeof value['courseId'] !== 'string' ||
+    typeof value['enrolled'] !== 'boolean'
+  )
+    return null;
+  const completed = value['completedLessons'];
+  if (typeof completed !== 'number' || !Number.isSafeInteger(completed) || completed < 0)
+    return null;
+  return {
+    courseId: value['courseId'],
+    enrolled: value['enrolled'],
+    completedLessons: completed,
+  };
+}
+
+/**
+ * The person's own standing on one published LearningPath, after the page has
+ * rendered — or `failed` (which hides the island) for any answer that is not
+ * one of the expected forms, including a path that is no longer published.
+ */
+export async function readPathStanding(
+  pathSlug: string,
+  signal: AbortSignal,
+): Promise<PathRead> {
+  try {
+    const query = new URLSearchParams({ path: pathSlug });
+    const response = await fetch(`/api/my/learning/path-state?${query.toString()}`, {
+      method: 'GET',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { accept: 'application/json' },
+      signal,
+    });
+    if (!response.ok) return { state: 'failed' };
+    const body: unknown = await response.json();
+    if (!isRecord(body)) return { state: 'failed' };
+    if (body['signedIn'] === false) return { state: 'signed-out' };
+    const path = body['signedIn'] === true ? body['path'] : null;
+    if (!isRecord(path) || !Array.isArray(path['courses'])) return { state: 'failed' };
+    const courses = (path['courses'] as readonly unknown[]).map(pathCourseOf);
+    return courses.every((entry) => entry !== null)
+      ? { state: 'signed-in', courses: courses as readonly PathCourseStanding[] }
+      : { state: 'failed' };
+  } catch {
+    return { state: 'failed' };
+  }
+}
+
 /** One Learning POST: enrol, or request a trial class. */
 export async function sendLearning(
   path: 'enrolments' | 'trials',
