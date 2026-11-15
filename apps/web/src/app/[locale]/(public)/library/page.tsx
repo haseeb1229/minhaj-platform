@@ -36,9 +36,11 @@ import { requireRoute } from '@/shell/registry';
  * `/library/books` opens with): the Library at a glance (books, content
  * languages, readable online, downloadable and the span of publication years,
  * each linked to the view it counts); the editors' featured books; the ways
- * in by Topic, content language and author (chips with counts) and by kind;
- * and the Quran's and Hadith's own Books hubs. The topic shelves follow the
- * same facet's largest Topics.
+ * in by Topic, content language and author (chips with counts); and the
+ * Quran's and Hadith's own Books hubs. The topic shelves follow the same
+ * facet's largest Topics. (A "by kind" way in repeated the directory below
+ * it, link for link, until Library Part 2 removed it: the kinds are the
+ * directory's, and every one of them is on `/library/resources`.)
  *
  * THE ONE ENTRY THIS PAGE DOES NOT OWN is Articles. `/library/articles` is
  * Editorial's content at a Library address; this page links to it and knows
@@ -94,16 +96,6 @@ const TOPIC_SHELVES = 3;
 const SHELF = 12;
 /** How many chips one way in offers before linking to its whole browse. */
 const WAY_CHIPS = 10;
-/** The kinds of resource the Library holds, as the "by kind" way in names them. */
-const KINDS = [
-  'books',
-  'research',
-  'research-papers',
-  'publications',
-  'magazines',
-  'encyclopedias',
-  'articles',
-] as const;
 
 type DirectoryKey =
   | 'books'
@@ -320,18 +312,6 @@ export default async function LibraryLandingPage({
       all: {
         href: localizedPath(locale, '/library/authors'),
         text: t('landing.find.allAuthors'),
-      },
-    },
-    {
-      key: 'kinds',
-      heading: t('landing.find.kinds'),
-      chips: KINDS.map((kind) => ({
-        href: localizedPath(locale, `/library/${kind}`),
-        text: t(`section.${kind}`),
-      })),
-      all: {
-        href: localizedPath(locale, '/library/resources'),
-        text: t('landing.allResources'),
       },
     },
   ];

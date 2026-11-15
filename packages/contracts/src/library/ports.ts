@@ -12,6 +12,17 @@ import type {
 } from './values.ts';
 import type { PassageQuery, PassageSurahCount, QuranPassage } from '../passage/index.ts';
 import type {
+  LibraryContributorDirectory,
+  LibraryDownloadFacets,
+  LibraryDownloadPage,
+  LibraryDownloadsQuery,
+  LibraryHoldings,
+  LibraryLanguageHoldings,
+  LibrarySalePointPage,
+  LibrarySalePointQuery,
+  LibraryTopicHoldings,
+} from './browse.ts';
+import type {
   MagazineIssueRecord,
   TopicResearchFacets,
   TopicResearchPage,
@@ -220,9 +231,9 @@ export interface IssueCoverRelation {
  * public Works carry it.
  *
  * `id` is deliberately untyped as to WHAT it identifies — a Person, a Topic or a
- * Language code — because the three facet reads differ only in what they group
- * by, and three identical interfaces would be three places for one shape to
- * drift. The method that returns it says which.
+ * Language code — because the facets of one read differ only in what they
+ * group by, and identical interfaces would be places for one shape to drift.
+ * The field that carries it says which.
  *
  * THE COUNT IS OF PUBLIC WORKS, so a facet whose only Works are drafts does not
  * appear at all. A browse entry leading to an empty result is dead navigation
@@ -250,26 +261,28 @@ export interface LibraryPublicReaderPort {
   works(query: LibraryQuery): Promise<WorkPage>;
   work(slug: string): Promise<WorkDetail | null>;
   canonicalSlug(slug: string): Promise<string | null>;
-  salePoints(offset: number): Promise<{ items: SalePointRecord[]; hasMore: boolean }>;
   sitemap(offset: number, limit: number): Promise<LibrarySitemapRow[]>;
   assetRelation(editionId: string): Promise<LibraryAssetRelation | null>;
   /** Phase 30-R: the relation the issue-cover route decides by, or null. */
   issueCoverRelation(issueId: string): Promise<IssueCoverRelation | null>;
   /**
-   * The navigational facets `/library/authors`, `/library/topics` and
-   * `/library/languages` browse by.
-   *
-   * THREE AGGREGATE READS, not one read per row. The pages that consume them
-   * resolve the display names for a whole page of identifiers in ONE call to the
-   * owning context, so a listing of 25 contributors costs two queries rather
-   * than twenty-six (§32, §49).
+   * LIBRARY PART 2 — THE BROWSE AND ACCESS READS (`./browse.ts`), which
+   * replaced the three Phase-8 facet reads (`contributorFacets`,
+   * `topicFacets`, `languageFacets`, historical) and the public sale-point
+   * page read (`salePoints`, historical). Each is bounded and grouped, under
+   * every counted aggregate's own public predicate.
    *
    * Library does not own a Person, a Topic or a Language. These return
-   * IDENTIFIERS and counts of its own Works; the names come from the owners.
+   * IDENTIFIERS and counts of its own records; the names come from the owners.
    */
-  contributorFacets(offset: number): Promise<LibraryFacetPage>;
-  topicFacets(offset: number): Promise<LibraryFacetPage>;
-  languageFacets(offset: number): Promise<LibraryFacetPage>;
+  holdings(): Promise<LibraryHoldings>;
+  /** Per asked Topic (at most `LIBRARY_TOPIC_TOTALS_MAX`), its records by kind. */
+  topicHoldings(topics: readonly string[]): Promise<readonly LibraryTopicHoldings[]>;
+  languageHoldings(): Promise<readonly LibraryLanguageHoldings[]>;
+  contributorDirectory(): Promise<LibraryContributorDirectory>;
+  downloads(query: LibraryDownloadsQuery): Promise<LibraryDownloadPage>;
+  downloadFacets(query: LibraryDownloadsQuery): Promise<LibraryDownloadFacets>;
+  salePointDirectory(query: LibrarySalePointQuery): Promise<LibrarySalePointPage>;
 
   /**
    * Search projection reads (DELIVERY_PLAN.md Phase 17 — "Work, Edition and

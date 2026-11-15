@@ -930,6 +930,30 @@ group, and carries the Library's metadata notice — as `/library/books` does ag
 landing's reads fails closed on its own: a read that fails hides only its own shelf, never the
 whole page. No route changes.
 
+**Library Part 2.** The browse and access pages are rebuilt; no route is added or removed.
+`/library/resources` is the directory of every kind (Books, Research, Research papers,
+Publications, Encyclopedias, Magazines with their issues, Articles, Downloads, Sale points, and the
+Topic, language and author browses), each with its count and what it holds; the route map's
+`?type, topic, language, contributor, from, to` — never read until now (historical) — is one
+redirect to that kind's own listing with the filters it takes (a contributor for books only, a
+Topic alone for magazines, none for articles), and without a known `type` one redirect to the bare
+directory. `/library/authors` is an A–Z directory, **`?letter, role, q, page`** (48 a page): a
+first letter (or `#`), a role, a name search (every word; accents and vowel marks ignored); each
+name opens `/people/{slug}` (the `/library/authors/{slug}` alias still 301s there), each count the
+books listing filtered by the Person. `/library/topics` (Taxonomy's tree, grouped by subject area)
+and `/library/languages` (content languages, never the interface's) take **no parameter**; each
+count leads to that kind's listing narrowed by the Topic or language (`libraryBooksHref` for
+books). `/library/downloads` lists every downloadable **Edition** (it listed Works until now,
+historical), **`?language, topic, sort, page`** (24 a page, `sort=newest` or the default title
+order); each download is still `/assets/library/editions/{editionId}/download/{assetId}`, whose
+rules are unchanged. `/library/sale-points` takes **`?q, page`** (24 a page, A–Z; a name or any part
+of an address, matched literally). One address per view on all six: empty controls, another
+order, a malformed or repeated value and a former `?offset=` are one redirect to the canonical
+spelling — on Sale points to the page holding the sale point it began with; on Authors,
+Downloads, Topics and Languages, where the former pages no longer correspond, the offset is
+dropped. The landing's "by kind" way in, which repeated its own directory link for link, is
+removed.
+
 ### 3.7 Watch / Listen
 
 | Route | Purpose |

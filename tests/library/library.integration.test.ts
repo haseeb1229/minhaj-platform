@@ -633,14 +633,19 @@ live('Phase 8 Library against real SQL Server and real Storage', () => {
       expect(shown?.document).toBeNull();
     });
 
-    it('lists facets of public Works only, in a deterministic order', async () => {
-      const first = await publicReads.languageFacets(0);
-      const again = await publicReads.languageFacets(0);
+    // Library Part 2: the Phase-8 facet reads (`languageFacets`, `topicFacets`)
+    // gave way to the browse holdings, which this proves the same way; their
+    // exact counts are proved in `library-browse.integration.test.ts`.
+    it('lists holdings of public records only, in a deterministic order', async () => {
+      const first = await publicReads.languageHoldings();
+      const again = await publicReads.languageHoldings();
       expect(again).toEqual(first);
-      expect(first.items.every((facet) => facet.works > 0)).toBe(true);
+      expect(first.every((entry) => entry.kinds.every((kind) => kind.count > 0))).toBe(
+        true,
+      );
 
-      const topics = await publicReads.topicFacets(0);
-      expect(topics.items.some((facet) => facet.id === topicId)).toBe(true);
+      const topics = await publicReads.topicHoldings([topicId]);
+      expect(topics.some((entry) => entry.topic === topicId)).toBe(true);
     });
 
     it('filters books by content language and topic IN SQL, bounded', async () => {

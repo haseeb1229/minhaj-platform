@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { Locale } from '@minhaj/contracts';
 import type { ContributorCapabilities } from '@minhaj/contracts/identity';
 import { NO_CONTRIBUTOR_CAPABILITIES } from '@minhaj/contracts/identity';
@@ -12,6 +13,7 @@ import type {
   PersonStatus,
   ProfileKind,
   ProfileStatus,
+  PublicPersonCard,
   PublicPersonCardPage,
   PublicPersonProfile,
   PublicTeacherEntry,
@@ -194,6 +196,9 @@ const PERSON_PAGE = 25;
 /** Phase 30-R: the most public contributor cards one read returns. */
 const PUBLIC_CARD_PAGE = 24;
 
+/** Library Part 2: the contributors one card read may name — the reader's own bound. */
+const PUBLIC_CARD_IDS = z.array(z.uuid()).max(300);
+
 /**
  * How many links one reconciliation pass examines.
  *
@@ -279,6 +284,21 @@ export function createPeopleReadService({
       );
       const offset = Math.max(Math.trunc(input.offset ?? 0), 0);
       return reader.listPublicPeople({ locale: input.locale, offset, limit });
+    },
+
+    /**
+     * Library Part 2 — the published contributors among `ids` as public
+     * cards (a directory page's portraits and names in their own language).
+     * The identifiers are parsed here — well-formed, at most 300 distinct —
+     * before any read; none asked reads nothing.
+     */
+    async publicPersonCards(
+      ids: readonly string[],
+      locale: Locale,
+    ): Promise<readonly PublicPersonCard[]> {
+      const asked = PUBLIC_CARD_IDS.parse([...new Set(ids)]);
+      if (asked.length === 0) return [];
+      return reader.publicPersonCards(asked, locale);
     },
 
     /** Every publicly indexable contributor URL, bounded, for the sitemap. */

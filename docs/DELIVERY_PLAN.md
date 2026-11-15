@@ -812,7 +812,9 @@ review history:**
   (Phase-9 records are read as text; a file relation arrives with the owner that needs one, through
   Storage); a contributor filter on the Phase-9 listings (no surface consumes one); cross-type
   facets on `/library/topics`, `/library/languages` and `/library/authors`, which remain Work
-  browses and say so, while `/library/resources` and `/topics/{slug}` include every delivered type.
+  browses and say so, while `/library/resources` and `/topics/{slug}` include every delivered type
+  (at Phase-9 exit; since Library Part 2 `/library/topics` and `/library/languages` count every
+  Library kind, and `/library/authors` remains a directory of Work credits).
 
 ---
 
@@ -4326,6 +4328,126 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > and axe (no serious or critical finding) with no sideways scroll at 320 and 1440 px on the landing,
 > the listing and both Edition views in en and ur. *CI and staging evidence are recorded when they
 > exist.*
+
+> **Library Part 2 — the browse and access pages: Resources, Authors, Topics, Languages, Downloads
+> and Sale points (owner direction: every section built from A to Z, one item at a time; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (DOMAIN_MODEL.md §5.1, §10.1;
+> ROUTE_MAP.md §3.6; ARCHITECTURE.md Storage). No route is added or removed, no schema change and no
+> migration; the asset routes, their allow/deny decisions and their headers are untouched (each
+> download is still `/assets/library/editions/{editionId}/download/{assetId}`). The written works
+> and periodicals are Library Part 3 and keep working as they were.
+>
+> - **The audit (before).** `/library/resources` previewed ten records of each kind as plain cards,
+>   with no count, no description of what a kind holds and none of the access or browse ways, and
+>   ignored the `?type…` parameters the route map gives it. `/library/authors`, `/topics` and
+>   `/languages` were one shared facet browse (`facet-browse.tsx`): fifty cards a page ordered by
+>   count behind Previous/Next, Works only ("Books: n"), no figures, no filter or search, no A–Z
+>   order or index, no portrait, no role, names unmarked for language; the Topic browse ignored
+>   Taxonomy's tree and named no other kind; the language browse counted EDITIONS under a "Books"
+>   label (a Work in two editions of one language counted twice) and named the language only in
+>   its own script. `/library/downloads` listed WORKS, not the Editions that may be downloaded,
+>   with no format, size, language, rights statement, filter, count or download link (every row
+>   went to the Work page). `/library/sale-points` showed the business facts but not one book a
+>   sale point sells, no count, no search and Previous/Next only. None had figures, active-filter
+>   chips, numbered pages, an explained no-results state or one address per view. The landing's
+>   "by kind" way in (Library Part 1) repeated its own directory link for link — two "Research"
+>   links in `main`, the cause of `research-publications.spec`'s failure on CI for `3a0bd4d`.
+> - **New reads (Model A).** Library: `holdings`, `topicHoldings`, `languageHoldings`,
+>   `contributorDirectory`, `downloads`, `downloadFacets`, `salePointDirectory`
+>   (`packages/contracts/src/library/browse.ts`, `packages/database/src/adapters/library/browse.ts`;
+>   every field parsed by the read service before any read; bound parameters only; each count what
+>   the listing it leads to shows). They replace `contributorFacets`, `topicFacets`,
+>   `languageFacets`, the public `salePoints` read and the Work query's `downloads` flag, removed
+>   with their last consumers. People: `publicPersonCards(ids, locale)` (published Persons only, at
+>   most 300). Storage: `servableFiles(ids)` — `servable` answered with each file's media type and
+>   size, asked by a new public composition (`composition/library-files.ts`), never by the byte
+>   route.
+> - **Resources.** "Resources" in the route map is the Library's landing-and-everything view, and
+>   the Library's resource kinds are DOMAIN_MODEL.md §10's aggregates plus Editorial's Articles at a
+>   Library address. The page is their directory, grouped as the landing's directory is (books;
+>   research and publications; periodicals and articles; access; ways to browse), each kind a card
+>   with its count, what it holds and its listing; the Books card adds editions, readable online and
+>   downloadable; Magazines their issues; Articles (Editorial offers no count) say only whether any
+>   is published. A `?type…` request is one redirect to that kind's listing.
+> - **Authors.** An A–Z directory of everyone credited on a public Work (Library's directory, named
+>   by People in bounded batches, ordered by the reader's collation): portrait or an initial tile,
+>   the name in the language People resolved it in (`lang`/`dir`), each role with its book count
+>   ("Author of 12 books", "Translator of 2 books"), the books count linked to the books listing
+>   filtered by the Person and the name to the canonical profile. A first-letter index (an address
+>   per letter, with counts), a role filter with counts and a name search (every word; accents,
+>   vowel marks and the tatweel ignored), 48 a page, chips, figures (people, authors, translators).
+>   An Edition's BookTranslation translators are not a Work credit and are not listed (the books
+>   listing cannot filter by them); more than 1000 credited people would be stated, not hidden.
+> - **Topics.** Taxonomy's active tree in the reader's locale, grouped by subject area (with a
+>   jump list when there are several), each Topic with its trail, its records by kind — books,
+>   research, research papers, publications, encyclopedias, magazines — each count linked to that
+>   kind's listing narrowed to it (`libraryBooksHref` for books), and its Topic page. A Topic with
+>   nothing in the Library is not listed. Taxonomy stays the owner; the composition is Layer 4's.
+> - **Languages.** Each content language named by Taxonomy in its own script and direction and by
+>   the interface, with its records by kind — a book once per language one of its editions is in —
+>   each count linked to that kind's listing in it. Articles and magazine issues are not counted
+>   (no Library listing narrows them by language).
+> - **Downloads.** One entry per downloadable Edition: cover, the Work's title (to the Work page
+>   at that Edition), the edition's label, language, year, publisher and pages, the rights
+>   statement ("Download allowed by the rights recorded for this edition"; no other licence is
+>   stated), its format and size ("PDF, 2.4 MB") and the Download link — or, when Storage cannot
+>   serve the file now, "The file cannot be served right now" and no link. Filters with counts
+>   (content language, Topic), title or newest order, 24 a page, figures, chips, an explained empty
+>   state leading to the books and the sale points.
+> - **Sale points.** Each published sale point's name, address, contact and website (host shown,
+>   marked external, `rel="noopener noreferrer"`), free text in `dir="auto"`, and the books it is
+>   recorded as selling (count, the first six by title linked, "and n more"). A sale point carries
+>   no structured city or country, so the directory is not grouped by place; a search finds a name
+>   or any part of an address, matched literally (a `%` or `_` is a character). No map (no accepted
+>   document admits one, and an embed would send every visitor to a third party).
+> - **The CI failures of `3a0bd4d` (decision).** The landing's "by kind" way in is removed: a page
+>   should not offer one destination twice under one name, and every kind is in its directory and
+>   on `/library/resources`. "Books on Hadith" resolved twice because the header's Hadith menu
+>   offers it once Hadith books exist (the shell's navigation, not the page); the landing test now
+>   scopes the subject hubs to their own region. The retry-only duplicate "Synthetic browser proof
+>   work" in "browses books…" predates this part (the spec's `beforeAll` inserts again on a retry)
+>   and is left as it was.
+> - **Messages.** New `library.browse.*` in en/ur/ar; `library.sectionBody.{resources, authors,
+>   topics, languages, downloads}` and `library.landing.find.intro` reworded; removed as unused:
+>   `library.{emptyFacet, facetWorks, emptyDownloads, emptySalePoints, downloadsNotice,
+>   emptyArticles, landing.find.kinds, scholarly.viewAll.{research, research-paper, publication,
+>   encyclopedia}}` and `components/library/facet-browse.tsx`.
+>
+> **Data facts — what staging will show.** The staging Library holds the 102 Minhaj Books Works, 2
+> magazines with 72 issues (MIGRATION_STRATEGY.md §19), no Research, ResearchPaper, Publication or
+> Encyclopedia, no sale point (the source's sale-point tab is never read), no Work ↔ author link
+> and no downloadable Edition. So `/library/resources` counts 102 books, their editions, the
+> magazines and issues, and says "None published yet" for the four empty kinds, Downloads and Sale
+> points; `/library/authors`, `/library/downloads` and `/library/sale-points` show their honest
+> empty states (each leading to the books, and Downloads also to the sale points); Topics lists
+> whichever Topics the operator filed Works and magazines under, and Languages the books' content
+> languages. The demo data adds none of these. The local persistent database was not inspected.
+>
+> **Proof:** `tests/library/browse.test.ts` (every new read's input refused before any read: a
+> malformed language or Topic, an unknown order or locale, an offset or limit past its bound, the
+> removed `downloads` flag, an empty or over-long sale-point search, duplicate or too many Topics;
+> defaults stated; an empty ask reads nothing); `tests/library/browse-view.test.ts` (the six
+> pages' address rules, `kindHref`, the resources redirect, initials, the name search, file format
+> and size); `tests/library/library-browse.integration.test.ts` (new, real SQL Server: every
+> holdings figure, never a draft, a Work without a published Edition, an issue of a draft Magazine
+> or a draft sale point; per-Topic and per-language counts equal to the listings; the contributor
+> directory's roles; downloads exactly the allowed-with-a-file Editions of public Works, both
+> orders, paging and totals, facets without their own filter; sale points A–Z, the books each
+> sells, the literal search; People's cards published only); `tests/library/library.integration
+> .test.ts` (its facet test now proves the holdings reads the same way);
+> `tests/people/public-cards.test.ts` and `tests/storage/service.test.ts` (the new People and
+> Storage reads); `tests/config/locale.test.ts` (the new modules declared, `facet-browse.tsx`
+> gone). `tests/browser/library.spec.ts` — the landing test asserts Find a book's own ways (no kind
+> links) and scopes the subject hubs to their region; the fixture adds one author, one undated
+> downloadable Work and one sale point of this run ("Zz…", sorting last); new: the resources
+> directory and its redirect, the author directory (roles, books, profile, initial tile, role,
+> letter, search, one address), Topics and Languages leading into their listings, Downloads (format
+> and size, rights, the unchanged asset route answering 200, a denied Edition never listed,
+> filters), Sale points (facts, books, literal search, former offset), keyboard use of the
+> directory search, and axe (no serious or critical finding) with no sideways scroll at 320 and
+> 1440 px on all six pages in en, ur and ar. `tests/browser/research-publications.spec.ts` — the
+> resources assertions follow the directory (the kinds counted and linked; it previewed records
+> until now). *CI and staging evidence are recorded when they exist.*
 
 ---
 

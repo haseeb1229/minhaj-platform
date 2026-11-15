@@ -1,67 +1,32 @@
-import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
-import { editorialReadRuntime } from '@/composition/editorial-read';
-import { libraryReadRuntime } from '@/composition/library-read';
-import { translationFor } from '@/components/editorial/public-content';
-import { directionOf } from '@/config/locale';
+import { LibraryResourcesPage } from '@/components/library/resources';
+import { resourcesRedirect } from '@/components/library/browse-view';
 import { requireLocale } from '@/config/route-locale';
-import { CardGrid, EmptyState, LinkCard, SectionHeader } from '@/components/ui';
-import { ListingFrame } from '@/components/library/frame';
-import { labelFor, workPath } from '@/components/library/presentation';
-import { listingHref, sectionTitle } from '@/components/library/scholarly';
-import {
-  scholarlyLabel,
-  scholarlyListPath,
-} from '@/components/library/scholarly-presentation';
 import { shellMetadata } from '@/seo/metadata';
 import { requireRoute } from '@/shell/registry';
 
 /**
- * `/{locale}/library/resources` — every resource type the Library area ACTUALLY
- * delivers (ROUTE_MAP.md §5).
+ * `/{locale}/library/resources` — every kind of record the Library publishes,
+ * with its count and what it holds, and the ways to browse them (Library Part
+ * 2; ROUTE_MAP.md §3.6). The page is ONE view: a request carrying the route
+ * map's `?type, topic, language, contributor, from, to` is one redirect to
+ * that kind's own listing with the filters it takes (`resourcesRedirect`).
  *
- * SEVEN TYPES, BECAUSE SEVEN EXIST. Works (Phase 8), Articles (Phase 6, at a
- * Library address), and Phase 9's research, research papers, publications,
- * encyclopedias and magazines. Collections are Phase 15's and are absent rather
- * than listed as an empty section, because a heading for a capability that does
- * not exist advertises something untrue. A DELIVERED type with nothing published
- * yet says so in its own section — that is an honest state, not a promise.
- *
- * THIS IS THE LAYER-4 COMPOSITION THE ARCHITECTURE NAMES, and it is worth being
- * precise about why it is allowed. Library does NOT depend on Editorial: it has no
- * import of an Editorial service, no query against an Editorial table and no
- * knowledge that Articles exist. This PAGE — Layer 4, application composition —
- * calls each owner's public read interface and renders the two lists side by side
- * (ARCHITECTURE.md §3.1.1, and this phase's §10: "Do NOT depend on Editorial to
- * display Articles. Layer 4 composes `/library/articles`").
- *
- * TWO SEPARATE LISTS RATHER THAN ONE MERGED FEED, deliberately. Merging them would
- * need one ordering across two contexts' records, which means one context's
- * timestamp standing in for the other's — and a "recency" that is really "whichever
- * context wrote more recently". Each list is bounded, ordered by its own owner, and
- * links to its own canonical address.
+ * `force-dynamic`, because every figure here is data an administrator
+ * changes: a cached copy would keep offering a record since withdrawn. Signed
+ * out, always — nothing here reaches Identity or a cookie.
  */
 export const dynamic = 'force-dynamic';
 
-/** A deliberately short preview of each type. The full listings are one click away. */
-const PREVIEW = 10;
-
-/** Phase 9's types, in the Library's information-architecture order. */
-const SCHOLARLY = [
-  'research',
-  'research-paper',
-  'publication',
-  'encyclopedia',
-  'magazine',
-] as const;
-
-export async function generateMetadata({
-  params,
-}: {
+interface BrowseParams {
   readonly params: Promise<{ readonly locale: string }>;
-}): Promise<Metadata> {
+  readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export async function generateMetadata({ params }: BrowseParams): Promise<Metadata> {
   const locale = await requireLocale(params);
   const t = await getTranslations({ locale, namespace: 'library' });
 
@@ -73,140 +38,10 @@ export async function generateMetadata({
   });
 }
 
-export default async function ResourcesPage({
-  params,
-}: {
-  readonly params: Promise<{ readonly locale: string }>;
-}) {
+export default async function Page({ params, searchParams }: BrowseParams) {
   const locale = await requireLocale(params);
-
-  const t = await getTranslations({ locale, namespace: 'library' });
-  const shell = await getTranslations({ locale, namespace: 'shell' });
-
-  const [works, articles, ...scholarly] = await Promise.all([
-    libraryReadRuntime().works({ offset: 0 }),
-    editorialReadRuntime().articles(0),
-    ...SCHOLARLY.map((kind) => libraryReadRuntime().scholarlyList(kind, {})),
-  ]);
-
-  return (
-    <ListingFrame
-      breadcrumbLabel={shell('nav.breadcrumbs')}
-      trail={[
-        { href: localizedPath(locale, ''), text: shell('nav.home') },
-        { href: localizedPath(locale, '/library'), text: t('title') },
-        { text: t('section.resources') },
-      ]}
-      title={t('section.resources')}
-      lede={t('sectionBody.resources')}
-    >
-      <div className="flex flex-col gap-[var(--space-section)]">
-        <section aria-labelledby="resources-books" className="flex flex-col gap-5">
-          <SectionHeader
-            id="resources-books"
-            heading={t('section.books')}
-            action={{
-              href: localizedPath(locale, '/library/books'),
-              text: t('allBooks'),
-            }}
-          />
-
-          {works.items.length === 0 ? (
-            <EmptyState>{t('empty')}</EmptyState>
-          ) : (
-            <CardGrid label={t('section.books')}>
-              {works.items.slice(0, PREVIEW).map((record) => {
-                const label = labelFor(record, locale);
-                return (
-                  <LinkCard
-                    key={record.id}
-                    href={workPath(locale, record.slug)}
-                    title={label.title}
-                    description={label.description}
-                    lang={label.locale}
-                    dir={directionOf(label.locale)}
-                  />
-                );
-              })}
-            </CardGrid>
-          )}
-        </section>
-
-        <section aria-labelledby="resources-articles" className="flex flex-col gap-5">
-          <SectionHeader
-            id="resources-articles"
-            heading={t('section.articles')}
-            action={{
-              href: localizedPath(locale, '/library/articles'),
-              text: t('allArticles'),
-            }}
-          />
-
-          {articles.length === 0 ? (
-            <EmptyState>{t('emptyArticles')}</EmptyState>
-          ) : (
-            <CardGrid label={t('section.articles')}>
-              {articles.slice(0, PREVIEW).map((record) => {
-                // EDITORIAL'S OWN RESOLUTION, not a second implementation of it.
-                // Which language version of an Article is shown is Editorial's
-                // decision, and this page uses the helper that makes it.
-                const translation = translationFor(record, locale);
-                return (
-                  <LinkCard
-                    key={record.slug}
-                    href={localizedPath(
-                      locale,
-                      `/library/articles/${encodeURIComponent(record.slug)}`,
-                    )}
-                    title={translation.title}
-                    description={translation.excerpt}
-                    lang={translation.languageCode}
-                    dir={translation.languageCode === 'en' ? 'ltr' : 'rtl'}
-                  />
-                );
-              })}
-            </CardGrid>
-          )}
-        </section>
-
-        {SCHOLARLY.map((kind, index) => {
-          const page = scholarly[index];
-          const title = sectionTitle(t, kind);
-          const id = `resources-${kind}`;
-          return (
-            <section key={kind} aria-labelledby={id} className="flex flex-col gap-5">
-              <SectionHeader
-                id={id}
-                heading={title}
-                action={{
-                  href: scholarlyListPath(locale, kind),
-                  text: t(`scholarly.viewAll.${kind}`),
-                }}
-              />
-
-              {page === undefined || page.items.length === 0 ? (
-                <EmptyState>{t(`scholarly.empty.${kind}`)}</EmptyState>
-              ) : (
-                <CardGrid label={title}>
-                  {page.items.slice(0, PREVIEW).map((row) => {
-                    const label = scholarlyLabel(row, locale);
-                    return (
-                      <LinkCard
-                        key={row.id}
-                        href={listingHref(locale, row)}
-                        title={label.title}
-                        description={label.summary}
-                        lang={label.locale}
-                        dir={directionOf(label.locale)}
-                      />
-                    );
-                  })}
-                </CardGrid>
-              )}
-            </section>
-          );
-        })}
-      </div>
-    </ListingFrame>
-  );
+  const query = await searchParams;
+  const canonical = resourcesRedirect(locale, query);
+  if (canonical !== null) redirect(canonical);
+  return <LibraryResourcesPage locale={locale} />;
 }

@@ -66,6 +66,8 @@ export function libraryReadRuntime(): LibraryReadRuntime {
  */
 export {
   contentLanguages as libraryContentLanguages,
+  contributorCards as libraryContributorCards,
+  contributorNames as libraryContributorNames,
   referenceNames as libraryReferenceNames,
   type ContentLanguage,
 } from './public-references';

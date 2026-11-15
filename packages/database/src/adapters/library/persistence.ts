@@ -28,6 +28,7 @@ import { auditRow } from '../../audit-row.ts';
 import { requestSearchIndexing } from '../../search-intent.ts';
 import { createTopicResearchReader, researchTopicTotals } from './topic-research.ts';
 import { createScholarlyPersistence, createScholarlyPublicReader } from './scholarly.ts';
+import { createLibraryBrowseReader } from './browse.ts';
 
 class LibraryDataError extends Error {
   readonly reason: string;
@@ -324,12 +325,11 @@ const UNMATCHABLE_VERSION = 0;
 
 const boundedOffset = (n: number) =>
   Math.max(0, Math.min(10_000_000, Math.trunc(n) || 0));
+/** The administrative directory of sale points, any state (Library Part 2 moved the public one to `./browse.ts`). */
 async function salePoints(
   offset: number,
-  publicOnly: boolean,
 ): Promise<{ items: SalePointRecord[]; hasMore: boolean }> {
   const rows = await getDatabaseClient().salePoint.findMany({
-    where: publicOnly ? { state: 'published' } : {},
     orderBy: [{ name: 'asc' }, { id: 'asc' }],
     skip: boundedOffset(offset),
     take: 26,
@@ -372,7 +372,7 @@ export function createLibraryPersistence(): LibraryPersistencePort {
       const row = await db.edition.findUnique({ where: { id }, include: editionInclude });
       return row ? edition(row) : null;
     },
-    salePoints: (offset) => salePoints(offset, false),
+    salePoints: (offset) => salePoints(offset),
     async saveWork({ actorId, id, expectedVersion, value }) {
       try {
         return await db.$transaction(async (tx) => {
@@ -738,7 +738,6 @@ function publicWhere(q: LibraryQuery): Prisma.WorkWhereInput {
           },
         }
       : {}),
-    ...(q.downloads ? { download: 'allowed', downloadAssetId: { not: null } } : {}),
   };
   return {
     // The filters NARROW which Edition satisfies the public predicate; they
@@ -774,11 +773,6 @@ async function orderedWorks(
   if (q.language) edition.push(Prisma.sql`e.[languageCode] = ${q.language}`);
   if (q.from !== null) edition.push(Prisma.sql`e.[publicationYear] >= ${q.from}`);
   if (q.to !== null) edition.push(Prisma.sql`e.[publicationYear] <= ${q.to}`);
-  if (q.downloads)
-    edition.push(
-      Prisma.sql`e.[download] = N'allowed'`,
-      Prisma.sql`e.[downloadAssetId] IS NOT NULL`,
-    );
   const conditions = [
     Prisma.sql`w.[state] = N'published'`,
     Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[Edition] e WHERE ${Prisma.join(edition, ' AND ')})`,
@@ -1355,59 +1349,7 @@ export function createLibraryPublicReader(): LibraryPublicReaderPort {
     ...createScholarlyPublicReader(),
     ...topicWorksReader(),
     ...createTopicResearchReader(),
-    async contributorFacets(offset) {
-      const rows = await db.workContributor.groupBy({
-        by: ['personId'],
-        where: { work: PUBLIC_WORK },
-        _count: { workId: true },
-        orderBy: [{ _count: { workId: 'desc' } }, { personId: 'asc' }],
-        skip: boundedOffset(offset),
-        take: FACET_PAGE + 1,
-      });
-      return facetPage(
-        rows.map((row) => ({ id: row.personId, count: row._count.workId })),
-        FACET_PAGE,
-      );
-    },
-
-    async topicFacets(offset) {
-      const rows = await db.workTopic.groupBy({
-        by: ['topicId'],
-        where: { work: PUBLIC_WORK },
-        _count: { workId: true },
-        orderBy: [{ _count: { workId: 'desc' } }, { topicId: 'asc' }],
-        skip: boundedOffset(offset),
-        take: FACET_PAGE + 1,
-      });
-      return facetPage(
-        rows.map((row) => ({ id: row.topicId, count: row._count.workId })),
-        FACET_PAGE,
-      );
-    },
-
-    /**
-     * CONTENT languages, counted over published EDITIONS rather than Works.
-     *
-     * The distinction is the one DOMAIN_MODEL.md §10.1 turns on: a Work has no
-     * language, its manifestations do. Counting Works would have to pick one
-     * language per Work and would then have to invent a rule for a Work with an
-     * Arabic original and an Urdu translation.
-     */
-    async languageFacets(offset) {
-      const rows = await db.edition.groupBy({
-        by: ['languageCode'],
-        where: { state: 'published', work: PUBLIC_WORK },
-        _count: { id: true },
-        orderBy: [{ _count: { id: 'desc' } }, { languageCode: 'asc' }],
-        skip: boundedOffset(offset),
-        take: FACET_PAGE + 1,
-      });
-      return facetPage(
-        rows.map((row) => ({ id: row.languageCode, count: row._count.id })),
-        FACET_PAGE,
-      );
-    },
-
+    ...createLibraryBrowseReader(),
     async works(query) {
       if (query.sort !== null) return orderedWorks(query, query.sort);
       const rows = await db.work.findMany({
@@ -1436,7 +1378,6 @@ export function createLibraryPublicReader(): LibraryPublicReaderPort {
       });
       return row?.work.slug ?? null;
     },
-    salePoints: (offset) => salePoints(offset, true),
     async sitemap(offset, limit) {
       const rows = await db.work.findMany({
         where: PUBLIC_WORK,

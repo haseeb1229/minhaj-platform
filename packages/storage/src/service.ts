@@ -481,6 +481,30 @@ export function createStorageService(
       return new Set(present.filter((id): id is string => id !== null));
     },
 
+    async servableFiles(assetIds) {
+      const unique = [...new Set(assetIds)];
+      const answer = new Map<string, { mediaType: string; byteSize: number }>();
+      if (unique.length === 0) return answer;
+      if (unique.length > SERVABLE_BATCH) {
+        throw new RangeError('A servability question names too many assets.');
+      }
+      const records = await assets.findMany(unique);
+      const present = await Promise.all(
+        records
+          .filter((record) => record.state === 'clean')
+          .map(async (record) =>
+            (await files.exists(record.storageKey)) ? record : null,
+          ),
+      );
+      for (const record of present)
+        if (record !== null)
+          answer.set(record.id, {
+            mediaType: record.mediaType,
+            byteSize: record.byteSize,
+          });
+      return answer;
+    },
+
     async servableImages(assetIds) {
       const unique = [...new Set(assetIds)];
       if (unique.length === 0) return new Set<string>();

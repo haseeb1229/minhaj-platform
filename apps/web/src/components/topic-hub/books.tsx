@@ -122,6 +122,11 @@ function isRole(role: string): role is ContributionRole {
   return (CONTRIBUTION_ROLES as readonly string[]).includes(role);
 }
 
+/** A copy of an owner's name map keyed by the identifier in lower case. */
+function caseless<V>(map: ReadonlyMap<string, V>): Map<string, V> {
+  return new Map([...map].map(([id, value]) => [id.toLowerCase(), value]));
+}
+
 /** The People credited on a book, as one line; a role other than author is named. */
 function creditLine(work: TopicWork, names: Names, t: HubTranslator): string {
   return work.contributors
@@ -365,6 +370,12 @@ export async function BooksHub({
     locale,
   );
 
+  // An address carries an identifier in lower case (`identifier`), while an
+  // owner returns it as stored: options and chips compare without case, so a
+  // chosen Topic or contributor is pre-selected and named, never "unknown".
+  const people = caseless(names.people);
+  const topics = caseless(names.topics);
+
   const listId = `${domain.key}-books-list`;
   const featuredId = `${domain.key}-books-featured`;
   const title = domain.title;
@@ -390,16 +401,16 @@ export async function BooksHub({
 
   const languageOptions = facets.languages.items;
   const contributorOptions = facets.contributors.items.flatMap((facet) => {
-    const person = names.people.get(facet.id);
+    const person = people.get(facet.id.toLowerCase());
     return person === undefined
       ? []
-      : [{ id: facet.id, name: person.name, works: facet.works }];
+      : [{ id: facet.id.toLowerCase(), name: person.name, works: facet.works }];
   });
   const topicOptions = facets.topics.items.flatMap((facet) => {
-    const topic = names.topics.get(facet.id);
+    const topic = topics.get(facet.id.toLowerCase());
     return topic === undefined
       ? []
-      : [{ id: facet.id, name: topic.name, works: facet.works }];
+      : [{ id: facet.id.toLowerCase(), name: topic.name, works: facet.works }];
   });
   const surahOptions =
     passages === null || query.shelf === 'general' ? [] : facets.surahs;
@@ -416,11 +427,11 @@ export async function BooksHub({
   const contributorName =
     query.contributor === null
       ? null
-      : (names.people.get(query.contributor)?.name ?? null);
+      : (people.get(query.contributor.toLowerCase())?.name ?? null);
   const topicName =
     own === null || own.topic === null
       ? null
-      : (names.topics.get(own.topic)?.name ?? null);
+      : (topics.get(own.topic.toLowerCase())?.name ?? null);
 
   /** A year span in words: both ends, or the one end that is set. */
   const yearSpan = (from: number | null, to: number | null): string | null =>

@@ -1,50 +1,37 @@
-import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
-import { libraryReadRuntime } from '@/composition/library-read';
-import { directionOf } from '@/config/locale';
-import { requireLocale } from '@/config/route-locale';
-import { CardGrid, EmptyState, LinkCard } from '@/components/ui';
-import { ListingFrame, Pager } from '@/components/library/frame';
+import { LibraryDownloadsPage } from '@/components/library/downloads';
 import {
-  labelFor,
-  readLibraryOffset,
-  workPath,
-  WORK_PAGE,
-} from '@/components/library/presentation';
+  downloadsCanonicalRedirect,
+  readDownloadsView,
+} from '@/components/library/browse-view';
+import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
 import { requireRoute } from '@/shell/registry';
 
 /**
- * `/{locale}/library/downloads` — Works with a download that is actually allowed
- * (ROUTE_MAP.md §5, "Access").
+ * `/{locale}/library/downloads` — every downloadable Edition, with its
+ * language, format, size and rights statement, `?language, topic, sort, page`
+ * (Library Part 2; ROUTE_MAP.md §3.6, "Access"). Each download is the existing
+ * asset route, `/assets/library/editions/{editionId}/download/{assetId}`,
+ * whose rules are unchanged. One address per view: empty controls, another
+ * order, a malformed value or a former `?offset=` (which paged Works, not
+ * Editions) is one redirect to the canonical spelling.
  *
- * THE FILTER IS FORCED, NOT REQUESTED. `downloads` is set here rather than read
- * from the query, so this page cannot be turned into the unfiltered listing by
- * removing a parameter — and, more importantly, cannot be turned into a list of
- * books whose files merely EXIST. The reader's filter matches on the Library-owned
- * availability decision AND on a present file, both of them, because either one
- * alone would be a lie: a file with no permission is not a download, and a
- * permission with no file is not one either (§26, §31).
- *
- * WHAT THIS PAGE DOES NOT DO. It does not state a licence, a rights holder or a
- * legal basis, because the data carries none and inventing one would be inventing
- * law. It offers the download where the decision permits it and says nothing more
- * (§26).
- *
- * THE DOWNLOAD LINK ITSELF IS ON THE WORK PAGE, not here. This is a discovery
- * listing, and each row goes to the Work where the Edition — and therefore which
- * edition's file, in which language — can be chosen honestly.
+ * `force-dynamic`, because every figure here is data an administrator
+ * changes: a cached copy would keep offering a record since withdrawn. Signed
+ * out, always — nothing here reaches Identity or a cookie.
  */
 export const dynamic = 'force-dynamic';
 
-interface DownloadsParams {
+interface BrowseParams {
   readonly params: Promise<{ readonly locale: string }>;
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export async function generateMetadata({ params }: DownloadsParams): Promise<Metadata> {
+export async function generateMetadata({ params }: BrowseParams): Promise<Metadata> {
   const locale = await requireLocale(params);
   const t = await getTranslations({ locale, namespace: 'library' });
 
@@ -56,70 +43,10 @@ export async function generateMetadata({ params }: DownloadsParams): Promise<Met
   });
 }
 
-export default async function DownloadsPage({ params, searchParams }: DownloadsParams) {
+export default async function Page({ params, searchParams }: BrowseParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-
-  const t = await getTranslations({ locale, namespace: 'library' });
-  const shell = await getTranslations({ locale, namespace: 'shell' });
-
-  const offset = readLibraryOffset(query);
-  const page = await libraryReadRuntime().works({ offset, downloads: true });
-
-  return (
-    <ListingFrame
-      breadcrumbLabel={shell('nav.breadcrumbs')}
-      trail={[
-        { href: localizedPath(locale, ''), text: shell('nav.home') },
-        { href: localizedPath(locale, '/library'), text: t('title') },
-        { text: t('section.downloads') },
-      ]}
-      title={t('section.downloads')}
-      lede={t('sectionBody.downloads')}
-      notice={t('downloadsNotice')}
-    >
-      {page.items.length === 0 ? (
-        <EmptyState>{t('emptyDownloads')}</EmptyState>
-      ) : (
-        <CardGrid label={t('section.downloads')} columns={3}>
-          {page.items.map((record) => {
-            const label = labelFor(record, locale);
-            return (
-              <LinkCard
-                key={record.id}
-                href={workPath(locale, record.slug)}
-                title={label.title}
-                description={label.description}
-                headingLevel="h2"
-                lang={label.locale}
-                dir={directionOf(label.locale)}
-              />
-            );
-          })}
-        </CardGrid>
-      )}
-
-      <Pager
-        label={t('section.downloads')}
-        previous={
-          offset > 0
-            ? localizedPath(
-                locale,
-                `/library/downloads?offset=${String(Math.max(0, offset - WORK_PAGE))}`,
-              )
-            : null
-        }
-        next={
-          page.hasMore
-            ? localizedPath(
-                locale,
-                `/library/downloads?offset=${String(offset + WORK_PAGE)}`,
-              )
-            : null
-        }
-        previousLabel={t('previous')}
-        nextLabel={t('next')}
-      />
-    </ListingFrame>
-  );
+  const canonical = downloadsCanonicalRedirect(locale, query);
+  if (canonical !== null) redirect(canonical);
+  return <LibraryDownloadsPage locale={locale} view={readDownloadsView(query)} />;
 }

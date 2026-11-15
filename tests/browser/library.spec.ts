@@ -59,6 +59,22 @@ const downloadAssetId = randomUUID();
 const deniedAssetId = randomUUID();
 const salePointId = randomUUID();
 
+// Library Part 2: this run's own contributor, downloadable Edition and sale
+// point, each named "Zz…" so it sorts last and crowds no other spec's first
+// page, and found by its unique name or address.
+const authorId = randomUUID();
+const authorSlug = `browser-library-author-${run}`;
+const authorName = `Zz synthetic library author ${run}`;
+const browseWorkId = randomUUID();
+const browseSlug = `browser-library-browse-${run}`;
+const browseTitle = `Zz synthetic browse proof ${run}`;
+const browseEditionId = randomUUID();
+const browseAssetId = randomUUID();
+const browseSalePointId = randomUUID();
+const browseSalePoint = `Zz synthetic sale point ${run}`;
+let topicId = '';
+let topicSlug = '';
+
 const CONTENT_VERSION = 'd'.repeat(64);
 const SECTIONS = ['opening', 'middle', 'closing'] as const;
 const position = (key: string) => `edition-${arabicId}-${CONTENT_VERSION}-${key}`;
@@ -94,13 +110,17 @@ test.beforeAll(async () => {
 
   await writePhase5Fixture(sql, people);
 
-  const [topic] = await sql.query<{ id: string }>(
-    "SELECT TOP 1 [id] FROM [Topic] WHERE [status]=N'active' ORDER BY [id];",
+  const [topic] = await sql.query<{ id: string; slug: string }>(
+    "SELECT TOP 1 [id],[slug] FROM [Topic] WHERE [status]=N'active' ORDER BY [id];",
   );
   if (topic === undefined) throw new Error('No seeded Topic is available.');
+  // Lower case, as every canonical Library address spells an identifier.
+  topicId = topic.id.toLowerCase();
+  topicSlug = topic.slug;
 
   await seedCleanAsset(downloadAssetId);
   await seedCleanAsset(deniedAssetId);
+  await seedCleanAsset(browseAssetId);
 
   const document = JSON.stringify({
     sections: SECTIONS.map((key) => ({
@@ -164,6 +184,30 @@ test.beforeAll(async () => {
     VALUES
       (N'${randomUUID()}', N'${datedWorkId}', N'en', N'Synthetic dated edition', N'published', 1901,
        N'unavailable', N'denied', 1, SYSUTCDATETIME());
+
+    -- Library Part 2: an author of this run alone, credited as author AND
+    -- editor on one undated, downloadable Work sold at this run's sale point.
+    -- Undated and titled "Zz", it sorts last by title and by date.
+    INSERT INTO [dbo].[Person] ([id],[slug],[userId],[primaryLocale],[status])
+      VALUES (N'${authorId}', N'${authorSlug}', NULL, N'en', N'published');
+    INSERT INTO [dbo].[PersonTranslation] ([personId],[locale],[name],[biography])
+      VALUES (N'${authorId}', N'en', N'${authorName}', NULL);
+    INSERT INTO [dbo].[Work] ([id],[slug],[primaryLocale],[state],[isFeatured],[version],[updatedAt])
+      VALUES (N'${browseWorkId}', N'${browseSlug}', N'en', N'published', 0, 1, SYSUTCDATETIME());
+    INSERT INTO [dbo].[WorkLabel] ([workId],[locale],[title],[description])
+      VALUES (N'${browseWorkId}', N'en', N'${browseTitle}', N'');
+    INSERT INTO [dbo].[WorkContributor] ([workId],[personId],[role],[position]) VALUES
+      (N'${browseWorkId}', N'${authorId}', N'author', 0),
+      (N'${browseWorkId}', N'${authorId}', N'editor', 1);
+    INSERT INTO [dbo].[WorkTopic] ([workId],[topicId]) VALUES (N'${browseWorkId}', N'${topic.id}');
+    INSERT INTO [dbo].[Edition]
+      ([id],[workId],[languageCode],[label],[state],[pageCount],[reading],[download],[downloadAssetId],[version],[updatedAt])
+    VALUES
+      (N'${browseEditionId}', N'${browseWorkId}', N'en', N'Synthetic downloadable edition', N'published', 12,
+       N'unavailable', N'allowed', N'${browseAssetId}', 1, SYSUTCDATETIME());
+    INSERT INTO [dbo].[SalePoint] ([id],[name],[address],[contact],[url],[state],[version])
+      VALUES (N'${browseSalePointId}', N'${browseSalePoint}', N'Proof Street ${run}, Proofabad', N'+00 0000 000000', N'https://example.org/proof', N'published', 1);
+    INSERT INTO [dbo].[WorkSalePoint] ([workId],[salePointId]) VALUES (N'${browseWorkId}', N'${browseSalePointId}');
   `);
 });
 
@@ -291,15 +335,25 @@ test.describe('an anonymous visitor reads the Library', () => {
     const find = page.getByRole('region', { name: 'Find a book' });
     await expect(find.getByRole('heading', { name: 'By topic' })).toBeVisible();
     await expect(find.getByRole('heading', { name: 'By language' })).toBeVisible();
-    await expect(find.getByRole('link', { name: 'Books', exact: true })).toHaveAttribute(
+    await expect(find.getByRole('link', { name: 'Every topic' })).toHaveAttribute(
       'href',
-      '/library/books',
+      '/library/topics',
     );
-    await expect(page.getByRole('link', { name: 'Books on the Quran' })).toHaveAttribute(
-      'href',
-      '/quran/books',
+    // Library Part 2: the "by kind" way in repeated the directory below it
+    // link for link (two "Research" links on one page), so it was removed;
+    // the kinds are the directory's alone, and Find a book offers none.
+    await expect(find.getByRole('link', { name: 'Research', exact: true })).toHaveCount(
+      0,
     );
-    await expect(page.getByRole('link', { name: 'Books on Hadith' })).toHaveAttribute(
+    await expect(find.getByRole('link', { name: 'Books', exact: true })).toHaveCount(0);
+    // The subject hubs, in their own section: the header's Hadith menu also
+    // offers "Books on Hadith" once Hadith books exist — the shell's
+    // navigation, not this page offering the destination twice.
+    const subjects = page.getByRole('region', { name: 'Books by subject' });
+    await expect(
+      subjects.getByRole('link', { name: 'Books on the Quran' }),
+    ).toHaveAttribute('href', '/quran/books');
+    await expect(subjects.getByRole('link', { name: 'Books on Hadith' })).toHaveAttribute(
       'href',
       '/hadith/books',
     );
@@ -572,6 +626,252 @@ test.describe('an anonymous visitor reads the Library', () => {
 });
 
 /* ========================================================================== */
+
+test.describe('Library Part 2 — the browse and access pages', () => {
+  /** A search box's value as a GET form submits it. */
+  const typed = (text: string) => encodeURIComponent(text).replaceAll('%20', '+');
+
+  test('the resources directory counts every kind, and a typed view is its listing', async ({
+    page,
+  }) => {
+    const response = await page.goto('/library/resources');
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('All resources');
+    const books = page.getByRole('region', { name: 'Books and editions' });
+    await expect(books.getByRole('link', { name: 'Books', exact: true })).toHaveAttribute(
+      'href',
+      '/library/books',
+    );
+    await expect(books.getByText(/^\d+ books?$/)).toBeVisible();
+    const access = page.getByRole('region', { name: 'Access and availability' });
+    await expect(access.getByText(/^\d+ editions? to download$/)).toBeVisible();
+    await expect(access.getByText(/^\d+ sale points?$/)).toBeVisible();
+    // The route map's `?type, topic…` is that kind's own listing, in one redirect.
+    await page.goto(`/library/resources?type=books&topic=${topicId}`);
+    await expect(page).toHaveURL(new RegExp(`/library/books\\?topic=${topicId}$`));
+    // The listing it lands on pre-selects that Topic and names its chip: the
+    // address spells the identifier in lower case while the Topic is stored in
+    // upper case, and the two compare without case — never "A topic".
+    await expect(page.locator('select[name="topic"]')).toHaveValue(topicId);
+    const chips = page.getByRole('link', { name: /^Remove filter: / });
+    await expect(chips).toHaveCount(1);
+    await expect(chips.first()).not.toHaveAccessibleName('Remove filter: A topic');
+    await page.goto('/library/resources?type=nothing');
+    await expect(page).toHaveURL(/\/library\/resources$/);
+  });
+
+  test('the author directory: roles, books, profile, filters and one address', async ({
+    page,
+  }) => {
+    const q = typed(authorName);
+    const card = page.locator('main li', {
+      has: page.getByRole('heading', { name: authorName }),
+    });
+    await page.goto(`/library/authors?q=${q}`);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      'Authors and contributors',
+    );
+    await expect(
+      card.getByRole('link', { name: authorName, exact: true }),
+    ).toHaveAttribute('href', `/people/${authorSlug}`);
+    await expect(card.getByText('Author of 1 book', { exact: true })).toBeVisible();
+    await expect(card.getByText('Editor of 1 book', { exact: true })).toBeVisible();
+    await expect(
+      card.getByRole('link', { name: `1 book by ${authorName}` }),
+    ).toHaveAttribute('href', `/library/books?contributor=${authorId}`);
+    // No portrait is recorded, so the initial tile stands in.
+    await expect(card.getByText('Z', { exact: true })).toBeVisible();
+
+    // A role narrows; one this person does not hold leaves nobody.
+    await page.goto(`/library/authors?role=editor&q=${q}`);
+    await expect(card).toHaveCount(1);
+    await page.goto(`/library/authors?role=translator&q=${q}`);
+    await expect(page.getByText('No one matches')).toBeVisible();
+    await page.getByRole('link', { name: 'Remove filter: Translator' }).click();
+    await expect(page).toHaveURL(/\/library\/authors\?q=Zz\+synthetic/);
+    await expect(card).toHaveCount(1);
+
+    // The first-letter index is a view of its own, spelled one way.
+    await page.goto(`/library/authors?letter=z&q=${q}`);
+    await expect(page).toHaveURL(/\/library\/authors\?letter=Z&q=Zz\+synthetic/);
+    await expect(card).toHaveCount(1);
+
+    // One address per view: empty controls and a former offset, one redirect each.
+    await page.goto('/library/authors?q=&role=');
+    await expect(page).toHaveURL(/\/library\/authors$/);
+    await page.goto('/library/authors?offset=50');
+    await expect(page).toHaveURL(/\/library\/authors$/);
+  });
+
+  test('topics and languages lead into the listings they count', async ({ page }) => {
+    await page.goto('/library/topics');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Topics');
+    // The Topic's own entry: its heading links to its Topic page.
+    const topicLink = page.locator(`h3 a[href="/topics/${topicSlug}"]`);
+    await expect(page.getByRole('main').locator(topicLink)).toBeVisible();
+    const entry = page.locator('main li', { has: topicLink });
+    await expect(entry.locator(`a[href="/library/books?topic=${topicId}"]`)).toHaveText(
+      /^\d+ books?$/,
+    );
+    await page.goto('/library/topics?offset=50');
+    await expect(page).toHaveURL(/\/library\/topics$/);
+
+    await page.goto('/library/languages');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Content languages');
+    const arabic = page.locator('main li', { has: page.locator('h2[lang="ar"]') });
+    await expect(arabic.locator('h2')).toHaveAttribute('dir', 'rtl');
+    await expect(arabic.locator('a[href="/library/books?language=ar"]')).toHaveText(
+      /^\d+ books?$/,
+    );
+  });
+
+  test('downloads: format, size, rights and the unchanged asset route', async ({
+    page,
+    request,
+  }) => {
+    const item = page.locator('main li', {
+      has: page.getByRole('link', { name: browseTitle }),
+    });
+    await page.goto('/library/downloads');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Downloads');
+    await expect(item.getByRole('link', { name: browseTitle })).toHaveAttribute(
+      'href',
+      `/library/books/${browseSlug}?edition=${browseEditionId}`,
+    );
+    await expect(item.getByText(/^PDF, \d+ byte$/)).toBeVisible();
+    await expect(
+      item.getByText('Download allowed by the rights recorded for this edition'),
+    ).toBeVisible();
+    const target = `/assets/library/editions/${browseEditionId}/download/${browseAssetId}`;
+    await expect(
+      item.getByRole('link', { name: 'Download Synthetic downloadable edition' }),
+    ).toHaveAttribute('href', target);
+    const bytes = await request.get(target);
+    expect(bytes.status()).toBe(200);
+    expect(bytes.headers()['content-type']).toContain('application/pdf');
+    // A denied Edition is never listed, though its file exists.
+    await expect(page.getByText('Synthetic Urdu translation')).toHaveCount(0);
+
+    // A filter narrows and says so; the view is the address.
+    await page.goto('/library/downloads?language=ar');
+    await expect(item).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Remove filter: Arabic' })).toBeVisible();
+    await page.goto('/library/downloads?sort=title&language=&topic=');
+    await expect(page).toHaveURL(/\/library\/downloads$/);
+  });
+
+  test('sale points: business facts, the books each sells and a literal search', async ({
+    page,
+  }) => {
+    const card = page.locator('main li', {
+      has: page.getByRole('heading', { name: browseSalePoint }),
+    });
+    await page.goto(`/library/sale-points?q=${typed(`Proof Street ${run}`)}`);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Where to buy');
+    await expect(card).toHaveCount(1);
+    await expect(card.getByText(`Proof Street ${run}, Proofabad`)).toBeVisible();
+    await expect(card.getByText('+00 0000 000000')).toBeVisible();
+    await expect(card.getByRole('link', { name: /example\.org/ })).toHaveAttribute(
+      'href',
+      'https://example.org/proof',
+    );
+    await expect(card.getByText('Sells 1 book from the Library')).toBeVisible();
+    await expect(card.getByRole('link', { name: browseTitle })).toHaveAttribute(
+      'href',
+      `/library/books/${browseSlug}`,
+    );
+    // A wildcard is a character: "%%%" is in no name or address.
+    await page.goto('/library/sale-points?q=%25%25%25');
+    await expect(page.getByText('No sale point matches')).toBeVisible();
+    await page.goto('/library/sale-points?offset=0');
+    await expect(page).toHaveURL(/\/library\/sale-points$/);
+  });
+
+  test('every browse page: no serious accessibility finding and no sideways scroll, in English, Urdu and Arabic', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(300_000);
+    for (const locale of ['', '/ur', '/ar'])
+      for (const target of [
+        '/library/resources',
+        '/library/authors',
+        '/library/topics',
+        '/library/languages',
+        '/library/downloads',
+        '/library/sale-points',
+      ])
+        for (const width of [320, 1440]) {
+          const address = `${locale}${target}`;
+          await page.setViewportSize({ width, height: 900 });
+          const response = await page.goto(address);
+          expect(response?.status(), address).toBe(200);
+          await expect(page.locator('html')).toHaveAttribute(
+            'dir',
+            locale === '' ? 'ltr' : 'rtl',
+          );
+          const overflow = await page.evaluate(
+            () =>
+              document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          );
+          expect(overflow, `${address} at ${String(width)}px`).toBeLessThanOrEqual(0);
+          if (width !== 1440) continue;
+          const results = await new AxeBuilder({ page })
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+            .analyze();
+          const blocking = results.violations.filter(
+            (violation) =>
+              violation.impact === 'serious' || violation.impact === 'critical',
+          );
+          for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+            testInfo.annotations.push({
+              type: 'axe',
+              description: `${address}: ${finding.id} (${String(finding.impact)})`,
+            });
+          expect(
+            blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+            address,
+          ).toEqual([]);
+        }
+  });
+
+  test('the directory search is usable by keyboard alone, visibly', async ({ page }) => {
+    /** Tab alone until `target` holds focus, then prove the indicator shows. */
+    const tabTo = async (target: ReturnType<Page['locator']>, where: string) => {
+      const handle = await target.elementHandle();
+      if (handle === null) throw new Error(`${where} is not on the page.`);
+      let reached = false;
+      for (let step = 0; step < 200 && !reached; step += 1) {
+        await page.keyboard.press('Tab');
+        reached = await handle.evaluate((element) => document.activeElement === element);
+      }
+      expect(reached, `${where} reached by Tab alone`).toBe(true);
+      const focus = await target.evaluate((element) => {
+        const style = globalThis.getComputedStyle(element);
+        return {
+          visible: element.matches(':focus-visible'),
+          outline: style.outlineStyle,
+          width: Number.parseFloat(style.outlineWidth),
+          shadow: style.boxShadow,
+        };
+      });
+      expect(focus.visible, where).toBe(true);
+      expect(
+        (focus.outline !== 'none' && focus.width > 0) || focus.shadow !== 'none',
+        `${where} ${JSON.stringify(focus)}`,
+      ).toBe(true);
+    };
+
+    await page.goto('/library/authors');
+    await tabTo(page.locator('#authors-q'), 'the name search');
+    await page.keyboard.type(authorName);
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/library\/authors\?q=Zz\+synthetic/);
+    await tabTo(
+      page.getByRole('link', { name: authorName, exact: true }),
+      'the profile link',
+    );
+  });
+});
 
 test.describe('the byte routes answer only when both owners allow', () => {
   const bytes = (edition: string, purpose: string, asset: string) =>

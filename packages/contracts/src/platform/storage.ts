@@ -418,6 +418,17 @@ export interface StorageServicePort {
    * visibility.
    */
   servableImages(assetIds: readonly string[]): Promise<ReadonlySet<string>>;
+  /**
+   * Library Part 2. Exactly `servable`, answered with each servable asset's
+   * sniffed media type and stored byte size — what a page of downloads states
+   * beside each file ("PDF, 2.4 MB"). Same bound, same non-decision about
+   * visibility: the byte route still makes both decisions per request.
+   */
+  servableFiles(
+    assetIds: readonly string[],
+  ): Promise<
+    ReadonlyMap<string, { readonly mediaType: string; readonly byteSize: number }>
+  >;
   /** Bounded, idempotent reconciliation of Storage-owned resources only. */
   reconcile(now: Date, limit: number): Promise<number>;
   /**

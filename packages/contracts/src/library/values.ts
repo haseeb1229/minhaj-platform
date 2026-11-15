@@ -345,7 +345,6 @@ export const libraryQuerySchema = z
     contributor: libraryIdSchema.nullable().default(null),
     from: z.number().int().min(1).max(9999).nullable().default(null),
     to: z.number().int().min(1).max(9999).nullable().default(null),
-    downloads: z.boolean().default(false),
     sort: librarySortSchema.nullable().default(null),
     /** The interface locale a `title` order reads titles in; null reads primary titles. */
     titleLocale: localeSchema.nullable().default(null),

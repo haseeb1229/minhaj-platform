@@ -399,6 +399,14 @@ Storage `Asset` with its measured box and an optional credit — set through Peo
 JPEG or PNG, and served only by People's own route while the Person is published. Never an
 avatar URL, a remote reference or anything inferred from a face.
 
+**Public cards by identifier (Library Part 2).** `publicPersonCards(ids, locale)` answers, for at
+most 300 distinct well-formed identifiers (parsed by the read service before any read), the
+PUBLISHED Persons among them as the same public card `listPublicPeople` returns — the name in the
+requested locale else the primary, the locale it came from, a biography excerpt and the portrait;
+an unknown, draft or archived Person is absent. `/library/authors` asks it for one directory page,
+and resolves the whole directory's names in bounded batches of `contributorReferences`. No schema
+change.
+
 ### 5.2 Profiles
 
 A **Person may hold several legitimate profiles simultaneously.** Each is a separate
@@ -1655,6 +1663,29 @@ Owns published works. Corrects the prior revision's conflation of *localized met
   every other filter) and `topics` (Topic → Works without the Topic filter; always empty on a
   hub). `/library/books` and the Library landing are built on it. Parameterised SQL, bounded, the
   ordinary public predicate; no schema change.
+- **Browse and access (Library Part 2).** Seven public reads (`@minhaj/contracts/library`
+  `browse.ts`, adapter `adapters/library/browse.ts`), each grouped and bounded under every counted
+  aggregate's own public predicate, replace the Phase-8 facet reads `contributorFacets`,
+  `topicFacets` and `languageFacets` and the public `salePoints` page read (historical; the
+  administrative sale-point directory is unchanged), and the `downloads` flag of the Work listing
+  query (historical): `holdings` (the whole Library by kind — Works, those readable and
+  downloadable, published Editions and the downloadable ones, Research, ResearchPaper,
+  Publication, Encyclopedia, Magazine, issues of a published Magazine, sale points — and the
+  distinct Topics, content languages and credited Persons); `topicHoldings(topics)` (at most
+  `LIBRARY_TOPIC_TOTALS_MAX` asked Topics, each with its public records per kind — Work, Research,
+  ResearchPaper, Publication, Encyclopedia, Magazine); `languageHoldings` (per content language, a
+  Work once per language one of its published Editions is in and each dated record in its own;
+  a Magazine has no language); `contributorDirectory` (at most 1000 Persons credited on a public
+  Work, most-credited first, with their distinct Works and Works per role, by `WorkContributor`
+  only — an Edition's translators on a BookTranslation are not a Work credit and are not counted);
+  `downloads(query)` / `downloadFacets(query)` (published Editions of public Works whose
+  availability allows a download with a file recorded — the asset route's own business decision —
+  narrowed by content language and the Work's Topic, ordered by title or newest, 24 a page with
+  the total; facets by language and Topic, each without its own filter); and
+  `salePointDirectory(query)` (published sale points A–Z, a literal name-or-address search whose
+  wildcards are escaped, 24 a page with the total, each with the count and the first six by title
+  of the public Works it sells). Every count equals what the listing it links to shows. No schema
+  change.
 
 ### 10.2 Other aggregates
 

@@ -385,9 +385,19 @@ test.describe('Library-wide surfaces include what Phase 9 delivered', () => {
     ).toHaveAttribute('href', '/library/books');
     await expect(main.getByText(/^Titles and descriptions are shown/)).toBeVisible();
 
+    // Library Part 2: `/library/resources` is a directory of every kind with
+    // its count (it previewed ten records of each until then), so it is
+    // proved by the kinds this spec publishes being counted and linked.
     await page.goto('/library/resources');
-    await expect(page.getByRole('link', { name: RESEARCH_TITLE })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'All research papers' })).toBeVisible();
+    const scholarly = page.getByRole('region', { name: 'Research and publications' });
+    await expect(
+      scholarly.getByRole('link', { name: 'Research', exact: true }),
+    ).toHaveAttribute('href', '/library/research');
+    await expect(scholarly.getByText(/^\d+ research records?$/)).toBeVisible();
+    await expect(
+      scholarly.getByRole('link', { name: 'Research papers', exact: true }),
+    ).toHaveAttribute('href', '/library/research-papers');
+    await expect(scholarly.getByText(/^\d+ research papers?$/)).toBeVisible();
 
     await page.goto('/topics/education');
     const section = page.getByRole('region', { name: 'Research on this topic' });

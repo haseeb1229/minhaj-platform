@@ -1,14 +1,15 @@
 import { z } from 'zod';
 import {
+  libraryDownloadsQuerySchema,
   libraryIdSchema,
   libraryQuerySchema,
+  librarySalePointQuerySchema,
   libraryTopicTotalsInputSchema,
   librarySlugSchema,
   topicResearchQuerySchema,
   topicWorksQuerySchema,
   scholarlyKindSchema,
   scholarlyQuerySchema,
-  type LibraryFacetPage,
   type LibraryPublicReaderPort,
   type ScholarlyKind,
   type ScholarlyRecord,
@@ -62,28 +63,43 @@ export function createLibraryReadService(reader: LibraryPublicReaderPort) {
         : Promise.resolve(null);
     },
 
-    salePoints(offset = 0) {
-      return reader.salePoints(browseOffset.parse(offset));
-    },
-
     /**
-     * The navigational facets, each one bounded and each one aggregate.
-     *
-     * A facet page hands back identifiers; the page that renders it resolves the
-     * names in ONE call to the owning context. That split is why `/library/authors`
-     * costs two queries rather than one per row (§32, §49) — and it is also why
-     * Library never has to hold a copy of a contributor's name.
+     * LIBRARY PART 2 — the browse and access reads (`/library/resources`,
+     * `/authors`, `/topics`, `/languages`, `/downloads`, `/sale-points`).
+     * Each hands back identifiers and counts; the page resolves names from
+     * their owners in a bounded number of calls, which is also why Library
+     * never holds a copy of a contributor's, a Topic's or a language's name.
+     * Every input is parsed here, before any read.
      */
-    contributorFacets(offset = 0): Promise<LibraryFacetPage> {
-      return reader.contributorFacets(browseOffset.parse(offset));
+    holdings() {
+      return reader.holdings();
     },
 
-    topicFacets(offset = 0): Promise<LibraryFacetPage> {
-      return reader.topicFacets(browseOffset.parse(offset));
+    /** Per asked Topic, its public records by kind. None asked reads nothing. */
+    async topicHoldings(raw: unknown) {
+      const topics = libraryTopicTotalsInputSchema.parse(raw);
+      if (topics.length === 0) return [];
+      return reader.topicHoldings(topics);
     },
 
-    languageFacets(offset = 0): Promise<LibraryFacetPage> {
-      return reader.languageFacets(browseOffset.parse(offset));
+    languageHoldings() {
+      return reader.languageHoldings();
+    },
+
+    contributorDirectory() {
+      return reader.contributorDirectory();
+    },
+
+    downloads(raw: unknown = {}) {
+      return reader.downloads(libraryDownloadsQuerySchema.parse(raw));
+    },
+
+    downloadFacets(raw: unknown = {}) {
+      return reader.downloadFacets(libraryDownloadsQuerySchema.parse(raw));
+    },
+
+    salePointDirectory(raw: unknown = {}) {
+      return reader.salePointDirectory(librarySalePointQuerySchema.parse(raw));
     },
 
     /**

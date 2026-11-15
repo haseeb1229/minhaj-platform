@@ -85,3 +85,36 @@ describe('a card excerpt', () => {
       expect(['شیخ', 'الاسلام']).toContain(word);
   });
 });
+
+describe('public contributor cards by identifier (Library Part 2)', () => {
+  function byIds() {
+    const asked: unknown[] = [];
+    const reader = {
+      async publicPersonCards(ids: readonly string[], locale: string) {
+        asked.push({ ids, locale });
+        return [];
+      },
+    } as unknown as PeopleReaderPort;
+    return { service: createPeopleReadService({ reader }), asked };
+  }
+
+  it('asks once for the distinct identifiers, and not at all for none', async () => {
+    const { service, asked } = byIds();
+    expect(await service.publicPersonCards([], 'en')).toEqual([]);
+    expect(asked).toEqual([]);
+    await service.publicPersonCards([ID(1), ID(2), ID(1)], 'ar');
+    expect(asked).toEqual([{ ids: [ID(1), ID(2)], locale: 'ar' }]);
+  });
+
+  it('refuses a malformed identifier or an oversized batch before reading', async () => {
+    const { service, asked } = byIds();
+    await expect(service.publicPersonCards(['not-a-person'], 'en')).rejects.toThrow();
+    await expect(
+      service.publicPersonCards(
+        Array.from({ length: 301 }, (_, index) => ID(index + 1)),
+        'en',
+      ),
+    ).rejects.toThrow();
+    expect(asked).toEqual([]);
+  });
+});

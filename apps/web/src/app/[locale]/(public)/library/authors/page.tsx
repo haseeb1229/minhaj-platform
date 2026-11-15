@@ -1,22 +1,27 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
-import { FacetBrowse } from '@/components/library/facet-browse';
+import { LibraryAuthorsPage } from '@/components/library/authors';
+import {
+  authorsCanonicalRedirect,
+  readAuthorsView,
+} from '@/components/library/browse-view';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
 import { requireRoute } from '@/shell/registry';
 
 /**
- * `/{locale}/library/authors` — Contributors who have at least one published Work. Details 301 to People.
+ * `/{locale}/library/authors` — the contributor directory: everyone credited
+ * on a public Work, named by People, with their roles and books,
+ * `?letter, role, q, page` (Library Part 2; ROUTE_MAP.md §3.6). A name opens
+ * the canonical People profile; `/library/authors/{slug}` still 301s there.
+ * One address per view: a form's empty controls, another order, a malformed
+ * value or a former `?offset=` is one redirect to the canonical spelling.
  *
- * A THIN ROUTE OVER ONE SHARED BROWSE. The three facet browses differ only in
- * which aggregate they read and where a row links, so they share an
- * implementation rather than repeating one three times (see
- * `@/components/library/facet-browse`).
- *
- * `force-dynamic`, because the facet counts are data an administrator changes.
- * A cached copy would keep offering a heading whose only Works have since been
- * withdrawn.
+ * `force-dynamic`, because every figure here is data an administrator
+ * changes: a cached copy would keep offering a record since withdrawn. Signed
+ * out, always — nothing here reaches Identity or a cookie.
  */
 export const dynamic = 'force-dynamic';
 
@@ -39,6 +44,8 @@ export async function generateMetadata({ params }: BrowseParams): Promise<Metada
 
 export default async function Page({ params, searchParams }: BrowseParams) {
   const locale = await requireLocale(params);
-
-  return <FacetBrowse locale={locale} kind="authors" query={await searchParams} />;
+  const query = await searchParams;
+  const canonical = authorsCanonicalRedirect(locale, query);
+  if (canonical !== null) redirect(canonical);
+  return <LibraryAuthorsPage locale={locale} view={readAuthorsView(query, locale)} />;
 }

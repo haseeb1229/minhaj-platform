@@ -8,6 +8,7 @@ import type {
   PersonStatus,
   ProfileKind,
   ProfileStatus,
+  PublicPersonCard,
   PublicPersonCardPage,
   PublicPersonProfile,
   PublicTeacherEntry,
@@ -127,6 +128,16 @@ export interface PeopleReaderPort {
     readonly offset: number;
     readonly limit: number;
   }): Promise<PublicPersonCardPage>;
+
+  /**
+   * Library Part 2. The PUBLISHED contributors among `ids` (at most 300) as
+   * public cards — the same card `listPublicPeople` returns — in identifier
+   * order. An unknown, draft or archived Person is simply absent.
+   */
+  publicPersonCards(
+    ids: readonly string[],
+    locale: Locale,
+  ): Promise<readonly PublicPersonCard[]>;
 
   /**
    * Phase 30-R. Whether `assetId` is the portrait of a PUBLISHED Person

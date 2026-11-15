@@ -1,22 +1,23 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
-import { FacetBrowse } from '@/components/library/facet-browse';
+import { LibraryLanguagesPage } from '@/components/library/languages';
+import { bareRedirect } from '@/components/library/browse-view';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
 import { requireRoute } from '@/shell/registry';
 
 /**
- * `/{locale}/library/languages` — Library Works grouped by the CONTENT language of their Editions.
+ * `/{locale}/library/languages` — the Library by CONTENT language (never
+ * the interface language): each language named by Taxonomy in its own script,
+ * with its public records by kind, each count leading to that kind's listing
+ * in the language (Library Part 2; ROUTE_MAP.md §3.6). One view: a former
+ * `?offset=` is one redirect to the page.
  *
- * A THIN ROUTE OVER ONE SHARED BROWSE. The three facet browses differ only in
- * which aggregate they read and where a row links, so they share an
- * implementation rather than repeating one three times (see
- * `@/components/library/facet-browse`).
- *
- * `force-dynamic`, because the facet counts are data an administrator changes.
- * A cached copy would keep offering a heading whose only Works have since been
- * withdrawn.
+ * `force-dynamic`, because every figure here is data an administrator
+ * changes: a cached copy would keep offering a record since withdrawn. Signed
+ * out, always — nothing here reaches Identity or a cookie.
  */
 export const dynamic = 'force-dynamic';
 
@@ -39,6 +40,8 @@ export async function generateMetadata({ params }: BrowseParams): Promise<Metada
 
 export default async function Page({ params, searchParams }: BrowseParams) {
   const locale = await requireLocale(params);
-
-  return <FacetBrowse locale={locale} kind="languages" query={await searchParams} />;
+  const query = await searchParams;
+  const canonical = bareRedirect(locale, '/library/languages', query);
+  if (canonical !== null) redirect(canonical);
+  return <LibraryLanguagesPage locale={locale} />;
 }

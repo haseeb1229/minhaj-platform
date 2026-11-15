@@ -528,7 +528,12 @@ container structure; no pixel is decoded on the server and nothing is re-encoded
 ceiling counts what ARRIVES, discarded metadata included. `servable(ids)` answers, for one
 bounded page, which assets are technically servable (clean, bytes present) — a question a
 consumer asks only about assets its own authorised records name, so a page offers an image only
-where fetching it can work; the byte route still makes both decisions per request.
+where fetching it can work; the byte route still makes both decisions per request. Since Library
+Part 2, `servableFiles(ids)` is the same question answered with each servable asset's sniffed
+media type and stored byte size (same bound, same non-decision about visibility), so
+`/library/downloads` states "PDF, 2.4 MB" beside a file and states a file it cannot serve as
+unavailable instead of linking it; the public composition asking it (`composition/library-files.ts`)
+is separate from the byte route's, which is unchanged.
 
 **Owner-safe release (Phase 24).** A consumer that must be able to dispose of what it stores
 generates a 256-bit release token, records it in its OWN row, and passes it in the upload policy;

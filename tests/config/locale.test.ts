@@ -186,7 +186,18 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/editorial/frame.tsx',
     // Phase 8. The Library components render on the anonymous public path;
     // the ROUTES that use them are dynamic for data, never these modules.
-    'apps/web/src/components/library/facet-browse.tsx',
+    // Library Part 2: the browse and access pages (resources, authors,
+    // topics, languages, downloads, sale points), their shared parts and
+    // their pure address rules — replacing the Phase-8 shared facet browse,
+    // `facet-browse.tsx`, removed.
+    'apps/web/src/components/library/authors.tsx',
+    'apps/web/src/components/library/browse-parts.tsx',
+    'apps/web/src/components/library/browse-view.ts',
+    'apps/web/src/components/library/downloads.tsx',
+    'apps/web/src/components/library/languages.tsx',
+    'apps/web/src/components/library/resources.tsx',
+    'apps/web/src/components/library/sale-points.tsx',
+    'apps/web/src/components/library/topics.tsx',
     // The flagship presentation pass: the Library's shared page frames, which
     // the static landing and the dynamic listings and records both render.
     // Phase 30-R. Library's cover image and cover card, and People's portrait

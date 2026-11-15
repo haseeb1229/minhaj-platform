@@ -730,6 +730,29 @@ export function createPeopleReader(): PeopleReaderPort {
       };
     },
 
+    async publicPersonCards(ids, locale) {
+      if (ids.length > 300) throw new Error('Contributor card batch exceeds bound');
+      if (ids.length === 0) return [];
+      // Published only, in the query, as for every public People read.
+      const rows = await prisma.person.findMany({
+        where: { id: { in: [...ids] }, status: 'published' },
+        include: PERSON_INCLUDE,
+        orderBy: { id: 'asc' },
+        take: 300,
+      });
+      return rows.map((row) => {
+        const label = labelFor(row, locale);
+        return {
+          id: row.id,
+          slug: row.slug,
+          name: label.name,
+          excerpt: personCardExcerpt(label.biography),
+          resolvedLocale: label.resolvedLocale,
+          portrait: portraitOf(row),
+        };
+      });
+    },
+
     async isPublicPortrait(personId, assetId) {
       const row = await prisma.person.findFirst({
         where: { id: personId, status: 'published', portraitAssetId: assetId },

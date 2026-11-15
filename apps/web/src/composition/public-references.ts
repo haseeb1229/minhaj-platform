@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { Locale } from '@minhaj/contracts';
+import type { PublicPersonCard } from '@minhaj/contracts/people';
 
 import { peopleReadRuntime } from './people-read';
 import { taxonomyRuntime } from './taxonomy';
@@ -115,4 +116,44 @@ export async function referenceNames(
       topics.map((entry) => [entry.id, { slug: entry.slug, name: entry.name }]),
     ),
   };
+}
+
+/** The most People one owner call names — People's own reader bound. */
+const PEOPLE_BATCH = 300;
+
+/**
+ * LIBRARY PART 2 — the names and current addresses of a whole contributor
+ * directory (at most `LIBRARY_CONTRIBUTOR_DIRECTORY_MAX` Persons), resolved by
+ * People in bounded batches rather than one call per Person. A Person People
+ * does not return as published is absent, and the directory omits them.
+ */
+export async function contributorNames(
+  personIds: readonly string[],
+  locale: Locale,
+): Promise<ReadonlyMap<string, { slug: string; name: string }>> {
+  const ids = [...new Set(personIds)];
+  const batches: string[][] = [];
+  for (let start = 0; start < ids.length; start += PEOPLE_BATCH)
+    batches.push(ids.slice(start, start + PEOPLE_BATCH));
+  const answers = await Promise.all(
+    batches.map((batch) =>
+      peopleReadRuntime().people.contributorReferences(batch, locale),
+    ),
+  );
+  return new Map(
+    answers.flat().map((entry) => [entry.id, { slug: entry.slug, name: entry.name }]),
+  );
+}
+
+/**
+ * LIBRARY PART 2 — one directory page's contributors as People's public cards
+ * (the name in the language it was resolved in, and the published portrait),
+ * in ONE bounded call.
+ */
+export async function contributorCards(
+  personIds: readonly string[],
+  locale: Locale,
+): Promise<ReadonlyMap<string, PublicPersonCard>> {
+  const cards = await peopleReadRuntime().people.publicPersonCards(personIds, locale);
+  return new Map(cards.map((card) => [card.id, card]));
 }

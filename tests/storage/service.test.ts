@@ -801,6 +801,22 @@ describe('servability is one bounded technical question for a page (Phase 12)', 
 
     const answer = await storage.servable([clean.id, gone.id, held.id, 'no-such-asset']);
     expect([...answer]).toEqual([clean.id]);
+    // Library Part 2: the same question, answered with what each file is.
+    const described = await storage.servableFiles([
+      clean.id,
+      gone.id,
+      held.id,
+      'no-such-asset',
+    ]);
+    expect([...described]).toEqual([
+      [clean.id, { mediaType: 'image/png', byteSize: clean.byteSize }],
+    ]);
+    expect(await storage.servableFiles([])).toEqual(new Map());
+    await expect(
+      storage.servableFiles(
+        Array.from({ length: 101 }, (_, index) => `asset-${String(index)}`),
+      ),
+    ).rejects.toThrow(RangeError);
     expect(await storage.servable([])).toEqual(new Set());
     await expect(
       storage.servable(
