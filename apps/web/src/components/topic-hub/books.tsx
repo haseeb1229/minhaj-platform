@@ -34,6 +34,7 @@ import {
   type BooksScope,
   type LibraryBooksFilters,
 } from './books-view';
+import { caseless } from './address';
 import type { HubDomain, HubLink } from './domain';
 import { ActiveFilters, ExploreFilters, ExploreHero, languageName } from './parts';
 
@@ -120,11 +121,6 @@ const FEATURED = 4;
 
 function isRole(role: string): role is ContributionRole {
   return (CONTRIBUTION_ROLES as readonly string[]).includes(role);
-}
-
-/** A copy of an owner's name map keyed by the identifier in lower case. */
-function caseless<V>(map: ReadonlyMap<string, V>): Map<string, V> {
-  return new Map([...map].map(([id, value]) => [id.toLowerCase(), value]));
 }
 
 /** The People credited on a book, as one line; a role other than author is named. */

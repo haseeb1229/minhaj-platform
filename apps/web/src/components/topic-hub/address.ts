@@ -88,3 +88,12 @@ export function pageRange(
   const from = (page - 1) * size + 1;
   return { from, to: from + shown - 1 };
 }
+
+/**
+ * A copy of an owner's name map keyed by the identifier in lower case: an
+ * address carries an identifier in lower case (`identifier`), while an owner
+ * returns it as stored, so options and chips compare without case.
+ */
+export function caseless<V>(map: ReadonlyMap<string, V>): Map<string, V> {
+  return new Map([...map].map(([id, value]) => [id.toLowerCase(), value]));
+}

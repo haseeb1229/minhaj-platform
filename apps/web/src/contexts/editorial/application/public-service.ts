@@ -121,6 +121,10 @@ export function createEditorialReadService(
       z.number().int().min(0).max(10_000_000).parse(offset);
       return reader.publishedArticles(offset, 25);
     },
+    /** Library Part 3: how many Articles are published, for the listing's total and pages. */
+    articleCount() {
+      return reader.publishedArticleCount();
+    },
     articleSitemap(offset: number, limit: number) {
       return reader.articleSitemap(offset, limit);
     },

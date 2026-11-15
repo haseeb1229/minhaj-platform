@@ -386,6 +386,8 @@ live(
           { decade: 1990, records: 2 },
         ],
         readable: 2,
+        // Library Part 3: a hub has one Topic, so it is never browsed by Topic.
+        topics: { items: [], hasMore: false },
       });
 
       // Under a language: the hub is unchanged, the language facet leaves its

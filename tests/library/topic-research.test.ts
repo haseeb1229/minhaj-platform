@@ -41,6 +41,7 @@ function recording() {
         contributors: { items: [], hasMore: false },
         decades: [],
         readable: 0,
+        topics: { items: [], hasMore: false },
       };
     },
   } as unknown as LibraryPublicReaderPort;
@@ -52,7 +53,10 @@ describe('Library’s public Topic Research read', () => {
     const { service, seen } = recording();
     await service.topicResearch();
     await service.topicResearchFacets({});
+    // Library Part 3: the scope is stated too — a hub's, unless the whole
+    // Library is asked for by name.
     const expected: TopicResearchQuery = {
+      scope: 'topic',
       topic: null,
       kind: 'all',
       language: null,
@@ -73,6 +77,7 @@ describe('Library’s public Topic Research read', () => {
   it('passes a full, valid query through unchanged', async () => {
     const { service, seen } = recording();
     const query = {
+      scope: 'library',
       topic: TOPIC,
       kind: 'research-paper',
       language: 'ur-PK',
@@ -91,6 +96,8 @@ describe('Library’s public Topic Research read', () => {
   });
 
   it.each([
+    ['an unknown scope', { scope: 'subject' }],
+    ['the scope as text that is not one', { scope: 'Library' }],
     ['an unknown kind', { kind: 'publication' }],
     ['a kind spelled as the address spells it', { kind: 'paper' }],
     ['an unknown order', { sort: 'popular' }],

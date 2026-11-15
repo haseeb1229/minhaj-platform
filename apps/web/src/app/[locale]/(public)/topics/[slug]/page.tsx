@@ -23,11 +23,8 @@ import { FatwaTopicSection } from '@/components/fatwa/topics';
 import { HadithTopicSection } from '@/components/hadith/topics';
 import { courseBrowseHref } from '@/components/learning/presentation';
 import { QuranTopicSection } from '@/components/quran/topics';
-import {
-  scholarlyLabel,
-  scholarlyListPath,
-  scholarlyQueryPath,
-} from '@/components/library/scholarly-presentation';
+import { kindHref } from '@/components/library/browse-view';
+import { scholarlyLabel } from '@/components/library/scholarly-presentation';
 import { BookShelf } from '@/components/topic-hub/books';
 import { CourseShelf } from '@/components/topic-hub/courses';
 import { ResearchShelf } from '@/components/topic-hub/research';
@@ -234,15 +231,7 @@ export default async function TopicPage({ params }: TopicParams) {
     videos:
       subjectHub('videos') ??
       localizedPath(locale, `/watch/topics/${encodeURIComponent(topic.slug)}`),
-    research:
-      subjectHub('research') ??
-      scholarlyQueryPath(scholarlyListPath(locale, 'research'), {
-        offset: 0,
-        language: null,
-        topic: topic.id,
-        from: null,
-        to: null,
-      }),
+    research: subjectHub('research') ?? kindHref(locale, 'research', { topic: topic.id }),
   };
   const totals: Readonly<Record<SubjectHub, number>> = {
     courses: courses.total,
@@ -536,13 +525,7 @@ export default async function TopicPage({ params }: TopicParams) {
                         ? {}
                         : {
                             action: {
-                              href: scholarlyQueryPath(scholarlyListPath(locale, kind), {
-                                offset: 0,
-                                language: null,
-                                topic: topic.id,
-                                from: null,
-                                to: null,
-                              }),
+                              href: kindHref(locale, kind, { topic: topic.id }),
                               text: t(`all.${kind}`),
                             },
                           })}

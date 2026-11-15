@@ -308,8 +308,10 @@ live('Phase 9 Library aggregates against real SQL Server', () => {
       expect((await reads.scholarlyRecord('magazine', magazine.slug))?.id).toBe(
         magazine.id,
       );
-      expect(await reads.magazineIssues(magazine.id)).toEqual({
+      // Library Part 3: the issues read states its total.
+      expect(await reads.magazineIssuePage({ magazineId: magazine.id })).toEqual({
         items: [],
+        total: 0,
         hasMore: false,
       });
     });
@@ -565,7 +567,7 @@ live('Phase 9 Library aggregates against real SQL Server', () => {
       const v2n1 = await make('v2-n1', 2, 1, 2021);
       const loose = await make('unnumbered', null, null, null);
 
-      const page = await reads.magazineIssues(magazine.id);
+      const page = await reads.magazineIssuePage({ magazineId: magazine.id });
       // Newest first by year, then by number; the undated issue last.
       expect(page.items.map((row) => row.slug)).toEqual([
         'v2-n1',

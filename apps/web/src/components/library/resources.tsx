@@ -19,8 +19,8 @@ import { BrowseFrame, ClosingNote } from './browse-parts';
  * Topics, Languages and Authors — each with how many public records it holds
  * and what it holds. One Library read (`holdings`) states every Library
  * figure; Articles are Editorial's, composed here at Layer 4 from its own
- * public read, and say only whether any is published — Editorial offers no
- * count, and none is invented. A kind with nothing yet says so and still
+ * public count (Library Part 3; until then Editorial offered none and the
+ * card said only whether any was published, historical). A kind with nothing yet says so and still
  * leads to its listing, whose own empty state explains.
  *
  * Signed out, always: nothing here reaches Identity or a cookie.
@@ -45,7 +45,7 @@ export async function LibraryResourcesPage({ locale }: { readonly locale: Locale
   ]);
   const [holdings, articles] = await Promise.all([
     libraryReadRuntime().holdings(),
-    editorialReadRuntime().articles(0),
+    editorialReadRuntime().articleCount(),
   ]);
 
   const path = (segment: string) => localizedPath(locale, `/library/${segment}`);
@@ -138,7 +138,8 @@ export async function LibraryResourcesPage({ locale }: { readonly locale: Locale
           title: t('section.articles'),
           href: path('articles'),
           body: t('sectionBody.articles'),
-          count: articles.length === 0 ? null : t('browse.resources.articles'),
+          count:
+            articles === 0 ? null : t('browse.resources.articles', { count: articles }),
         },
       ],
     },

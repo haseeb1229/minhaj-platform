@@ -16,7 +16,12 @@ import {
   type Query,
 } from '@/components/topic-hub/address';
 import { libraryBooksHref } from '@/components/topic-hub/books-view';
-import { scholarlyListPath, scholarlyQueryPath } from './scholarly-presentation';
+import {
+  DEFAULT_RESEARCH_QUERY,
+  LIBRARY_RECORD_SCOPES,
+  researchHref,
+} from '@/components/topic-hub/research-view';
+import { magazinesHref } from './magazine-view';
 
 /**
  * LIBRARY PART 2 — THE BROWSE AND ACCESS PAGES' ADDRESS RULES, pure, so the
@@ -56,12 +61,11 @@ export function kindHref(
       ...(filter.language === undefined ? {} : { language: filter.language }),
       ...(topic === undefined ? {} : { library: { topic } }),
     });
-  return scholarlyQueryPath(scholarlyListPath(locale, kind), {
-    offset: 0,
+  if (kind === 'magazine') return magazinesHref(locale, topic ?? null);
+  return researchHref(LIBRARY_RECORD_SCOPES[kind], locale, {
+    ...DEFAULT_RESEARCH_QUERY,
     language: filter.language ?? null,
     topic: topic ?? null,
-    from: null,
-    to: null,
   });
 }
 
@@ -94,10 +98,15 @@ const RESOURCE_KEYS: ReadonlySet<string> = new Set([
  * `/library/resources` IS THE DIRECTORY, with one address. ROUTE_MAP.md §3.6
  * gives it `?type, topic, language, contributor, from, to`; each such view is
  * one kind's own listing, so a request carrying them is ONE redirect there,
- * keeping the filters that listing takes (a contributor only for books; a
- * Magazine takes a Topic alone; Articles take none). Without a known type, any
+ * keeping the filters that listing takes (a Magazine takes a Topic alone;
+ * Articles take none; since Library Part 3 the written works take a
+ * contributor as the books do). Without a known type, any
  * of them is one redirect to the bare directory. `null` when the request is
  * already the directory.
+ *
+ * Since Library Part 3 the written works' listings take a decade, not a year
+ * range, so a range is kept only where it is one decade (`from=1990&to=1999`
+ * is the 1990s); any other range is dropped — never guessed into a decade.
  */
 export function resourcesRedirect(locale: string, query: Query): string | null {
   if (!Object.keys(query).some((key) => RESOURCE_KEYS.has(key))) return null;
@@ -108,23 +117,25 @@ export function resourcesRedirect(locale: string, query: Query): string | null {
 
   const topic = identifier(query, 'topic');
   const code = language(query);
+  const contributor = identifier(query, 'contributor');
   const from = whole(single(query, 'from', 8), 1, 9999);
   const to = whole(single(query, 'to', 8), 1, 9999);
   if (kind === 'work') {
-    const contributor = identifier(query, 'contributor');
     return libraryBooksHref(locale, {
       ...(code === null ? {} : { language: code }),
       ...(contributor === null ? {} : { contributor }),
       library: { topic, from, to },
     });
   }
-  const dated = kind !== 'magazine';
-  return scholarlyQueryPath(scholarlyListPath(locale, kind), {
-    offset: 0,
-    language: dated ? code : null,
+  if (kind === 'magazine') return magazinesHref(locale, topic);
+  const decade =
+    from !== null && to !== null && from % 10 === 0 && to === from + 9 ? from : null;
+  return researchHref(LIBRARY_RECORD_SCOPES[kind], locale, {
+    ...DEFAULT_RESEARCH_QUERY,
+    language: code,
+    contributor,
     topic,
-    from: dated && (from === null || to === null || from <= to) ? from : null,
-    to: dated && (from === null || to === null || from <= to) ? to : null,
+    decade,
   });
 }
 

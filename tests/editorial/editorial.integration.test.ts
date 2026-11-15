@@ -205,8 +205,16 @@ live('Phase 6 real SQL Editorial workflow and correspondence', () => {
         await expect(
           transition(kind, approved, 'publish', reviewer),
         ).rejects.toMatchObject({ reason: 'denied' });
+        // Library Part 3: the Articles listing's total counts published Articles only.
+        const counted = await reader.publishedArticleCount();
         const published = await transition(kind, approved, 'publish', publisher);
         expect(published.state).toBe('published');
+        if (kind === 'article') {
+          expect(await reader.publishedArticleCount()).toBe(counted + 1);
+          expect(await reader.publishedArticleCount()).toBe(
+            (await reader.publishedArticles(0, 50)).length,
+          );
+        } else expect(await reader.publishedArticleCount()).toBe(counted);
         const publicRow =
           kind === 'article'
             ? await reader.publicArticle(row.slug)
@@ -221,6 +229,7 @@ live('Phase 6 real SQL Editorial workflow and correspondence', () => {
         ])
           expect(JSON.stringify(publicRow)).not.toContain(field);
         await transition(kind, published, 'archive', publisher);
+        expect(await reader.publishedArticleCount()).toBe(counted);
         expect(
           kind === 'article'
             ? await reader.publicArticle(row.slug)

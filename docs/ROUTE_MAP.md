@@ -954,6 +954,27 @@ Downloads, Topics and Languages, where the former pages no longer correspond, th
 dropped. The landing's "by kind" way in, which repeated its own directory link for link, is
 removed.
 
+**Library Part 3.** The written works and periodicals are rebuilt; no route is added or removed.
+`/library/research` and `/library/research-papers` are the shared research listing over the whole
+Library (DOMAIN_MODEL.md §10.2, `scope: 'library'`; the Quran's and Hadith's hubs are unchanged),
+`/library/publications` and `/library/encyclopedias` the same listing over the published-records
+read. All four take **`?topic, language, contributor, decade, fulltext, sort, page`** — `sort` is
+`newest` (default), `oldest` or `title`; research pages hold 20, publications and encyclopedias 24;
+the kind is the address (the two research listings link to each other as tabs, with the view's
+filters kept). Their Phase-9 parameters are one redirect: `?offset=` (25 a page, historical) to the
+page holding the record it began with, `?from=`/`?to=` dropped (a decade replaces the year range;
+`/library/resources?type=…&from=1990&to=1999` keeps exactly one decade as `?decade=1990`, and now
+passes a contributor to them as it does to books). `/library/magazines` takes **`?topic`** alone
+(every Magazine on one page; its former `?offset`, `?language`, `?from`, `?to` are dropped by one
+redirect). `/library/magazines/{slug}` takes **`?year`** (one publication year) **or
+`?undated=1`**, and **`?page`** (24 a page); its former `?offset=` is the page holding the issue it
+began with. `/library/articles` — Editorial's one public listing of its Articles, which the
+`articles` menu link, the Library menu and the resources directory all lead to (no other articles
+listing exists, so nothing is duplicated) — takes **`?page`** (25 a page, newest by chronology);
+its former `?offset=` is the page holding the Article it began with; it stays `noindex`. One
+address per view on all of them; every filtered or paged view stays canonical to the bare listing
+and out of the sitemap. Record addresses and their slug-history 301s are unchanged.
+
 ### 3.7 Watch / Listen
 
 | Route | Purpose |

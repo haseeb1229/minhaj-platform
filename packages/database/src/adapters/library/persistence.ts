@@ -26,6 +26,7 @@ import {
 import { getDatabaseClient } from '../../client.ts';
 import { auditRow } from '../../audit-row.ts';
 import { requestSearchIndexing } from '../../search-intent.ts';
+import { createPublishedRecordsReader } from './published-records.ts';
 import { createTopicResearchReader, researchTopicTotals } from './topic-research.ts';
 import { createScholarlyPersistence, createScholarlyPublicReader } from './scholarly.ts';
 import { createLibraryBrowseReader } from './browse.ts';
@@ -1349,6 +1350,7 @@ export function createLibraryPublicReader(): LibraryPublicReaderPort {
     ...createScholarlyPublicReader(),
     ...topicWorksReader(),
     ...createTopicResearchReader(),
+    ...createPublishedRecordsReader(),
     ...createLibraryBrowseReader(),
     async works(query) {
       if (query.sort !== null) return orderedWorks(query, query.sort);

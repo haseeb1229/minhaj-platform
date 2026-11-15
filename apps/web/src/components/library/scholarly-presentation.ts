@@ -1,12 +1,11 @@
 import { localizedPath } from '@minhaj/contracts';
-import { z } from 'zod';
+import type { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
 import type {
   ScholarlyKind,
   ScholarlyLabel,
   ScholarlyListing,
-  ScholarlyQuery,
   StandaloneScholarlyKind,
 } from '@minhaj/contracts/library';
 
@@ -142,59 +141,6 @@ export function scholarlyLocales(record: {
 }
 
 /**
- * A URL's query, tolerated and then re-validated by the read service — the same
- * two layers as the Work listing. A mistyped year or a repeated parameter is the
- * unfiltered listing, never an error page, and nothing here can widen what is
- * public.
- */
-export function readScholarlyQuery(
-  query: Record<string, string | string[] | undefined>,
-): ScholarlyQuery {
-  const text = (key: string, max: number): string | null => {
-    const raw = query[key];
-    return typeof raw === 'string' && raw !== '' && raw.length <= max ? raw : null;
-  };
-  const year = (key: string): number | null =>
-    z.coerce.number().int().min(1).max(9999).nullable().catch(null).parse(text(key, 8));
-
-  const from = year('from');
-  const to = year('to');
-  const topic = text('topic', 64);
-
-  return {
-    offset: z.coerce
-      .number()
-      .int()
-      .min(0)
-      .max(25_000)
-      .catch(0)
-      .parse(text('offset', 8) ?? 0),
-    language: text('language', 16),
-    topic: topic !== null && z.uuid().safeParse(topic).success ? topic : null,
-    ...(from !== null && to !== null && from > to
-      ? { from: null, to: null }
-      : { from, to }),
-  };
-}
-
-/** The listing address for a set of filters, neutral values omitted. */
-export function scholarlyQueryPath(
-  base: string,
-  filters: ScholarlyQuery,
-  overrides: Partial<ScholarlyQuery> = {},
-): string {
-  const merged = { ...filters, ...overrides };
-  const search = new URLSearchParams();
-  if (merged.offset > 0) search.set('offset', String(merged.offset));
-  if (merged.language !== null) search.set('language', merged.language);
-  if (merged.topic !== null) search.set('topic', merged.topic);
-  if (merged.from !== null) search.set('from', String(merged.from));
-  if (merged.to !== null) search.set('to', String(merged.to));
-  const text = search.toString();
-  return text === '' ? base : `${base}?${text}`;
-}
-
-/**
  * The paragraphs of a plain-text field — an abstract, a summary — split on blank
  * lines. Each becomes a TEXT NODE; there is no markup path.
  */
@@ -209,4 +155,29 @@ export function paragraphsOf(value: string): string[] {
 /** The address a DOI resolves at. The DOI's grammar admits nothing unsafe. */
 export function doiHref(doi: string): string {
   return `https://doi.org/${doi.split('/').map(part).join('/')}`;
+}
+
+/** The Library's interface words. */
+type LibraryTranslator = Awaited<ReturnType<typeof getTranslations<'library'>>>;
+
+/** The section registry key of each standalone kind's listing. */
+const SECTION_KEY = {
+  research: 'research',
+  'research-paper': 'research-papers',
+  publication: 'publications',
+  magazine: 'magazines',
+  encyclopedia: 'encyclopedias',
+} as const satisfies Record<StandaloneScholarlyKind, string>;
+
+/** A kind's listing name ("Research papers"), as the Library menu names it. */
+export function sectionTitle(
+  t: LibraryTranslator,
+  kind: StandaloneScholarlyKind,
+): string {
+  return t(`section.${SECTION_KEY[kind]}`);
+}
+
+/** What a kind's listing holds, in one sentence. */
+export function sectionBody(t: LibraryTranslator, kind: StandaloneScholarlyKind): string {
+  return t(`sectionBody.${SECTION_KEY[kind]}`);
 }

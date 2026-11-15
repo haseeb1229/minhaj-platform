@@ -87,10 +87,18 @@ describe('resourcesRedirect — the directory is one view', () => {
     );
     expect(
       resourcesRedirect('ur', { type: 'research', language: 'ar', from: '2001' }),
-    ).toBe('/ur/library/research?language=ar&from=2001');
-    // A contributor is a books filter only; a Magazine takes a Topic alone.
+    ).toBe('/ur/library/research?language=ar');
+    // Library Part 3: the written works take a decade, not a year range — a
+    // range that is exactly one decade is kept as it, any other dropped —
+    // and a contributor, as the books do. A Magazine takes a Topic alone.
+    expect(
+      resourcesRedirect('en', { type: 'research-papers', from: '1990', to: '1999' }),
+    ).toBe('/library/research-papers?decade=1990');
+    expect(
+      resourcesRedirect('en', { type: 'research-papers', from: '1990', to: '2000' }),
+    ).toBe('/library/research-papers');
     expect(resourcesRedirect('en', { type: 'research', contributor: PERSON })).toBe(
-      '/library/research',
+      `/library/research?contributor=${PERSON}`,
     );
     expect(
       resourcesRedirect('en', {

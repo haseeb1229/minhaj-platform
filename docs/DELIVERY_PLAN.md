@@ -810,7 +810,8 @@ review history:**
   `research.*` or `magazine.*` key.
 - **Not delivered, and not owed by this phase:** files and downloads for these aggregates
   (Phase-9 records are read as text; a file relation arrives with the owner that needs one, through
-  Storage); a contributor filter on the Phase-9 listings (no surface consumes one); cross-type
+  Storage); a contributor filter on the Phase-9 listings (no surface consumes one — at Phase-9
+  exit; since Library Part 3 the four written-work listings filter by a credited Person); cross-type
   facets on `/library/topics`, `/library/languages` and `/library/authors`, which remain Work
   browses and say so, while `/library/resources` and `/topics/{slug}` include every delivered type
   (at Phase-9 exit; since Library Part 2 `/library/topics` and `/library/languages` count every
@@ -4448,6 +4449,139 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > 1440 px on all six pages in en, ur and ar. `tests/browser/research-publications.spec.ts` — the
 > resources assertions follow the directory (the kinds counted and linked; it previewed records
 > until now). *CI and staging evidence are recorded when they exist.*
+
+> **Library Part 3 — the written works and periodicals: Research, Research papers, Publications,
+> Encyclopedias, Magazines and their issues, and Articles (owner direction: every section built
+> from A to Z, one item at a time; on `feature/rebaseline-r2-full-ecosystem-completion`).**
+> Delivered (DOMAIN_MODEL.md §7.2.1, §10.2; ROUTE_MAP.md §3.6). No route is added or removed, no
+> schema change and no migration; the reader's document schema, every record address and its
+> slug-history 301s are unchanged. With this part every item of the Library menu is rebuilt.
+>
+> - **The audit (before).** The four written-work listings and the magazines were one Phase-9
+>   panel of plain selects (the platform's whole Topic tree and every Taxonomy language, never
+>   what the kind holds) with no counts, no figures, no author, decade or full-text filter, no
+>   chips, one fixed order, no total, Previous/Next behind `?offset=` and a form whose empty
+>   controls made a second address for every view — while the Quran and Hadith Research hubs had
+>   all of these over the same records. A research record's page put the reader inside the narrow
+>   column, offered no call to read, stated nothing about access, and related nothing. Publications
+>   and encyclopedias were rows of words with no publisher, no entries and no way to read from the
+>   listing. A Magazine's page paged 25 issues with no total, no year index and no way to the
+>   latest issue; an issue's page linked its Magazine twice under one name, showed its contents
+>   without saying what they were, and, its numbers unrecorded (every migrated issue), had no way
+>   to any other issue. `/library/articles` — Editorial's only articles listing, which the
+>   `articles` menu link leads to — was a grid with no count, Previous/Next behind `?offset=`, and
+>   a "next" link shown whenever a page happened to hold 25.
+> - **Research and research papers (decision).** Both listings are the shared research listing
+>   (`components/topic-hub/research.tsx`) over the whole Library, as Library Part 1 made the Books
+>   listing: Library's `topicResearch`/`topicResearchFacets` take `scope: 'library'` (every public
+>   record; the Topic a filter with its own facet; a listing's figures those of its own kind) and the
+>   hubs' default `scope: 'topic'` is unchanged, as are their addresses and markup. The listing body
+>   (`RecordListing`: hero, tabs, GET filters with counts, chips, "n–m of N", the decade timeline,
+>   honest empty, no-results and past-the-end states, numbered pages) is now shared by the hubs, the
+>   two research listings and the next two; each kind keeps its own address, so the kind tabs on the
+>   two research listings lead between them with the view's filters kept, each counted under them.
+> - **Publications and encyclopedias.** New Model A read `publishedRecords`/`publishedRecordFacets`
+>   (one aggregate per read; the same record-set engine, `adapters/library/record-sets.ts`, which
+>   `topic-research.ts` now composes): the same listing with kind-appropriate entries — a
+>   publication by its publisher, credits and date; an encyclopedia by its entries (its text's
+>   sections; there are no volumes or entry subsystem to show) — "Read the full text" / "Read the
+>   entries" only where the text is here, else "Details".
+> - **A record's page.** The header's call to action follows the stored state ("Read the full
+>   text", "Read the entries", "See what is in this issue") and leads to the reader (the Part 1
+>   layout, introduced by its sections and language) — at the page's full width below an
+>   abstract, and in the reading column beside the facts when nothing else is there; the facts add
+>   the citation count and the access — read here (with the section or entry count) or not, and
+>   "Download: not offered on this platform" (no file exists for these aggregates); citations
+>   follow the text; related works: more on the record's first Topic, then more by its first
+>   author, never the record itself and never one record twice, each with the way to the whole
+>   filtered listing.
+> - **Magazines.** New reads `magazineDirectory`, `magazineIssuePage` (with its total; replaces
+>   `magazineIssues`, removed) and `magazineIssueFacets`. `/library/magazines`: figures (titles,
+>   issues, issues with their contents here), each title with its cover, issue count, years and
+>   newest issue, a Topic chip index, and the newest issues across titles. A Magazine's page: its
+>   figures in the header, "Open the latest issue", the year index (`?year=`, `?undated=1`, with
+>   counts), the issues under their year, 24 a page with numbered pages and honest empty and
+>   past-the-end states. An issue's page: its cover, numbering and date, its contents through the
+>   reader ("In this issue"), the access facts, its neighbours by number where both numbers are
+>   recorded, and "More from {magazine}" with the way to all its issues; its Magazine is linked
+>   once (the breadcrumb and that way), no longer twice under one name. **"Latest" is said only
+>   where the order means it**: an issue with neither a year nor a printed number is listed in the
+>   periodical's slug order, and nothing calls one of them the latest (no caption, no "latest"
+>   link, no "latest issues" shelf of them). A Magazine's publisher and frequency are not modelled,
+>   so none is shown.
+> - **Articles (decision).** `/library/articles` IS Editorial's one public Articles listing — the
+>   header's `articles` link, the Library menu and the resources directory all lead to it, and no
+>   second listing exists — so nothing is duplicated and nothing is moved: it stays Editorial's
+>   listing composed at Layer 4 in the Library's frame. New Editorial read
+>   `publishedArticleCount()` gives it a total: figures, "n–m of N", numbered pages at `?page`
+>   (25, Editorial's page), a past-the-end state and one address per page; the resources directory
+>   now counts Articles too (it said only "Published articles" until now, historical).
+> - **One address per view everywhere**, by the hubs' rules: the Phase-9 `?offset=` is the page
+>   holding the record it began with; `?from=`/`?to=` are dropped (`/library/resources` keeps a
+>   range of exactly one decade as `?decade=`, and passes a contributor to the written works);
+>   `kindHref` (Topics, Languages, resources and the Topic page's Library links) spells every kind
+>   through the new rules, so no link costs a redirect. `readScholarlyQuery` and
+>   `scholarlyQueryPath` lost their consumers and are removed; `sectionTitle`/`sectionBody` moved to
+>   `scholarly-presentation.ts`; `caseless` moved to `topic-hub/address.ts` and is used for every
+>   name lookup (an address spells an identifier in lower case, an owner as stored).
+> - **Messages.** New `library.{records.*, periodicals.*, articlesPage.*,
+>   scholarly.listingNotice}` in en/ur/ar; `library.browse.resources.{articles, about}` reworded
+>   (a count; Articles now counted here); removed as unused: `library.{filterAny, filterClear,
+>   filterFrom, filterTo, filterLanguage, filterTopic, scholarly.filters, scholarly.emptyFiltered,
+>   scholarly.empty.{research, research-paper, publication, encyclopedia}}`.
+>
+> **Data facts — what staging will show.** The staging Library holds 2 Magazines with 72 public
+> issues (MIGRATION_STRATEGY.md §19), each issue with its first-party cover where one was acquired
+> and, where its page listed one, a table of contents as its readable text — **no issue states a
+> year, a date, a volume or a number** (§18 "observed and not changed"); no Research, ResearchPaper,
+> Publication or Encyclopedia. So staging shows: `/library/research`, `/research-papers`,
+> `/publications` and `/encyclopedias` their honest empty states, each leading on;
+> `/library/magazines` the figures (2 titles, 72 issues, those with their contents here) and the two
+> titles with their covers and issue counts but no year span, no "latest issue" and no "latest
+> issues" shelf; each Magazine's page its issues under "Year not recorded" in slug order, 24 a page,
+> with no year index and no "Open the latest issue"; each issue its cover, "In this issue" with its
+> contents through the reader where they were recorded (else the honest statement), "Download: not
+> offered", no previous/next and "More from" its Magazine. The demo data adds none of these. Dating
+> the migrated issues needs the model decision §18 records; nothing is inferred from a title. The
+> local persistent database was not inspected.
+>
+> **Proof:** `tests/library/library-records.test.ts` (new: the published-records, issues, year-index
+> and directory reads refuse a missing or wrong kind, a year that is no decade, a malformed Topic,
+> contributor or language, an unknown order, a page or offset past its bound, a year with
+> "undated", a field they do not know — before any read; defaults stated);
+> `tests/library/topic-research.test.ts` (the scope stated by default, a whole-Library query passed
+> through, an unknown scope refused; the facets' empty Topic facet);
+> `tests/library/library-records.integration.test.ts` (new, real SQL Server: the whole Library's
+> research set, its Topic filter and facet, a listing's figures of its own kind, the hubs untouched
+> beside it; publications and encyclopedias — never a draft, three orders, every filter, pages and
+> totals, the section count, every facet without its own filter; a Magazine's issues by view with
+> totals, its year index, never a draft issue or one of a draft Magazine; the directory's counts,
+> years, newest issue, figures and Topic facet); `tests/library/topic-research.integration.test.ts`
+> (the hub's facets state an empty Topic facet; everything else unchanged);
+> `tests/library/scholarly.integration.test.ts` (the issues read states its total);
+> `tests/editorial/editorial.integration.test.ts` (the Article count moves with publishing and
+> archiving, and equals the listing); `tests/topic-hub/research-view.test.ts` (the whole Library's
+> scopes: the kind fixed by the address, the Topic read, the former offset and year range, empty
+> controls, the read asked of Library within its bounds — every hub expectation unchanged);
+> `tests/library/magazine-view.test.ts` and `tests/editorial/articles-view.test.ts` (new: the
+> periodicals' and the Articles listing's address rules); `tests/library/browse-view.test.ts` (the
+> resources redirect keeps a contributor and one decade for the written works — it dropped the
+> contributor and kept `from`/`to` until now); `tests/library/scholarly.test.ts` (the removed query
+> helpers' tests removed with them); `tests/config/locale.test.ts` (the new modules declared).
+> `tests/browser/research-publications.spec.ts` — an entry's title is matched exactly (each entry
+> also names its record in "Abstract and details: …"); the no-results proof uses a decade (the year
+> range is gone) and the shared "Clear filters"; the issue's numbering is read from its facts (the
+> header states it too); the 2021 issues are read from their own list (the region now also holds
+> the year index); the fixture adds one undated "Zz…" research record by the same author on the
+> same Topic, one undated "Zz…" issue, the spring issue's contents and the Magazine's Topic; new:
+> the research listings (kinds, Topic chip and option, decade, former parameters, empty
+> controls), a record's call to action, access facts and related works (never twice),
+> publications and encyclopedias (publisher, entries, no-results), the periodicals directory, a
+> Magazine (figures, latest issue, year index, undated view, empty year, former offset past the
+> end), an issue (reader, access, more from its Magazine, the honest state without contents), the
+> Articles listing's one address, and axe (no serious or critical finding) with no sideways scroll
+> at 320 and 1440 px on all eleven Part 3 surfaces in en, ur and ar. *CI and staging evidence are
+> recorded when they exist.*
 
 ---
 

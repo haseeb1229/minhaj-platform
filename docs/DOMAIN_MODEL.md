@@ -598,6 +598,11 @@ approval; no parallel published/draft branch is maintained in Phase 6. Revisions
 structured document, schema version and server-sanitised rendering. Public DTOs exclude the
 authoring document and private workflow actors.
 
+**Library Part 3.** Editorial's public reader adds `publishedArticleCount()` — how many Articles are
+published, under the same predicate as `publishedArticles` — so the one public Articles listing
+(`/library/articles`, composed at Layer 4 in the Library's frame) states its total and numbered
+pages; Library holds no copy of an Article.
+
 Article slugs and help-article Page slugs may change; all prior slugs remain reserved and
 resolve directly to the current published canonical URL with HTTP 301. Fixed organisational,
 legal and utility Page destinations are an allowlist, immutable after creation, with the
@@ -1734,6 +1739,40 @@ those with their text here, content languages, credited People, earliest and lat
 kinds under every other filter, and the languages, contributors, decades and full-text count, each
 counted without its own filter. Both are each aggregate's ordinary public predicate,
 parameterised SQL (table names are the adapter's own constants), bounded; no schema change.
+
+**The whole Library's written works and periodicals (Library Part 3).** No schema change and no
+new aggregate; four public reads and one wider scope, each parsed field by field by Library's read
+service before any read, bound parameters only:
+
+- **The research read over the whole Library.** `topicResearchQuerySchema` takes `scope`
+  (`topic`, the default — the hubs' read exactly as before — or `library`). With `library` the set
+  is every published Research and ResearchPaper record and `topic` one more narrowing filter (absent:
+  every Topic); `topicResearchFacets` adds `topics` (Topic → records, without the Topic filter; always
+  empty on a hub, which has one Topic), and in the whole Library, where each kind has its own
+  listing, `hub` counts the set **of the asked kind** (`kinds` still counts both under every other
+  filter). The SQL is one record-set engine shared with the next read
+  (`adapters/library/record-sets.ts`; `topic-research.ts` now composes it).
+- **The published-records read** (`publishedRecords`, `publishedRecordFacets`,
+  `publishedRecordsQuerySchema`, `PUBLISHED_RECORDS_PAGE` = 24): the published Publications **or**
+  Encyclopedias — one aggregate per read — narrowed by Topic, content language, credited Person,
+  decade and "full text here", ordered newest, oldest or by title (undated last; each total); a
+  card's worth per record (labels, credits, language, date facts, publisher, whether its text is
+  here and how many sections it has — counted in SQL with `OPENJSON`, the document never loaded);
+  the facets each without its own filter. An Encyclopedia's "entries" are its document's sections:
+  its structure is its document, there is no entry subsystem and no volume is recorded.
+- **A Magazine's issues** (`magazineIssuePage`, `magazineIssuesQuerySchema`,
+  `MAGAZINE_ISSUE_PAGE` = 24; it replaces `magazineIssues(magazineId, offset)`, removed with its
+  last consumer — historical): all of a public Magazine's public issues, one publication year's, or
+  the undated ones — never a year and "undated" at once — in the periodical's own order, with the
+  total; `magazineIssueFacets(magazineId)`: the issue count, those with readable text, and the year
+  index (each year with its issues, newest first, the undated last).
+- **The periodicals directory** (`magazineDirectory`, `MAGAZINE_DIRECTORY_MAX` = 100): the public
+  Magazines A–Z by slug under an optional Topic, each with its public issue count, earliest and
+  latest year and newest issue (one windowed read for all of them, never one per Magazine), the
+  figures of the whole set (Magazines, issues, issues with readable text) and the Topic facet.
+
+A Magazine still carries no publisher and no frequency, so none is shown; an issue carries no file,
+so no download is ever offered for one (only a Work's Edition has files, §10.1).
 
 ---
 

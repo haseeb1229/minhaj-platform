@@ -591,6 +591,14 @@ export interface ScholarlyTarget {
  *                  `oldest` (earliest first; undated last) or `title` (A–Z
  *                  by the title a reader of `titleLocale` is shown). Every
  *                  order ends on the kind and the identifier.
+ *
+ * LIBRARY PART 3 — THE WHOLE LIBRARY IS THE SAME READ WITHOUT A TOPIC SCOPE,
+ * as Library Part 1 made the Works read. With `scope: 'library'` the set is
+ * every PUBLIC record of the two aggregates and `topic` becomes one more
+ * narrowing filter (absent: every Topic), with a facet of its own; the
+ * default `scope: 'topic'` is the hubs' read exactly as before (no Topic, no
+ * record). Which scope a caller asks for is explicit, so a hub whose Topic is
+ * missing can never fall through to the whole Library.
  */
 export const TOPIC_RESEARCH_PAGE = 20;
 export const TOPIC_RESEARCH_KINDS = Object.freeze([
@@ -603,14 +611,21 @@ export type TopicResearchShelf = z.infer<typeof topicResearchKindSchema>;
 export const topicResearchSortSchema = z.enum(['newest', 'oldest', 'title']);
 export type TopicResearchSort = z.infer<typeof topicResearchSortSchema>;
 
+/** What a research read is over: one Topic's records (the hubs), or the whole Library. */
+export const TOPIC_RESEARCH_SCOPES = Object.freeze(['topic', 'library'] as const);
+export type TopicResearchScope = (typeof TOPIC_RESEARCH_SCOPES)[number];
+
+/** The first year of a decade: 1990 is 1990–1999. Years run from 1. */
+const decadeSchema = z.number().int().min(0).max(9990).multipleOf(10);
+
 export const topicResearchQuerySchema = z
   .object({
+    scope: z.enum(TOPIC_RESEARCH_SCOPES).default('topic'),
     topic: libraryIdSchema.nullable().default(null),
     kind: topicResearchKindSchema.default('all'),
     language: libraryLanguageCodeSchema.nullable().default(null),
     contributor: libraryIdSchema.nullable().default(null),
-    /** The first year of a decade: 1990 is 1990–1999. Years run from 1. */
-    decade: z.number().int().min(0).max(9990).multipleOf(10).nullable().default(null),
+    decade: decadeSchema.nullable().default(null),
     fullText: z.boolean().default(false),
     sort: topicResearchSortSchema.default('newest'),
     titleLocale: localeSchema.nullable().default(null),
@@ -686,7 +701,15 @@ export interface TopicResearchFacetPage {
  *   `decades`      decade → records (dated records only, newest decade
  *                  first), without the decade filter;
  *   `readable`     records with their text on the platform, without the
- *                  full-text filter.
+ *                  full-text filter;
+ *   `topics`       (Library Part 3) Topic → records, without the Topic
+ *                  filter — in the whole Library only; a hub has one Topic,
+ *                  so it is always empty there.
+ *
+ * In the whole Library (`scope: 'library'`) a listing is of one kind — each
+ * has its own address — so `hub` is the set OF THAT KIND (with `kind: 'all'`,
+ * both); `kinds` still counts both under every other filter, for the way
+ * between the two listings.
  */
 export interface TopicResearchFacets {
   readonly hub: {
@@ -708,4 +731,192 @@ export interface TopicResearchFacets {
   readonly contributors: TopicResearchFacetPage;
   readonly decades: readonly { readonly decade: number; readonly records: number }[];
   readonly readable: number;
+  readonly topics: TopicResearchFacetPage;
+}
+
+/* ===========================================================================
+ * Library Part 3 — Publications and Encyclopedias as a listing
+ * ========================================================================= */
+
+/**
+ * LIBRARY PART 3 — THE PUBLISHED-RECORDS READ. The public records of ONE of
+ * the two aggregates that carry a publisher and readable text but no
+ * scholarly apparatus — Publication and Encyclopedia (DOMAIN_MODEL.md
+ * §10.2) — as a listing: one bounded, ordered page with the total the query
+ * admits, and the aggregates the listing is navigated by. The same filters,
+ * orders and rules as the research read, over one aggregate at a time:
+ *
+ *   `topic`        a Taxonomy Topic the record is filed under;
+ *   `language`     the record's CONTENT language;
+ *   `contributor`  a credited Person, in any role;
+ *   `decade`       a publication year in [decade, decade + 9];
+ *   `fullText`     only records whose readable text is on the platform;
+ *   `sort`         `newest`, `oldest` (undated last in both) or `title`.
+ */
+export const PUBLISHED_RECORDS_PAGE = 24;
+export const PUBLISHED_RECORD_KINDS = Object.freeze([
+  'publication',
+  'encyclopedia',
+] as const);
+export type PublishedRecordKind = (typeof PUBLISHED_RECORD_KINDS)[number];
+
+export const publishedRecordsQuerySchema = z
+  .object({
+    kind: z.enum(PUBLISHED_RECORD_KINDS),
+    topic: libraryIdSchema.nullable().default(null),
+    language: libraryLanguageCodeSchema.nullable().default(null),
+    contributor: libraryIdSchema.nullable().default(null),
+    decade: decadeSchema.nullable().default(null),
+    fullText: z.boolean().default(false),
+    sort: topicResearchSortSchema.default('newest'),
+    titleLocale: localeSchema.nullable().default(null),
+    offset: z.number().int().min(0).max(25_000).default(0),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(PUBLISHED_RECORDS_PAGE)
+      .default(PUBLISHED_RECORDS_PAGE),
+  })
+  .strict();
+
+export type PublishedRecordsQuery = z.infer<typeof publishedRecordsQuerySchema>;
+
+/**
+ * One public Publication or Encyclopedia — a card's worth: identity, labels,
+ * credits, content language and date facts, publisher, whether its readable
+ * text is on the platform and how many sections that text has (an
+ * Encyclopedia's entries are its sections; there is no entry subsystem).
+ * Never the document itself.
+ */
+export interface PublishedRecordItem {
+  readonly kind: PublishedRecordKind;
+  readonly id: string;
+  readonly slug: string;
+  readonly primaryLocale: Locale;
+  readonly labels: readonly ScholarlyLabel[];
+  readonly contributors: readonly {
+    readonly personId: string;
+    readonly role: ContributionRole;
+  }[];
+  readonly languageCode: string;
+  readonly publicationYear: number | null;
+  readonly publishedOn: string | null;
+  readonly publisher: string | null;
+  readonly readable: boolean;
+  /** How many sections its readable text has; 0 when it has none here. */
+  readonly sections: number;
+}
+
+export interface PublishedRecordPage {
+  readonly items: readonly PublishedRecordItem[];
+  readonly total: number;
+  readonly hasMore: boolean;
+}
+
+/**
+ * The listing's aggregates, each one bounded read counting public records:
+ * `all` the whole set unfiltered (records, those with their text here,
+ * content languages, credited People, earliest and latest year); then the
+ * languages, Topics, contributors, decades and the full-text count, each
+ * counted without its own filter.
+ */
+export interface PublishedRecordFacets {
+  readonly all: {
+    readonly records: number;
+    readonly readable: number;
+    readonly languages: number;
+    readonly contributors: number;
+    readonly earliest: number | null;
+    readonly latest: number | null;
+  };
+  readonly languages: TopicResearchFacetPage;
+  readonly topics: TopicResearchFacetPage;
+  readonly contributors: TopicResearchFacetPage;
+  readonly decades: readonly { readonly decade: number; readonly records: number }[];
+  readonly readable: number;
+}
+
+/* ===========================================================================
+ * Library Part 3 — a Magazine's issues, and the periodicals as a directory
+ * ========================================================================= */
+
+/** How many issues one page of a Magazine shows. */
+export const MAGAZINE_ISSUE_PAGE = 24;
+
+/**
+ * One view of a public Magazine's public issues: all of them, the issues of
+ * one publication `year`, or the `undated` ones — never both — in the
+ * periodical's own order (newest year, date, volume and number first; the
+ * slug the tie-breaker).
+ */
+export const magazineIssuesQuerySchema = z
+  .object({
+    magazineId: libraryIdSchema,
+    year: z.number().int().min(1).max(9999).nullable().default(null),
+    undated: z.boolean().default(false),
+    offset: z.number().int().min(0).max(25_000).default(0),
+    limit: z.number().int().min(1).max(MAGAZINE_ISSUE_PAGE).default(MAGAZINE_ISSUE_PAGE),
+  })
+  .strict()
+  .refine((value) => value.year === null || !value.undated, {
+    message: 'A year and "undated" are two different views.',
+  });
+
+export type MagazineIssuesQuery = z.infer<typeof magazineIssuesQuerySchema>;
+
+export interface MagazineIssuePage {
+  readonly items: readonly ScholarlyListing[];
+  readonly total: number;
+  readonly hasMore: boolean;
+}
+
+/**
+ * What a Magazine's page is navigated by: its public issues, those with
+ * readable text here, and its year index — each publication year with its
+ * issues, newest first, the undated issues (`year: null`) last.
+ */
+export interface MagazineIssueFacets {
+  readonly issues: number;
+  readonly readable: number;
+  readonly years: readonly { readonly year: number | null; readonly issues: number }[];
+}
+
+/** How many Magazines one directory read answers with, at most. */
+export const MAGAZINE_DIRECTORY_MAX = 100;
+
+export const magazineDirectoryQuerySchema = z
+  .object({ topic: libraryIdSchema.nullable().default(null) })
+  .strict();
+
+export type MagazineDirectoryQuery = z.infer<typeof magazineDirectoryQuerySchema>;
+
+/**
+ * One public Magazine in the periodicals directory: its listing row (with its
+ * newest cover), how many public issues it has, their earliest and latest
+ * year, and its newest public issue.
+ */
+export interface MagazineDirectoryItem {
+  readonly magazine: ScholarlyListing;
+  readonly issues: number;
+  readonly earliest: number | null;
+  readonly latest: number | null;
+  readonly latestIssue: ScholarlyListing | null;
+}
+
+/**
+ * The periodicals directory: the public Magazines (A–Z by slug, at most
+ * `MAGAZINE_DIRECTORY_MAX`, `hasMore` past it) under an optional Topic, the
+ * figures of the whole set (Magazines, their public issues, those with
+ * readable text), and the Topics they are filed under, each with its count.
+ */
+export interface MagazineDirectory {
+  readonly items: readonly MagazineDirectoryItem[];
+  readonly hasMore: boolean;
+  readonly figures: {
+    readonly magazines: number;
+    readonly issues: number;
+    readonly readable: number;
+  };
+  readonly topics: TopicResearchFacetPage;
 }

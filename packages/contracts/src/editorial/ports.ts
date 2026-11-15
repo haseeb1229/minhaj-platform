@@ -76,6 +76,8 @@ export interface EditorialPublicReaderPort {
     offset: number,
     limit: number,
   ): Promise<readonly PublicEditorialSummary[]>;
+  /** Library Part 3: how many Articles are published — the listing's total. */
+  publishedArticleCount(): Promise<number>;
   articleSitemap(
     offset: number,
     limit: number,

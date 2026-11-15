@@ -2,12 +2,13 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import type { Locale } from '@minhaj/contracts';
 import type { ContributionRole } from '@minhaj/contracts/people';
 import {
   readerDocumentSchema,
+  MAGAZINE_DIRECTORY_MAX,
   SCHOLARLY_LIMITS,
   SCHOLARLY_PAGE,
   type LibraryCover,
@@ -742,7 +743,9 @@ export type ScholarlyPublicReader = Pick<
   | 'scholarlyList'
   | 'scholarlyRecord'
   | 'scholarlyCanonicalSlug'
-  | 'magazineIssues'
+  | 'magazineIssuePage'
+  | 'magazineIssueFacets'
+  | 'magazineDirectory'
   | 'magazineIssue'
   | 'magazineIssueCanonical'
   | 'magazineIssueNeighbours'
@@ -901,6 +904,37 @@ export function createScholarlyPublicReader(): ScholarlyPublicReader {
   const db = getDatabaseClient();
   const issues = FAMILIES['magazine-issue'];
 
+  /**
+   * Each named Magazine's newest public issue in the periodical's own order —
+   * ONE windowed read of identifiers (SQL Server sorts NULL lowest, so a
+   * descending year puts an undated issue last, as `ISSUE_ORDER` does), then
+   * those issues loaded under the public predicate again.
+   */
+  async function newestIssues(magazineIds: readonly string[]) {
+    const picked = await db.$queryRaw<{ id: string; magazineId: string }[]>`
+      SELECT x.[id], x.[magazineId] FROM (
+        SELECT i.[id], i.[magazineId], ROW_NUMBER() OVER (
+                 PARTITION BY i.[magazineId]
+                 ORDER BY i.[publicationYear] DESC, i.[publishedOn] DESC, i.[volume] DESC,
+                          i.[issueNumber] DESC, i.[slug] ASC, i.[id] ASC) AS [n]
+        FROM [dbo].[MagazineIssue] i
+        JOIN [dbo].[Magazine] m ON m.[id] = i.[magazineId]
+        WHERE i.[state] = N'published' AND m.[state] = N'published'
+          AND i.[magazineId] IN (${Prisma.join([...magazineIds])})
+      ) x
+      WHERE x.[n] = 1;`;
+    if (picked.length === 0) return [];
+    const magazineOf = new Map(picked.map((entry) => [entry.id, entry.magazineId]));
+    const rows = await issues.delegates(db).record.findMany({
+      where: { id: { in: [...magazineOf.keys()] }, ...publicWhere(issues) },
+      select: listingSelect(issues),
+    });
+    return rows.flatMap((row) => {
+      const magazineId = magazineOf.get((row as { id: string }).id);
+      return magazineId === undefined ? [] : [{ magazineId, row }];
+    });
+  }
+
   return {
     async scholarlyList(kind, query) {
       const family = FAMILIES[kind];
@@ -949,15 +983,133 @@ export function createScholarlyPublicReader(): ScholarlyPublicReader {
       return row?.[family.owner]?.slug ?? null;
     },
 
-    async magazineIssues(magazineId, offset) {
-      const rows = await issues.delegates(db).record.findMany({
-        where: { magazineId, ...publicWhere(issues) },
-        select: listingSelect(issues),
-        orderBy: ISSUE_ORDER,
-        skip: boundedOffset(offset),
-        take: SCHOLARLY_PAGE + 1,
-      });
-      return pageOf('magazine-issue', rows);
+    /**
+     * LIBRARY PART 3 — one view of a Magazine's issues with its total: all of
+     * them, one publication year's, or the undated ones, in the periodical's
+     * own order. The public predicate (an issue of a published Magazine) is
+     * the query's; a filter only narrows it.
+     */
+    async magazineIssuePage(query) {
+      const where = {
+        magazineId: query.magazineId,
+        ...publicWhere(issues),
+        ...(query.year !== null
+          ? { publicationYear: query.year }
+          : query.undated
+            ? { publicationYear: null }
+            : {}),
+      };
+      const delegate = issues.delegates(db).record;
+      const [rows, total] = await Promise.all([
+        delegate.findMany({
+          where,
+          select: listingSelect(issues),
+          orderBy: ISSUE_ORDER,
+          skip: boundedOffset(query.offset),
+          take: query.limit + 1,
+        }),
+        db.magazineIssue.count({ where }),
+      ]);
+      return {
+        items: rows.slice(0, query.limit).map((row) => toListing('magazine-issue', row)),
+        total,
+        hasMore: rows.length > query.limit,
+      };
+    },
+
+    /** Library Part 3 — a Magazine's issue count, readable count and year index. */
+    async magazineIssueFacets(magazineId) {
+      const where = { magazineId, ...publicWhere(issues) };
+      const [years, readable] = await Promise.all([
+        db.magazineIssue.groupBy({
+          by: ['publicationYear'],
+          where,
+          _count: { _all: true },
+          orderBy: { publicationYear: 'desc' },
+        }),
+        db.magazineIssue.count({ where: { ...where, document: { not: null } } }),
+      ]);
+      // SQL Server sorts NULL lowest, so a descending order puts "undated"
+      // last; it is placed there explicitly all the same.
+      const index = years
+        .map((row) => ({ year: row.publicationYear, issues: row._count._all }))
+        .sort((a, b) => (a.year === null ? 1 : b.year === null ? -1 : b.year - a.year));
+      return {
+        issues: index.reduce((sum, row) => sum + row.issues, 0),
+        readable,
+        years: index,
+      };
+    },
+
+    /**
+     * Library Part 3 — the periodicals directory. The Magazines are few and
+     * bounded (`MAGAZINE_DIRECTORY_MAX`); each row's issue count, year span and
+     * newest issue are read for all of them at once, never one read per
+     * Magazine.
+     */
+    async magazineDirectory(query) {
+      const magazines = FAMILIES.magazine;
+      const issuePublic = publicWhere(issues);
+      const [rows, figures, readable, topics] = await Promise.all([
+        magazines.delegates(db).record.findMany({
+          where: {
+            ...publicWhere(magazines),
+            ...(query.topic === null
+              ? {}
+              : { topics: { some: { topicId: query.topic } } }),
+          },
+          select: listingSelect(magazines),
+          orderBy: [{ slug: 'asc' }, { id: 'asc' }],
+          take: MAGAZINE_DIRECTORY_MAX + 1,
+        }),
+        Promise.all([
+          db.magazine.count({ where: { state: 'published' } }),
+          db.magazineIssue.count({ where: issuePublic }),
+        ]),
+        db.magazineIssue.count({ where: { ...issuePublic, document: { not: null } } }),
+        db.magazineTopic.groupBy({
+          by: ['topicId'],
+          where: { magazine: { state: 'published' } },
+          _count: { _all: true },
+        }),
+      ]);
+      const shown = rows.slice(0, MAGAZINE_DIRECTORY_MAX);
+      const ids = shown.map((row) => (row as { id: string }).id);
+      const [spans, newest] =
+        ids.length === 0
+          ? [[], []]
+          : await Promise.all([
+              db.magazineIssue.groupBy({
+                by: ['magazineId'],
+                where: { ...issuePublic, magazineId: { in: ids } },
+                _count: { _all: true },
+                _min: { publicationYear: true },
+                _max: { publicationYear: true },
+              }),
+              newestIssues(ids),
+            ]);
+      const spanOf = new Map(spans.map((row) => [row.magazineId, row]));
+      const newestOf = new Map(newest.map((entry) => [entry.magazineId, entry.row]));
+      const facet = topics
+        .map((row) => ({ id: row.topicId, records: row._count._all }))
+        .sort((a, b) => b.records - a.records || (a.id < b.id ? -1 : 1));
+      return {
+        items: shown.map((row) => {
+          const magazine = toListing('magazine', row);
+          const span = spanOf.get(magazine.id);
+          const latest = newestOf.get(magazine.id) ?? null;
+          return {
+            magazine,
+            issues: span?._count._all ?? 0,
+            earliest: span?._min.publicationYear ?? null,
+            latest: span?._max.publicationYear ?? null,
+            latestIssue: latest === null ? null : toListing('magazine-issue', latest),
+          };
+        }),
+        hasMore: rows.length > MAGAZINE_DIRECTORY_MAX,
+        figures: { magazines: figures[0], issues: figures[1], readable },
+        topics: { items: facet.slice(0, 50), hasMore: facet.length > 50 },
+      };
     },
 
     async magazineIssue(magazineSlug, issueSlug) {

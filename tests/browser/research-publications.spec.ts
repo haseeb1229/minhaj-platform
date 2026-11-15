@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { AxeBuilder } from '@axe-core/playwright';
 import type { BrowserContext, Page } from '@playwright/test';
 
 import type { SqlSession } from '../../packages/database/src/lifecycle/sql-connection.ts';
@@ -50,6 +51,8 @@ const magazineId = randomUUID();
 const firstIssueId = randomUUID();
 const secondIssueId = randomUUID();
 const draftIssueId = randomUUID();
+const relatedId = randomUUID();
+const undatedIssueId = randomUUID();
 
 const researchOld = `browser-research-old-${run}`;
 const researchSlug = `browser-research-${run}`;
@@ -62,6 +65,11 @@ const issueOld = `spring-old-${run}`;
 const issueSlug = `spring-${run}`;
 
 const RESEARCH_TITLE = `Synthetic browser research ${WORD}`;
+// Library Part 3: 'Zz…' and undated, so it sorts last in every order and
+// crowds no other spec's first page on the shared database.
+const RELATED_TITLE = `Zz synthetic related research ${run}`;
+const UNDATED_ISSUE = `Zz synthetic undated issue ${run}`;
+let educationTopic = '';
 const MAGAZINE_TITLE = `Synthetic browser monthly ${WORD}`;
 
 async function grant(accountId: string, keys: readonly string[]): Promise<void> {
@@ -92,6 +100,7 @@ test.beforeAll(async () => {
     "SELECT [id] FROM [Topic] WHERE [slug] = N'education';",
   );
   if (topic === undefined) throw new Error('The canonical education topic is missing.');
+  educationTopic = topic.id.toLowerCase();
 
   const document = JSON.stringify({
     sections: ['opening', 'closing'].map((key) => ({
@@ -118,6 +127,14 @@ test.beforeAll(async () => {
       (N'${researchId}', 0, N'Synthetic citation one', N'https://example.org/one', N'10.1234/browser.one'),
       (N'${researchId}', 1, N'Synthetic citation two', NULL, NULL);
 
+    INSERT INTO [dbo].[Research] ([id],[slug],[primaryLocale],[languageCode],[state],[version],[updatedAt])
+    VALUES (N'${relatedId}', N'browser-related-${run}', N'en', N'en', N'published', 1, SYSUTCDATETIME());
+    INSERT INTO [dbo].[ResearchLabel] ([researchId],[locale],[title],[summary])
+      VALUES (N'${relatedId}', N'en', N'${RELATED_TITLE}', N'');
+    INSERT INTO [dbo].[ResearchContributor] ([researchId],[personId],[role],[position])
+      VALUES (N'${relatedId}', N'${people.linkedPersonId}', N'author', 0);
+    INSERT INTO [dbo].[ResearchTopic] ([researchId],[topicId]) VALUES (N'${relatedId}', N'${topic.id}');
+
     INSERT INTO [dbo].[ResearchPaper] ([id],[slug],[primaryLocale],[languageCode],[state],[publishedOn],[publicationYear],[venue],[doi],[version],[updatedAt])
     VALUES (N'${paperId}', N'${paperSlug}', N'en', N'ar', N'published', '2022-03-04', 2022,
             N'Synthetic Journal of Browsers', N'10.1234/browser.paper', 1, SYSUTCDATETIME());
@@ -140,15 +157,18 @@ test.beforeAll(async () => {
     UPDATE [dbo].[Magazine] SET [slug]=N'${magazineSlug}', [version]=2 WHERE [id]=N'${magazineId}';
     INSERT INTO [dbo].[MagazineLabel] ([magazineId],[locale],[title],[summary])
       VALUES (N'${magazineId}', N'en', N'${MAGAZINE_TITLE}', N'A synthetic periodical.');
+    INSERT INTO [dbo].[MagazineTopic] ([magazineId],[topicId]) VALUES (N'${magazineId}', N'${topic.id}');
     INSERT INTO [dbo].[MagazineIssue] ([id],[magazineId],[slug],[primaryLocale],[languageCode],[state],[volume],[issueNumber],[publicationYear],[version],[updatedAt]) VALUES
       (N'${firstIssueId}', N'${magazineId}', N'winter-${run}', N'en', N'en', N'published', 1, 1, 2021, 1, SYSUTCDATETIME()),
       (N'${secondIssueId}', N'${magazineId}', N'${issueOld}', N'en', N'en', N'published', 1, 2, 2021, 1, SYSUTCDATETIME()),
-      (N'${draftIssueId}', N'${magazineId}', N'draft-${run}', N'en', N'en', N'draft', 1, 3, 2021, 1, SYSUTCDATETIME());
-    UPDATE [dbo].[MagazineIssue] SET [slug]=N'${issueSlug}', [version]=2 WHERE [id]=N'${secondIssueId}';
+      (N'${draftIssueId}', N'${magazineId}', N'draft-${run}', N'en', N'en', N'draft', 1, 3, 2021, 1, SYSUTCDATETIME()),
+      (N'${undatedIssueId}', N'${magazineId}', N'undated-${run}', N'en', N'en', N'published', NULL, NULL, NULL, 1, SYSUTCDATETIME());
+    UPDATE [dbo].[MagazineIssue] SET [slug]=N'${issueSlug}', [document]=N'${document}', [version]=2 WHERE [id]=N'${secondIssueId}';
     INSERT INTO [dbo].[MagazineIssueLabel] ([magazineIssueId],[locale],[title],[summary]) VALUES
       (N'${firstIssueId}', N'en', N'Synthetic winter issue', N''),
       (N'${secondIssueId}', N'en', N'Synthetic spring issue', N''),
-      (N'${draftIssueId}', N'en', N'Synthetic hidden draft issue', N'');
+      (N'${draftIssueId}', N'en', N'Synthetic hidden draft issue', N''),
+      (N'${undatedIssueId}', N'en', N'${UNDATED_ISSUE}', N'');
 
     INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES
       (N'research', N'${researchId}'), (N'research-paper', N'${paperId}'),
@@ -170,19 +190,32 @@ test.describe('an anonymous visitor reads research and publications', () => {
     const response = await page.goto('/library/research');
     expect(response?.status()).toBe(200);
     expect(response?.headers()['set-cookie']).toBeUndefined();
-    await expect(page.getByRole('link', { name: RESEARCH_TITLE })).toBeVisible();
+    // Library Part 3: each entry names its record twice — the title, and the
+    // way to its text or details ("Abstract and details: …") — so the title
+    // link is the EXACT name.
+    await expect(
+      page.getByRole('link', { name: RESEARCH_TITLE, exact: true }),
+    ).toBeVisible();
 
     await page.goto('/library/research-papers?language=ar');
     await expect(
-      page.getByRole('link', { name: `Synthetic browser paper ${PAPER_WORD}` }),
+      page.getByRole('link', {
+        name: `Synthetic browser paper ${PAPER_WORD}`,
+        exact: true,
+      }),
     ).toBeVisible();
 
-    // A filter that matches nothing says so, and offers the way back.
-    await page.goto('/library/research-papers?language=ur&from=1900&to=1901');
+    // A filter that matches nothing says so, and offers the way back. (The
+    // listings take a decade since Library Part 3, not a year range.)
+    await page.goto('/library/research-papers?language=ur&decade=1900');
     await expect(
-      page.getByText('Nothing published matches these filters.'),
+      page.getByText(/^No research paper matches every filter you chose\./),
     ).toBeVisible();
-    await page.getByRole('link', { name: 'Clear all filters' }).first().click();
+    await page
+      .getByRole('main')
+      .getByRole('link', { name: 'Clear filters', exact: true })
+      .first()
+      .click();
     await expect(page).toHaveURL(/\/library\/research-papers$/);
   });
 
@@ -283,10 +316,11 @@ test.describe('a periodical and its issues', () => {
     await expect(
       issues.getByRole('list', { name: '2021' }).getByRole('listitem'),
     ).toHaveCount(2);
-    await expect(issues.getByRole('link')).toHaveText([
-      'Synthetic spring issue',
-      'Synthetic winter issue',
-    ]);
+    // Library Part 3: the region also holds the year index and the undated
+    // issue's group, so the issues of 2021 are read from their own list.
+    await expect(issues.getByRole('list', { name: '2021' }).getByRole('link')).toHaveText(
+      ['Synthetic spring issue', 'Synthetic winter issue'],
+    );
     await expect(page.getByText('Synthetic hidden draft issue')).toHaveCount(0);
   });
 
@@ -297,7 +331,11 @@ test.describe('a periodical and its issues', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
       'Synthetic spring issue',
     );
-    await expect(page.getByText('Volume 1, issue 2')).toBeVisible();
+    // The numbering opens the page and is stated among the facts (Library
+    // Part 3), so it is read from the facts.
+    await expect(
+      page.getByRole('region', { name: 'Details' }).getByText('Volume 1, issue 2'),
+    ).toBeVisible();
 
     const breadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' });
     await expect(breadcrumb.getByRole('link', { name: MAGAZINE_TITLE })).toHaveAttribute(
@@ -406,6 +444,292 @@ test.describe('Library-wide surfaces include what Phase 9 delivered', () => {
     await expect(
       section.getByRole('link', { name: RESEARCH_TITLE, exact: true }),
     ).toHaveAttribute('href', `/library/research/${researchSlug}`);
+  });
+});
+
+/* ========================================================================== */
+
+test.describe('Library Part 3 — the written works and periodicals', () => {
+  test('the research listings: figures, the two kinds, a Topic and a decade, one address per view', async ({
+    page,
+  }) => {
+    await page.goto(`/library/research?topic=${educationTopic}`);
+    const main = page.getByRole('main');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Research');
+    // The two kinds are two listings: the way between them keeps the filters.
+    const kinds = main.getByRole('navigation', { name: 'Kinds of research' });
+    await expect(kinds.getByRole('link', { name: /^Research \d+$/ })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect(
+      kinds.getByRole('link', { name: /^Research papers \d+$/ }),
+    ).toHaveAttribute('href', `/library/research-papers?topic=${educationTopic}`);
+    await expect(
+      main.getByRole('link', { name: RESEARCH_TITLE, exact: true }),
+    ).toBeVisible();
+    await expect(
+      main.getByRole('link', { name: RELATED_TITLE, exact: true }),
+    ).toBeVisible();
+    // The Topic is a chip that removes itself, and an option with its count.
+    await expect(main.locator('#research-topic option:checked')).toHaveText(
+      /^Education \(\d+\)$/,
+    );
+    await main.getByRole('link', { name: 'Remove filter: Education' }).click();
+    await expect(page).toHaveURL(/\/library\/research$/);
+
+    // The decade timeline: a dated record under its decade, the undated last.
+    await page.goto('/library/research?decade=2020');
+    await expect(
+      page.getByRole('main').getByRole('link', { name: RESEARCH_TITLE, exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('main').getByRole('link', { name: RELATED_TITLE, exact: true }),
+    ).toHaveCount(0);
+
+    // Former Phase-9 addresses: the offset to its page, a year range dropped.
+    await page.goto('/library/research?offset=0');
+    await expect(page).toHaveURL(/\/library\/research$/);
+    await page.goto('/library/research?from=2019&to=2021&sort=title');
+    await expect(page).toHaveURL(/\/library\/research\?sort=title$/);
+    // A form's empty controls are one redirect.
+    await page.goto('/library/research?topic=&language=&decade=&fulltext=&sort=newest');
+    await expect(page).toHaveURL(/\/library\/research$/);
+  });
+
+  test('a research record: its calls to action, access, and related works — never twice', async ({
+    page,
+  }) => {
+    await page.goto(`/library/research/${researchSlug}`);
+    const main = page.getByRole('main');
+    await expect(
+      main.getByRole('link', { name: 'Read the full text', exact: true }),
+    ).toHaveAttribute('href', '#library-reading');
+    const facts = main.getByRole('region', { name: 'Details' });
+    await expect(facts.getByText('Yes — 2 sections, below')).toBeVisible();
+    await expect(facts.getByText('Not offered on this platform')).toBeVisible();
+    await expect(facts.getByText('2 works cited')).toBeVisible();
+
+    const onTopic = main.getByRole('region', { name: 'More on Education' });
+    await expect(
+      onTopic.getByRole('link', { name: RELATED_TITLE, exact: true }),
+    ).toHaveAttribute('href', `/library/research/browser-related-${run}`);
+    await expect(
+      onTopic.getByRole('link', { name: 'All research on Education', exact: true }),
+    ).toHaveAttribute('href', `/library/research?topic=${educationTopic}`);
+    // The same record is never offered again "by" its author.
+    await expect(main.getByRole('region', { name: /^More by / })).toHaveCount(0);
+    await expect(main.getByRole('link', { name: RESEARCH_TITLE })).toHaveCount(0);
+  });
+
+  test('publications and encyclopedias: their listings, entries and honest states', async ({
+    page,
+  }) => {
+    await page.goto('/library/publications');
+    const main = page.getByRole('main');
+    const booklet = main.getByRole('listitem').filter({
+      has: page.getByRole('link', { name: 'Synthetic browser booklet', exact: true }),
+    });
+    await expect(booklet.getByText('Published by Synthetic Press')).toBeVisible();
+    await expect(
+      booklet.getByRole('link', { name: 'Details: Synthetic browser booklet' }),
+    ).toHaveAttribute('href', `/library/publications/${publicationSlug}`);
+
+    // Nothing in a decade: said, with the way back.
+    await page.goto('/library/publications?decade=1900');
+    await expect(
+      page.getByRole('main').getByText('No publication matches these filters'),
+    ).toBeVisible();
+
+    await page.goto('/library/encyclopedias');
+    const encyclopedia = page
+      .getByRole('main')
+      .getByRole('listitem')
+      .filter({ hasText: 'Synthetic browser encyclopedia' });
+    await expect(encyclopedia.getByText('2 entries')).toBeVisible();
+    await encyclopedia
+      .getByRole('link', { name: 'Read the entries: Synthetic browser encyclopedia' })
+      .click();
+    await expect(page).toHaveURL(
+      new RegExp(`/library/encyclopedias/${encyclopediaSlug}$`),
+    );
+    await expect(
+      page.getByRole('main').getByRole('link', { name: 'Read the entries', exact: true }),
+    ).toHaveAttribute('href', '#library-reading');
+    await expect(page.getByRole('heading', { level: 2, name: 'Entries' })).toBeVisible();
+  });
+
+  test('the periodicals directory: each title with its issues, years and latest issue', async ({
+    page,
+  }) => {
+    await page.goto('/library/magazines');
+    const entry = page
+      .getByRole('main')
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('link', { name: MAGAZINE_TITLE, exact: true }) });
+    await expect(entry.getByText('3 issues')).toBeVisible();
+    await expect(entry.getByText('2021', { exact: true })).toBeVisible();
+    await expect(
+      entry.getByRole('link', { name: 'Latest issue: Synthetic spring issue' }),
+    ).toHaveAttribute('href', `/library/magazines/${magazineSlug}/issues/${issueSlug}`);
+
+    // Under its Topic, and a former parameter dropped by one redirect.
+    await page.goto(`/library/magazines?topic=${educationTopic}`);
+    await expect(
+      page.getByRole('main').getByRole('link', { name: MAGAZINE_TITLE, exact: true }),
+    ).toBeVisible();
+    await page.goto('/library/magazines?offset=25');
+    await expect(page).toHaveURL(/\/library\/magazines$/);
+  });
+
+  test('a Magazine: its figures, latest issue, year index and pages', async ({
+    page,
+  }) => {
+    await page.goto(`/library/magazines/${magazineSlug}`);
+    const main = page.getByRole('main');
+    await expect(main.getByText('3 issues', { exact: true })).toBeVisible();
+    await expect(
+      // The title is said to assistive technology only ("Open the latest issue
+      // : …"); the link is named by both.
+      main.getByRole('link', {
+        name: /^Open the latest issue\s*:\s*Synthetic spring issue$/,
+      }),
+    ).toHaveAttribute('href', `/library/magazines/${magazineSlug}/issues/${issueSlug}`);
+
+    const index = main.getByRole('navigation', { name: 'Issues by year' });
+    await expect(index.getByRole('link')).toHaveText([
+      'All years3',
+      '20212',
+      'Year not recorded1',
+    ]);
+    await expect(index.getByRole('link', { name: /^All years\s*3$/ })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await index.getByRole('link', { name: /^2021\s*2$/ }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/library/magazines/${magazineSlug}\\?year=2021$`),
+    );
+    const issues = page.getByRole('region', { name: 'Issues' });
+    await expect(
+      issues.getByRole('list', { name: '2021' }).getByRole('listitem'),
+    ).toHaveCount(2);
+    await expect(issues.getByText(UNDATED_ISSUE)).toHaveCount(0);
+
+    await page.goto(`/library/magazines/${magazineSlug}?undated=1`);
+    await expect(
+      page.getByRole('region', { name: 'Issues' }).getByText(UNDATED_ISSUE),
+    ).toBeVisible();
+
+    // A year with nothing, and a page past the end: said, with the way back.
+    await page.goto(`/library/magazines/${magazineSlug}?year=1990`);
+    await expect(page.getByText('No issue of this magazine is from 1990.')).toBeVisible();
+    await page.goto(`/library/magazines/${magazineSlug}?offset=25`);
+    await expect(page).toHaveURL(
+      new RegExp(`/library/magazines/${magazineSlug}\\?page=2$`),
+    );
+    await expect(
+      page.getByText('There are fewer issues than page 2 would hold.'),
+    ).toBeVisible();
+  });
+
+  test('an issue: its contents through the reader, its access, and more of its Magazine', async ({
+    page,
+  }) => {
+    await page.goto(`/library/magazines/${magazineSlug}/issues/${issueSlug}`);
+    const main = page.getByRole('main');
+    await expect(
+      main.getByRole('link', { name: 'See what is in this issue', exact: true }),
+    ).toHaveAttribute('href', '#library-reading');
+    await expect(
+      page.getByRole('heading', { level: 2, name: 'In this issue' }),
+    ).toBeVisible();
+    await expect(
+      main
+        .getByRole('region', { name: 'Details' })
+        .getByText('Not offered on this platform'),
+    ).toBeVisible();
+    const more = main.getByRole('region', { name: `More from ${MAGAZINE_TITLE}` });
+    await expect(
+      more.getByRole('link', { name: 'Synthetic winter issue' }),
+    ).toBeVisible();
+    await expect(more.getByRole('link', { name: UNDATED_ISSUE })).toBeVisible();
+    await expect(
+      more.getByRole('link', { name: `All issues of ${MAGAZINE_TITLE}` }),
+    ).toHaveAttribute('href', `/library/magazines/${magazineSlug}`);
+
+    // An issue without its contents here says so — and offers no reading.
+    await page.goto(`/library/magazines/${magazineSlug}/issues/winter-${run}`);
+    await expect(
+      page.getByText('The contents of this issue are not available on this platform.'),
+    ).toBeVisible();
+    await expect(page.locator('#library-reading')).toHaveCount(0);
+  });
+
+  test('the Articles listing is Editorial’s one listing, one address per page', async ({
+    page,
+  }) => {
+    await page.goto('/library/articles?offset=0');
+    await expect(page).toHaveURL(/\/library\/articles$/);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Articles');
+    const main = page.getByRole('main');
+    await expect(
+      main.getByText(/^1–\d+ of \d+ articles?$/).or(main.getByText('No articles yet')),
+    ).toBeVisible();
+    await page.goto('/library/articles?page=two');
+    await expect(page).toHaveURL(/\/library\/articles$/);
+  });
+
+  test('every Part 3 surface: no serious accessibility finding and no sideways scroll, in English, Urdu and Arabic', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(600_000);
+    for (const locale of ['', '/ur', '/ar'])
+      for (const target of [
+        '/library/research',
+        '/library/research-papers',
+        '/library/publications',
+        '/library/encyclopedias',
+        '/library/magazines',
+        '/library/articles',
+        `/library/research/${researchSlug}`,
+        `/library/publications/${publicationSlug}`,
+        `/library/encyclopedias/${encyclopediaSlug}`,
+        `/library/magazines/${magazineSlug}`,
+        `/library/magazines/${magazineSlug}/issues/${issueSlug}`,
+      ])
+        for (const width of [320, 1440]) {
+          const address = `${locale}${target}`;
+          await page.setViewportSize({ width, height: 900 });
+          const response = await page.goto(address);
+          expect(response?.status(), address).toBe(200);
+          await expect(page.locator('html')).toHaveAttribute(
+            'dir',
+            locale === '' ? 'ltr' : 'rtl',
+          );
+          const overflow = await page.evaluate(
+            () =>
+              document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          );
+          expect(overflow, `${address} at ${String(width)}px`).toBeLessThanOrEqual(0);
+          if (width !== 1440) continue;
+          const results = await new AxeBuilder({ page })
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+            .analyze();
+          const blocking = results.violations.filter(
+            (violation) =>
+              violation.impact === 'serious' || violation.impact === 'critical',
+          );
+          for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+            testInfo.annotations.push({
+              type: 'axe',
+              description: `${address}: ${finding.id} (${String(finding.impact)})`,
+            });
+          expect(
+            blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+            address,
+          ).toEqual([]);
+        }
   });
 });
 

@@ -6,6 +6,9 @@ import {
   librarySalePointQuerySchema,
   libraryTopicTotalsInputSchema,
   librarySlugSchema,
+  magazineDirectoryQuerySchema,
+  magazineIssuesQuerySchema,
+  publishedRecordsQuerySchema,
   topicResearchQuerySchema,
   topicWorksQuerySchema,
   scholarlyKindSchema,
@@ -36,9 +39,6 @@ import { passageQuerySchema } from '@minhaj/contracts/passage';
  * who mistyped an address should get the 404 the page already knows how to
  * render.
  */
-
-/** Offsets are bounded at BOTH ends: negative is nonsense, unbounded is a walk. */
-const browseOffset = z.number().int().min(0).max(25_000);
 
 /** A well-formed slug, or `null` — which every caller treats as "no such record". */
 const validSlug = (slug: string): boolean => librarySlugSchema.safeParse(slug).success;
@@ -150,11 +150,35 @@ export function createLibraryReadService(reader: LibraryPublicReaderPort) {
         : Promise.resolve(null);
     },
 
-    magazineIssues(magazineId: string, offset = 0) {
-      return reader.magazineIssues(
-        libraryIdSchema.parse(magazineId),
-        browseOffset.parse(offset),
-      );
+    /**
+     * Library Part 3 — a Magazine's issues: one view (all, one year's or the
+     * undated ones) with its total, and the issue count, readable count and
+     * year index its page is navigated by. Every field parsed before any read.
+     */
+    magazineIssuePage(raw: unknown) {
+      return reader.magazineIssuePage(magazineIssuesQuerySchema.parse(raw));
+    },
+
+    magazineIssueFacets(magazineId: string) {
+      return reader.magazineIssueFacets(libraryIdSchema.parse(magazineId));
+    },
+
+    /** Library Part 3 — the periodicals directory, under an optional Topic. */
+    magazineDirectory(raw: unknown = {}) {
+      return reader.magazineDirectory(magazineDirectoryQuerySchema.parse(raw));
+    },
+
+    /**
+     * Library Part 3 — the published-records read (`/library/publications`,
+     * `/library/encyclopedias`): one bounded page of one aggregate's public
+     * records and the listing's aggregates. Every field parsed before any read.
+     */
+    publishedRecords(raw: unknown) {
+      return reader.publishedRecords(publishedRecordsQuerySchema.parse(raw));
+    },
+
+    publishedRecordFacets(raw: unknown) {
+      return reader.publishedRecordFacets(publishedRecordsQuerySchema.parse(raw));
     },
 
     magazineIssue(magazineSlug: string, issueSlug: string) {

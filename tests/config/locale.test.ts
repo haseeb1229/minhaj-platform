@@ -215,6 +215,15 @@ describe('the render and routing tree stays statically renderable', () => {
     // Library Part 1: the whole Library's books listing, the shared Books
     // listing composed with `scope: 'library'`; the route is dynamic for data.
     'apps/web/src/components/library/books.tsx',
+    // Library Part 3: the whole Library's research listings (the shared
+    // research listing with `scope: 'library'`), the Publications and
+    // Encyclopedias listing, and the periodicals' pure address rules; the
+    // routes are dynamic for data.
+    'apps/web/src/components/library/research.tsx',
+    'apps/web/src/components/library/published.tsx',
+    'apps/web/src/components/library/magazine-view.ts',
+    // Library Part 3: the Articles listing's pure address rules.
+    'apps/web/src/components/editorial/articles-view.ts',
     // Phase 17. A pure highlighter the dynamic search route renders with; the
     // module itself reads no request state.
     'apps/web/src/components/search/highlight.ts',

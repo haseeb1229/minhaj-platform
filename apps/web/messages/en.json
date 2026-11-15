@@ -1853,13 +1853,7 @@
     "empty": "No books are published yet.",
     "next": "Next",
     "previous": "Previous",
-    "filterAny": "Any",
     "filterApply": "Apply filters",
-    "filterClear": "Clear all filters",
-    "filterFrom": "Published from (year)",
-    "filterLanguage": "Content language",
-    "filterTo": "Published to (year)",
-    "filterTopic": "Topic",
     "allBooks": "All books",
     "allArticles": "All articles",
     "contributors": "Contributors",
@@ -2020,14 +2014,8 @@
         "magazine-issue": "Magazine issue",
         "encyclopedia": "Encyclopedia"
       },
-      "filters": "Filter this list",
-      "emptyFiltered": "Nothing published matches these filters.",
       "empty": {
-        "research": "No research is published yet.",
-        "research-paper": "No research papers are published yet.",
-        "publication": "No publications are published yet.",
-        "magazine": "No magazines are published yet.",
-        "encyclopedia": "No encyclopedias are published yet."
+        "magazine": "No magazines are published yet."
       },
       "viewAll": {
         "magazine": "All magazines and journals"
@@ -2061,7 +2049,8 @@
       "issueNavigation": "Other issues of this magazine",
       "previousIssue": "Previous issue",
       "nextIssue": "Next issue",
-      "undated": "Year not recorded"
+      "undated": "Year not recorded",
+      "listingNotice": "Titles and summaries are shown in your interface language where they have been written. They describe each record; they are not a translation of it."
     },
     "scholarlyAdmin": {
       "create": {
@@ -2227,7 +2216,7 @@
         "statLanguages": "{count, plural, one {content language} other {content languages}}",
         "statTopics": "{count, plural, one {topic} other {topics}}",
         "none": "None published yet",
-        "articles": "Published articles",
+        "articles": "{count, plural, one {# article} other {# articles}}",
         "issues": "{count, plural, one {# issue} other {# issues}}",
         "downloads": "{count, plural, one {# edition to download} other {# editions to download}}",
         "salePoints": "{count, plural, one {# sale point} other {# sale points}}",
@@ -2239,7 +2228,7 @@
         "topics": "{count, plural, one {# topic} other {# topics}}",
         "languages": "{count, plural, one {# content language} other {# content languages}}",
         "contributors": "{count, plural, one {# author or contributor} other {# authors and contributors}}",
-        "about": "Every figure counts published records only. Articles come from the platform’s editorial process and are counted there."
+        "about": "Every figure counts published records only. Articles come from the platform’s editorial process."
       },
       "topics": {
         "lede": "Every subject the Library files its records under. Each count opens that kind of record, narrowed to the topic.",
@@ -2350,6 +2339,137 @@
         "pager": "Pages of sale points",
         "about": "Each sale point is listed as its operator recorded it. Ask the sale point itself about availability and prices."
       }
+    },
+    "records": {
+      "research": {
+        "stat": "{count, plural, one {work of research} other {works of research}}",
+        "listIntro": "Every published work of research, in every content language. Narrow the list by topic, language, author, decade or whether its full text is here.",
+        "emptyTitle": "No research yet",
+        "empty": "No research is published in the Library yet.",
+        "noResults": "No research matches every filter you chose. Remove one to see more.",
+        "all": "All research in the Library"
+      },
+      "research-paper": {
+        "stat": "{count, plural, one {research paper} other {research papers}}",
+        "listIntro": "Every published research paper, with where it appeared, in every content language. Narrow the list by topic, language, author, decade or whether its full text is here.",
+        "emptyTitle": "No research papers yet",
+        "empty": "No research paper is published in the Library yet.",
+        "noResults": "No research paper matches every filter you chose. Remove one to see more."
+      },
+      "publication": {
+        "stat": "{count, plural, one {publication} other {publications}}",
+        "listHeading": "Browse the publications",
+        "listIntro": "Reports, booklets and other standalone publications, in every content language. Narrow the list by topic, language, author, decade or whether its text is here.",
+        "filters": "Filter the publications",
+        "apply": "Show publications",
+        "summary": "{from}–{to} of {total, plural, one {# publication} other {# publications}}",
+        "emptyTitle": "No publications yet",
+        "empty": "No publication is published in the Library yet.",
+        "noResultsTitle": "No publication matches these filters",
+        "noResults": "No publication matches every filter you chose. Remove one to see more.",
+        "pastEnd": "There are fewer publications than page {page} would hold.",
+        "pages": "Pages of publications",
+        "about": "Every publication here is published in Minhaj-ul-Quran’s Library. Titles and summaries describe a publication in your language; its text is in the language it was written in.",
+        "all": "All publications in the Library"
+      },
+      "encyclopedia": {
+        "stat": "{count, plural, one {encyclopedia} other {encyclopedias}}",
+        "listHeading": "Browse the encyclopedias",
+        "listIntro": "Encyclopedias, each readable entry by entry where its text is here. Narrow the list by topic, language, author, decade or whether its text is here.",
+        "filters": "Filter the encyclopedias",
+        "apply": "Show encyclopedias",
+        "summary": "{from}–{to} of {total, plural, one {# encyclopedia} other {# encyclopedias}}",
+        "emptyTitle": "No encyclopedias yet",
+        "empty": "No encyclopedia is published in the Library yet.",
+        "noResultsTitle": "No encyclopedia matches these filters",
+        "noResults": "No encyclopedia matches every filter you chose. Remove one to see more.",
+        "pastEnd": "There are fewer encyclopedias than page {page} would hold.",
+        "pages": "Pages of encyclopedias",
+        "about": "An encyclopedia’s entries are the sections of its text. Volumes are not recorded separately, so each encyclopedia is one record with all its entries.",
+        "all": "All encyclopedias in the Library"
+      },
+      "researchAbout": "Every work here is published in Minhaj-ul-Quran’s Library. Research and research papers are two kinds, each with its own list; the tabs above move between them with your filters kept.",
+      "quranResearch": "Research on the Quran",
+      "hadithResearch": "Research on Hadith",
+      "toBooks": "Browse the books",
+      "toResources": "See every resource type",
+      "readFull": "Read the full text",
+      "readFullNamed": "Read the full text: {title}",
+      "readEntries": "Read the entries",
+      "readEntriesNamed": "Read the entries: {title}",
+      "details": "Details",
+      "detailsNamed": "Details: {title}",
+      "publishedBy": "Published by",
+      "entries": "{count, plural, one {# entry} other {# entries}}",
+      "sections": "{count, plural, one {# section} other {# sections}}",
+      "entriesHeading": "Entries",
+      "entriesIntro": "{count, plural, one {# entry} other {# entries}}, in {language}. Choose one from the list, or read on from the first.",
+      "readerIntro": "{count, plural, one {# section} other {# sections}}, in {language}.",
+      "citationCount": "{count, plural, one {# work cited} other {# works cited}}",
+      "related": {
+        "onTopic": "More on {topic}",
+        "allOnTopic": "{kind, select, research {All research} paper {All research papers} publication {All publications} other {All encyclopedias}} on {topic}",
+        "byPerson": "More by {name}",
+        "allByPerson": "{kind, select, research {All research} paper {All research papers} publication {All publications} other {All encyclopedias}} by {name}"
+      },
+      "access": {
+        "text": "Read on this platform",
+        "here": "Yes — {count, plural, one {# section} other {# sections}}, below",
+        "entriesHere": "Yes — {count, plural, one {# entry} other {# entries}}, below",
+        "notHere": "Not available here",
+        "download": "Download",
+        "noDownload": "Not offered on this platform"
+      }
+    },
+    "periodicals": {
+      "span": "{from}–{to}",
+      "issueCount": "{count, plural, one {# issue} other {# issues}}",
+      "latestIssue": "Latest issue",
+      "statMagazines": "{count, plural, one {magazine or journal} other {magazines and journals}}",
+      "statIssues": "{count, plural, one {issue} other {issues}}",
+      "statReadable": "{count, plural, one {with its contents here} other {with their contents here}}",
+      "readableCount": "{count, plural, one {# with its contents here} other {# with their contents here}}",
+      "listHeading": "The magazines and journals",
+      "listIntro": "Each title with its issues and the years they span.",
+      "byTopic": "By topic",
+      "allTopics": "All topics",
+      "emptyTitle": "No magazines yet",
+      "noResultsTitle": "No magazine on this topic",
+      "noResults": "No magazine or journal is filed under {topic} yet.",
+      "thisTopic": "this topic",
+      "allMagazines": "All magazines and journals",
+      "more": "Only the first hundred titles are listed here.",
+      "inThisIssue": "In this issue",
+      "readIssue": "See what is in this issue",
+      "noIssueText": "The contents of this issue are not available on this platform.",
+      "moreFrom": "More from {magazine}",
+      "allIssuesOf": "All issues of {magazine}",
+      "openLatest": "Open the latest issue",
+      "latestCover": "Cover of the latest issue",
+      "yearIndex": "Issues by year",
+      "allYears": "All years",
+      "pastEndTitle": "Past the last page",
+      "noneInView": "No issue here",
+      "pastEnd": "There are fewer issues than page {page} would hold.",
+      "noneIn": "No issue of this magazine is from {year}.",
+      "noneUndated": "Every issue of this magazine has a recorded year.",
+      "summary": "{from}–{to} of {total, plural, one {# issue} other {# issues}}",
+      "pages": "Pages of issues",
+      "pageLabel": "Page {page}"
+    },
+    "articlesPage": {
+      "stat": "{count, plural, one {article} other {articles}}",
+      "news": "News and statements",
+      "emptyTitle": "No articles yet",
+      "listHeading": "Latest articles",
+      "listIntro": "Newest first, each at the date it was written.",
+      "pastEndTitle": "Past the last page",
+      "firstPage": "Go to the first page",
+      "pastEnd": "There are fewer articles than page {page} would hold.",
+      "summary": "{from}–{to} of {total, plural, one {# article} other {# articles}}",
+      "pages": "Pages of articles",
+      "pageLabel": "Page {page}",
+      "about": "Articles are written and reviewed through the platform’s editorial process. This is their one listing; each article keeps its own page."
     }
   },
   "search": {

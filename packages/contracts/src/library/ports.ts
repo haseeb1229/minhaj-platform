@@ -24,6 +24,14 @@ import type {
 } from './browse.ts';
 import type {
   MagazineIssueRecord,
+  MagazineDirectory,
+  MagazineDirectoryQuery,
+  MagazineIssueFacets,
+  MagazineIssuePage,
+  MagazineIssuesQuery,
+  PublishedRecordFacets,
+  PublishedRecordPage,
+  PublishedRecordsQuery,
   TopicResearchFacets,
   TopicResearchPage,
   TopicResearchQuery,
@@ -397,8 +405,32 @@ export interface LibraryPublicReaderPort {
     slug: string,
   ): Promise<string | null>;
 
-  /** One bounded page of a public Magazine's public issues, newest first. */
-  magazineIssues(magazineId: string, offset: number): Promise<ScholarlyListingPage>;
+  /**
+   * LIBRARY PART 3 — one bounded page of a public Magazine's public issues in
+   * the periodical's own order — all of them, one publication year's or the
+   * undated ones — with the total that view admits
+   * (`magazineIssuesQuerySchema`).
+   */
+  magazineIssuePage(query: MagazineIssuesQuery): Promise<MagazineIssuePage>;
+
+  /** Library Part 3 — a public Magazine's issue count, readable count and year index. */
+  magazineIssueFacets(magazineId: string): Promise<MagazineIssueFacets>;
+
+  /**
+   * Library Part 3 — the periodicals directory: the public Magazines (under
+   * an optional Topic) with their issue counts, years and newest issue, the
+   * figures of the whole set and the Topics they are filed under.
+   */
+  magazineDirectory(query: MagazineDirectoryQuery): Promise<MagazineDirectory>;
+
+  /**
+   * LIBRARY PART 3 — THE PUBLISHED-RECORDS READ: one bounded, ordered page of
+   * the public Publications or Encyclopedias (`publishedRecordsQuerySchema`),
+   * with the total the query admits, and the listing's aggregates — the
+   * research read's rules, over one aggregate at a time.
+   */
+  publishedRecords(query: PublishedRecordsQuery): Promise<PublishedRecordPage>;
+  publishedRecordFacets(query: PublishedRecordsQuery): Promise<PublishedRecordFacets>;
 
   /** One public issue by its Magazine's CURRENT slug and its own CURRENT slug. */
   magazineIssue(

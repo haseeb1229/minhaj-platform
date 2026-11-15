@@ -1,9 +1,14 @@
 import 'server-only';
 
+import type { ReactNode } from 'react';
 import { getTranslations } from 'next-intl/server';
 
 import { localizedPath, type Locale } from '@minhaj/contracts';
-import type { TopicResearchItem } from '@minhaj/contracts/library';
+import type {
+  TopicResearchFacetPage,
+  TopicResearchItem,
+  TopicResearchKind,
+} from '@minhaj/contracts/library';
 import { CONTRIBUTION_ROLES, type ContributionRole } from '@minhaj/contracts/people';
 
 import {
@@ -29,12 +34,15 @@ import {
   Select,
 } from '@/components/ui';
 import { directionOf } from '@/config/locale';
+import { caseless } from './address';
 import type { HubDomain, HubLink } from './domain';
 import { ActiveFilters, ExploreFilters, ExploreHero, languageName } from './parts';
 import {
   KIND_WORDS,
+  LIBRARY_RECORD_SCOPES,
   byDecade,
   excerptOf,
+  libraryRecordsReadQuery,
   researchFiltered,
   researchHref,
   researchPageCount,
@@ -46,14 +54,19 @@ import {
 
 /**
  * A SUBJECT'S RESEARCH HUB (Quran Part 12; shared with Hadith since Hadith
- * Part 1) — `/quran/research`, `/hadith/research`.
+ * Part 1) — `/quran/research`, `/hadith/research` — and, since Library Part
+ * 3, the whole Library's research listings, `/library/research` and
+ * `/library/research-papers` (`scope.kind`), as Library Part 1 made the Books
+ * listing.
  *
  * LAYER-4 COMPOSITION OF LIBRARY'S OWN PUBLIC READS (DOMAIN_MODEL.md §3.1,
  * §10.2): the research is Library's — the public Research and ResearchPaper
- * records on the subject's Taxonomy Topic — read through Library's public
- * `topicResearch` and `topicResearchFacets`; the names of their contributors
- * are People's, the content languages' directions Taxonomy's. No subject
- * context imports Library; only this presentation layer composes them.
+ * records on the subject's Taxonomy Topic, or (whole Library) every public
+ * record of one kind — read through Library's public `topicResearch` and
+ * `topicResearchFacets`; the names of their contributors are People's, the
+ * Topics' Taxonomy's, the content languages' directions Taxonomy's. No
+ * subject context imports Library; only this presentation layer composes
+ * them.
  *
  * READ MODE: SCHOLARLY, PRECISE, CALM. A record is a catalogue entry, not a
  * poster: its kind, content language and date; its title in its own language,
@@ -64,9 +77,15 @@ import {
  * timeline, grouped by decade. No record carries a passage, so there are no
  * passage links — nothing is stated that Library did not answer.
  *
- * ONE ADDRESS PER VIEW (`./research-view`): a kind, a content language, an
- * author, a decade, "full text on the platform", an order and a page, each a
- * GET parameter, so the hub works without script and every view can be shared.
+ * ONE ADDRESS PER VIEW (`./research-view`): a kind (a hub's; the whole
+ * Library's kind is its address), a Topic (whole Library), a content
+ * language, an author, a decade, "full text on the platform", an order and a
+ * page, each a GET parameter, so the listing works without script and every
+ * view can be shared.
+ *
+ * THE LISTING BODY IS SHARED (`RecordListing`) with the whole Library's
+ * Publications and Encyclopedias (`@/components/library/published`), which
+ * differ only in their entries and their words.
  */
 
 /** What a subject says on its Research hub, in its own words. */
@@ -79,6 +98,12 @@ export interface ResearchCopy {
   readonly emptyTitle: string;
   readonly empty: string;
   readonly noResults: string;
+  /** Library Part 3: the whole Library's own eyebrow, notice and closing words. */
+  readonly eyebrow?: string;
+  readonly notice?: string;
+  readonly about?: string;
+  /** Library Part 3: where the empty state leads (a hub: the Library's research). */
+  readonly emptyAction?: HubLink;
 }
 
 type HubTranslator = Awaited<ReturnType<typeof getTranslations<'topicHub'>>>;
@@ -89,7 +114,7 @@ function isRole(role: string): role is ContributionRole {
 }
 
 /** A year as written in the interface's numerals, never grouped ("2021", not "2,021"). */
-function yearText(year: number, locale: Locale): string {
+export function yearText(year: number, locale: Locale): string {
   return new Intl.NumberFormat(locale, { useGrouping: false }).format(year);
 }
 
@@ -101,10 +126,20 @@ function decadeText(decade: number | null, locale: Locale, t: HubTranslator): st
 }
 
 /** The People credited on a record, as one line; a role other than author is named. */
-function creditLine(item: TopicResearchItem, names: Names, t: HubTranslator): string {
+export function creditLine(
+  item: {
+    readonly contributors: readonly {
+      readonly personId: string;
+      readonly role: string;
+    }[];
+  },
+  names: Names,
+  t: HubTranslator,
+): string {
+  const people = caseless(names.people);
   return item.contributors
     .flatMap((entry) => {
-      const person = names.people.get(entry.personId);
+      const person = people.get(entry.personId.toLowerCase());
       if (person === undefined) return [];
       return [
         entry.role === 'author' || !isRole(entry.role)
@@ -119,8 +154,8 @@ function creditLine(item: TopicResearchItem, names: Names, t: HubTranslator): st
 }
 
 /** The record's date: the day when it is known (a date, never shifted by a zone), else the year. */
-function dateOf(
-  item: TopicResearchItem,
+export function dateOf(
+  item: { readonly publishedOn: string | null; readonly publicationYear: number | null },
   locale: Locale,
 ): { readonly text: string; readonly machine: string } | null {
   if (item.publishedOn !== null)
@@ -260,8 +295,9 @@ function ResearchEntry({
 
 /**
  * A list of research entries outside a hub — a Topic's own page (Learn Part
- * 2) — every contributor resolved in ONE People call and the content
- * languages in ONE Taxonomy call. Nothing when empty.
+ * 2), a record's related works (Library Part 3) — every contributor resolved
+ * in ONE People call and the content languages in ONE Taxonomy call. Nothing
+ * when empty.
  */
 export async function ResearchShelf({
   locale,
@@ -303,81 +339,139 @@ export async function ResearchShelf({
   );
 }
 
-export async function ResearchHub({
+/* ===========================================================================
+ * The listing body, shared with the Library's Publications and Encyclopedias
+ * ========================================================================= */
+
+/** The words a listing of records speaks in: the research hub's, or a kind's. */
+export interface ListingWords {
+  readonly listHeading: string;
+  readonly filters: string;
+  readonly apply: string;
+  readonly summary: (range: { from: number; to: number; total: number }) => string;
+  readonly noResultsTitle: string;
+  readonly pastEnd: (page: number) => string;
+  readonly pages: string;
+}
+
+/** The figures a hero states: a count or a written figure, and where it leads. */
+interface Stat {
+  readonly value: number | string;
+  readonly label: string;
+  readonly href?: string;
+}
+
+/** What a listing is navigated by — every count without its own filter. */
+export interface ListingFacets {
+  readonly languages: TopicResearchFacetPage;
+  readonly contributors: TopicResearchFacetPage;
+  readonly topics: TopicResearchFacetPage;
+  readonly decades: readonly { readonly decade: number; readonly records: number }[];
+  readonly readable: number;
+  /** Whether the full-text filter can change anything. */
+  readonly showFullText: boolean;
+}
+
+/**
+ * THE LISTING OF RECORDS — the hero, then (unless nothing is published) the
+ * list's header, its tabs, the GET filter form, the active-filter chips,
+ * "n–m of N", the entries (a timeline by decade in the chronological
+ * orders), the honest empty states and numbered pages; and the closing words.
+ */
+export function RecordListing<T extends { readonly publicationYear: number | null }>({
   domain,
   scope,
   query,
-  copy,
-  actions,
+  t,
+  stem,
+  hero,
+  empty,
+  tabs,
+  intro,
+  words,
+  noResults,
+  facets,
+  names,
+  page,
+  entry,
+  keyOf,
+  footer,
 }: {
   readonly domain: HubDomain;
   readonly scope: ResearchScope;
   readonly query: ResearchQuery;
-  readonly copy: ResearchCopy;
-  /** The ways onward the header offers. */
-  readonly actions: readonly HubLink[];
+  readonly t: HubTranslator;
+  /** The listing's element identifiers start with it (`research`). */
+  readonly stem: string;
+  readonly hero: ReactNode;
+  /** The state when nothing is published at all; the listing otherwise. */
+  readonly empty: ReactNode | null;
+  readonly tabs: ReactNode;
+  readonly intro: string;
+  readonly words: ListingWords;
+  readonly noResults: string;
+  readonly facets: ListingFacets;
+  readonly names: Names;
+  readonly page: {
+    readonly items: readonly T[];
+    readonly total: number;
+    readonly hasMore: boolean;
+  };
+  readonly entry: (item: T, heading: 'h3' | 'h4') => ReactNode;
+  readonly keyOf: (item: T) => string;
+  readonly footer: ReactNode;
 }) {
   const { locale } = domain;
-  const t = await getTranslations({ locale, namespace: 'topicHub' });
-  const library = libraryReadRuntime();
-  const read = researchReadQuery(query, domain.topicId, locale);
-  const [page, facets, languages] = await Promise.all([
-    library.topicResearch(read),
-    library.topicResearchFacets(read),
-    libraryContentLanguages(),
-  ]);
-  const names = await libraryReferenceNames(
-    {
-      personIds: [
-        ...page.items.flatMap((item) => item.contributors.map((entry) => entry.personId)),
-        ...facets.contributors.items.map((facet) => facet.id),
-        ...(query.contributor === null ? [] : [query.contributor]),
-      ],
-      topicIds: [],
-    },
-    locale,
-  );
-
-  const LIST_ID = `${domain.key}-research-list`;
+  const LIST_ID = `${domain.key}-${stem}-list`;
   const title = domain.title;
-  const hub = facets.hub;
-  const filtered = researchFiltered(query);
+  const filtered = researchFiltered(query, scope);
   const base = researchHref(scope, locale, query, {
-    kind: 'all',
+    kind: scope.kind === undefined ? 'all' : query.kind,
     language: null,
     contributor: null,
     decade: null,
     fullText: false,
+    ...(scope.kind === undefined ? {} : { topic: null }),
   });
-  const pages = researchPageCount(page.total);
-  const range = researchRange(query.page, page.items.length);
+  const pages = researchPageCount(page.total, scope);
+  const range = researchRange(query.page, page.items.length, scope);
 
+  const people = caseless(names.people);
+  const topics = caseless(names.topics);
   const contributorOptions = facets.contributors.items.flatMap((facet) => {
-    const person = names.people.get(facet.id);
+    const person = people.get(facet.id.toLowerCase());
     return person === undefined
       ? []
-      : [{ id: facet.id, name: person.name, records: facet.records }];
+      : [{ id: facet.id.toLowerCase(), name: person.name, records: facet.records }];
   });
+  const topicOptions = facets.topics.items.flatMap((facet) => {
+    const topic = topics.get(facet.id.toLowerCase());
+    return topic === undefined
+      ? []
+      : [{ id: facet.id.toLowerCase(), name: topic.name, records: facet.records }];
+  });
+  const chosenTopic = query.topic ?? null;
+  const showTopic = topicOptions.length > 0 || chosenTopic !== null;
   const showLanguage = facets.languages.items.length > 1 || query.language !== null;
   const showContributor = contributorOptions.length > 0 || query.contributor !== null;
   const showDecade = facets.decades.length > 1 || query.decade !== null;
-  const showFullText = (hub.readable > 0 && hub.readable < hub.records) || query.fullText;
-  const showKinds = (hub.research > 0 && hub.papers > 0) || query.kind !== 'all';
   const contributorName =
     query.contributor === null
       ? null
-      : (names.people.get(query.contributor)?.name ?? null);
-  const span =
-    hub.earliest === null || hub.latest === null
-      ? null
-      : hub.earliest === hub.latest
-        ? yearText(hub.earliest, locale)
-        : t('research.span', {
-            from: yearText(hub.earliest, locale),
-            to: yearText(hub.latest, locale),
-          });
+      : (people.get(query.contributor.toLowerCase())?.name ?? null);
+  const topicName =
+    chosenTopic === null ? null : (topics.get(chosenTopic.toLowerCase())?.name ?? null);
 
   const active = [
+    ...(chosenTopic === null
+      ? []
+      : [
+          {
+            key: 'topic',
+            text: topicName ?? t('books.unknownTopic'),
+            removeHref: researchHref(scope, locale, query, { topic: null }),
+          },
+        ]),
     ...(query.language === null
       ? []
       : [
@@ -427,123 +521,44 @@ export async function ResearchHub({
 
   return domain.frame(
     <>
-      <ExploreHero
-        eyebrow={t('research.eyebrow')}
-        title={title}
-        lede={copy.lede}
-        stats={[
-          ...(hub.records === 0
-            ? []
-            : [
-                {
-                  value: hub.records,
-                  label: copy.stat(hub.records),
-                  href: `#${LIST_ID}`,
-                },
-              ]),
-          ...(hub.research === 0 || hub.papers === 0
-            ? []
-            : [
-                {
-                  value: hub.papers,
-                  label: t('research.statPapers', { count: hub.papers }),
-                  href: researchHref(scope, locale, query, {
-                    kind: 'research-paper',
-                    language: null,
-                    contributor: null,
-                    decade: null,
-                    fullText: false,
-                  }),
-                },
-              ]),
-          ...(hub.readable === 0
-            ? []
-            : [
-                {
-                  value: hub.readable,
-                  label: t('research.statReadable', { count: hub.readable }),
-                  href: researchHref(scope, locale, query, {
-                    kind: 'all',
-                    language: null,
-                    contributor: null,
-                    decade: null,
-                    fullText: true,
-                  }),
-                },
-              ]),
-          ...(hub.contributors === 0
-            ? []
-            : [
-                {
-                  value: hub.contributors,
-                  label: t('research.statContributors', { count: hub.contributors }),
-                },
-              ]),
-          ...(hub.languages < 2
-            ? []
-            : [
-                {
-                  value: hub.languages,
-                  label: t('common.statLanguages', { count: hub.languages }),
-                },
-              ]),
-          ...(span === null ? [] : [{ value: span, label: t('research.statSpan') }]),
-        ]}
-        actions={actions}
-      />
+      {hero}
 
-      {hub.records === 0 ? (
-        <EmptyState
-          icon="book"
-          title={copy.emptyTitle}
-          action={{
-            href: scholarlyListPath(locale, 'research'),
-            text: t('research.libraryResearch'),
-          }}
-        >
-          {copy.empty}
-        </EmptyState>
-      ) : (
+      {empty ?? (
         <section aria-labelledby={LIST_ID} className="flex flex-col gap-5">
-          <SectionHeader
-            id={LIST_ID}
-            heading={t('research.listHeading')}
-            intro={
-              query.kind === 'all' ? copy.listIntro : t(`research.kindHelp.${query.kind}`)
-            }
-          />
+          <SectionHeader id={LIST_ID} heading={words.listHeading} intro={intro} />
 
-          {showKinds ? (
-            <LinkTabs
-              label={t('research.kinds')}
-              tabs={(['all', 'research', 'research-paper'] as const).map((kind) => ({
-                href: researchHref(scope, locale, query, { kind }),
-                text: t(`research.tab.${kind}`),
-                current: query.kind === kind,
-                count: String(
-                  kind === 'all'
-                    ? facets.kinds.all
-                    : kind === 'research'
-                      ? facets.kinds.research
-                      : facets.kinds.papers,
-                ),
-              }))}
-            />
-          ) : null}
+          {tabs}
 
           <ExploreFilters
             action={localizedPath(locale, scope.path)}
-            label={t('research.filters')}
+            label={words.filters}
             hidden={
-              query.kind === 'all'
+              scope.kind !== undefined || query.kind === 'all'
                 ? []
                 : [{ name: 'kind', value: KIND_WORDS[query.kind] }]
             }
-            submit={t('research.apply')}
+            submit={words.apply}
             reset={filtered ? { href: base, text: t('common.reset') } : null}
           >
+            {showTopic ? (
+              <Field id={`${stem}-topic`} label={t('books.filterTopic')}>
+                {(props) => (
+                  <Select {...props} name="topic" defaultValue={chosenTopic ?? ''}>
+                    <option value="">{t('books.anyTopic')}</option>
+                    {topicOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {t('common.option', {
+                          name: option.name,
+                          count: option.records,
+                        })}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+            ) : null}
             {showLanguage ? (
-              <Field id="research-language" label={t('common.filterLanguage')}>
+              <Field id={`${stem}-language`} label={t('common.filterLanguage')}>
                 {(props) => (
                   <Select {...props} name="language" defaultValue={query.language ?? ''}>
                     <option value="">{t('common.anyLanguage')}</option>
@@ -560,7 +575,7 @@ export async function ResearchHub({
               </Field>
             ) : null}
             {showContributor ? (
-              <Field id="research-contributor" label={t('common.filterContributor')}>
+              <Field id={`${stem}-contributor`} label={t('common.filterContributor')}>
                 {(props) => (
                   <Select
                     {...props}
@@ -581,7 +596,7 @@ export async function ResearchHub({
               </Field>
             ) : null}
             {showDecade ? (
-              <Field id="research-decade" label={t('research.filterDecade')}>
+              <Field id={`${stem}-decade`} label={t('research.filterDecade')}>
                 {(props) => (
                   <Select
                     {...props}
@@ -601,8 +616,8 @@ export async function ResearchHub({
                 )}
               </Field>
             ) : null}
-            {showFullText ? (
-              <Field id="research-fulltext" label={t('research.filterFullText')}>
+            {facets.showFullText ? (
+              <Field id={`${stem}-fulltext`} label={t('research.filterFullText')}>
                 {(props) => (
                   <Select
                     {...props}
@@ -620,7 +635,7 @@ export async function ResearchHub({
                 )}
               </Field>
             ) : null}
-            <Field id="research-sort" label={t('common.filterSort')}>
+            <Field id={`${stem}-sort`} label={t('common.filterSort')}>
               {(props) => (
                 <Select {...props} name="sort" defaultValue={query.sort}>
                   <option value="newest">{t('common.sort.newest')}</option>
@@ -635,11 +650,7 @@ export async function ResearchHub({
 
           {range === null ? null : (
             <p className="text-sm text-foreground-muted">
-              {t('research.summary', {
-                from: range.from,
-                to: range.to,
-                total: page.total,
-              })}
+              {words.summary({ from: range.from, to: range.to, total: page.total })}
             </p>
           )}
 
@@ -652,20 +663,20 @@ export async function ResearchHub({
                   text: t('common.firstPage'),
                 }}
               >
-                {t('research.pastEnd', { page: query.page })}
+                {words.pastEnd(query.page)}
               </EmptyState>
             ) : (
               <EmptyState
-                title={t('research.noResultsTitle')}
+                title={words.noResultsTitle}
                 action={{ href: base, text: t('common.reset') }}
               >
-                {copy.noResults}
+                {noResults}
               </EmptyState>
             )
           ) : chronological ? (
             <div className="flex flex-col gap-8">
               {groups.map((group, index) => {
-                const id = `${domain.key}-research-decade-${String(index)}`;
+                const id = `${domain.key}-${stem}-decade-${String(index)}`;
                 const name = decadeText(group.decade, locale, t);
                 return (
                   <section
@@ -681,15 +692,7 @@ export async function ResearchHub({
                     </h3>
                     <ul aria-label={name} className="flex min-w-0 flex-col gap-4">
                       {group.items.map((item) => (
-                        <ResearchEntry
-                          key={`${item.kind}:${item.id}`}
-                          locale={locale}
-                          item={item}
-                          names={names}
-                          languages={languages}
-                          heading="h4"
-                          t={t}
-                        />
+                        <EntrySlot key={keyOf(item)}>{entry(item, 'h4')}</EntrySlot>
                       ))}
                     </ul>
                   </section>
@@ -699,22 +702,14 @@ export async function ResearchHub({
           ) : (
             <ul aria-label={title} className="flex min-w-0 flex-col gap-4">
               {page.items.map((item) => (
-                <ResearchEntry
-                  key={`${item.kind}:${item.id}`}
-                  locale={locale}
-                  item={item}
-                  names={names}
-                  languages={languages}
-                  heading="h3"
-                  t={t}
-                />
+                <EntrySlot key={keyOf(item)}>{entry(item, 'h3')}</EntrySlot>
               ))}
             </ul>
           )}
 
           {page.items.length === 0 ? null : (
             <Pager
-              label={t('research.pages')}
+              label={words.pages}
               previous={
                 query.page > 1
                   ? researchHref(scope, locale, query, { page: query.page - 1 })
@@ -739,32 +734,307 @@ export async function ResearchHub({
         </section>
       )}
 
-      <div className="flex flex-col gap-3 border-t border-border pt-4">
-        <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
-          {t('research.about')}
-        </p>
-        <ul className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-          {(['research', 'research-paper'] as const).map((kind) => (
-            <li key={kind}>
-              <a
-                href={`${scholarlyListPath(locale, kind)}${
-                  domain.topicId === null
-                    ? ''
-                    : `?topic=${encodeURIComponent(domain.topicId)}`
-                }`}
-                className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-action underline-offset-4 hover:underline"
-              >
-                {t(
-                  kind === 'research'
-                    ? 'research.libraryResearch'
-                    : 'research.libraryPapers',
-                )}
-                <Icon name="arrow-end" size={16} />
-              </a>
-            </li>
-          ))}
-        </ul>
-      </div>
+      {footer}
     </>,
   );
+}
+
+/** A keyed wrapper: each entry renders its own `<li>`. */
+function EntrySlot({ children }: { readonly children: ReactNode }) {
+  return <>{children}</>;
+}
+
+/** A listing's closing words and its ways onward. */
+export function ListingFooter({
+  about,
+  links,
+}: {
+  readonly about: string;
+  readonly links: readonly HubLink[];
+}) {
+  return (
+    <div className="flex flex-col gap-3 border-t border-border pt-4">
+      <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
+        {about}
+      </p>
+      <ul className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+        {links.map((link) => (
+          <li key={link.href}>
+            <a
+              href={link.href}
+              className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-action underline-offset-4 hover:underline"
+            >
+              {link.text}
+              <Icon name="arrow-end" size={16} />
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** A year span in words, or null when no record is dated. */
+export function spanText(
+  earliest: number | null,
+  latest: number | null,
+  locale: Locale,
+  t: HubTranslator,
+): string | null {
+  if (earliest === null || latest === null) return null;
+  return earliest === latest
+    ? yearText(earliest, locale)
+    : t('research.span', {
+        from: yearText(earliest, locale),
+        to: yearText(latest, locale),
+      });
+}
+
+/** The figures every listing of records can state: the full text, authors, languages, years. */
+export function commonStats(
+  figures: {
+    readonly readable: number;
+    readonly contributors: number;
+    readonly languages: number;
+    readonly earliest: number | null;
+    readonly latest: number | null;
+  },
+  readableHref: string,
+  locale: Locale,
+  t: HubTranslator,
+): Stat[] {
+  const span = spanText(figures.earliest, figures.latest, locale, t);
+  return [
+    ...(figures.readable === 0
+      ? []
+      : [
+          {
+            value: figures.readable,
+            label: t('research.statReadable', { count: figures.readable }),
+            href: readableHref,
+          },
+        ]),
+    ...(figures.contributors === 0
+      ? []
+      : [
+          {
+            value: figures.contributors,
+            label: t('research.statContributors', { count: figures.contributors }),
+          },
+        ]),
+    ...(figures.languages < 2
+      ? []
+      : [
+          {
+            value: figures.languages,
+            label: t('common.statLanguages', { count: figures.languages }),
+          },
+        ]),
+    ...(span === null ? [] : [{ value: span, label: t('research.statSpan') }]),
+  ];
+}
+
+/* ===========================================================================
+ * The research hub and the Library's research listings
+ * ========================================================================= */
+
+export async function ResearchHub({
+  domain,
+  scope,
+  query,
+  copy,
+  actions,
+  onward,
+}: {
+  readonly domain: HubDomain;
+  readonly scope: ResearchScope;
+  readonly query: ResearchQuery;
+  readonly copy: ResearchCopy;
+  /** The ways onward the header offers. */
+  readonly actions: readonly HubLink[];
+  /** Library Part 3: the closing ways onward in place of the Library's listings. */
+  readonly onward?: readonly HubLink[];
+}) {
+  const { locale } = domain;
+  const t = await getTranslations({ locale, namespace: 'topicHub' });
+  const library = libraryReadRuntime();
+  const whole = scope.kind !== undefined;
+  const read =
+    scope.kind === undefined
+      ? researchReadQuery(query, domain.topicId, locale)
+      : libraryRecordsReadQuery({ ...scope, kind: scope.kind }, query, locale);
+  const [page, facets, languages] = await Promise.all([
+    library.topicResearch(read),
+    library.topicResearchFacets(read),
+    libraryContentLanguages(),
+  ]);
+  const names = await libraryReferenceNames(
+    {
+      personIds: [
+        ...page.items.flatMap((item) => item.contributors.map((entry) => entry.personId)),
+        ...facets.contributors.items.map((facet) => facet.id),
+        ...(query.contributor === null ? [] : [query.contributor]),
+      ],
+      topicIds: [
+        ...facets.topics.items.map((facet) => facet.id),
+        ...((query.topic ?? null) === null ? [] : [query.topic ?? '']),
+      ],
+    },
+    locale,
+  );
+
+  const LIST_ID = `${domain.key}-research-list`;
+  const hub = facets.hub;
+  const empty = (kind: Partial<ResearchQuery>) =>
+    researchHref(scope, locale, query, {
+      language: null,
+      contributor: null,
+      decade: null,
+      fullText: false,
+      ...(whole ? { topic: null } : {}),
+      ...kind,
+    });
+
+  const hero = (
+    <ExploreHero
+      eyebrow={copy.eyebrow ?? t('research.eyebrow')}
+      title={domain.title}
+      lede={copy.lede}
+      {...(copy.notice === undefined ? {} : { notice: copy.notice })}
+      stats={[
+        ...(hub.records === 0
+          ? []
+          : [{ value: hub.records, label: copy.stat(hub.records), href: `#${LIST_ID}` }]),
+        ...(hub.research === 0 || hub.papers === 0
+          ? []
+          : [
+              {
+                value: hub.papers,
+                label: t('research.statPapers', { count: hub.papers }),
+                href: empty({ kind: 'research-paper' }),
+              },
+            ]),
+        ...commonStats(
+          hub,
+          empty({ kind: whole ? query.kind : 'all', fullText: true }),
+          locale,
+          t,
+        ),
+      ]}
+      actions={actions}
+    />
+  );
+
+  const tabs = whole ? (
+    <LinkTabs
+      label={t('research.kinds')}
+      tabs={(
+        ['research', 'research-paper'] as const satisfies readonly TopicResearchKind[]
+      ).map((kind) => ({
+        href: researchHref(
+          LIBRARY_RECORD_SCOPES[kind],
+          locale,
+          { ...query, kind },
+          { page: 1 },
+        ),
+        text: t(`research.tab.${kind}`),
+        current: scope.kind === kind,
+        count: String(kind === 'research' ? facets.kinds.research : facets.kinds.papers),
+      }))}
+    />
+  ) : (hub.research > 0 && hub.papers > 0) || query.kind !== 'all' ? (
+    <LinkTabs
+      label={t('research.kinds')}
+      tabs={(['all', 'research', 'research-paper'] as const).map((kind) => ({
+        href: researchHref(scope, locale, query, { kind }),
+        text: t(`research.tab.${kind}`),
+        current: query.kind === kind,
+        count: String(
+          kind === 'all'
+            ? facets.kinds.all
+            : kind === 'research'
+              ? facets.kinds.research
+              : facets.kinds.papers,
+        ),
+      }))}
+    />
+  ) : null;
+
+  const footer = (
+    <ListingFooter
+      about={copy.about ?? t('research.about')}
+      links={
+        onward ??
+        (['research', 'research-paper'] as const).map((kind) => ({
+          href: `${scholarlyListPath(locale, kind)}${
+            domain.topicId === null ? '' : `?topic=${encodeURIComponent(domain.topicId)}`
+          }`,
+          text: t(
+            kind === 'research' ? 'research.libraryResearch' : 'research.libraryPapers',
+          ),
+        }))
+      }
+    />
+  );
+
+  return RecordListing({
+    domain,
+    scope,
+    query,
+    t,
+    stem: 'research',
+    hero,
+    empty:
+      hub.records === 0 ? (
+        <EmptyState
+          icon="book"
+          title={copy.emptyTitle}
+          action={
+            copy.emptyAction ?? {
+              href: scholarlyListPath(locale, 'research'),
+              text: t('research.libraryResearch'),
+            }
+          }
+        >
+          {copy.empty}
+        </EmptyState>
+      ) : null,
+    tabs,
+    intro:
+      whole || query.kind === 'all'
+        ? copy.listIntro
+        : t(`research.kindHelp.${query.kind}`),
+    words: {
+      listHeading: t('research.listHeading'),
+      filters: t('research.filters'),
+      apply: t('research.apply'),
+      summary: (range) => t('research.summary', range),
+      noResultsTitle: t('research.noResultsTitle'),
+      pastEnd: (number) => t('research.pastEnd', { page: number }),
+      pages: t('research.pages'),
+    },
+    noResults: copy.noResults,
+    facets: {
+      languages: facets.languages,
+      contributors: facets.contributors,
+      topics: facets.topics,
+      decades: facets.decades,
+      readable: facets.readable,
+      showFullText: (hub.readable > 0 && hub.readable < hub.records) || query.fullText,
+    },
+    names,
+    page,
+    entry: (item: TopicResearchItem, heading) => (
+      <ResearchEntry
+        locale={locale}
+        item={item}
+        names={names}
+        languages={languages}
+        heading={heading}
+        t={t}
+      />
+    ),
+    keyOf: (item: TopicResearchItem) => `${item.kind}:${item.id}`,
+    footer,
+  });
 }

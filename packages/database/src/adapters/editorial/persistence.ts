@@ -618,7 +618,11 @@ function articleOperations(): Pick<
 }
 function articleReads(): Pick<
   EditorialPublicReaderPort,
-  'publicArticle' | 'publishedArticles' | 'articleSitemap' | 'articleCanonicalSlug'
+  | 'publicArticle'
+  | 'publishedArticles'
+  | 'publishedArticleCount'
+  | 'articleSitemap'
+  | 'articleCanonicalSlug'
 > {
   return {
     async articleCanonicalSlug(slug: string) {
@@ -651,6 +655,9 @@ function articleReads(): Pick<
         take: limitOf(limit),
       });
       return rows.map(articleSummary);
+    },
+    publishedArticleCount() {
+      return getDatabaseClient().article.count({ where: { state: 'published' } });
     },
     async articleSitemap(offset: number, limit: number) {
       const rows = await getDatabaseClient().article.findMany({

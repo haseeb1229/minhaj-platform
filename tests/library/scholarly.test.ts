@@ -16,11 +16,9 @@ import {
   doiHref,
   issuePath,
   paragraphsOf,
-  readScholarlyQuery,
   scholarlyLabel,
   scholarlyPath,
   scholarlyPathOf,
-  scholarlyQueryPath,
   standaloneKindOfSegment,
 } from '../../apps/web/src/components/library/scholarly-presentation.ts';
 import { createScholarlySearchSource } from '../../apps/web/src/contexts/library/index.ts';
@@ -214,31 +212,6 @@ describe('an issue belongs to one Magazine, with genuine numbers only', () => {
 describe('public listing query', () => {
   it('refuses an inverted year range at the trust boundary', () => {
     expect(scholarlyQuerySchema.safeParse({ from: 2020, to: 2010 }).success).toBe(false);
-  });
-
-  it('tolerates a mistyped URL and turns it into the unfiltered listing', () => {
-    expect(
-      readScholarlyQuery({
-        from: 'banana',
-        to: '2020',
-        topic: 'not-a-uuid',
-        language: ['en', 'ur'],
-        offset: '-5',
-      }),
-    ).toEqual({ offset: 0, language: null, topic: null, from: null, to: 2020 });
-    expect(readScholarlyQuery({ from: '2021', to: '2010' })).toMatchObject({
-      from: null,
-      to: null,
-    });
-  });
-
-  it('writes one address per view, neutral values omitted', () => {
-    const base = '/en/library/research';
-    const filters = readScholarlyQuery({});
-    expect(scholarlyQueryPath(base, filters)).toBe(base);
-    expect(scholarlyQueryPath(base, filters, { topic: TOPIC, offset: 25 })).toBe(
-      `${base}?offset=25&topic=${TOPIC}`,
-    );
   });
 });
 

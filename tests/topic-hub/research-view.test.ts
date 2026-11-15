@@ -1,14 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
-import { TOPIC_RESEARCH_PAGE, topicResearchQuerySchema } from '@minhaj/contracts/library';
+import {
+  PUBLISHED_RECORDS_PAGE,
+  TOPIC_RESEARCH_PAGE,
+  publishedRecordsQuerySchema,
+  topicResearchQuerySchema,
+} from '@minhaj/contracts/library';
 
 import {
   DEFAULT_RESEARCH_QUERY,
   EXCERPT,
+  LIBRARY_ENCYCLOPEDIAS,
+  LIBRARY_PUBLICATIONS,
+  LIBRARY_RESEARCH,
+  LIBRARY_RESEARCH_PAPERS,
   RESEARCH_MAX_PAGE,
   byDecade,
   decadeOf,
   excerptOf,
+  libraryRecordsReadQuery,
   readResearchQuery,
   researchCanonicalRedirect,
   researchFiltered,
@@ -326,5 +336,143 @@ describe('the Hadith Research hub’s address', () => {
     expect(researchCanonicalRedirect(HADITH, 'ar', { kind: 'paper', language: '' })).toBe(
       '/ar/hadith/research?kind=paper',
     );
+  });
+});
+
+/* ===========================================================================
+ * Library Part 3 — the whole Library's listings of one kind
+ * ========================================================================= */
+
+describe('the whole Library’s listings of one kind', () => {
+  it('fixes the kind by the address, reads the Topic, and keeps every hub default', () => {
+    expect(readResearchQuery({}, LIBRARY_RESEARCH)).toEqual({
+      ...DEFAULT_RESEARCH_QUERY,
+      kind: 'research',
+      topic: null,
+    });
+    expect(readResearchQuery({ kind: 'research' }, LIBRARY_RESEARCH_PAPERS).kind).toBe(
+      'research-paper',
+    );
+    // A published kind is not a research kind: the view's kind stays neutral.
+    expect(readResearchQuery({}, LIBRARY_PUBLICATIONS).kind).toBe('all');
+    expect(
+      readResearchQuery({ topic: TOPIC.toUpperCase() }, LIBRARY_ENCYCLOPEDIAS).topic,
+    ).toBe(TOPIC);
+    expect(readResearchQuery({ topic: 'quran' }, LIBRARY_RESEARCH).topic).toBeNull();
+    // A hub never reads a Topic of its own from the address.
+    expect(readResearchQuery({ topic: TOPIC })).not.toHaveProperty('topic');
+  });
+
+  it('is unfiltered with nothing but its own kind, and filtered by a Topic', () => {
+    const view = readResearchQuery({}, LIBRARY_RESEARCH_PAPERS);
+    expect(researchFiltered(view, LIBRARY_RESEARCH_PAPERS)).toBe(false);
+    expect(
+      researchFiltered(
+        readResearchQuery({ topic: TOPIC }, LIBRARY_RESEARCH),
+        LIBRARY_RESEARCH,
+      ),
+    ).toBe(true);
+  });
+
+  it('never spells the kind, spells the Topic first, and has one bare address', () => {
+    const view = readResearchQuery(
+      {
+        topic: TOPIC,
+        language: 'ur',
+        decade: '1990',
+        fulltext: '1',
+        sort: 'title',
+        page: '2',
+      },
+      LIBRARY_RESEARCH,
+    );
+    expect(researchHref(LIBRARY_RESEARCH, 'en', view)).toBe(
+      `/library/research?topic=${TOPIC}&language=ur&decade=1990&fulltext=1&sort=title&page=2`,
+    );
+    expect(
+      researchHref(LIBRARY_RESEARCH, 'ur', readResearchQuery({}, LIBRARY_RESEARCH)),
+    ).toBe('/ur/library/research');
+    // The way between the two research listings keeps every filter but the page.
+    expect(
+      researchHref(
+        LIBRARY_RESEARCH_PAPERS,
+        'en',
+        { ...view, kind: 'research-paper' },
+        { page: 1 },
+      ),
+    ).toBe(
+      `/library/research-papers?topic=${TOPIC}&language=ur&decade=1990&fulltext=1&sort=title`,
+    );
+  });
+
+  it('answers the former Phase-9 parameters with one redirect', () => {
+    // `?offset=` (25 a page) is the page holding the record it began with.
+    expect(researchCanonicalRedirect(LIBRARY_RESEARCH, 'en', { offset: '25' })).toBe(
+      '/library/research?page=2',
+    );
+    expect(researchCanonicalRedirect(LIBRARY_PUBLICATIONS, 'en', { offset: '48' })).toBe(
+      '/library/publications?page=3',
+    );
+    expect(researchCanonicalRedirect(LIBRARY_RESEARCH, 'en', { offset: '0' })).toBe(
+      '/library/research',
+    );
+    // A year range is no longer read: dropped, never guessed.
+    expect(
+      researchCanonicalRedirect(LIBRARY_RESEARCH_PAPERS, 'ar', {
+        language: 'ar',
+        from: '1990',
+        to: '1999',
+      }),
+    ).toBe('/ar/library/research-papers?language=ar');
+    // A form's empty controls; a hub's `kind` is not this listing's business.
+    expect(
+      researchCanonicalRedirect(LIBRARY_ENCYCLOPEDIAS, 'en', {
+        topic: '',
+        language: '',
+        sort: 'newest',
+      }),
+    ).toBe('/library/encyclopedias');
+    expect(
+      researchCanonicalRedirect(LIBRARY_RESEARCH, 'en', { kind: 'paper' }),
+    ).toBeNull();
+    expect(
+      researchCanonicalRedirect(LIBRARY_RESEARCH, 'en', { topic: TOPIC }),
+    ).toBeNull();
+    expect(
+      researchCanonicalRedirect(LIBRARY_RESEARCH, 'en', { topic: TOPIC.toUpperCase() }),
+    ).toBe(`/library/research?topic=${TOPIC}`);
+  });
+
+  it('asks Library for the scope’s kind, and never past its offset bound', () => {
+    const deepest = String(Math.floor(25_000 / PUBLISHED_RECORDS_PAGE) + 1);
+    const research = libraryRecordsReadQuery(
+      { path: '/library/research', kind: 'research' },
+      readResearchQuery({ topic: TOPIC, page: '3' }, LIBRARY_RESEARCH),
+      'ur',
+    );
+    expect(research).toEqual({
+      scope: 'library',
+      kind: 'research',
+      topic: TOPIC,
+      language: null,
+      contributor: null,
+      decade: null,
+      fullText: false,
+      sort: 'newest',
+      titleLocale: 'ur',
+      offset: 2 * TOPIC_RESEARCH_PAGE,
+      limit: TOPIC_RESEARCH_PAGE,
+    });
+    expect(topicResearchQuerySchema.safeParse(research).success).toBe(true);
+    for (const page of [deepest, String(Number(deepest) + 1), '99999']) {
+      const read = libraryRecordsReadQuery(
+        { path: '/library/publications', kind: 'publication' },
+        readResearchQuery({ page }, LIBRARY_PUBLICATIONS),
+        'en',
+      );
+      expect(publishedRecordsQuerySchema.safeParse(read).success, page).toBe(true);
+    }
+    expect(researchPageCount(25, LIBRARY_PUBLICATIONS)).toBe(2);
+    expect(researchRange(2, 1, LIBRARY_ENCYCLOPEDIAS)).toEqual({ from: 25, to: 25 });
   });
 });
