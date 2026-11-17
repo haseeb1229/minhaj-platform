@@ -2713,10 +2713,12 @@
       "playlists": "Playlists",
       "speakers": "Speakers",
       "topics": "Topics",
-      "listen": "Listen"
+      "listen": "Listen",
+      "listenLectures": "Audio lectures",
+      "listenSeries": "Audio series"
     },
     "sectionBody": {
-      "videos": "Every published video, newest first, with filters by topic, speaker, series and language.",
+      "videos": "Every published video, newest first — narrow it by topic, language, speaker, series or length.",
       "lectures": "Lectures and speeches.",
       "events": "Recordings from events and gatherings.",
       "highlights": "Short highlights and excerpts.",
@@ -2727,16 +2729,11 @@
       "playlists": "Curated lists of videos, in a chosen order.",
       "speakers": "The people who speak in these videos.",
       "topics": "Browse every topic, with its videos alongside books and research.",
-      "listen": "Lectures, talks and speeches to listen to."
+      "listen": "Lectures, talks and speeches to listen to.",
+      "listenLectures": "Lectures and talks to listen to, with filters.",
+      "listenSeries": "Audio gathered into series, in order."
     },
-    "filters": "Filter videos",
     "filterTopic": "Topic",
-    "filterSpeaker": "Speaker",
-    "filterSeries": "Series or programme",
-    "filterLanguage": "Language of the video",
-    "filterAny": "Any",
-    "filterApply": "Apply filters",
-    "filterClear": "Clear all filters",
     "emptyFiltered": "No published video matches these filters.",
     "previous": "Previous page",
     "next": "Next page",
@@ -2765,7 +2762,8 @@
       },
       "episode": "Episode {number}",
       "captions": "Captions",
-      "transcript": "Transcript"
+      "transcript": "Transcript",
+      "format": "Kind of video"
     },
     "playerHeading": "Video player",
     "player": {
@@ -2798,9 +2796,7 @@
     "playlistEmpty": "No video in this playlist has been published yet.",
     "speakersEmpty": "No speakers are named on a published video yet.",
     "speakerVideos": "Videos: {count}",
-    "topicTitle": "Videos",
     "topicHub": "Everything on this topic",
-    "topicEmpty": "No published video is on this topic yet.",
     "landing": {
       "featuredIntro": "Videos selected to be featured on this page.",
       "latestIntro": "The most recently published videos, newest first.",
@@ -2810,15 +2806,65 @@
       "groupsIntro": "Videos gathered together, to be watched in order.",
       "findHeading": "Speakers, topics and audio",
       "findIntro": "Find videos by who speaks or what they are about, or listen instead.",
-      "seeAll": "All {name}"
+      "seeAll": "All {name}",
+      "programmesAction": "Watch the programmes",
+      "stats": {
+        "videos": "{count, plural, one {video} other {videos}}",
+        "languages": "{count, plural, one {language} other {languages}}",
+        "topics": "{count, plural, one {topic} other {topics}}",
+        "speakers": "{count, plural, one {speaker} other {speakers}}"
+      },
+      "topicsHeading": "Browse by topic",
+      "topicsIntro": "What these videos are about, and how many there are on each.",
+      "allTopics": "All topics",
+      "onTopic": "On {name}",
+      "allOnTopic": "All videos on {name}",
+      "speakersHeading": "Speakers",
+      "speakersIntro": "Who speaks in these videos, and in how many.",
+      "allSpeakers": "All speakers",
+      "subjectsHeading": "Videos by subject",
+      "subjectsIntro": "The Quran and Hadith each gather their own videos, with their own ways to browse them.",
+      "subjects": {
+        "quran": "Videos on the Quran",
+        "quranBody": "Lectures that explain the Quran, by Surah, with where each takes up a passage.",
+        "hadith": "Videos on Hadith",
+        "hadithBody": "Lectures and talks on Hadith and its sciences."
+      }
     },
     "viewsLabel": "Kind of video",
     "aboutHeading": "About this video",
-    "related": "Related videos",
     "kind": {
       "series": "Series",
       "program": "Programme",
       "playlist": "Playlist"
+    },
+    "homeLink": "Go to Watch",
+    "anyTopic": "Any topic",
+    "unknownTopic": "A topic",
+    "episodeOf": "Episode {number} of {total}",
+    "episodeNav": "Previous and next episode",
+    "previousEpisode": "Previous episode",
+    "nextEpisode": "Next episode",
+    "upNext": "Up next",
+    "relatedAll": "See all {count, plural, one {# video} other {# videos}}",
+    "relatedSpeaker": "More with {name}",
+    "relatedTopic": "More on {name}",
+    "relatedLanguage": "More in {name}",
+    "share": {
+      "action": "Share",
+      "copied": "Link copied",
+      "failed": "The link could not be shared. Copy it from the address bar instead."
+    },
+    "listing": {
+      "stat": "{count, plural, one {video} other {videos}}",
+      "statHours": "{count, plural, one {hour of video} other {hours of video}}",
+      "listIntro": "Every published video in every content language, newest first. Narrow the list by topic, language, speaker, series or length.",
+      "emptyTitle": "No videos yet",
+      "emptyView": "No video of this kind has been published yet.",
+      "about": "Titles and descriptions describe each video in your language; the language of the video itself is named on its card. Each video plays from the service that hosts it, and only after you press play.",
+      "quranVideos": "Videos on the Quran",
+      "hadithVideos": "Videos on Hadith",
+      "listen": "Listen to lectures"
     }
   },
   "listen": {
@@ -4011,7 +4057,10 @@
     },
     "tafsirLinks": {
       "heading": "On the Quran",
-      "help": "The passages of the Quran this explains. Each opens its tafsir: the ayat, and everything else linked to them."
+      "help": "The passages of the Quran this explains. Each opens its tafsir: the ayat, and everything else linked to them.",
+      "momentsHeading": "Watch from",
+      "momentsHelp": "Where in this lecture each passage is taken up. Each opens the lecture there; it starts when you press play.",
+      "watchFrom": "Watch from"
     },
     "booksHub": {
       "lede": "Books from Minhaj-ul-Quran’s Library on the Quran and its sciences — with the Surahs each tafsir and commentary explains. Choose a shelf, a Surah, a language or an author.",

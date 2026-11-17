@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
-import type { BrowserContext, Page, Request } from '@playwright/test';
+import { AxeBuilder } from '@axe-core/playwright';
+import type { BrowserContext, Page, Request, TestInfo } from '@playwright/test';
 
 import type { SqlSession } from '../../packages/database/src/lifecycle/sql-connection.ts';
 import {
@@ -33,6 +34,14 @@ import {
  * and withheld once withdrawn; and that administration works, validates the
  * provider, orders a Playlist and refuses a stale save visibly.
  *
+ * WATCH PART 1: the listing is the shared Videos listing over the whole of
+ * Media — figures, format tabs with counts, a Topic filter with counts and its
+ * chip, one address per view (a `?format=`, a former `?offset=` and the
+ * Topic view each one redirect); a Video's page carries its Series with the
+ * previous and next episode and a share button; the landing carries its
+ * figures, its ways in by Topic and every menu item. No fixture is added: the
+ * programme's two episodes and the education Topic already here prove them.
+ *
  * NO PROVIDER IS CONTACTED. The one provider request the activation test makes
  * is answered by a stub, so the suite proves what the page asks for without
  * depending on — or disclosing anything to — a real third party.
@@ -45,6 +54,8 @@ test.describe.configure({ mode: 'serial' });
 
 let sql: SqlSession;
 let people: Phase5Fixture;
+/** The canonical education Topic's identifier, as an address spells it. */
+let educationId: string;
 const contexts: BrowserContext[] = [];
 
 const run = randomUUID().replaceAll('-', '').slice(0, 10);
@@ -118,6 +129,7 @@ test.beforeAll(async () => {
     "SELECT [id] FROM [Topic] WHERE [slug] = N'education';",
   );
   if (topic === undefined) throw new Error('The canonical education topic is missing.');
+  educationId = topic.id.toLowerCase();
 
   // A SERIES renamed and made a PROGRAMME, so both its family and its slug have
   // a former address; a lecture renamed once; a playlist renamed once, ordered
@@ -238,7 +250,11 @@ test.describe('an anonymous visitor browses Watch', () => {
     await expect(page.getByRole('link', { name: LECTURE_TITLE })).toHaveCount(0);
 
     await page.goto('/watch/lectures');
-    await expect(page.getByRole('link', { name: LECTURE_TITLE })).toBeVisible();
+    await expect(
+      page
+        .getByRole('list', { name: 'Lectures and speeches', exact: true })
+        .getByRole('link', { name: LECTURE_TITLE }),
+    ).toBeVisible();
     await expect(page.getByRole('link', { name: INTERVIEW_TITLE })).toHaveCount(0);
     await expect(page.getByText('Synthetic hidden draft video')).toHaveCount(0);
 
@@ -246,7 +262,7 @@ test.describe('an anonymous visitor browses Watch', () => {
     await expect(
       page.getByText('No published video matches these filters.'),
     ).toBeVisible();
-    await page.getByRole('link', { name: 'Clear all filters' }).first().click();
+    await page.getByRole('link', { name: 'Clear filters' }).first().click();
     await expect(page).toHaveURL(/\/watch\/interviews$/);
   });
 
@@ -422,6 +438,20 @@ test.describe('an anonymous visitor browses Watch', () => {
     await hop(`/watch/series/${programSlug}`, `/watch/programs/${programSlug}`);
     // A speaker's detail is their ONE profile.
     await hop(`/watch/speakers/${people.linkedSlug}`, `/people/${people.linkedSlug}`);
+    // Watch Part 1: the Topic view is the listing filtered by it, in its locale.
+    const topicView = await request.get('/ur/watch/topics/education', {
+      maxRedirects: 0,
+    });
+    expect(topicView.status()).toBe(301);
+    const topicTarget = new URL(topicView.headers()['location'] ?? '', baseUrl());
+    expect(`${topicTarget.pathname}${topicTarget.search}`).toBe(
+      `/ur/watch/videos?topic=${educationId}`,
+    );
+    expect(topicView.headers()['x-robots-tag']).toBe('noindex');
+    const unknownTopic = await request.get('/watch/topics/no-such-topic-anywhere', {
+      maxRedirects: 0,
+    });
+    expect(unknownTopic.status()).toBe(404);
 
     for (const missing of [`/watch/videos/${draftSlug}`, '/watch/sermons']) {
       const response = await request.get(missing, { maxRedirects: 0 });
@@ -438,7 +468,12 @@ test.describe('an anonymous visitor browses Watch', () => {
     ).toBeVisible();
 
     await page.goto('/watch/topics/education');
-    await expect(page.getByRole('link', { name: LECTURE_TITLE })).toBeVisible();
+    await expect(page).toHaveURL(`/watch/videos?topic=${educationId}`);
+    await expect(
+      page
+        .getByRole('list', { name: 'Videos', exact: true })
+        .getByRole('link', { name: LECTURE_TITLE }),
+    ).toBeVisible();
     await expect(
       page.getByRole('link', { name: 'Everything on this topic' }),
     ).toHaveAttribute('href', '/topics/education');
@@ -487,6 +522,196 @@ test.describe('an anonymous visitor browses Watch', () => {
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       );
       expect(overflow, path).toBeLessThanOrEqual(0);
+    }
+  });
+});
+
+/* ========================================================================== */
+
+/** No serious or critical axe finding; anything lesser is annotated. */
+async function axe(page: Page, target: string, testInfo: TestInfo): Promise<void> {
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  const blocking = results.violations.filter(
+    (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+  );
+  for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+    testInfo.annotations.push({
+      type: 'axe',
+      description: `${target}: ${finding.id} (${String(finding.impact)})`,
+    });
+  expect(
+    blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+    target,
+  ).toEqual([]);
+}
+
+test.describe('Watch Part 1 — the listing, the video page and the landing', () => {
+  test('lists every video with figures, format tabs and filters with counts, at one address per view', async ({
+    page,
+    request,
+  }) => {
+    await page.goto('/watch/videos');
+    await expect(page.getByRole('heading', { level: 1, name: 'Videos' })).toBeVisible();
+    // The figures the data supports, and the curated formats as tabs with
+    // counts; the tabs keep every other filter.
+    await expect(page.getByRole('main')).toContainText(/\d+\s*videos?/);
+    const kinds = page.getByRole('navigation', { name: 'Kind of video' });
+    await expect(kinds.getByRole('link', { name: /^All videos\s*\d+$/ })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect(kinds.getByRole('link', { name: /^Interviews\s*\d+$/ })).toHaveAttribute(
+      'href',
+      '/watch/interviews',
+    );
+    // The Topic filter offers each Topic with what choosing it would show.
+    const topic = page.locator('#videos-topic');
+    await expect(topic.locator(`option[value="${educationId}"]`)).toHaveText(
+      /^Education \(\d+\)$/,
+    );
+    // Without script: the GET form, then ONE redirect to the view's spelling.
+    await topic.selectOption(educationId);
+    await page.getByRole('button', { name: 'Show videos' }).click();
+    await expect(page).toHaveURL(`/watch/videos?topic=${educationId}`);
+    await expect(
+      page
+        .getByRole('list', { name: 'Videos', exact: true })
+        .getByRole('link', { name: LECTURE_TITLE }),
+    ).toBeVisible();
+    const chips = page.getByRole('list', { name: 'Filters in use' });
+    await expect(
+      chips.getByRole('link', { name: 'Remove filter: Education' }),
+    ).toHaveAttribute('href', '/watch/videos');
+    await expect(
+      page.getByRole('link', { name: 'Everything on this topic' }),
+    ).toHaveAttribute('href', '/topics/education');
+    // A tab keeps the Topic.
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Kind of video' })
+        .getByRole('link', { name: /^Lectures and speeches\s*\d+$/ }),
+    ).toHaveAttribute('href', `/watch/lectures?topic=${educationId}`);
+
+    // A curated view is its own address: its tab is current, and a ?format=
+    // or a former ?offset= is one redirect.
+    await page.goto('/watch/interviews');
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Interviews' }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Kind of video' })
+        .getByRole('link', { name: /^Interviews\s*\d+$/ }),
+    ).toHaveAttribute('aria-current', 'page');
+    for (const [from, to] of [
+      ['/watch/videos?format=interview', '/watch/interviews'],
+      ['/ur/watch/videos?format=lecture&language=en', '/ur/watch/lectures?language=en'],
+      ['/watch/videos?offset=24', '/watch/videos?page=2'],
+      ['/watch/lectures?format=lecture', '/watch/lectures'],
+    ]) {
+      const response = await request.get(from, { maxRedirects: 0 });
+      expect(response.status(), from).toBe(307);
+      const target = new URL(response.headers()['location'] ?? '', baseUrl());
+      expect(`${target.pathname}${target.search}`, from).toBe(to);
+    }
+  });
+
+  test('gives an episode its Series, the previous and next episode, and a way to share it', async ({
+    page,
+  }) => {
+    await page.goto(`/watch/videos/${lectureSlug}`);
+    const series = page.getByRole('region', { name: PROGRAM_TITLE });
+    await expect(series.getByText('Episode 1 of 2')).toBeVisible();
+    const steps = series.getByRole('navigation', { name: 'Previous and next episode' });
+    await expect(steps.getByRole('link')).toHaveCount(1);
+    await steps.getByRole('link', { name: /^Next episode/ }).click();
+    await expect(page).toHaveURL(`/watch/videos/${interviewSlug}`);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(INTERVIEW_TITLE);
+    await expect(
+      page
+        .getByRole('region', { name: PROGRAM_TITLE })
+        .getByRole('link', { name: /^Previous episode/ }),
+    ).toHaveAttribute('href', `/watch/videos/${lectureSlug}`);
+    // With script, a share button; the address it shares is the canonical one.
+    await expect(page.getByRole('button', { name: 'Share' })).toBeVisible();
+    // An interview names its kind among the facts.
+    await expect(page.getByRole('region', { name: 'Details' })).toContainText(
+      'Interview',
+    );
+  });
+
+  test('opens Watch with its figures, ways in by Topic, the subject hubs and every menu item', async ({
+    page,
+  }) => {
+    await page.goto('/watch');
+    const main = page.getByRole('main');
+    await expect(main).toContainText(/\d+\s*videos?/);
+    // Every Topic chip leads to the listing filtered by it, at its one spelling.
+    const topics = page.getByRole('list', { name: 'Browse by topic', exact: true });
+    for (const href of await topics
+      .getByRole('link')
+      .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? '')))
+      expect(href).toMatch(/^\/watch\/videos\?topic=[0-9a-f-]{36}$/);
+    const subjects = page.getByRole('region', { name: 'Videos by subject' });
+    await expect(
+      subjects.getByRole('link', { name: /Videos on the Quran/ }),
+    ).toHaveAttribute('href', '/quran/videos');
+    await expect(
+      subjects.getByRole('link', { name: /Videos on Hadith/ }),
+    ).toHaveAttribute('href', '/hadith/videos');
+    // Every item of the Watch menu, and Listen's two listings.
+    const hrefs = await main
+      .getByRole('link')
+      .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
+    for (const href of [
+      '/watch/videos',
+      '/watch/lectures',
+      '/watch/events',
+      '/watch/highlights',
+      '/watch/interviews',
+      '/watch/documentaries',
+      '/watch/series',
+      '/watch/programs',
+      '/watch/playlists',
+      '/topics',
+      '/watch/speakers',
+      '/listen',
+      '/listen/lectures',
+      '/listen/series',
+    ])
+      expect(hrefs, href).toContain(href);
+  });
+
+  test('is axe-clean and never scrolls sideways, in English and Urdu, from 320 to 1440 px', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(240_000);
+    for (const [width, height] of [
+      [320, 800],
+      [1440, 900],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      for (const path of [
+        '/watch',
+        '/watch/videos',
+        `/watch/videos?topic=${educationId}`,
+        '/watch/lectures',
+        `/watch/videos/${lectureSlug}`,
+        '/ur/watch',
+        '/ur/watch/videos',
+        `/ur/watch/videos/${interviewSlug}`,
+        '/ar/watch/interviews',
+      ]) {
+        await page.goto(path);
+        const overflow = await page.evaluate(
+          () =>
+            document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+        expect(overflow, `${path} at ${String(width)}`).toBeLessThanOrEqual(0);
+        if (width === 1440) await axe(page, path, testInfo);
+      }
     }
   });
 });

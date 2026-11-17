@@ -151,6 +151,13 @@ not independent SEO entities.
 Each such page **carries `rel="canonical"` pointing to `/topics/{slug}`**. They are legitimate
 navigation, but they are not separate resources and must never compete in the index.
 
+**Watch Part 1 (decision).** `/watch/topics/{slug}` stays a working address but is no longer a page:
+it answers ONE `301` (`noindex`, `no-store`, the locale kept) to `/watch/videos?topic={id}` — the
+Videos listing filtered by that Topic, which now filters by Topic with counts and every other filter
+and names the way to `/topics/{slug}`; an unknown or archived Topic is a `404`. Until Watch Part 1
+it was a page of its own canonical to `/topics/{slug}` (historical). Rendering the listing at both
+addresses would give one view two. The other domain topic views are unchanged.
+
 ### 2.3 Four kinds of route — and which of them may be a path
 
 `Latest`, `Popular` and `Featured` are flags and queries (INFORMATION_ARCHITECTURE.md §1.1).
@@ -980,11 +987,11 @@ and out of the sitemap. Record addresses and their slug-history 301s are unchang
 | Route | Purpose |
 |---|---|
 | `/watch` | Landing — `?sort=featured\|latest`; with nothing featured, the default view opens on Latest and offers no sort tabs |
-| `/watch/videos` · `/watch/videos/{slug}` | Videos — `?topic, speaker, series, language`; a Video's page takes `?start` (Quran Part 8: whole seconds within the video, where its Play press begins — ignored otherwise, never part of the canonical address) |
-| `/watch/{lectures\|events\|highlights\|interviews\|documentaries}` | Filtered views |
+| `/watch/videos` · `/watch/videos/{slug}` | Videos — `?topic, language, speaker, series, length, sort, page` (Watch Part 1; `?topic, speaker, series, language` until then, historical); a Video's page takes `?start` (Quran Part 8: whole seconds within the video, where its Play press begins — ignored otherwise, never part of the canonical address) |
+| `/watch/{lectures\|events\|highlights\|interviews\|documentaries}` | Filtered views — the Videos listing standing on one format, each canonical to itself and taking the same parameters |
 | `/watch/series` · `/{slug}` · `/watch/programs` · `/{slug}` · `/watch/playlists` · `/{slug}` | Groupings — a programme is a Series of kind `program`; each Series is canonical under exactly one of the two families, and the other answers one 301 (Phase 10) |
 | `/watch/speakers` | Speaker listing — **details 301 → `/people/{slug}`** |
-| `/watch/topics/{slug}` | Filtered view, canonical → `/topics/{slug}` |
+| `/watch/topics/{slug}` | **301 → `/watch/videos?topic={id}`** (Watch Part 1, §2.2; a filtered view canonical → `/topics/{slug}` until then, historical) |
 | `/listen` · `/listen/lectures` · `/{slug}` · `/listen/series` · `/{slug}` | Audio — a **sibling** of `/watch`, not a child. `/listen/lectures` takes `?topic, speaker, series, language`; each track and audio series is canonical at exactly one address (Phase 11) |
 | `/listen/recitations` | **Catalogue projection of Quran-owned recitations**, canonical → `/quran/recitations`. Delivered in Phase 18 as a Layer-4 page over Quran's public reader, present only while a corpus is active — never filled by an AudioTrack |
 
@@ -999,6 +1006,27 @@ embed URL; the CSP is unchanged.
 
 **Owner direction 2026-11-08.** The `/watch` landing's grid shows twelve videos again, and its
 browse groups (formats, groupings, find) carry their introductions again. No route changes.
+
+**Watch Part 1.** `/watch/videos` is the shared Videos listing over the whole of Media
+(DOMAIN_MODEL.md §11, `scope: 'media'`), and each of the five curated views is the same listing
+standing on its format: figures, the featured videos, the formats as tabs with counts (each tab its
+view's own address, keeping every other filter), filters with counts — Topic, content language,
+speaker, Series, length — two orders (newest, title), removable chips and numbered pages of 24. It
+takes **`?topic, language, speaker, series, length, sort, page`** — every parameter it took before
+plus `length`, `sort` and `page`. One address per view: a form's empty controls, another order of
+the same parameters and a malformed or repeated value are one redirect to the canonical spelling; a
+`?format=` is one redirect to that format's own view (`/watch/videos?format=lecture` →
+`/watch/lectures`); a former `?offset=` (24 a page, as now) is one redirect to the page holding the
+Video it began with. Every filtered, ordered or paged view stays canonical to its bare listing and
+out of the sitemap; the five views stay their own canonical, indexable destinations.
+`/watch/topics/{slug}` is one 301 into the listing (§2.2). A Video's page keeps its address and
+`?start`; it adds its Series with the previous and next published episode ("Episode n of m"),
+"Watch from" links to `?start=` at each passage's recorded moment (inside the video only), "Up
+next", more with its speaker, on its Topic or in its language (each linked to the listing filtered
+by it), and a share button; the signed-in Save island now sits beside the facts. The landing adds
+Watch's figures, ways in by Topic and by speaker with counts, a shelf for each leading Topic and
+Series, the Quran's and Hadith's Videos hubs, and Listen's two listings in its index — `/listen`
+still linked once. No route is added or removed.
 
 ### 3.8 Fatwa
 

@@ -573,6 +573,13 @@ shelves them, leading to each owner's listing or, for the Quran and Hadith Topic
 | Highlights | — | All Topics | — |
 | — | — | Speakers | — |
 
+Since Watch Part 1 the Watch landing is the section's front door for every item of its menu: its
+figures, featured or latest videos, a shelf per kind of video, ways in by Topic and by speaker with
+counts, the leading Series and programmes, the Quran's and Hadith's own Videos hubs, and an index of
+every surface with Listen and its two listings. A Topic under Watch is the Videos listing filtered
+by it (`/watch/topics/{slug}` is one 301 there, ROUTE_MAP.md §2.2), which names the way to the
+Topic's own hub; the kinds of video are that listing's tabs.
+
 ### 3.7 Fatwa
 
 | Find | Browse | Ask | Understand |

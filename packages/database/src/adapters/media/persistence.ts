@@ -9,6 +9,7 @@ import {
   MEDIA_FACET_PAGE,
   MEDIA_PAGE,
   TOPIC_VIDEO_LENGTHS,
+  VIDEO_FORMATS,
   type MediaPersistencePort,
   type MediaPublicReaderPort,
   type MediaState,
@@ -940,31 +941,42 @@ const REFERENCE_SELECT = {
 } satisfies Prisma.VideoSelect;
 
 /* ---- Quran Part 11 / Hadith Part 1: a subject's Videos hub ---------------- */
+/* ---- Watch Part 1: the same read over the whole of Media ------------------ */
 
-/** Which of the query's filters a statement applies. */
+/**
+ * Which of the query's filters a statement applies. `scope` is the shelf and
+ * the Surah (the Quran passage parts); `topic` is the Topic as a FILTER, which
+ * only the whole of Media has (on a hub the Topic is membership).
+ */
 interface TopicVideosFilters {
   readonly scope: boolean;
+  readonly topic: boolean;
   readonly language: boolean;
   readonly speaker: boolean;
   readonly series: boolean;
   readonly length: boolean;
+  readonly format: boolean;
   readonly featured: boolean;
 }
 
 const ALL_TOPIC_VIDEO_FILTERS: TopicVideosFilters = {
   scope: true,
+  topic: true,
   language: true,
   speaker: true,
   series: true,
   length: true,
+  format: true,
   featured: true,
 };
 const NO_TOPIC_VIDEO_FILTERS: TopicVideosFilters = {
   scope: false,
+  topic: false,
   language: false,
   speaker: false,
   series: false,
   length: false,
+  format: false,
   featured: false,
 };
 
@@ -972,15 +984,22 @@ const NO_TOPIC_VIDEO_FILTERS: TopicVideosFilters = {
 const CARRIES_PASSAGE = Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[VideoQuranPassage] m WHERE m.[videoId] = v.[id])`;
 
 /**
- * MEMBERSHIP, as SQL over `[dbo].[Video] v`: on the Topic — and, only with the
- * Quran passage parts, carrying a passage. With no Topic and no passage parts
- * nothing is a member: the set is empty, never every Video.
+ * MEMBERSHIP, as SQL over `[dbo].[Video] v`, or null when every published
+ * Video is a member. On a hub: on the Topic — and, only with the Quran passage
+ * parts, carrying a passage; with no Topic and no passage parts nothing is a
+ * member: the set is empty, never every Video. In the whole of Media (Watch
+ * Part 1): every published Video, narrowed to the Topic only while
+ * `use.topic` applies it.
  */
-function topicVideosMember(q: TopicVideosQuery): Prisma.Sql {
+function topicVideosMember(
+  q: TopicVideosQuery,
+  use: TopicVideosFilters,
+): Prisma.Sql | null {
   const onTopic =
     q.topic === null
       ? null
       : Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[VideoTopic] o WHERE o.[videoId] = v.[id] AND o.[topicId] = ${q.topic})`;
+  if (q.scope === 'media') return use.topic ? onTopic : null;
   if (q.quranPassages)
     return onTopic === null
       ? CARRIES_PASSAGE
@@ -996,7 +1015,11 @@ function topicVideosMember(q: TopicVideosQuery): Prisma.Sql {
  * bands. Every value is a bound parameter.
  */
 function topicVideosWhere(q: TopicVideosQuery, use: TopicVideosFilters): Prisma.Sql {
-  const conditions = [Prisma.sql`v.[state] = N'published'`, topicVideosMember(q)];
+  const member = topicVideosMember(q, use);
+  const conditions = [
+    Prisma.sql`v.[state] = N'published'`,
+    ...(member === null ? [] : [member]),
+  ];
   if (use.scope && q.quranPassages) {
     if (q.surah !== null)
       conditions.push(
@@ -1019,12 +1042,16 @@ function topicVideosWhere(q: TopicVideosQuery, use: TopicVideosFilters): Prisma.
     const band = TOPIC_VIDEO_LENGTHS[q.length];
     conditions.push(Prisma.sql`v.[durationSeconds] BETWEEN ${band.from} AND ${band.to}`);
   }
+  if (use.format && q.format !== null)
+    conditions.push(Prisma.sql`v.[format] = ${q.format}`);
   if (use.featured && q.featured) conditions.push(Prisma.sql`v.[isFeatured] = 1`);
   return Prisma.join(conditions, ' AND ');
 }
 
 /** The same membership as an ORM filter: the hydrating read re-applies it. */
 function topicVideosMembership(q: TopicVideosQuery): Prisma.VideoWhereInput {
+  if (q.scope === 'media')
+    return q.topic === null ? {} : { topics: { some: { topicId: q.topic } } };
   if (!q.quranPassages)
     return q.topic === null
       ? { id: { in: [] } }
@@ -1227,8 +1254,17 @@ function topicVideosReader(): Pick<
     async topicVideoFacets(q) {
       const scoped = (use: Partial<TopicVideosFilters>) =>
         topicVideosWhere(q, { ...NO_TOPIC_VIDEO_FILTERS, ...use });
-      const others = { language: true, speaker: true, series: true, length: true };
-      const whole = scoped({});
+      const others = {
+        topic: true,
+        language: true,
+        speaker: true,
+        series: true,
+        length: true,
+        format: true,
+      };
+      // The figures are of the view the listing stands on: its membership and,
+      // on a curated Watch view, its format — never narrowed by a filter.
+      const whole = scoped({ format: true });
       const surahsExplained = q.quranPassages
         ? Prisma.sql`(SELECT COUNT(DISTINCT p.[surahNumber]) FROM [dbo].[VideoQuranPassage] p
                 WHERE p.[videoId] IN (SELECT v.[id] FROM [dbo].[Video] v WHERE ${whole}))`
@@ -1279,6 +1315,29 @@ function topicVideosReader(): Pick<
             ORDER BY p.[surahNumber];`
             : Promise.resolve([]),
         ]);
+      const [formats, topics] = await Promise.all([
+        // Every format, the unformatted included, so `all` is their sum.
+        db.$queryRaw<{ format: string | null; count: number }[]>`
+            SELECT v.[format] AS [format], COUNT(*) AS [count]
+            FROM [dbo].[Video] v
+            WHERE ${scoped({ ...others, scope: true, format: false })}
+            GROUP BY v.[format];`,
+        // A hub has one Topic: only the whole of Media is browsed by Topic.
+        q.scope === 'media'
+          ? db.$queryRaw<{ id: string; count: number }[]>`
+            SELECT TOP (${MEDIA_FACET_PAGE + 1}) o.[topicId] AS [id], COUNT(DISTINCT o.[videoId]) AS [count]
+            FROM [dbo].[VideoTopic] o
+            WHERE o.[videoId] IN (SELECT v.[id] FROM [dbo].[Video] v
+                                  WHERE ${scoped({ ...others, scope: true, topic: false })})
+            GROUP BY o.[topicId]
+            ORDER BY [count] DESC, [id] ASC;`
+          : Promise.resolve([]),
+      ]);
+      const byFormat = new Map(
+        formats.flatMap((row) =>
+          row.format === null ? [] : [[row.format, Number(row.count)] as const],
+        ),
+      );
 
       const facet = (rows: readonly { id: string; count: number }[]) => ({
         items: rows
@@ -1336,6 +1395,14 @@ function topicVideosReader(): Pick<
           surah: Number(row.surah),
           owners: Number(row.owners),
         })),
+        formats: {
+          all: formats.reduce((sum, row) => sum + Number(row.count), 0),
+          items: VIDEO_FORMATS.flatMap((format) => {
+            const videos = byFormat.get(format) ?? 0;
+            return videos === 0 ? [] : [{ format, videos }];
+          }),
+        },
+        topics: facet(topics),
       };
     },
   };
@@ -1442,6 +1509,34 @@ export function createMediaPublicReader(): MediaPublicReaderPort {
         take: MEDIA_PAGE + 1,
       });
       return videoPage(rows);
+    },
+
+    /**
+     * WATCH PART 1 — the nearest published episodes on either side of a
+     * position, and the count, each under the public predicate and only while
+     * the Series is published. Positions are unique within a Series (a
+     * filtered unique index), so "just before" and "just after" are exact.
+     */
+    async seriesNeighbours({ series, position }) {
+      const episodes = { seriesId: series, ...PUBLISHED, series: PUBLISHED };
+      const [previous, next, count] = await Promise.all([
+        db.video.findFirst({
+          where: { ...episodes, seriesPosition: { lt: position } },
+          select: LISTING_SELECT,
+          orderBy: [{ seriesPosition: 'desc' }, { id: 'desc' }],
+        }),
+        db.video.findFirst({
+          where: { ...episodes, seriesPosition: { gt: position } },
+          select: LISTING_SELECT,
+          orderBy: [...EPISODES],
+        }),
+        db.video.count({ where: episodes }),
+      ]);
+      return {
+        previous: previous === null ? null : toListing(previous),
+        next: next === null ? null : toListing(next),
+        episodes: count,
+      };
     },
 
     async playlists(offset) {

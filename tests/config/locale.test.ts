@@ -464,6 +464,10 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/media/player.tsx',
     'apps/web/src/components/media/presentation.ts',
     'apps/web/src/components/media/watch.tsx',
+    // Watch Part 1: the Videos listing over the whole of Media (the shared
+    // topic-hub listing) and the share island, which sends nothing anywhere.
+    'apps/web/src/components/media/share.tsx',
+    'apps/web/src/components/media/videos.tsx',
     // Phase 16. The Global Network directory, a Centre's pages and their pure
     // presentation decisions, on the same anonymous public path.
     'apps/web/src/components/global/centre.tsx',

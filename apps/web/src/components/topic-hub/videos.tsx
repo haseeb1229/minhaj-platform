@@ -4,10 +4,12 @@ import type { ReactNode } from 'react';
 import { getTranslations } from 'next-intl/server';
 
 import { localizedPath, type Locale } from '@minhaj/contracts';
-import type {
-  TopicVideo,
-  TopicVideoLength,
-  TopicVideosShelf,
+import {
+  VIDEO_FORMATS,
+  type TopicVideo,
+  type TopicVideoLength,
+  type TopicVideosShelf,
+  type VideoFormat,
 } from '@minhaj/contracts/media';
 import type { PassageSurahCount } from '@minhaj/contracts/passage';
 
@@ -15,7 +17,12 @@ import { mediaReadRuntime } from '@/composition/media-read';
 import { referenceNames } from '@/composition/public-references';
 import { contentLanguageBadge } from '@/components/content-language';
 import { Duration, formatDate } from '@/components/media/parts';
-import { mediaLabel, videoPath, videoPosterPath } from '@/components/media/presentation';
+import {
+  mediaLabel,
+  videoPath,
+  videoPosterPath,
+  viewOfFormat,
+} from '@/components/media/presentation';
 import {
   Badge,
   EmptyState,
@@ -31,6 +38,7 @@ import {
 } from '@/components/ui';
 import { Shelf } from '@/components/ui/shelf';
 import { directionOf } from '@/config/locale';
+import { caseless } from './address';
 import type { HubDomain, HubLink } from './domain';
 import { ActiveFilters, ExploreFilters, ExploreHero, languageName } from './parts';
 import {
@@ -39,7 +47,9 @@ import {
   videosPageCount,
   videosRange,
   videosReadQuery,
+  watchVideosHref,
   wholeHours,
+  type MediaVideosFilters,
   type VideosQuery,
   type VideosScope,
 } from './videos-view';
@@ -65,6 +75,14 @@ import {
  * NO THIRD-PARTY REQUEST TO PAINT A CARD — as on every Watch page, a poster is
  * Media's own stored copy, and the provider is contacted only from a video's
  * own page, after the visitor asks.
+ *
+ * WATCH PART 1 — `/watch/videos` AND THE FIVE CURATED VIEWS ARE THIS LISTING
+ * OVER THE WHOLE OF MEDIA (`WATCH_VIDEOS`, `watchVideosScope`, read with
+ * `scope: 'media'`), not a second implementation: a Topic is one more filter
+ * with its own counts and chip (and, once chosen, the way to everything on
+ * it), and the curated formats are tabs with counts that keep every other
+ * filter — each tab its view's own address. The hubs' reads, addresses and
+ * layout are unchanged.
  */
 
 type HubTranslator = Awaited<ReturnType<typeof getTranslations<'topicHub'>>>;
@@ -73,7 +91,11 @@ type Names = Awaited<ReturnType<typeof referenceNames>>;
 
 /** What a subject says on its Videos hub, in its own words. */
 export interface VideosCopy {
+  /** The header's eyebrow, where it is not the hubs' own. */
+  readonly eyebrow?: string;
   readonly lede: string;
+  /** "12 hours of video", where it is not the hubs' "hours of lectures". */
+  readonly hours?: (count: number) => string;
   /** "12 videos on Hadith". */
   readonly stat: (count: number) => string;
   /** What the listing holds, unnarrowed by a shelf. */
@@ -315,6 +337,7 @@ export async function VideosHub({
   copy,
   actions,
   passages,
+  onward,
 }: {
   readonly domain: HubDomain;
   readonly scope: VideosScope;
@@ -324,6 +347,11 @@ export async function VideosHub({
   readonly actions: readonly HubLink[];
   /** The Quran passage parts, or null where the subject has none. */
   readonly passages: VideosPassages | null;
+  /**
+   * Where the closing note leads instead of the whole of Watch — the whole of
+   * Media's own listing, which leads on to the subjects' hubs.
+   */
+  readonly onward?: readonly HubLink[];
 }) {
   const { locale } = domain;
   const [t, tw] = await Promise.all([
@@ -331,6 +359,10 @@ export async function VideosHub({
     getTranslations({ locale, namespace: 'watch' }),
   ]);
   const media = mediaReadRuntime();
+  const own: MediaVideosFilters | null =
+    scope.media === undefined
+      ? null
+      : (query.media ?? { topic: null, format: scope.media.format });
   const read = videosReadQuery(scope, query, domain.topicId, locale);
   const filtered = videosFiltered(query);
   const opening = !filtered && query.page === 1;
@@ -359,10 +391,18 @@ export async function VideosHub({
         ...facets.speakers.items.map((facet) => facet.id),
         ...(query.speaker === null ? [] : [query.speaker]),
       ],
-      topicIds: [],
+      topicIds: [
+        ...facets.topics.items.map((facet) => facet.id),
+        ...(own === null || own.topic === null ? [] : [own.topic]),
+      ],
     },
     locale,
   );
+  // An address carries an identifier in lower case, while an owner returns it
+  // as stored: options and chips compare without case, so a chosen speaker or
+  // Topic is pre-selected and named, never "unknown".
+  const people = caseless(names.people);
+  const topics = caseless(names.topics);
 
   const listId = `${domain.key}-videos-list`;
   const featuredId = `${domain.key}-videos-featured`;
@@ -373,6 +413,11 @@ export async function VideosHub({
   const hours = wholeHours(hub.seconds);
   const href = (change: Partial<VideosQuery> = {}) =>
     videosHref(scope, locale, query, change);
+  /** A change to the whole of Media's own filters alone. */
+  const ownHref = (change: Partial<MediaVideosFilters>) =>
+    href({ media: { topic: null, format: null, ...own, ...change } });
+  // Clearing the filters keeps the view's own format: it is the page, not a
+  // narrowing of it.
   const base = href({
     shelf: 'all',
     surah: null,
@@ -380,34 +425,59 @@ export async function VideosHub({
     speaker: null,
     series: null,
     length: null,
+    ...(own === null ? {} : { media: { topic: null, format: own.format } }),
   });
   const pages = videosPageCount(page.total);
   const range = videosRange(query.page, page.items.length);
 
   const languageOptions = facets.languages.items;
   const speakerOptions = facets.speakers.items.flatMap((facet) => {
-    const person = names.people.get(facet.id);
+    const person = people.get(facet.id.toLowerCase());
     return person === undefined
       ? []
-      : [{ id: facet.id, name: person.name, videos: facet.videos }];
+      : [{ id: facet.id.toLowerCase(), name: person.name, videos: facet.videos }];
   });
   const seriesOptions = facets.series.items.map((entry) => ({
-    id: entry.id,
+    id: entry.id.toLowerCase(),
     label: mediaLabel(entry, locale),
     videos: entry.videos,
   }));
+  const topicOptions = facets.topics.items.flatMap((facet) => {
+    const topic = topics.get(facet.id.toLowerCase());
+    return topic === undefined
+      ? []
+      : [{ id: facet.id.toLowerCase(), name: topic.name, videos: facet.videos }];
+  });
   const surahOptions =
     passages === null || query.shelf === 'general' ? [] : facets.surahs;
   const showLanguage = languageOptions.length > 1 || query.language !== null;
   const showSpeaker = speakerOptions.length > 0 || query.speaker !== null;
   const showSeries = seriesOptions.length > 0 || query.series !== null;
   const showLength = facets.lengths.length > 1 || query.length !== null;
+  const showTopic = own !== null && (topicOptions.length > 0 || own.topic !== null);
   const speakerName =
-    query.speaker === null ? null : (names.people.get(query.speaker)?.name ?? null);
+    query.speaker === null
+      ? null
+      : (people.get(query.speaker.toLowerCase())?.name ?? null);
   const seriesLabel =
     query.series === null
       ? null
-      : (seriesOptions.find((entry) => entry.id === query.series)?.label ?? null);
+      : (seriesOptions.find((entry) => entry.id === query.series?.toLowerCase())?.label ??
+        null);
+  const chosenTopic =
+    own === null || own.topic === null ? undefined : topics.get(own.topic.toLowerCase());
+  // The curated formats as tabs — every format with a video under the other
+  // filters, and the view's own — each with what choosing it would show.
+  const formatTabs =
+    own === null || (facets.formats.items.length === 0 && own.format === null)
+      ? []
+      : [null, ...VIDEO_FORMATS].flatMap((format: VideoFormat | null) => {
+          const videos =
+            format === null
+              ? facets.formats.all
+              : (facets.formats.items.find((row) => row.format === format)?.videos ?? 0);
+          return videos === 0 && format !== own.format ? [] : [{ format, videos }];
+        });
 
   const active = [
     ...(passages === null || query.surah === null
@@ -418,6 +488,16 @@ export async function VideosHub({
             text: passages.surahOption(query.surah),
             removeText: passages.surahOption(query.surah),
             removeHref: href({ surah: null }),
+          },
+        ]),
+    ...(own === null || own.topic === null
+      ? []
+      : [
+          {
+            key: 'topic',
+            text: chosenTopic?.name ?? tw('unknownTopic'),
+            removeText: chosenTopic?.name ?? tw('unknownTopic'),
+            removeHref: ownHref({ topic: null }),
           },
         ]),
     ...(query.language === null
@@ -491,7 +571,7 @@ export async function VideosHub({
   return domain.frame(
     <>
       <ExploreHero
-        eyebrow={t('videos.eyebrow')}
+        eyebrow={copy.eyebrow ?? t('videos.eyebrow')}
         title={title}
         lede={copy.lede}
         stats={[
@@ -525,7 +605,12 @@ export async function VideosHub({
               ]),
           ...(hours === 0
             ? []
-            : [{ value: hours, label: t('videos.statHours', { count: hours }) }]),
+            : [
+                {
+                  value: hours,
+                  label: copy.hours?.(hours) ?? t('videos.statHours', { count: hours }),
+                },
+              ]),
           ...(hub.languages < 2
             ? []
             : [
@@ -542,10 +627,14 @@ export async function VideosHub({
         <EmptyState
           icon="video"
           title={copy.emptyTitle}
-          action={{
-            href: localizedPath(locale, '/watch/videos'),
-            text: t('videos.watchLink'),
-          }}
+          action={
+            own === null
+              ? { href: watchVideosHref(locale), text: t('videos.watchLink') }
+              : own.format === null
+                ? { href: localizedPath(locale, '/watch'), text: tw('homeLink') }
+                : // An empty curated view leads to every video.
+                  { href: watchVideosHref(locale), text: tw('allVideos') }
+          }
         >
           {copy.empty}
         </EmptyState>
@@ -605,6 +694,21 @@ export async function VideosHub({
               }
             />
 
+            {formatTabs.length === 0 || own === null ? null : (
+              <LinkTabs
+                label={tw('viewsLabel')}
+                tabs={formatTabs.map(({ format, videos }) => ({
+                  href: ownHref({ format }),
+                  text:
+                    format === null
+                      ? tw('allVideos')
+                      : tw(`sections.${viewOfFormat(format)}` as 'sections.videos'),
+                  current: format === own.format,
+                  count: String(videos),
+                }))}
+              />
+            )}
+
             {passages !== null && facets.shelves.explaining > 0 && general > 0 ? (
               <LinkTabs
                 label={passages.shelves}
@@ -653,6 +757,23 @@ export async function VideosHub({
                   )}
                 </Field>
               )}
+              {showTopic && own !== null ? (
+                <Field id="videos-topic" label={tw('filterTopic')}>
+                  {(props) => (
+                    <Select {...props} name="topic" defaultValue={own.topic ?? ''}>
+                      <option value="">{tw('anyTopic')}</option>
+                      {topicOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {t('common.option', {
+                            name: option.name,
+                            count: option.videos,
+                          })}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+              ) : null}
               {showLanguage ? (
                 <Field id="videos-language" label={t('common.filterLanguage')}>
                   {(props) => (
@@ -746,6 +867,21 @@ export async function VideosHub({
 
             <ActiveFilters label={t('common.active')} filters={active} />
 
+            {chosenTopic === undefined ? null : (
+              <p className="text-sm">
+                <a
+                  href={localizedPath(
+                    locale,
+                    `/topics/${encodeURIComponent(chosenTopic.slug)}`,
+                  )}
+                  className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-action underline-offset-4 hover:underline"
+                >
+                  {tw('topicHub')}
+                  <Icon name="arrow-end" size={16} />
+                </a>
+              </p>
+            )}
+
             {range === null ? null : (
               <p className="text-sm text-foreground-muted">
                 {t('videos.summary', {
@@ -805,22 +941,34 @@ export async function VideosHub({
         <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
           {copy.about}
         </p>
-        <p className="text-sm">
-          <a
-            href={
-              domain.topicId === null
-                ? localizedPath(locale, '/watch/videos')
-                : localizedPath(
-                    locale,
-                    `/watch/videos?topic=${encodeURIComponent(domain.topicId)}`,
-                  )
-            }
-            className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-action underline-offset-4 hover:underline"
-          >
-            {t('videos.watchLink')}
-            <Icon name="arrow-end" size={16} />
-          </a>
-        </p>
+        {onward === undefined ? (
+          <p className="text-sm">
+            <a
+              href={watchVideosHref(
+                locale,
+                domain.topicId === null ? {} : { topic: domain.topicId },
+              )}
+              className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-action underline-offset-4 hover:underline"
+            >
+              {t('videos.watchLink')}
+              <Icon name="arrow-end" size={16} />
+            </a>
+          </p>
+        ) : (
+          <ul className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+            {onward.map((link) => (
+              <li key={link.href}>
+                <a
+                  href={link.href}
+                  className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-action underline-offset-4 hover:underline"
+                >
+                  {link.text}
+                  <Icon name="arrow-end" size={16} />
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </>,
   );

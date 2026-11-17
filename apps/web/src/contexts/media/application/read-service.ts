@@ -9,6 +9,7 @@ import {
   photoArchiveQuerySchema,
   topicVideosQuerySchema,
   seriesKindSchema,
+  seriesNeighboursQuerySchema,
   videoQuerySchema,
   type MediaPublicReaderPort,
   type SeriesKind,
@@ -82,6 +83,15 @@ export function createMediaReadService(reader: MediaPublicReaderPort) {
         mediaIdSchema.parse(seriesId),
         browseOffset.parse(offset),
       );
+    },
+
+    /**
+     * Watch Part 1 — an episode's neighbours in its Series and the published
+     * episode count. The Series identifier and the position are parsed here,
+     * before any read.
+     */
+    seriesNeighbours(raw: unknown) {
+      return reader.seriesNeighbours(seriesNeighboursQuerySchema.parse(raw));
     },
 
     playlists(offset = 0) {

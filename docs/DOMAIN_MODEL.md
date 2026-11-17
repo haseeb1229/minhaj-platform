@@ -1856,6 +1856,20 @@ Video carries passages, the explaining and Surah figures are zero, and a shelf, 
 order is refused before any read. The Quran Videos hub sets it; the Hadith Videos hub does not. No
 schema change.
 
+**The whole of Media (Watch Part 1).** As Library Part 1 did for Works (§10.1), the same read
+answers for every published Video under an explicit `scope: 'media'` (default `'topic'`, the hubs'
+read exactly as before): the Topic becomes one more narrowing filter (absent: every Topic) with a
+facet of its own, and the whole of Media has no Quran passage parts (refused beside the scope). One
+narrowing filter of any scope is added, `format` (a curated Watch view, `VIDEO_FORMATS`) — the view a
+listing stands on, so the figures count it while its own facet leaves it out. Two facets are added
+for every scope: `formats` (each format's Videos under every other filter, and `all`, their sum
+with the unformatted) and `topics` (Topic → Videos, the whole of Media only; empty on a hub). An
+episode's place is a new public read, `seriesNeighbours` (`seriesNeighboursQuerySchema`: a Series
+identifier and a position, parsed before any read): the published episode just before and just after
+the position — a draft between them simply absent — and the published episode count, all empty
+unless the Series is itself published; three bounded reads. Media still reads nothing of Taxonomy or
+People: Topic and speaker names are resolved at Layer 4. No schema change.
+
 As delivered (Phase 11) — AudioTrack and AudioSeries, **non-Quran audio only**:
 
 | Aggregate | Carries |

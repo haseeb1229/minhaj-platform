@@ -381,6 +381,19 @@ export type VideoQuery = z.infer<typeof videoQuerySchema>;
  * A Surah is a filter of the `explains` shelf, so it is refused beside
  * `general` rather than quietly answered with nothing; and every passage part
  * is refused without `quranPassages`.
+ *
+ * WATCH PART 1 — THE WHOLE OF MEDIA IS THE SAME READ WITHOUT A TOPIC SCOPE, as
+ * Library Part 1 made the Works read. With `scope: 'media'` the set is every
+ * PUBLISHED Video and `topic` becomes one more narrowing filter (absent:
+ * every Topic) with a facet of its own (`topics`); the default
+ * `scope: 'topic'` is the hubs' read exactly as before (no Topic, no Video).
+ * Which scope a caller asks for is explicit, so a hub whose Topic is missing
+ * can never fall through to every Video, and the whole of Media has no Quran
+ * passage parts. One narrowing filter of any scope:
+ *
+ *   `format`    the Video's curated Watch view (`VIDEO_FORMATS`) — the view a
+ *               listing stands on, so the hub's figures count it; its own
+ *               facet (`formats`) leaves it out.
  */
 export const TOPIC_VIDEOS_PAGE = MEDIA_PAGE;
 export const topicVideosShelfSchema = z.enum(['all', 'explains', 'general']);
@@ -400,6 +413,10 @@ export const TOPIC_VIDEO_LENGTHS = Object.freeze({
 });
 export type TopicVideoLength = keyof typeof TOPIC_VIDEO_LENGTHS;
 export const topicVideoLengthSchema = z.enum(['short', 'medium', 'long']);
+
+/** What a read is over: one Topic's Videos (the hubs), or the whole of Media (Watch Part 1). */
+export const TOPIC_VIDEO_SCOPES = Object.freeze(['topic', 'media'] as const);
+export type TopicVideoScope = (typeof TOPIC_VIDEO_SCOPES)[number];
 
 /**
  * LEARN PART 2 — THE TOPIC INDEX. The most Topics one totals read answers for:
@@ -426,6 +443,7 @@ export interface TopicVideoTotal {
 
 export const topicVideosQuerySchema = z
   .object({
+    scope: z.enum(TOPIC_VIDEO_SCOPES).default('topic'),
     topic: mediaIdSchema.nullable().default(null),
     quranPassages: z.boolean().default(false),
     shelf: topicVideosShelfSchema.default('all'),
@@ -434,6 +452,7 @@ export const topicVideosQuerySchema = z
     speaker: mediaIdSchema.nullable().default(null),
     series: mediaIdSchema.nullable().default(null),
     length: topicVideoLengthSchema.nullable().default(null),
+    format: videoFormatSchema.nullable().default(null),
     featured: z.boolean().default(false),
     sort: topicVideosSortSchema.default('newest'),
     titleLocale: localeSchema.nullable().default(null),
@@ -449,7 +468,10 @@ export const topicVideosQuerySchema = z
       value.quranPassages ||
       (value.shelf === 'all' && value.surah === null && value.sort !== 'quran'),
     { message: 'Shelves, a Surah and the Quran order are Quran passage parts.' },
-  );
+  )
+  .refine((value) => value.scope === 'topic' || !value.quranPassages, {
+    message: 'The whole of Media has no Quran passage parts.',
+  });
 export type TopicVideosQuery = z.infer<typeof topicVideosQuerySchema>;
 
 /** An administrative directory's filters: a state and a bounded text match. */
@@ -603,7 +625,13 @@ export interface TopicVideoFacetPage {
  *                the Series' address and titles;
  *   `lengths`    length band → Videos, under every other filter;
  *   `surahs`     Surah → Videos explaining a passage in it, under the
- *                language, speaker, Series and length.
+ *                language, speaker, Series and length;
+ *   `formats`    curated format → Videos, under every other filter, and
+ *                `all`, every Video under them whatever its format (Watch
+ *                Part 1: the format views' tabs);
+ *   `topics`     Topic → Videos, under every other filter — only in the
+ *                whole of Media, where a Topic is a filter (Watch Part 1); a
+ *                hub has one Topic, so its `topics` is empty.
  *
  * Without `quranPassages` nothing explains a passage: `explaining`, the
  * Surah figure and `surahs` are zero and empty.
@@ -632,6 +660,14 @@ export interface TopicVideoFacets {
     readonly videos: number;
   }[];
   readonly surahs: readonly PassageSurahCount[];
+  readonly formats: {
+    readonly all: number;
+    readonly items: readonly {
+      readonly format: VideoFormat;
+      readonly videos: number;
+    }[];
+  };
+  readonly topics: TopicVideoFacetPage;
 }
 
 /**
@@ -663,6 +699,27 @@ export interface VideoListing {
 export interface VideoPage {
   readonly items: readonly VideoListing[];
   readonly hasMore: boolean;
+}
+
+/**
+ * WATCH PART 1 — WHERE ONE EPISODE STANDS IN ITS SERIES: the published episode
+ * just before it and just after it (by position, a draft between them simply
+ * absent) and how many published episodes the Series has — only while the
+ * Series is itself published.
+ */
+export const seriesNeighboursQuerySchema = z
+  .object({
+    series: mediaIdSchema,
+    position: z.number().int().min(1).max(MEDIA_LIMITS.seriesPosition),
+  })
+  .strict();
+export type SeriesNeighboursQuery = z.infer<typeof seriesNeighboursQuerySchema>;
+
+export interface SeriesNeighbours {
+  readonly previous: VideoListing | null;
+  readonly next: VideoListing | null;
+  /** The Series' published episodes, this one included when it is published. */
+  readonly episodes: number;
 }
 
 export interface SeriesRecord {

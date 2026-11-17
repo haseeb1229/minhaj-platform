@@ -375,6 +375,10 @@ live(
           { surah: 2, owners: 1 },
           { surah: 18, owners: 2 },
         ],
+        // Watch Part 1: Ghazali alone carries a curated format; the other
+        // four count in `all` only. A hub has one Topic, so no Topic facet.
+        formats: { all: 5, items: [{ format: 'lecture', videos: 1 }] },
+        topics: { items: [], hasMore: false },
       });
     });
 
@@ -478,6 +482,8 @@ live(
         series: { items: [], hasMore: false },
         lengths: [{ length: 'short', videos: 1 }],
         surahs: [],
+        formats: { all: 2, items: [] },
+        topics: { items: [], hasMore: false },
       });
       const quranTopicOnly = await reads.topicVideoFacets({ topic: quranTopic });
       expect(quranTopicOnly.hub).toMatchObject({ videos: 3, explaining: 0, surahs: 0 });

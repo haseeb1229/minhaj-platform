@@ -29,6 +29,7 @@ import { BookShelf } from '@/components/topic-hub/books';
 import { CourseShelf } from '@/components/topic-hub/courses';
 import { ResearchShelf } from '@/components/topic-hub/research';
 import { VideoShelf } from '@/components/topic-hub/videos';
+import { watchVideosHref } from '@/components/topic-hub/videos-view';
 import {
   Alert,
   Breadcrumbs,
@@ -228,9 +229,7 @@ export default async function TopicPage({ params }: TopicParams) {
     courses: subjectHub('courses') ?? courseBrowseHref(locale, { topic: topic.slug }),
     books:
       subjectHub('books') ?? localizedPath(locale, `/library/books?topic=${topicParam}`),
-    videos:
-      subjectHub('videos') ??
-      localizedPath(locale, `/watch/topics/${encodeURIComponent(topic.slug)}`),
+    videos: subjectHub('videos') ?? watchVideosHref(locale, { topic: topic.id }),
     research: subjectHub('research') ?? kindHref(locale, 'research', { topic: topic.id }),
   };
   const totals: Readonly<Record<SubjectHub, number>> = {

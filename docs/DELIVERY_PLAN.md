@@ -4583,6 +4583,128 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > at 320 and 1440 px on all eleven Part 3 surfaces in en, ur and ar. *CI and staging evidence are
 > recorded when they exist.*
 
+> **Watch Part 1 — the Watch landing, the videos listing, its format views and the video page
+> (owner direction: every section built from A to Z, one item at a time; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (DOMAIN_MODEL.md §11; ROUTE_MAP.md
+> §2.2, §3.7; INFORMATION_ARCHITECTURE.md §3.6). No route is added or removed, no schema change and
+> no migration; the player, its privacy facade, the provider allowlist, the CSP and the
+> autoplay/Permissions-Policy rules are untouched (SECURITY_BASELINE.md §16.2). Series, programmes,
+> playlists and speakers are Watch Part 2, Listen is Part 3; they keep working as they were.
+>
+> - **The audit (before).** `/watch/videos` and the five format views were a Phase-10 panel of
+>   four plain selects (the platform's whole Topic tree, the 50 busiest speakers and every Series —
+>   none counted, none narrowed to what the view holds) with no figures, no featured videos, no
+>   length filter, one fixed order, no chips beyond "Clear all filters", no total and
+>   Previous/Next behind `?offset=`; its empty controls made a second address for every view, and
+>   the views' tabs carried no counts — while the Quran and Hadith Videos hubs (Quran Part 11,
+>   Hadith Part 1) had all of these over the same Videos. `/watch/topics/{slug}` was a bare grid of
+>   the same Videos, its Topic fixed, nothing else filterable. A Video's page named its Series
+>   twice under one name (a facts row and an aside), offered no previous or next episode (only the
+>   first six episodes of the first page, whatever its own place), had no share, put the Save
+>   island under the whole page, offered no way to the moments its Quran passages begin, and its
+>   "Related videos" grid was empty for any Video with neither a speaker nor a Topic (every
+>   migrated one with no Topic). The landing had no figures, no way in by Topic or speaker, did not
+>   cross-link the Quran's and Hadith's Videos hubs or Listen's two listings, and its hero and its
+>   index both offered "Programmes" to `/watch/programs` — one destination twice under one name.
+> - **One listing, two scopes (decision).** `/watch/videos` is the shared Videos listing
+>   (`components/topic-hub/videos.tsx`, composed by `components/media/videos.tsx`) over the whole
+>   of Media, as Library Part 1 did for books: Media's `topicVideos`/`topicVideoFacets` take
+>   `scope: 'media'` (every published Video, the Topic a filter with its own facet; the hubs'
+>   default `scope: 'topic'`, their reads, addresses and layout unchanged) and a `format` filter of
+>   any scope; new facets `formats` (each format under every other filter, and `all`) and `topics`.
+>   **Each of the five curated views is the same listing standing on its format**
+>   (`watchVideosScope`): its own title and canonical address, its tab current. The formats are
+>   tabs with counts that keep every other filter; the Topic is a filter with counts and a chip,
+>   and once chosen the listing names the way to the Topic's own hub. The address keeps every
+>   parameter it took (`?topic`, `?speaker`, `?series` identifiers and `?language`) and adds
+>   `?length`, `?sort` and `?page`; one address per view (`videosCanonicalRedirect`): a form's empty
+>   controls, another order, a malformed or repeated value, a `?format=` (one redirect to that
+>   format's own view) and a former `?offset=` (one redirect to the page holding the Video it began
+>   with) are each one redirect. Every Watch link into the listing — a Topic, a speaker (the
+>   speakers page and a person's profile), a related shelf, the hubs' "All videos in Watch" — is
+>   built by one function (`watchVideosHref`), identifiers in lower case. The old
+>   `VideoListingPage`, its form and the messages only it read are removed; Listen keeps
+>   `readMediaQuery`/`mediaQueryPath`.
+> - **The Topic view (decision).** `/watch/topics/{slug}` is now ONE `301` (a route handler, `noindex`,
+>   `no-store`, the locale kept; an unknown or archived Topic a `404`) to
+>   `/watch/videos?topic={id}`; it was a page canonical to `/topics/{slug}` until now (historical).
+>   Rendering the listing at both addresses would give one view two; the Topic hub now links
+>   straight to the listing.
+> - **The video page.** The stage as before; then its kind, language, length and date, who
+>   speaks, and **Share** (the device's share sheet, else the address copied — present only with
+>   script, sending nothing anywhere). An episode gets one Series panel: the Series named once
+>   (linked), "Episode n of m", the previous and next **published** episode (Media's new
+>   `seriesNeighbours` read — a draft between them skipped) and the episodes around it, not the
+>   first page's six. "On the Quran" is unchanged (each passage to `/quran/tafsir/surah/{n}`); a
+>   new **Watch from** list offers each passage at the moment its editor recorded (inside the
+>   video's recorded length only, never for an unavailable video) as a link to the page's own
+>   `?start=`. Beside them: **Up next** (the next episode, else the first related video), the
+>   facts (now with the kind of video; the Series row moved into the panel), Topics, playlists
+>   and the signed-in Save island (unchanged; it sat under the page). Below: more with its first
+>   speaker, more on its first Topic and — only when neither has anything else — more in its
+>   content language, each linked to the listing filtered by it, never one video twice, never one
+>   already offered. Unavailable and unformatted videos say so as before.
+> - **The landing.** One facet read of the whole of Media gives the hero's figures (videos, hours
+>   of video, content languages, Topics and speakers — a zero never stated, a bounded count never
+>   overstated); the featured or latest grid keeps `watchLanding`'s rule (opens on Latest with no
+>   tabs when nothing is featured); the format shelves stay; new: **Browse by topic** (Topic chips
+>   with counts) with a shelf for each of the two leading Topics, a shelf for each of the two
+>   leading Series or programmes (from the Series facet, in place of the first two programmes by
+>   slug), **Speakers** (chips with counts) where any is named, **Videos by subject** (the Quran's
+>   and Hadith's Videos hubs) and Listen's two listings in the index — `/listen` still linked once.
+>   The hero's second action is "Watch the programmes" (no longer a second "Programmes").
+> - **Messages.** New `watch.{homeLink, anyTopic, unknownTopic, episodeOf, episodeNav,
+>   previousEpisode, nextEpisode, upNext, relatedAll, relatedSpeaker, relatedTopic,
+>   relatedLanguage, share.*, fact.format, sections.listenLectures, sections.listenSeries,
+>   sectionBody.listenLectures, sectionBody.listenSeries, listing.*, landing.programmesAction,
+>   landing.stats.*, landing.topics*, landing.allTopics, landing.onTopic, landing.allOnTopic,
+>   landing.speakers*, landing.allSpeakers, landing.subjects*}` and `quran.tafsirLinks.{momentsHeading,
+>   momentsHelp, watchFrom}` in en/ur/ar; `watch.sectionBody.videos` reworded (it names length);
+>   removed as unused: `watch.{filters, filterSpeaker, filterSeries, filterLanguage, filterAny,
+>   filterApply, filterClear, topicTitle, topicEmpty, related}`.
+>
+> **Data facts — what staging will show.** The staging Videos are the Minhaj.TV records published
+> in Phase 30-R/30-RD — 63 recorded (24 + 39, MIGRATION_STRATEGY.md §19; the §19.1 wider run of
+> about 180 + 2,700 is planned, not recorded) — each with its title, description, provider date,
+> running time and content language where the source stated them and its first-party poster where
+> one was acquired, and, as the publication target writes them, **no format, no speaker, no Series,
+> not featured**, a Topic only where the run's mapping filed one. The demo data adds no Video. So
+> staging shows: the landing's figures (videos, whole hours, languages when more than one; Topics
+> where filed), the Latest grid without sort tabs, no format, Series or speaker shelf, Topic chips
+> and shelves only for filed Topics, the subject hubs and the index; `/watch/videos` its figures,
+> 24 a page with numbered pages, the language and length filters (and Topic where filed), no
+> format tabs, no speaker or Series filter; each format view its honest empty state leading to
+> Watch; a video page its poster player, facts, Share, no Series panel, no speakers, and related
+> shelves on its Topic where filed, else "More in" its language (with Up next). The local
+> persistent database was not inspected.
+>
+> **Proof:** `tests/media/topic-videos.test.ts` (the scope and format defaults stated; a
+> whole-of-Media query passed through; an unknown scope or format, the passage parts, a shelf or
+> the Quran order in the whole of Media refused before any read; `seriesNeighbours` parsed, seven
+> malformed inputs refused before any read); `tests/media/media-videos.integration.test.ts` (new,
+> real SQL Server: every published Video and never a draft, newest with the undated last; Topic
+> and format filters with every other filter, a draft Series admitting nothing, title order,
+> pages and totals; the view's figures counting its format, the formats' and Topics' facets each
+> without its own filter, a hub's empty Topic facet; neighbours either side with a draft skipped,
+> the published count, nothing for a draft or unknown Series);
+> `tests/media/topic-videos.integration.test.ts` (the hubs' facets now state their formats and an
+> empty Topic facet; everything else unchanged); `tests/topic-hub/videos-view.test.ts` (the whole
+> of Media's scope and views: the format as the path, a Topic read and written first, tabs keeping
+> filters, `watchVideosHref`, the former form, `?format=` and `?offset=` redirects, the read asked
+> of Media — every hub expectation unchanged); `tests/config/locale.test.ts` (the new modules);
+> `tests/architecture/phase4-shell-boundaries.test.ts` and `tests/identity/protocol.test.ts` (the
+> Topic view is a GET-only route handler now: listed, read-only, 32). `tests/browser/media.spec.ts`
+> — the lecture is found in the Lectures list (a curated view now opens on its featured videos
+> above the list), the shared reset link is "Clear filters", the Topic view is followed through
+> its 301 to the filtered listing; new: the listing's figures, format tabs with counts, the Topic
+> option with its count submitted without script, its chip and the way to the Topic hub, a tab
+> keeping the Topic, a format view current, the `?format=`/`?offset=` redirects, the Topic view's
+> 301 in Urdu and its 404; the Series panel ("Episode 1 of 2", next and previous episode), Share
+> and the kind of video; the landing's figures, Topic chips, subject hubs and every Watch menu
+> item; and axe (no serious or critical finding) at 1440 px with no sideways scroll at 320 and
+> 1440 px on the landing, the listing, a Topic view, a format view and a video page in en, ur and
+> ar. *CI and staging evidence are recorded when they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

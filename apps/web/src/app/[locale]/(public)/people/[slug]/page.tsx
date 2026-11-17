@@ -9,6 +9,7 @@ import type { ProfileFacetView, PublicPersonProfile } from '@minhaj/contracts/pe
 import { peopleReadRuntime } from '@/composition/people-read';
 import { AudioPreview } from '@/components/media/listen';
 import { VideoPreview } from '@/components/media/watch';
+import { watchVideosHref } from '@/components/topic-hub/videos-view';
 import { PersonPortraitFigure, portraitPath } from '@/components/people/portrait';
 import { absoluteUrl } from '@/config/origin';
 import { requireLocale } from '@/config/route-locale';
@@ -258,10 +259,7 @@ export default async function ContributorProfilePage({ params }: ProfileParams) 
             heading={t('videos')}
             headingId="person-videos"
             more={{
-              href: localizedPath(
-                locale,
-                `/watch/videos?speaker=${encodeURIComponent(profile.id)}`,
-              ),
+              href: watchVideosHref(locale, { speaker: profile.id }),
               text: t('allVideos'),
             }}
           />

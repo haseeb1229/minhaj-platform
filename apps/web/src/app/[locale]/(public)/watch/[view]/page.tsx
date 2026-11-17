@@ -1,9 +1,14 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
 import { formatOfView, WATCH_VIEWS } from '@/components/media/presentation';
-import { VideoListingPage } from '@/components/media/watch';
+import { WatchVideosPage } from '@/components/media/videos';
+import {
+  readVideosQuery,
+  videosCanonicalRedirect,
+  watchVideosScope,
+} from '@/components/topic-hub/videos-view';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
 import { requireRoute } from '@/shell/registry';
@@ -11,8 +16,12 @@ import { requireRoute } from '@/shell/registry';
 /**
  * `/{locale}/watch/{lectures|events|highlights|interviews|documentaries}` — the
  * five curated views (ROUTE_MAP.md §3.7, §2.3: "intentional navigational
- * views"). Each is the Video listing narrowed to one `format`, and each is its
- * own canonical, indexable browse destination.
+ * views"). Each is the shared Videos listing standing on one `format` (Watch
+ * Part 1: `watchVideosScope`), with its own title, and each is its own
+ * canonical, indexable browse destination; a filtered, ordered or paged view
+ * of it is canonical to it, and any other spelling is ONE redirect to its
+ * canonical address — `?format=` of another format included, which names
+ * another view.
  *
  * AN ALLOWLIST, NOT A CATCH-ALL. Only the five segments `generateStaticParams`
  * names exist; `dynamicParams` is off, so anything else is a 404 at the routing
@@ -49,5 +58,15 @@ export default async function WatchViewPage({ params, searchParams }: ViewParams
   const { view } = await params;
   const format = formatOfView(view);
   if (format === null) notFound();
-  return <VideoListingPage locale={locale} format={format} query={await searchParams} />;
+  const scope = watchVideosScope(format);
+  const query = await searchParams;
+  const canonical = videosCanonicalRedirect(scope, locale, query);
+  if (canonical !== null) redirect(canonical);
+  return (
+    <WatchVideosPage
+      locale={locale}
+      scope={scope}
+      query={readVideosQuery(scope, query)}
+    />
+  );
 }

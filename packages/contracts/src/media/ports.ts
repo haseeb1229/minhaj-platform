@@ -33,6 +33,8 @@ import type {
   PlaylistRecord,
   PlaylistValue,
   SeriesKind,
+  SeriesNeighbours,
+  SeriesNeighboursQuery,
   SeriesPage,
   SeriesRecord,
   SeriesValue,
@@ -127,6 +129,12 @@ export interface MediaPublicReaderPort {
   ): Promise<{ readonly kind: SeriesKind; readonly slug: string } | null>;
   /** One page of a published Series' published episodes, in episode order. */
   seriesVideos(seriesId: string, offset: number): Promise<VideoPage>;
+  /**
+   * WATCH PART 1 — an episode's place in its Series: the published episode
+   * just before and just after the position, and the published episode count
+   * — all empty unless the Series itself is published. Three bounded reads.
+   */
+  seriesNeighbours(query: SeriesNeighboursQuery): Promise<SeriesNeighbours>;
 
   playlists(offset: number): Promise<PlaylistPage>;
   playlist(slug: string): Promise<PlaylistRecord | null>;

@@ -1,10 +1,14 @@
 import {
   TOPIC_VIDEOS_PAGE,
+  VIDEO_FORMATS,
   type TopicVideoLength,
   type TopicVideosShelf,
   type TopicVideosSort,
+  type VideoFormat,
 } from '@minhaj/contracts/media';
 import { SURAH_TOTAL } from '@minhaj/contracts/passage';
+
+import { viewOfFormat } from '@/components/media/presentation';
 
 import {
   hubHref,
@@ -36,17 +40,59 @@ import {
  * rather than answered with an error page; what this produces is parsed again
  * by Media's read service (`topicVideosQuerySchema`), the authoritative
  * boundary, and no parameter can widen what is public.
+ *
+ * WATCH PART 1 — THE WHOLE OF MEDIA IS THE SAME LISTING WITHOUT A TOPIC SCOPE
+ * (`/watch/videos`, `WATCH_VIDEOS`), as Library Part 1 made the Books
+ * listing. Its view adds Watch's own filters (`media`): a Topic, and a
+ * curated format — which is not a parameter but THE PATH: each of the five
+ * curated views (`/watch/lectures` …) is this listing standing on its format
+ * (`watchVideosScope`), so `/watch/videos?format=lecture` is one redirect to
+ * `/watch/lectures`, and a format view's tabs and links keep every other
+ * filter. Its address keeps every parameter it has always taken (ROUTE_MAP.md
+ * §3.7) — `?topic`, `?speaker` and `?series` identifiers and `?language` —
+ * and adds `?length`, `?sort` and `?page`; a former `?offset=` (24 a page,
+ * as now) is one redirect to the page holding the Video it began with.
  */
 
 export interface VideosScope {
-  /** The hub's locale-free path: `/quran/videos`, `/hadith/videos`. */
+  /**
+   * The listing's locale-free path: `/quran/videos`, `/hadith/videos`,
+   * `/watch/videos` or a curated Watch view's.
+   */
   readonly path: string;
   /** The Quran passage parts: the shelves, a Surah and the Quran order. */
   readonly passages: boolean;
+  /** The whole of Media (Watch Part 1), standing on the route's own format. */
+  readonly media?: { readonly format: VideoFormat | null };
 }
+
+/** The locale-free path of the whole of Media's listing, on a format or none. */
+function watchVideosPathOf(format: VideoFormat | null): string {
+  return format === null ? '/watch/videos' : `/watch/${viewOfFormat(format)}`;
+}
+
+/** The whole of Media's listing standing on one curated format, or on none. */
+export function watchVideosScope(format: VideoFormat | null): VideosScope {
+  return Object.freeze({
+    path: watchVideosPathOf(format),
+    passages: false,
+    media: Object.freeze({ format }),
+  });
+}
+
+/** Watch's own listing of every published Video (ROUTE_MAP.md §3.7). */
+export const WATCH_VIDEOS: VideosScope = watchVideosScope(null);
 
 /** The deepest page an address may name: Media's offset bound, in pages. */
 export const VIDEOS_MAX_PAGE = Math.floor(25_000 / TOPIC_VIDEOS_PAGE) + 1;
+
+/** The whole of Media's own filters — absent from a subject's hub. */
+export interface MediaVideosFilters {
+  /** A Taxonomy Topic identifier. */
+  readonly topic: string | null;
+  /** The curated format the view stands on — its path, never a parameter. */
+  readonly format: VideoFormat | null;
+}
 
 export interface VideosQuery {
   readonly shelf: TopicVideosShelf;
@@ -58,6 +104,8 @@ export interface VideosQuery {
   readonly sort: TopicVideosSort;
   /** 1-based. */
   readonly page: number;
+  /** The whole of Media's own filters; never present on a subject's hub. */
+  readonly media?: MediaVideosFilters;
 }
 
 export const DEFAULT_VIDEOS_QUERY: VideosQuery = Object.freeze({
@@ -75,16 +123,45 @@ export const DEFAULT_VIDEOS_QUERY: VideosQuery = Object.freeze({
  * A view as its scope admits it: without the passage parts the shelf is
  * `all`, there is no Surah and no Quran order; and on the general shelf a
  * Surah — which narrows only the videos that explain one — is a
- * contradiction the shelf wins.
+ * contradiction the shelf wins. Only the whole of Media has its own filters,
+ * and with none named it stands on the route's format.
  */
 function admitted(scope: VideosScope, view: VideosQuery): VideosQuery {
   const shelf = scope.passages ? view.shelf : 'all';
-  return {
-    ...view,
+  const { media: own, ...rest } = view;
+  const base = {
+    ...rest,
     shelf,
     surah: scope.passages && shelf !== 'general' ? view.surah : null,
     sort: !scope.passages && view.sort === 'quran' ? 'newest' : view.sort,
-  };
+  } satisfies VideosQuery;
+  return scope.media === undefined
+    ? base
+    : { ...base, media: own ?? { topic: null, format: scope.media.format } };
+}
+
+/** The deepest former `?offset=` an address may carry (Media's offset bound). */
+const LEGACY_MAX_OFFSET = 25_000;
+
+/**
+ * The page a former `?offset=` named — the page holding the first Video it
+ * showed — or null when there is none or it is not a plain bounded number.
+ */
+function legacyPage(query: Query): number | null {
+  const text = single(query, 'offset', 6);
+  if (text === null || !/^\d{1,6}$/u.test(text)) return null;
+  const offset = Number(text);
+  return offset <= LEGACY_MAX_OFFSET
+    ? Math.min(Math.floor(offset / TOPIC_VIDEOS_PAGE) + 1, VIDEOS_MAX_PAGE)
+    : null;
+}
+
+/** A curated format named by a parameter, or null. */
+function formatOf(query: Query): VideoFormat | null {
+  const text = single(query, 'format', 16);
+  return (VIDEO_FORMATS as readonly string[]).includes(text ?? '')
+    ? (text as VideoFormat)
+    : null;
 }
 
 /** The hub's view from its address — every unknown or malformed value neutral. */
@@ -92,6 +169,7 @@ export function readVideosQuery(scope: VideosScope, query: Query): VideosQuery {
   const shelfText = single(query, 'shelf', 16);
   const sortText = single(query, 'sort', 16);
   const lengthText = single(query, 'length', 16);
+  const page = whole(single(query, 'page', 5), 1, VIDEOS_MAX_PAGE);
   return admitted(scope, {
     shelf: shelfText === 'explains' || shelfText === 'general' ? shelfText : 'all',
     surah: whole(single(query, 'surah', 3), 1, SURAH_TOTAL),
@@ -103,11 +181,23 @@ export function readVideosQuery(scope: VideosScope, query: Query): VideosQuery {
         ? lengthText
         : null,
     sort: sortText === 'quran' || sortText === 'title' ? sortText : 'newest',
-    page: whole(single(query, 'page', 5), 1, VIDEOS_MAX_PAGE) ?? 1,
+    page: page ?? (scope.media === undefined ? null : legacyPage(query)) ?? 1,
+    ...(scope.media === undefined
+      ? {}
+      : {
+          media: {
+            topic: identifier(query, 'topic'),
+            format: formatOf(query) ?? scope.media.format,
+          },
+        }),
   });
 }
 
-/** Whether anything narrows the hub — a shelf, a Surah, a language, a speaker, a Series or a length. */
+/**
+ * Whether anything narrows the hub — a shelf, a Surah, a language, a speaker,
+ * a Series or a length, and in the whole of Media a Topic. A curated format is
+ * the view itself, never a narrowing of it.
+ */
 export function videosFiltered(query: VideosQuery): boolean {
   return (
     query.shelf !== 'all' ||
@@ -115,7 +205,8 @@ export function videosFiltered(query: VideosQuery): boolean {
     query.language !== null ||
     query.speaker !== null ||
     query.series !== null ||
-    query.length !== null
+    query.length !== null ||
+    (query.media !== undefined && query.media.topic !== null)
   );
 }
 
@@ -133,15 +224,51 @@ export function videosHref(
   const next = admitted(scope, { ...query, ...change });
   const page = change.page ?? (Object.keys(change).length === 0 ? query.page : 1);
   const search = new URLSearchParams();
+  const own = next.media;
   if (next.shelf !== 'all') search.set('shelf', next.shelf);
   if (next.surah !== null) search.set('surah', String(next.surah));
+  if (own !== undefined && own.topic !== null) search.set('topic', own.topic);
   if (next.language !== null) search.set('language', next.language);
   if (next.speaker !== null) search.set('speaker', next.speaker);
   if (next.series !== null) search.set('series', next.series);
   if (next.length !== null) search.set('length', next.length);
   if (next.sort !== 'newest') search.set('sort', next.sort);
   if (page > 1) search.set('page', String(page));
-  return hubHref(locale, scope.path, search);
+  return hubHref(
+    locale,
+    own === undefined ? scope.path : watchVideosPathOf(own.format),
+    search,
+  );
+}
+
+/**
+ * The address of one view of the whole of Media, from its unfiltered first
+ * page — what every Watch page that links into the listing (a Topic, a
+ * speaker, a Series, a language, a format) builds, so no two spell one view
+ * differently. Identifiers are written in lower case, as an address reads
+ * them, so a link never costs a redirect.
+ */
+export function watchVideosHref(
+  locale: string,
+  change: {
+    readonly topic?: string;
+    readonly format?: VideoFormat;
+    readonly language?: string;
+    readonly speaker?: string;
+    readonly series?: string;
+    readonly length?: TopicVideoLength;
+    readonly sort?: TopicVideosSort;
+  } = {},
+): string {
+  return videosHref(WATCH_VIDEOS, locale, {
+    ...DEFAULT_VIDEOS_QUERY,
+    language: change.language ?? null,
+    speaker: change.speaker?.toLowerCase() ?? null,
+    series: change.series?.toLowerCase() ?? null,
+    length: change.length ?? null,
+    sort: change.sort ?? 'newest',
+    media: { topic: change.topic?.toLowerCase() ?? null, format: change.format ?? null },
+  });
 }
 
 /** The parameters a view of a Videos hub is spelled with. */
@@ -154,6 +281,14 @@ const VIEW_KEYS: ReadonlySet<string> = new Set([
   'length',
   'sort',
   'page',
+]);
+
+/** …and of the whole of Media, which also reads its own filters and its former offset. */
+const MEDIA_KEYS: ReadonlySet<string> = new Set([
+  ...VIEW_KEYS,
+  'topic',
+  'format',
+  'offset',
 ]);
 
 /**
@@ -175,19 +310,23 @@ export function videosCanonicalRedirect(
     locale,
     scope.path,
     query,
-    VIEW_KEYS,
+    scope.media === undefined ? VIEW_KEYS : MEDIA_KEYS,
     videosHref(scope, locale, readVideosQuery(scope, query)),
   );
 }
 
-/** What Media is asked for one view (the Topic resolved at Layer 4). */
+/**
+ * What Media is asked for one view: on a hub its Topic (resolved at Layer 4);
+ * in the whole of Media the view's own Topic filter, if any, and its format,
+ * under `scope: 'media'`.
+ */
 export function videosReadQuery(
   scope: VideosScope,
   query: VideosQuery,
   topic: string | null,
   titleLocale: string,
 ): Record<string, unknown> {
-  return {
+  const read = {
     topic,
     quranPassages: scope.passages,
     shelf: query.shelf,
@@ -201,6 +340,9 @@ export function videosReadQuery(
     offset: (query.page - 1) * TOPIC_VIDEOS_PAGE,
     limit: TOPIC_VIDEOS_PAGE,
   };
+  if (scope.media === undefined) return read;
+  const own = query.media ?? { topic: null, format: scope.media.format };
+  return { ...read, scope: 'media', topic: own.topic, format: own.format };
 }
 
 /** How many pages a total fills; at least one. */

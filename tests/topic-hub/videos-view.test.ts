@@ -12,6 +12,9 @@ import {
   videosPageCount,
   videosRange,
   videosReadQuery,
+  WATCH_VIDEOS,
+  watchVideosHref,
+  watchVideosScope,
   wholeHours,
 } from '../../apps/web/src/components/topic-hub/videos-view.ts';
 import { QURAN_VIDEOS as QURAN } from '../../apps/web/src/components/quran/hubs.ts';
@@ -22,7 +25,8 @@ import { HADITH_VIDEOS as HADITH } from '../../apps/web/src/components/hadith/hu
  * Quran passage parts (the Quran's scope) and without them (Hadith's): the
  * view a URL names, the address each control and link builds, and the query
  * Media is asked. Tolerant of anything a visitor or a crawler types; never
- * widening.
+ * widening. Watch Part 1 adds the whole of Media (WATCH_VIDEOS and the
+ * five curated views), and every hub expectation is unchanged.
  */
 
 const PERSON = '5b0e1d2c-3f4a-4b5c-8d6e-7f8091a2b3c4';
@@ -338,5 +342,214 @@ describe('a Videos hub without the Quran passage parts (Hadith)', () => {
       offset: TOPIC_VIDEOS_PAGE,
     });
     expect(topicVideosQuerySchema.safeParse(read).success).toBe(true);
+  });
+});
+
+describe('the whole of Media — /watch/videos and the curated views (Watch Part 1)', () => {
+  const LECTURES = watchVideosScope('lecture');
+  const NONE = { topic: null, format: null };
+
+  it('stands on the route’s own format, and reads a Topic among its filters', () => {
+    expect(WATCH_VIDEOS).toEqual({
+      path: '/watch/videos',
+      passages: false,
+      media: { format: null },
+    });
+    expect(LECTURES).toEqual({
+      path: '/watch/lectures',
+      passages: false,
+      media: { format: 'lecture' },
+    });
+    expect(watchVideosScope('documentary').path).toBe('/watch/documentaries');
+    expect(readVideosQuery(WATCH_VIDEOS, {})).toEqual({
+      ...DEFAULT_VIDEOS_QUERY,
+      media: NONE,
+    });
+    expect(readVideosQuery(LECTURES, {})).toEqual({
+      ...DEFAULT_VIDEOS_QUERY,
+      media: { topic: null, format: 'lecture' },
+    });
+    expect(
+      readVideosQuery(WATCH_VIDEOS, {
+        topic: TOPIC.toUpperCase(),
+        language: 'ur',
+        speaker: PERSON,
+        length: 'long',
+        sort: 'title',
+        page: '2',
+      }),
+    ).toEqual({
+      ...DEFAULT_VIDEOS_QUERY,
+      language: 'ur',
+      speaker: PERSON,
+      length: 'long',
+      sort: 'title',
+      page: 2,
+      media: { topic: TOPIC, format: null },
+    });
+    // A Topic narrows; the format is the view itself, never a narrowing.
+    expect(videosFiltered(readVideosQuery(WATCH_VIDEOS, { topic: TOPIC }))).toBe(true);
+    expect(videosFiltered(readVideosQuery(LECTURES, {}))).toBe(false);
+  });
+
+  it('has no Quran passage part and drops what is malformed', () => {
+    expect(
+      readVideosQuery(WATCH_VIDEOS, {
+        shelf: 'explains',
+        surah: '2',
+        sort: 'quran',
+        topic: 'education',
+        format: 'sermon',
+      }),
+    ).toEqual({ ...DEFAULT_VIDEOS_QUERY, media: NONE });
+    // A repeated format leaves the route's own.
+    expect(readVideosQuery(LECTURES, { format: ['event', 'event'] }).media).toEqual({
+      topic: null,
+      format: 'lecture',
+    });
+  });
+
+  it('writes the format as the path, a Topic first among the parameters', () => {
+    const view = readVideosQuery(WATCH_VIDEOS, {
+      topic: TOPIC,
+      language: 'ur',
+      series: SERIES,
+      page: '3',
+    });
+    expect(videosHref(WATCH_VIDEOS, 'en', view)).toBe(
+      `/watch/videos?topic=${TOPIC}&language=ur&series=${SERIES}&page=3`,
+    );
+    // A tab keeps every filter, changes the path, and starts at page one.
+    expect(
+      videosHref(WATCH_VIDEOS, 'ur', view, { media: { topic: TOPIC, format: 'event' } }),
+    ).toBe(`/ur/watch/events?topic=${TOPIC}&language=ur&series=${SERIES}`);
+    expect(
+      videosHref(LECTURES, 'en', readVideosQuery(LECTURES, {}), {
+        media: { topic: null, format: null },
+      }),
+    ).toBe('/watch/videos');
+    expect(videosHref(LECTURES, 'ar', readVideosQuery(LECTURES, {}))).toBe(
+      '/ar/watch/lectures',
+    );
+    // Round trip.
+    const params = Object.fromEntries(
+      new URL(videosHref(WATCH_VIDEOS, 'en', view), 'https://x.invalid').searchParams,
+    );
+    expect(readVideosQuery(WATCH_VIDEOS, params)).toEqual(view);
+  });
+
+  it('builds every link into the listing at its one spelling, identifiers in lower case', () => {
+    expect(watchVideosHref('en')).toBe('/watch/videos');
+    expect(watchVideosHref('ur', { topic: TOPIC.toUpperCase() })).toBe(
+      `/ur/watch/videos?topic=${TOPIC}`,
+    );
+    expect(watchVideosHref('en', { speaker: PERSON.toUpperCase(), language: 'ar' })).toBe(
+      `/watch/videos?language=ar&speaker=${PERSON}`,
+    );
+    expect(watchVideosHref('en', { format: 'highlight', series: SERIES })).toBe(
+      `/watch/highlights?series=${SERIES}`,
+    );
+    expect(videosCanonicalRedirect(WATCH_VIDEOS, 'en', { topic: TOPIC })).toBeNull();
+    const built = new URL(
+      watchVideosHref('en', { format: 'interview', length: 'short', sort: 'title' }),
+      'https://x.invalid',
+    );
+    expect(built.pathname).toBe('/watch/interviews');
+    expect(
+      videosCanonicalRedirect(
+        watchVideosScope('interview'),
+        'en',
+        Object.fromEntries(built.searchParams),
+      ),
+    ).toBeNull();
+  });
+
+  it('answers the former form, a ?format= and a former ?offset= with one redirect', () => {
+    expect(videosCanonicalRedirect(WATCH_VIDEOS, 'en', {})).toBeNull();
+    expect(videosCanonicalRedirect(LECTURES, 'en', {})).toBeNull();
+    // The listing's own former parameters, in their former order, stay one address.
+    expect(
+      videosCanonicalRedirect(WATCH_VIDEOS, 'en', { topic: TOPIC, speaker: PERSON }),
+    ).toBeNull();
+    // What the filter form submits.
+    expect(
+      videosCanonicalRedirect(WATCH_VIDEOS, 'en', {
+        topic: '',
+        language: 'ur',
+        speaker: '',
+        series: '',
+        length: '',
+        sort: 'newest',
+      }),
+    ).toBe('/watch/videos?language=ur');
+    // Another order of the same view.
+    expect(
+      videosCanonicalRedirect(watchVideosScope('interview'), 'en', {
+        series: SERIES,
+        language: 'ar',
+      }),
+    ).toBe(`/watch/interviews?language=ar&series=${SERIES}`);
+    // A format is a path of its own.
+    expect(videosCanonicalRedirect(WATCH_VIDEOS, 'ur', { format: 'lecture' })).toBe(
+      '/ur/watch/lectures',
+    );
+    expect(
+      videosCanonicalRedirect(LECTURES, 'en', { format: 'event', topic: TOPIC }),
+    ).toBe(`/watch/events?topic=${TOPIC}`);
+    expect(videosCanonicalRedirect(LECTURES, 'en', { format: 'lecture' })).toBe(
+      '/watch/lectures',
+    );
+    // A former offset of 24 a page: the page holding the Video it began with.
+    expect(videosCanonicalRedirect(WATCH_VIDEOS, 'en', { offset: '24' })).toBe(
+      '/watch/videos?page=2',
+    );
+    expect(
+      videosCanonicalRedirect(WATCH_VIDEOS, 'en', { offset: '50', topic: TOPIC }),
+    ).toBe(`/watch/videos?topic=${TOPIC}&page=3`);
+    for (const offset of ['0', 'abc', '999999'])
+      expect(videosCanonicalRedirect(WATCH_VIDEOS, 'en', { offset }), offset).toBe(
+        '/watch/videos',
+      );
+    // A page named beside an offset wins.
+    expect(videosCanonicalRedirect(WATCH_VIDEOS, 'en', { page: '4', offset: '24' })).toBe(
+      '/watch/videos?page=4',
+    );
+    // Built from the parsed view, never from the typed text.
+    expect(
+      videosCanonicalRedirect(WATCH_VIDEOS, 'en', { topic: 'https://evil.example/' }),
+    ).toBe('/watch/videos');
+  });
+
+  it('asks Media for the whole of Media, the Topic and format as filters — a query its schema accepts', () => {
+    const read = videosReadQuery(
+      LECTURES,
+      readVideosQuery(LECTURES, { topic: TOPIC, page: '2' }),
+      null,
+      'ar',
+    );
+    expect(read).toEqual({
+      scope: 'media',
+      topic: TOPIC,
+      format: 'lecture',
+      quranPassages: false,
+      shelf: 'all',
+      surah: null,
+      language: null,
+      speaker: null,
+      series: null,
+      length: null,
+      sort: 'newest',
+      titleLocale: 'ar',
+      offset: TOPIC_VIDEOS_PAGE,
+      limit: TOPIC_VIDEOS_PAGE,
+    });
+    expect(topicVideosQuerySchema.safeParse(read).success).toBe(true);
+    // A hub never reads the whole of Media's filters.
+    expect(readVideosQuery(HADITH, { topic: TOPIC, format: 'lecture' })).toEqual(
+      DEFAULT_VIDEOS_QUERY,
+    );
+    expect(
+      videosReadQuery(HADITH, readVideosQuery(HADITH, {}), TOPIC, 'en'),
+    ).not.toHaveProperty('scope');
   });
 });

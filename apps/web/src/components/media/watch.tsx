@@ -11,35 +11,36 @@ import {
   type PlaylistRecord,
   type SeriesKind,
   type SeriesRecord,
-  type VideoFormat,
+  type TopicVideo,
   type VideoListing,
   type VideoPoster,
   type VideoRecord,
 } from '@minhaj/contracts/media';
-import type { TopicView } from '@minhaj/contracts/taxonomy';
 
 import { mediaReadRuntime } from '@/composition/media-read';
 import { contentLanguages, referenceNames } from '@/composition/public-references';
-import { taxonomyRuntime } from '@/composition/taxonomy';
 import {
   contentLanguageBadge,
   interfaceLanguageFirst,
 } from '@/components/content-language';
 import { paragraphsOf } from '@/components/library/scholarly-presentation';
+import { caseless } from '@/components/topic-hub/address';
+import { languageName } from '@/components/topic-hub/parts';
+import { VideoShelf as VideoCards } from '@/components/topic-hub/videos';
+import { watchVideosHref } from '@/components/topic-hub/videos-view';
 import {
   ActionLink,
   Alert,
   Badge,
   Breadcrumbs,
-  Button,
   CardGrid,
   Container,
   DetailRow,
   EmptyState,
-  Field,
   Hero,
   Icon,
   LanguageBadge,
+  LinkCard,
   LinkTabs,
   ListRow,
   MediaCard,
@@ -48,7 +49,7 @@ import {
   Poster,
   Prose,
   SectionHeader,
-  Select,
+  Stat,
   TextLink,
   TopicChips,
 } from '@/components/ui';
@@ -70,26 +71,29 @@ import {
   offsetPath,
   playlistPath,
   readOffset,
-  readMediaQuery,
   seriesPath,
   seriesSegment,
   videoPath,
   videoPosterPath,
-  mediaQueryPath,
   videoStructuredData,
-  viewOfFormat,
   watchLanding,
   WATCH_VIEWS,
 } from './presentation';
+import { ShareVideo } from './share';
 
 /**
  * The public Watch surfaces (ROUTE_MAP.md §3.7) — Video, Series, Playlist.
  *
  * SERVER COMPONENTS, SESSION-FREE BY CONSTRUCTION. Every read goes through
- * `@/composition/media-read`, `@/composition/public-references` and
- * `@/composition/taxonomy`, none of which reaches Identity, a session or a
- * cookie, so a signed-in visitor sees exactly what an anonymous one does. The
- * one client island is the privacy-gated player.
+ * `@/composition/media-read` and `@/composition/public-references`, neither
+ * of which reaches Identity, a session or a cookie, so a signed-in visitor
+ * sees exactly what an anonymous one does. The client islands are the
+ * privacy-gated player and (Watch Part 1) the share button; a Video's page is
+ * handed the private Save island from its route.
+ *
+ * WATCH PART 1: the video listings — `/watch/videos` and the five curated
+ * views — are the shared Videos listing (`./videos`), and `/watch/topics/{slug}`
+ * is one 301 into it.
  *
  * NO THIRD-PARTY REQUEST TO PAINT A CARD. A card's poster is first-party: our
  * own stored copy of the Video's image where it has one (Phase 30-R), else a
@@ -384,197 +388,6 @@ async function watchTrail(locale: Locale) {
 }
 
 /* ===========================================================================
- * Video listings — /watch/videos and the five curated views
- * ========================================================================= */
-
-/**
- * A REAL GET FORM: every filter works without JavaScript, every filtered view
- * is a shareable address canonical to its base, and changing a filter returns
- * to the first page. The options are bounded vocabularies — active topics, the
- * speakers with the most published videos, published series and programmes,
- * Taxonomy's content languages — never the catalogue itself.
- *
- * TWO EMPTY STATES: "nothing is published here yet" and "nothing matches these
- * filters" are different facts, and the second offers the way back.
- */
-export async function VideoListingPage({
-  locale,
-  format,
-  query,
-}: {
-  readonly locale: Locale;
-  readonly format: VideoFormat | null;
-  readonly query: Record<string, string | string[] | undefined>;
-}) {
-  const t = await getTranslations({ locale, namespace: 'watch' });
-  const trail = await watchTrail(locale);
-  const filters = readMediaQuery(query);
-  const section = format === null ? 'videos' : viewOfFormat(format);
-  const base = localizedPath(locale, `/watch/${section}`);
-  const title = t(`sections.${section}` as 'sections.videos');
-
-  const reads = mediaReadRuntime();
-  const [page, languageMap, topics, speakers, series, programs] = await Promise.all([
-    reads.videos({ ...filters, format }),
-    contentLanguages(),
-    taxonomyRuntime().taxonomy.listTree({ locale, includeArchived: false }),
-    reads.speakerFacets(0),
-    reads.seriesList('series', 0),
-    reads.seriesList('program', 0),
-  ]);
-  const speakerNames = await referenceNames(
-    {
-      personIds: [
-        ...speakers.items.map((facet) => facet.id),
-        ...(filters.speaker === null ? [] : [filters.speaker]),
-      ],
-      topicIds: [],
-    },
-    locale,
-  );
-
-  const filtered =
-    filters.topic !== null ||
-    filters.speaker !== null ||
-    filters.series !== null ||
-    filters.language !== null;
-  const groupings = [...series.items, ...programs.items];
-  // The interface's own language is offered first among the content languages
-  // (F10); every other language stays one choice away.
-  const languages = interfaceLanguageFirst(
-    [...languageMap.values()],
-    (language) => language.code,
-    locale,
-  );
-
-  return (
-    <Container>
-      <div className="flex flex-col gap-8 py-[var(--space-page)]">
-        <MediaPageHeader
-          crumbs={{
-            label: trail.label,
-            trail: [trail.home, trail.watch, { text: title }],
-          }}
-          title={title}
-          lede={t(`sectionBody.${section}` as 'sectionBody.videos')}
-        />
-
-        {/* The curated views are sibling pages of this listing, one choice away. */}
-        <LinkTabs
-          label={t('viewsLabel')}
-          tabs={['videos', ...WATCH_VIEWS].map((view) => ({
-            href: localizedPath(locale, `/watch/${view}`),
-            text: t(`sections.${view}` as 'sections.videos'),
-            current: view === section,
-          }))}
-        />
-
-        <form
-          method="get"
-          action={base}
-          className="flex flex-col gap-4 border-b border-border pb-8"
-          aria-label={t('filters')}
-        >
-          <div className="grid items-end gap-4 sm:grid-cols-2 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
-            <Field id="filter-topic" label={t('filterTopic')}>
-              {(props) => (
-                <Select {...props} name="topic" defaultValue={filters.topic ?? ''}>
-                  <option value="">{t('filterAny')}</option>
-                  {topics.map((topic) => (
-                    <option key={topic.id} value={topic.id}>
-                      {topic.label.name}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-            <Field id="filter-speaker" label={t('filterSpeaker')}>
-              {(props) => (
-                <Select {...props} name="speaker" defaultValue={filters.speaker ?? ''}>
-                  <option value="">{t('filterAny')}</option>
-                  {[...speakerNames.people.entries()].map(([id, person]) => (
-                    <option key={id} value={id}>
-                      {person.name}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-            <Field id="filter-series" label={t('filterSeries')}>
-              {(props) => (
-                <Select {...props} name="series" defaultValue={filters.series ?? ''}>
-                  <option value="">{t('filterAny')}</option>
-                  {groupings.map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {mediaLabel(group, locale).title}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-            <Field id="filter-language" label={t('filterLanguage')}>
-              {(props) => (
-                <Select {...props} name="language" defaultValue={filters.language ?? ''}>
-                  <option value="">{t('filterAny')}</option>
-                  {languages.map((language) => (
-                    <option
-                      key={language.code}
-                      value={language.code}
-                      lang={language.code}
-                      dir={language.direction}
-                    >
-                      {language.name}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-            <Button tone="secondary">{t('filterApply')}</Button>
-          </div>
-          {filtered ? (
-            <p className="text-sm">
-              <TextLink href={base}>{t('filterClear')}</TextLink>
-            </p>
-          ) : null}
-        </form>
-
-        {page.items.length === 0 ? (
-          <EmptyState>
-            {filtered ? (
-              <span className="flex flex-col gap-2">
-                <span>{t('emptyFiltered')}</span>
-                <TextLink href={base}>{t('filterClear')}</TextLink>
-              </span>
-            ) : (
-              t('empty')
-            )}
-          </EmptyState>
-        ) : (
-          <VideoGrid locale={locale} videos={page.items} label={title} />
-        )}
-
-        <Pagination
-          label={title}
-          previous={
-            filters.offset > 0
-              ? mediaQueryPath(base, filters, {
-                  offset: Math.max(0, filters.offset - MEDIA_PAGE),
-                })
-              : null
-          }
-          next={
-            page.hasMore
-              ? mediaQueryPath(base, filters, { offset: filters.offset + MEDIA_PAGE })
-              : null
-          }
-          t={t}
-        />
-      </div>
-    </Container>
-  );
-}
-
-/* ===========================================================================
  * Video detail
  * ========================================================================= */
 
@@ -640,46 +453,162 @@ function VideoStructuredData({
   );
 }
 
-/** How many other episodes a Video's page lists beside it. */
-const EPISODE_PREVIEW = 6;
+/** How many episodes around this one a Video's page lists. */
+const EPISODE_WINDOW = 5;
 
-/** How many related Videos a Video's page offers under it. */
-const RELATED_PREVIEW = 6;
+/** How many videos each related shelf of a Video's page shows. */
+const RELATED_PREVIEW = 3;
+
+/** How many a related read asks for, so that what is excluded still leaves a shelf. */
+const RELATED_ASK = 12;
+
+/** One "more like this" shelf under a Video: what relates it, and the way to all of them. */
+interface RelatedShelf {
+  readonly key: 'speaker' | 'topic' | 'language';
+  readonly heading: string;
+  readonly more: { readonly href: string; readonly text: string };
+  readonly videos: readonly TopicVideo[];
+}
 
 /**
- * VIDEOS RELATED TO ONE VIDEO — what else its first speaker gives, else what
- * else is on its first topic — never itself, and never the episodes already
- * listed beside it. Composed from the public listing read Media already has,
- * so "related" means a fact the records state, never a guess.
+ * WHAT ELSE TO WATCH — composed from Media's own public reads, so "related"
+ * is a fact the records state, never a guess: more with its first speaker,
+ * more on its first Topic, and only when neither has anything else, more in
+ * its content language. Never itself, never an episode already offered
+ * beside it, never one video twice. When the page offers no next episode, the
+ * first of them is "Up next".
  */
 async function relatedVideos(
+  locale: Locale,
   record: VideoRecord,
   exclude: ReadonlySet<string>,
-): Promise<readonly VideoListing[]> {
+  names: {
+    readonly speaker: string | null;
+    readonly topic: string | null;
+  },
+  t: WatchTranslator,
+  takeUpNext: boolean,
+): Promise<{
+  readonly upNext: TopicVideo | null;
+  readonly shelves: readonly RelatedShelf[];
+}> {
   const reads = mediaReadRuntime();
-  const keep = (items: readonly VideoListing[]) =>
-    items.filter((video) => video.id !== record.id && !exclude.has(video.id));
+  const ask = (filter: Record<string, string>) =>
+    reads.topicVideos({
+      scope: 'media',
+      titleLocale: locale,
+      limit: RELATED_ASK,
+      ...filter,
+    });
   const speaker = record.speakerIds[0];
-  const bySpeaker =
-    speaker === undefined ? [] : keep((await reads.videos({ speaker })).items);
-  if (bySpeaker.length >= RELATED_PREVIEW) return bySpeaker.slice(0, RELATED_PREVIEW);
   const topic = record.topicIds[0];
-  const byTopic = topic === undefined ? [] : keep((await reads.videos({ topic })).items);
-  const seen = new Set(bySpeaker.map((video) => video.id));
-  return [...bySpeaker, ...byTopic.filter((video) => !seen.has(video.id))].slice(
-    0,
-    RELATED_PREVIEW,
+  const [bySpeaker, byTopic] = await Promise.all([
+    speaker === undefined || names.speaker === null ? null : ask({ speaker }),
+    topic === undefined || names.topic === null ? null : ask({ topic }),
+  ]);
+  const seen = new Set([record.id, ...exclude]);
+  // Held in an object: the helper below decides it.
+  const picked: { upNext: TopicVideo | null } = { upNext: null };
+  const shelves: RelatedShelf[] = [];
+  const add = (
+    key: RelatedShelf['key'],
+    page: { readonly items: readonly TopicVideo[]; readonly total: number } | null,
+    heading: string,
+    href: string,
+  ) => {
+    if (page === null) return;
+    const fresh = page.items.filter((video) => !seen.has(video.id));
+    if (takeUpNext && picked.upNext === null && fresh[0] !== undefined) {
+      picked.upNext = fresh[0];
+      seen.add(fresh[0].id);
+      fresh.shift();
+    }
+    const videos = fresh.slice(0, RELATED_PREVIEW);
+    for (const video of videos) seen.add(video.id);
+    if (videos.length > 0)
+      shelves.push({
+        key,
+        heading,
+        more: { href, text: t('relatedAll', { count: page.total }) },
+        videos,
+      });
+  };
+  if (speaker !== undefined && names.speaker !== null)
+    add(
+      'speaker',
+      bySpeaker,
+      t('relatedSpeaker', { name: names.speaker }),
+      watchVideosHref(locale, { speaker }),
+    );
+  if (topic !== undefined && names.topic !== null)
+    add(
+      'topic',
+      byTopic,
+      t('relatedTopic', { name: names.topic }),
+      watchVideosHref(locale, { topic }),
+    );
+  if (shelves.length === 0 && picked.upNext === null)
+    add(
+      'language',
+      await ask({ language: record.languageCode }),
+      t('relatedLanguage', { name: languageName(record.languageCode, locale) }),
+      watchVideosHref(locale, { language: record.languageCode }),
+    );
+  return { upNext: picked.upNext, shelves };
+}
+
+/** A previous or next episode, as a card with its direction named first. */
+function EpisodeStep({
+  locale,
+  video,
+  direction,
+  t,
+}: {
+  readonly locale: Locale;
+  readonly video: VideoListing;
+  readonly direction: 'previous' | 'next';
+  readonly t: WatchTranslator;
+}) {
+  const label = mediaLabel(video, locale);
+  return (
+    <a
+      href={videoPath(locale, video.slug)}
+      className={`group flex min-h-11 min-w-0 flex-col gap-1 rounded-control border border-border bg-surface p-3 no-underline hover:border-action ${direction === 'next' ? 'sm:col-start-2 sm:items-end sm:text-end' : ''}`}
+    >
+      <span className="inline-flex items-center gap-1.5 text-caption font-semibold text-action">
+        {direction === 'previous' ? <Icon name="arrow-start" size={16} /> : null}
+        {t(direction === 'previous' ? 'previousEpisode' : 'nextEpisode')}
+        {video.seriesPosition === null ? null : (
+          <span className="font-normal text-foreground-muted">
+            {' · '}
+            {t('fact.episode', { number: video.seriesPosition })}
+          </span>
+        )}
+        {direction === 'next' ? <Icon name="arrow-end" size={16} /> : null}
+      </span>
+      <span
+        className="font-medium text-foreground wrap-anywhere group-hover:underline"
+        lang={label.locale}
+        dir={directionOf(label.locale)}
+      >
+        {label.title}
+      </span>
+    </a>
   );
 }
 
 /**
- * One Video's page (R2): THE STAGE FIRST. The poster-led, one-press player at
- * full width of the reading column, then what the video is — its title in its
- * own language, its kind, who speaks — then its description and transcript,
- * with its facts, topics, playlists and the episodes around it beside them,
- * and related videos below. A video the provider no longer serves shows its
- * poster muted, says so plainly, and links out. Usable signed out; nothing
- * about the visit is recorded.
+ * One Video's page (R2; Watch Part 1): THE STAGE FIRST. The poster-led,
+ * one-press player at full width of the reading column, then what the video
+ * is — its title in its own language, its kind, language, length and date, who
+ * speaks — and the way to share it; then, for an episode, its Series with the
+ * previous and next episode and the episodes around it; then where it
+ * explains the Quran (each passage's tafsir, and the moment it takes each one
+ * up), its description and transcript; beside them "Up next", its facts,
+ * Topics, playlists and the signed-in Save; and below, more with its speaker,
+ * on its Topic or in its language. A video the provider no longer serves shows
+ * its poster muted, says so plainly, and links out. Usable signed out;
+ * nothing about the visit is recorded.
  *
  * ONLY WHAT IS KNOWN IS SHOWN. A caption track the provider offers is stated;
  * an unknown one is not turned into a "no captions" row, and a transcript is a
@@ -690,6 +619,8 @@ export async function VideoDetailPage({
   record,
   start = null,
   passages = null,
+  moments = null,
+  personal = null,
 }: {
   readonly locale: Locale;
   readonly record: VideoRecord;
@@ -701,18 +632,28 @@ export async function VideoDetailPage({
   readonly start?: number | null;
   /** Quran Part 8: the Quran passages this lecture explains, composed at Layer 4. */
   readonly passages?: ReactNode;
+  /** Watch Part 1: where in it the lecture takes up each passage, composed at Layer 4. */
+  readonly moments?: ReactNode;
+  /** The private island (Save and notes), placed beside the facts. */
+  readonly personal?: ReactNode;
 }) {
   const t = await getTranslations({ locale, namespace: 'watch' });
   const trailParts = await watchTrail(locale);
   const reads = mediaReadRuntime();
 
-  const [references, languages, playlists, episodes] = await Promise.all([
+  const [references, languages, playlists, episodes, neighbours] = await Promise.all([
     referenceNames({ personIds: record.speakerIds, topicIds: record.topicIds }, locale),
     contentLanguages(),
     reads.videoPlaylists(record.id),
     record.series === null
       ? Promise.resolve(null)
       : reads.seriesVideos(record.series.id, 0),
+    record.series === null
+      ? Promise.resolve(null)
+      : reads.seriesNeighbours({
+          series: record.series.id,
+          position: record.series.position,
+        }),
   ]);
 
   const label = mediaLabel(record, locale);
@@ -734,14 +675,39 @@ export async function VideoDetailPage({
     return topic === undefined ? [] : [topic];
   });
   const seriesLabel = record.series === null ? null : mediaLabel(record.series, locale);
+  // The episodes around this one, in episode order, itself left out.
+  const here = episodes?.items.findIndex((video) => video.id === record.id) ?? -1;
   const others =
     episodes === null
       ? []
       : episodes.items
-          .filter((video) => video.id !== record.id)
-          .slice(0, EPISODE_PREVIEW);
-  const related = await relatedVideos(record, new Set(others.map((video) => video.id)));
-  const people = await speakersOf([...others, ...related], locale);
+          .slice(
+            Math.max(0, here - 2),
+            Math.max(0, here - 2) + EPISODE_WINDOW + (here === -1 ? 0 : 1),
+          )
+          .filter((video) => video.id !== record.id);
+  const previous = neighbours?.previous ?? null;
+  const next = neighbours?.next ?? null;
+  const offered = new Set([
+    ...others.map((video) => video.id),
+    ...(previous === null ? [] : [previous.id]),
+    ...(next === null ? [] : [next.id]),
+  ]);
+  const related = await relatedVideos(
+    locale,
+    record,
+    offered,
+    {
+      speaker: speakers[0]?.name ?? null,
+      topic:
+        record.topicIds[0] === undefined
+          ? null
+          : (references.topics.get(record.topicIds[0])?.name ?? null),
+    },
+    t,
+    next === null,
+  );
+  const people = await speakersOf(others, locale);
   const contentBadge = contentLanguageBadge(record.languageCode, locale);
   // The description is written in the interface's language; when the video is
   // spoken in another, say once that the words describe it, not translate it.
@@ -750,6 +716,8 @@ export async function VideoDetailPage({
     (record.languageCode.split('-')[0] ?? '').toLowerCase() !== label.locale;
   const poster = posterImage(record);
   const unavailable = record.availability === 'unavailable';
+  const upNext = related.upNext;
+  const upNextLabel = upNext === null ? null : mediaLabel(upNext, locale);
 
   return (
     <Container>
@@ -847,9 +815,6 @@ export async function VideoDetailPage({
                 {contentBadge === undefined ? null : <LanguageBadge {...contentBadge} />}
                 <MetaRow
                   items={[
-                    record.series === null
-                      ? null
-                      : t('fact.episode', { number: record.series.position }),
                     record.durationSeconds === null ? null : (
                       <Duration seconds={record.durationSeconds} />
                     ),
@@ -884,9 +849,108 @@ export async function VideoDetailPage({
                   ))}
                 </p>
               )}
+              <ShareVideo
+                url={absoluteUrl(videoPath(locale, record.slug))}
+                title={label.title}
+                labels={{
+                  share: t('share.action'),
+                  copied: t('share.copied'),
+                  failed: t('share.failed'),
+                }}
+              />
             </header>
 
+            {record.series === null || seriesLabel === null ? null : (
+              <section
+                aria-labelledby="video-series"
+                className="flex flex-col gap-4 rounded-panel border border-border bg-surface-raised p-4 sm:p-5"
+              >
+                <div className="flex min-w-0 flex-col gap-1">
+                  <p className="text-sm text-foreground-muted">
+                    {t(`fact.partOf.${record.series.kind}`)}
+                  </p>
+                  <h2
+                    id="video-series"
+                    className="text-subheading font-semibold wrap-anywhere"
+                  >
+                    <TextLink
+                      href={seriesPath(locale, record.series.kind, record.series.slug)}
+                    >
+                      <span
+                        lang={seriesLabel.locale}
+                        dir={directionOf(seriesLabel.locale)}
+                      >
+                        {seriesLabel.title}
+                      </span>
+                    </TextLink>
+                  </h2>
+                  <p className="text-sm font-medium">
+                    {neighbours === null || neighbours.episodes < 2
+                      ? t('fact.episode', { number: record.series.position })
+                      : t('episodeOf', {
+                          number: record.series.position,
+                          total: neighbours.episodes,
+                        })}
+                  </p>
+                </div>
+                {previous === null && next === null ? null : (
+                  <nav aria-label={t('episodeNav')} className="grid gap-3 sm:grid-cols-2">
+                    {previous === null ? null : (
+                      <EpisodeStep
+                        locale={locale}
+                        video={previous}
+                        direction="previous"
+                        t={t}
+                      />
+                    )}
+                    {next === null ? null : (
+                      <EpisodeStep locale={locale} video={next} direction="next" t={t} />
+                    )}
+                  </nav>
+                )}
+                {others.length === 0 ? null : (
+                  <ol
+                    aria-label={t(`moreFrom.${record.series.kind}`)}
+                    className="list-none p-0"
+                  >
+                    {others.map((video) => {
+                      const other = mediaLabel(video, locale);
+                      const names = speakerNames(video, people);
+                      return (
+                        <ListRow
+                          key={video.id}
+                          href={videoPath(locale, video.slug)}
+                          title={other.title}
+                          lang={other.locale}
+                          dir={directionOf(other.locale)}
+                          image={posterImage(video)}
+                          meta={[
+                            video.seriesPosition === null
+                              ? null
+                              : t('fact.episode', { number: video.seriesPosition }),
+                            video.durationSeconds === null ? null : (
+                              <Duration seconds={video.durationSeconds} />
+                            ),
+                            names === '' ? null : <span dir="auto">{names}</span>,
+                          ]}
+                        />
+                      );
+                    })}
+                  </ol>
+                )}
+                <p className="text-sm">
+                  <TextLink
+                    href={seriesPath(locale, record.series.kind, record.series.slug)}
+                  >
+                    {t('allEpisodes')}
+                  </TextLink>
+                </p>
+              </section>
+            )}
+
             {passages}
+
+            {moments}
 
             {label.description === '' ? null : (
               <section className="flex flex-col gap-4" aria-labelledby="video-about">
@@ -937,48 +1001,25 @@ export async function VideoDetailPage({
           </div>
 
           <aside className="flex min-w-0 flex-col gap-8 lg:pt-11">
-            {record.series === null ||
-            seriesLabel === null ||
-            others.length === 0 ? null : (
-              <section className="flex flex-col gap-1" aria-labelledby="video-episodes">
-                <h2 id="video-episodes" className="text-subheading font-semibold">
-                  {t(`moreFrom.${record.series.kind}`)}
+            {upNext === null || upNextLabel === null ? null : (
+              <section className="flex flex-col gap-1" aria-labelledby="video-up-next">
+                <h2 id="video-up-next" className="text-subheading font-semibold">
+                  {t('upNext')}
                 </h2>
-                <p className="text-sm text-foreground-muted">
-                  <span lang={seriesLabel.locale} dir={directionOf(seriesLabel.locale)}>
-                    {seriesLabel.title}
-                  </span>
-                </p>
-                <ol aria-labelledby="video-episodes" className="list-none p-0">
-                  {others.map((video) => {
-                    const other = mediaLabel(video, locale);
-                    return (
-                      <ListRow
-                        key={video.id}
-                        href={videoPath(locale, video.slug)}
-                        title={other.title}
-                        lang={other.locale}
-                        dir={directionOf(other.locale)}
-                        image={posterImage(video)}
-                        meta={[
-                          video.seriesPosition === null
-                            ? null
-                            : t('fact.episode', { number: video.seriesPosition }),
-                          video.durationSeconds === null ? null : (
-                            <Duration seconds={video.durationSeconds} />
-                          ),
-                        ]}
-                      />
-                    );
-                  })}
-                </ol>
-                <p className="pt-2 text-sm">
-                  <TextLink
-                    href={seriesPath(locale, record.series.kind, record.series.slug)}
-                  >
-                    {t('allEpisodes')}
-                  </TextLink>
-                </p>
+                <ListRow
+                  as="div"
+                  href={videoPath(locale, upNext.slug)}
+                  title={upNextLabel.title}
+                  lang={upNextLabel.locale}
+                  dir={directionOf(upNextLabel.locale)}
+                  image={posterImage(upNext)}
+                  meta={[
+                    upNext.format === null ? null : t(`format.${upNext.format}`),
+                    upNext.durationSeconds === null ? null : (
+                      <Duration seconds={upNext.durationSeconds} />
+                    ),
+                  ]}
+                />
               </section>
             )}
 
@@ -993,6 +1034,11 @@ export async function VideoDetailPage({
                     {language?.name ?? record.languageCode}
                   </span>
                 </DetailRow>
+                {record.format === null ? null : (
+                  <DetailRow term={t('fact.format')}>
+                    {t(`format.${record.format}`)}
+                  </DetailRow>
+                )}
                 {record.durationSeconds === null ? null : (
                   <DetailRow term={t('fact.duration')}>
                     <Duration seconds={record.durationSeconds} />
@@ -1003,22 +1049,6 @@ export async function VideoDetailPage({
                     <time dateTime={record.publishedOn}>
                       {formatDate(record.publishedOn, locale)}
                     </time>
-                  </DetailRow>
-                )}
-                {record.series === null || seriesLabel === null ? null : (
-                  <DetailRow term={t(`fact.partOf.${record.series.kind}`)}>
-                    <TextLink
-                      href={seriesPath(locale, record.series.kind, record.series.slug)}
-                    >
-                      <span
-                        lang={seriesLabel.locale}
-                        dir={directionOf(seriesLabel.locale)}
-                      >
-                        {seriesLabel.title}
-                      </span>
-                    </TextLink>
-                    {' · '}
-                    {t('fact.episode', { number: record.series.position })}
                   </DetailRow>
                 )}
                 {record.captions ? (
@@ -1071,26 +1101,25 @@ export async function VideoDetailPage({
                 </ul>
               </section>
             )}
+
+            {personal}
           </aside>
         </div>
 
-        {related.length === 0 ? null : (
-          <section className="flex flex-col gap-6" aria-labelledby="video-related">
-            <SectionHeader id="video-related" heading={t('related')} />
-            <ul aria-labelledby="video-related" className={VIDEO_GRID}>
-              {related.map((video) => (
-                <VideoCard
-                  key={video.id}
-                  locale={locale}
-                  video={video}
-                  people={people}
-                  t={t}
-                  headingLevel="h3"
-                />
-              ))}
-            </ul>
+        {related.shelves.map((shelf) => (
+          <section
+            key={shelf.key}
+            className="flex flex-col gap-6"
+            aria-labelledby={`video-related-${shelf.key}`}
+          >
+            <SectionHeader
+              id={`video-related-${shelf.key}`}
+              heading={shelf.heading}
+              action={shelf.more}
+            />
+            <VideoCards locale={locale} videos={shelf.videos} label={shelf.heading} />
           </section>
-        )}
+        ))}
 
         <VideoStructuredData locale={locale} record={record} trail={trail} />
       </article>
@@ -1429,7 +1458,7 @@ export async function PlaylistDetailPage({
 }
 
 /* ===========================================================================
- * Speakers, and a topic's videos
+ * Speakers
  * ========================================================================= */
 
 /** The first-party person mark, decorative: no portrait is invented. */
@@ -1513,13 +1542,7 @@ export async function SpeakerBrowsePage({
                     </h2>
                     <p className="text-sm">
                       <a
-                        href={mediaQueryPath(
-                          localizedPath(locale, '/watch/videos'),
-                          readMediaQuery({}),
-                          {
-                            speaker: row.id,
-                          },
-                        )}
+                        href={watchVideosHref(locale, { speaker: row.id })}
                         className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-action underline-offset-4 hover:underline"
                       >
                         {t('speakerVideos', { count: String(row.videos) })}
@@ -1538,71 +1561,6 @@ export async function SpeakerBrowsePage({
             offset > 0 ? offsetPath(base, Math.max(0, offset - MEDIA_FACET_PAGE)) : null
           }
           next={page.hasMore ? offsetPath(base, offset + MEDIA_FACET_PAGE) : null}
-          t={t}
-        />
-      </div>
-    </Container>
-  );
-}
-
-/**
- * `/watch/topics/{slug}` — the Videos on one topic. A FILTERED VIEW whose
- * canonical is the topic hub, `/topics/{slug}` (ROUTE_MAP.md §2.2), which is
- * linked from here and which lists these Videos too.
- */
-export async function WatchTopicPage({
-  locale,
-  topic,
-  query,
-}: {
-  readonly locale: Locale;
-  readonly topic: TopicView;
-  readonly query: Record<string, string | string[] | undefined>;
-}) {
-  const t = await getTranslations({ locale, namespace: 'watch' });
-  const trail = await watchTrail(locale);
-  const offset = readOffset(query);
-  const path = localizedPath(locale, `/watch/topics/${encodeURIComponent(topic.slug)}`);
-  const page = await mediaReadRuntime().videos({ topic: topic.id, offset });
-  const labelLocale = topic.label.resolvedLocale;
-
-  return (
-    <Container>
-      <div className="flex flex-col gap-8 py-[var(--space-page)]">
-        <MediaPageHeader
-          crumbs={{
-            label: trail.label,
-            trail: [trail.home, trail.watch, { text: topic.label.name }],
-          }}
-          title={
-            <>
-              {t('topicTitle')}:{' '}
-              <span lang={labelLocale} dir={directionOf(labelLocale)}>
-                {topic.label.name}
-              </span>
-            </>
-          }
-        >
-          <div className="pt-1">
-            <ActionLink
-              href={localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`)}
-              tone="secondary"
-            >
-              {t('topicHub')}
-            </ActionLink>
-          </div>
-        </MediaPageHeader>
-        {page.items.length === 0 ? (
-          <EmptyState>{t('topicEmpty')}</EmptyState>
-        ) : (
-          <VideoGrid locale={locale} videos={page.items} label={topic.label.name} />
-        )}
-        <Pagination
-          label={topic.label.name}
-          previous={
-            offset > 0 ? offsetPath(path, Math.max(0, offset - MEDIA_PAGE)) : null
-          }
-          next={page.hasMore ? offsetPath(path, offset + MEDIA_PAGE) : null}
           t={t}
         />
       </div>
@@ -1660,41 +1618,91 @@ const LANDING = 12;
 /** How many posters one shelf of the landing carries. */
 const SHELF = 12;
 
-/** How many programmes the landing gives a shelf of their own episodes. */
-const PROGRAMME_SHELVES = 2;
+/** How many Series or programmes the landing gives a shelf of their own episodes. */
+const SERIES_SHELVES = 2;
+
+/** How many Topics the landing gives a shelf of their own videos. */
+const TOPIC_SHELVES = 2;
+
+/** How many Topics and speakers the landing offers as ways in. */
+const TOPIC_CHIPS = 12;
+const SPEAKER_CHIPS = 10;
 
 /**
- * Every Watch surface this phase delivers, grouped the way the landing's browse
- * index offers them: the kinds of video, the ordered groupings, and the ways to
- * find by person or topic — with Listen, Watch's sibling for audio, linked ONCE.
+ * Every Watch surface, grouped the way the landing's browse index offers them
+ * — the kinds of video, the ordered groupings, and the ways to find by person
+ * or topic — with Listen, Watch's sibling for audio, and its two listings.
+ * Together with the Topic and speaker ways in, every Watch menu item.
  */
 const LANDING_GROUPS = [
   { key: 'formats', surfaces: ['videos', ...WATCH_VIEWS] },
   { key: 'groups', surfaces: ['series', 'programs', 'playlists'] },
-  { key: 'find', surfaces: ['speakers', 'topics', 'listen'] },
+  {
+    key: 'find',
+    surfaces: ['speakers', 'topics', 'listen', 'listenLectures', 'listenSeries'],
+  },
 ] as const;
 
-/** Where a browse entry goes: Watch's own surfaces, the topic hub, or Listen. */
+/** Where a browse entry goes: Watch's own surfaces, the Topic index, or Listen. */
 function surfacePath(locale: Locale, surface: string): string {
   if (surface === 'topics') return localizedPath(locale, '/topics');
   if (surface === 'listen') return localizedPath(locale, '/listen');
+  if (surface === 'listenLectures') return localizedPath(locale, '/listen/lectures');
+  if (surface === 'listenSeries') return localizedPath(locale, '/listen/series');
   return localizedPath(locale, `/watch/${surface}`);
+}
+
+/** A way in with its count, as a chip: "Education · 12". */
+function CountChips({
+  label,
+  chips,
+}: {
+  readonly label: string;
+  readonly chips: readonly {
+    readonly href: string;
+    readonly text: string;
+    readonly count: string;
+  }[];
+}) {
+  return (
+    <ul aria-label={label} className="flex list-none flex-wrap gap-2 p-0">
+      {chips.map((chip) => (
+        <li key={chip.href} className="min-w-0">
+          <a
+            href={chip.href}
+            className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-full border border-border bg-surface-raised px-4 text-sm no-underline transition-colors duration-[var(--duration-fast)] hover:border-accent hover:bg-accent-surface"
+          >
+            <span className="min-w-0 wrap-anywhere" dir="auto">
+              {chip.text}
+            </span>
+            <span className="text-caption font-semibold text-foreground-muted tabular-nums">
+              {chip.count}
+            </span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 /**
  * `/watch` — `?sort=featured|latest` (ROUTE_MAP.md §3.7).
  *
- * POSTER-LED (R2, audit F13). The page opens on its lead video — the first
- * featured one with a poster, beside the section's name — then the featured or
- * latest grid, then a shelf per kind of video and per leading programme, each
- * only when it has something in it, then a compact index of every surface.
- * Within a shelf the interface's own language comes first (F10).
+ * THE FRONT DOOR (R2, audit F13; Watch Part 1). The page opens on what Watch
+ * holds — its figures, read in ONE facet read of the whole of Media — then its
+ * lead video (the first featured one with a poster) in the featured or latest
+ * grid, then a shelf per kind of video, the Topics and their leading shelves,
+ * the leading Series and programmes, the speakers, the Quran's and Hadith's
+ * own Videos hubs, and a compact index of every surface — each only when it
+ * has something in it. Within a shelf the interface's own language comes
+ * first (F10).
  *
  * NO FAKE CURATION. "Featured" is the Videos an operator marked featured, and
- * when there are none the page says so and points at the latest instead of
- * relabelling the latest as featured. The browse index names only what exists:
- * the Watch surfaces, topics, and Listen. Photographs are reached from News and
- * Events, their designed entry point. No "coming soon".
+ * when there are none the page opens on Latest and offers no sort tabs rather
+ * than relabelling the latest as featured. Figures are counts Media answered —
+ * a zero is never stated. The browse index names only what exists: the Watch
+ * surfaces, topics, and Listen. Photographs are reached from News and Events,
+ * their designed entry point. No "coming soon".
  */
 export async function WatchLandingPage({
   locale,
@@ -1709,17 +1717,36 @@ export async function WatchLandingPage({
     const format = formatOfView(view);
     return format === null ? [] : [{ view, format }];
   });
-  const [asked, programmes, ...byFormat] = await Promise.all([
+  const [asked, facets, ...byFormat] = await Promise.all([
     reads.videos({ featured: requested === 'featured' }),
-    reads.seriesList('program', 0),
+    reads.topicVideoFacets({ scope: 'media', titleLocale: locale }),
     ...views.map(({ format }) => reads.videos({ format })),
   ]);
-  const programmeShelves = await Promise.all(
-    programmes.items.slice(0, PROGRAMME_SHELVES).map(async (programme) => ({
-      programme,
-      videos: (await reads.seriesVideos(programme.id, 0)).items.slice(0, SHELF),
-    })),
-  );
+  const topicFacets = facets.topics.items.slice(0, TOPIC_CHIPS);
+  const speakerFacets = facets.speakers.items.slice(0, SPEAKER_CHIPS);
+  const [names, seriesShelves, topicShelves] = await Promise.all([
+    referenceNames(
+      {
+        personIds: speakerFacets.map((facet) => facet.id),
+        topicIds: topicFacets.map((facet) => facet.id),
+      },
+      locale,
+    ),
+    Promise.all(
+      facets.series.items.slice(0, SERIES_SHELVES).map(async (series) => ({
+        series,
+        videos: (await reads.seriesVideos(series.id, 0)).items.slice(0, SHELF),
+      })),
+    ),
+    Promise.all(
+      topicFacets.slice(0, TOPIC_SHELVES).map(async (facet) => ({
+        facet,
+        videos: (await reads.videos({ topic: facet.id })).items.slice(0, SHELF),
+      })),
+    ),
+  ]);
+  const topics = caseless(names.topics);
+  const people = caseless(names.people);
 
   const { sort, tabs } = watchLanding(
     requested,
@@ -1749,6 +1776,70 @@ export async function WatchLandingPage({
     }))
     .filter((shelf) => shelf.videos.length > 0);
   const nameFor = (view: string) => t(`sections.${view}` as 'sections.videos');
+  const number = (value: number) => new Intl.NumberFormat(locale).format(value);
+  const hub = facets.hub;
+  const hours = Math.floor(hub.seconds / 3600);
+  const topicChips = topicFacets.flatMap((facet) => {
+    const topic = topics.get(facet.id.toLowerCase());
+    return topic === undefined
+      ? []
+      : [
+          {
+            href: watchVideosHref(locale, { topic: facet.id }),
+            text: topic.name,
+            count: number(facet.videos),
+          },
+        ];
+  });
+  const speakerChips = speakerFacets.flatMap((facet) => {
+    const person = people.get(facet.id.toLowerCase());
+    return person === undefined
+      ? []
+      : [
+          {
+            href: watchVideosHref(locale, { speaker: facet.id }),
+            text: person.name,
+            count: number(facet.videos),
+          },
+        ];
+  });
+  const stats = [
+    ...(hub.videos === 0
+      ? []
+      : [
+          {
+            value: number(hub.videos),
+            label: t('landing.stats.videos', { count: hub.videos }),
+          },
+        ]),
+    ...(hours === 0
+      ? []
+      : [{ value: number(hours), label: t('listing.statHours', { count: hours }) }]),
+    ...(hub.languages < 2
+      ? []
+      : [
+          {
+            value: number(hub.languages),
+            label: t('landing.stats.languages', { count: hub.languages }),
+          },
+        ]),
+    ...(facets.topics.items.length === 0 || facets.topics.hasMore
+      ? []
+      : [
+          {
+            value: number(facets.topics.items.length),
+            label: t('landing.stats.topics', { count: facets.topics.items.length }),
+          },
+        ]),
+    ...(facets.speakers.items.length === 0 || facets.speakers.hasMore
+      ? []
+      : [
+          {
+            value: number(facets.speakers.items.length),
+            label: t('landing.stats.speakers', { count: facets.speakers.items.length }),
+          },
+        ]),
+  ];
 
   return (
     <>
@@ -1761,11 +1852,19 @@ export async function WatchLandingPage({
               {t('allVideos')}
             </ActionLink>
             <ActionLink href={localizedPath(locale, '/watch/programs')} tone="secondary">
-              {t('sections.programs')}
+              {t('landing.programmesAction')}
             </ActionLink>
           </>
         }
-      />
+      >
+        {stats.length === 0 ? null : (
+          <div className="flex flex-wrap gap-x-10 gap-y-4 pt-2">
+            {stats.map((stat) => (
+              <Stat key={stat.label} value={stat.value} label={stat.label} />
+            ))}
+          </div>
+        )}
+      </Hero>
 
       <Container>
         <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
@@ -1817,26 +1916,95 @@ export async function WatchLandingPage({
             />
           ))}
 
-          {programmeShelves
+          {topicChips.length === 0 ? null : (
+            <section className="flex flex-col gap-5" aria-labelledby="watch-topics">
+              <SectionHeader
+                id="watch-topics"
+                heading={t('landing.topicsHeading')}
+                intro={t('landing.topicsIntro')}
+                action={{
+                  href: localizedPath(locale, '/topics'),
+                  text: t('landing.allTopics'),
+                }}
+              />
+              <CountChips label={t('landing.topicsHeading')} chips={topicChips} />
+            </section>
+          )}
+
+          {topicShelves
             .filter((shelf) => shelf.videos.length > 0)
-            .map(({ programme, videos }) => {
-              const programmeLabel = mediaLabel(programme, locale);
+            .flatMap(({ facet, videos }) => {
+              const topic = topics.get(facet.id.toLowerCase());
+              return topic === undefined
+                ? []
+                : [
+                    <VideoShelf
+                      key={facet.id}
+                      locale={locale}
+                      id={`watch-topic-${topic.slug}`}
+                      heading={t('landing.onTopic', { name: topic.name })}
+                      videos={videos}
+                      action={{
+                        href: watchVideosHref(locale, { topic: facet.id }),
+                        text: t('landing.allOnTopic', { name: topic.name }),
+                      }}
+                    />,
+                  ];
+            })}
+
+          {seriesShelves
+            .filter((shelf) => shelf.videos.length > 0)
+            .map(({ series, videos }) => {
+              const seriesLabel = mediaLabel(series, locale);
               return (
                 <VideoShelf
-                  key={programme.id}
+                  key={series.id}
                   locale={locale}
-                  id={`watch-programme-${programme.id}`}
-                  heading={programmeLabel.title}
-                  headingLang={programmeLabel.locale}
+                  id={`watch-series-${series.id}`}
+                  heading={seriesLabel.title}
+                  headingLang={seriesLabel.locale}
                   videos={videos}
                   episode
                   action={{
-                    href: seriesPath(locale, programme.kind, programme.slug),
+                    href: seriesPath(locale, series.kind, series.slug),
                     text: t('allEpisodes'),
                   }}
                 />
               );
             })}
+
+          {speakerChips.length === 0 ? null : (
+            <section className="flex flex-col gap-5" aria-labelledby="watch-speakers">
+              <SectionHeader
+                id="watch-speakers"
+                heading={t('landing.speakersHeading')}
+                intro={t('landing.speakersIntro')}
+                action={{
+                  href: localizedPath(locale, '/watch/speakers'),
+                  text: t('landing.allSpeakers'),
+                }}
+              />
+              <CountChips label={t('landing.speakersHeading')} chips={speakerChips} />
+            </section>
+          )}
+
+          <section className="flex flex-col gap-5" aria-labelledby="watch-subjects">
+            <SectionHeader
+              id="watch-subjects"
+              heading={t('landing.subjectsHeading')}
+              intro={t('landing.subjectsIntro')}
+            />
+            <ul className="grid list-none gap-4 p-0 sm:grid-cols-2">
+              {(['quran', 'hadith'] as const).map((subject) => (
+                <LinkCard
+                  key={subject}
+                  href={localizedPath(locale, `/${subject}/videos`)}
+                  title={t(`landing.subjects.${subject}`)}
+                  description={t(`landing.subjects.${subject}Body`)}
+                />
+              ))}
+            </ul>
+          </section>
 
           {/* Every surface, as a compact index rather than a wall of cards. */}
           <nav aria-labelledby="watch-browse" className="flex flex-col gap-6">

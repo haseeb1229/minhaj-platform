@@ -135,7 +135,7 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/watch/playlists/[slug]/page.tsx',
   'apps/web/src/app/[locale]/(public)/watch/speakers/page.tsx',
   'apps/web/src/app/[locale]/(public)/watch/speakers/[slug]/route.ts',
-  'apps/web/src/app/[locale]/(public)/watch/topics/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/watch/topics/[slug]/route.ts',
   // Phase 11. Every Listen surface reads AudioTracks and AudioSeries an
   // administrator publishes and withdraws, and a track's page asks Storage
   // whether its file can be served now — so none can be prerendered, and each

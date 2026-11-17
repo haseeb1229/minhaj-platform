@@ -2,9 +2,10 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { mediaReadRuntime } from '@/composition/media-read';
+import { videoPath } from '@/components/media/presentation';
 import { VideoDetailPage, videoMetadataInput } from '@/components/media/watch';
 import { PersonalControls } from '@/components/personal-island/personal-controls';
-import { QuranPassageLinks } from '@/components/quran/tafsir-links';
+import { LectureMoments, QuranPassageLinks } from '@/components/quran/tafsir-links';
 import { readLectureStart } from '@/components/quran/tafsir-layout';
 import { requireLocale } from '@/config/route-locale';
 import { contentMetadata } from '@/seo/metadata';
@@ -19,7 +20,9 @@ import { contentMetadata } from '@/seo/metadata';
  * (DOMAIN_MODEL.md §19.7).
  *
  * `?start=` (Quran Part 8) opens the lecture at a passage: the Play press
- * begins there; the page says so; the canonical address is unchanged.
+ * begins there; the page says so; the canonical address is unchanged. Watch
+ * Part 1 offers each recorded moment as such a link ("Watch from"), and
+ * places the private Save island beside the facts.
  *
  * THE ONE PUBLIC ROUTE THAT MAY FRAME A PROVIDER, and only after the visitor
  * asks: its Content-Security-Policy is the only public one whose `frame-src`
@@ -51,18 +54,25 @@ export default async function VideoPage({ params, searchParams }: DetailParams) 
   // the canonical address.
   const start = readLectureStart((await searchParams)['start'], record.durationSeconds);
   return (
-    <>
-      <VideoDetailPage
-        locale={locale}
-        record={record}
-        start={start}
-        passages={<QuranPassageLinks locale={locale} passages={record.quranPassages} />}
-      />
-      <PersonalControls
-        locale={locale}
-        target={{ kind: 'video', id: record.id }}
-        framed
-      />
-    </>
+    <VideoDetailPage
+      locale={locale}
+      record={record}
+      start={start}
+      passages={<QuranPassageLinks locale={locale} passages={record.quranPassages} />}
+      moments={
+        // A moment is a place to start playing: none for a video with no player.
+        record.availability === 'unavailable' ? null : (
+          <LectureMoments
+            locale={locale}
+            path={videoPath(locale, record.slug)}
+            passages={record.quranPassages}
+            duration={record.durationSeconds}
+          />
+        )
+      }
+      personal={
+        <PersonalControls locale={locale} target={{ kind: 'video', id: record.id }} />
+      }
+    />
   );
 }
