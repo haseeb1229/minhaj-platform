@@ -1,30 +1,19 @@
-import { localeSchema, localizedPath } from '@minhaj/contracts';
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
-import { z } from 'zod';
-
 import type { Locale } from '@minhaj/contracts';
-import {
-  NEWS_EARLIEST_YEAR,
-  NEWS_MAX_OFFSET,
-  isNewsKind,
-  leadImagePath,
-  newsPathOf,
-  type NewsKind,
-  type PublicNews,
-} from '@minhaj/contracts/editorial';
+import { leadImagePath, newsPathOf, type PublicNews } from '@minhaj/contracts/editorial';
 
 import { absoluteUrl } from '@/config/origin';
 import { contentMetadata } from '@/seo/metadata';
 
 /**
  * The PURE presentation rules of Editorial's public pages: which translation a
- * reader is shown, what a News page claims to search engines, and how the News
- * queries are read. No read runtime and no rendering here, so each rule is
- * proved on its own (`tests/editorial/news-presentation.test.ts`).
+ * reader is shown and what a News page claims to search engines. No read
+ * runtime and no rendering here, so each rule is proved on its own
+ * (`tests/editorial/news-presentation.test.ts`). How the News listings and the
+ * archive read their addresses is `./news-view` (News & Events Part 1).
  */
-
-type Query = Record<string, string | string[] | undefined>;
 
 /**
  * The translation a reader is shown: the requested locale when the record has
@@ -39,105 +28,6 @@ export function translationFor<T extends { readonly languageCode: Locale }>(
     record.translations.find((row) => row.languageCode === record.primaryLanguage);
   if (!translation) throw new Error('Published editorial translation is missing.');
   return translation;
-}
-
-/** `?offset=`, bounded; anything else is the first page. */
-export function readNewsOffset(query: Query): number {
-  const raw = query['offset'];
-  return z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(NEWS_MAX_OFFSET)
-    .catch(0)
-    .parse(typeof raw === 'string' && raw.length <= 8 ? raw : 0);
-}
-
-/**
- * The archive's `?year=` and `?month=`, TOLERATED: a malformed or impossible
- * value is simply absent, and a month without a year means nothing. The read
- * service validates again.
- */
-export function readNewsArchiveQuery(query: Query): {
-  readonly year: number | null;
-  readonly month: number | null;
-  readonly offset: number;
-} {
-  const whole = (key: string, pattern: RegExp): number | null => {
-    const raw = query[key];
-    return typeof raw === 'string' && pattern.test(raw) ? Number(raw) : null;
-  };
-  const rawYear = whole('year', /^\d{4}$/);
-  const year =
-    rawYear !== null && rawYear >= NEWS_EARLIEST_YEAR && rawYear <= 9998 ? rawYear : null;
-  const rawMonth = whole('month', /^\d{1,2}$/);
-  const month =
-    year !== null && rawMonth !== null && rawMonth >= 1 && rawMonth <= 12
-      ? rawMonth
-      : null;
-  return { year, month, offset: readNewsOffset(query) };
-}
-
-/**
- * R2 — the News listings' narrowing, TOLERATED like the archive's: `?lang=` is
- * one of the three content languages and `?type=` one of the four families;
- * anything else — a repeated parameter, another value — is simply absent.
- */
-export function readNewsFilters(query: Query): {
-  readonly language: Locale | null;
-  readonly kind: NewsKind | null;
-} {
-  const raw = (key: string) => {
-    const value = query[key];
-    return typeof value === 'string' && value.length <= 16 ? value : null;
-  };
-  const language = raw('lang');
-  const kind = raw('type');
-  return {
-    language: language === null ? null : (localeSchema.safeParse(language).data ?? null),
-    kind: kind !== null && isNewsKind(kind) ? kind : null,
-  };
-}
-
-/**
- * The address of a News listing (`/news` or a family's own) with its language
- * narrowing and offset, neutral values omitted — the first page of every
- * language is the bare listing.
- */
-export function newsListingPath(
-  locale: string,
-  path: string,
-  filter: { readonly language: Locale | null },
-  offset = 0,
-): string {
-  const search = new URLSearchParams();
-  if (filter.language !== null) search.set('lang', filter.language);
-  if (offset > 0) search.set('offset', String(offset));
-  const encoded = search.toString();
-  return localizedPath(locale, `${path}${encoded === '' ? '' : `?${encoded}`}`);
-}
-
-/** The archive's address for a year, a month and an offset, neutral values omitted. */
-export function newsArchivePath(
-  locale: string,
-  filter: {
-    readonly year: number | null;
-    readonly month: number | null;
-    readonly kind?: NewsKind | null;
-    readonly language?: Locale | null;
-  },
-  offset = 0,
-): string {
-  const search = new URLSearchParams();
-  if (filter.kind !== null && filter.kind !== undefined) search.set('type', filter.kind);
-  if (filter.language !== null && filter.language !== undefined)
-    search.set('lang', filter.language);
-  if (filter.year !== null) search.set('year', String(filter.year));
-  if (filter.year !== null && filter.month !== null)
-    search.set('month', String(filter.month));
-  if (offset > 0) search.set('offset', String(offset));
-  const encoded = search.toString();
-  return localizedPath(locale, `/news/archive${encoded === '' ? '' : `?${encoded}`}`);
 }
 
 /** Canonical, `hreflang` and `x-default` from the record's own languages. */

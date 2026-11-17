@@ -5045,6 +5045,109 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > `tests/architecture/phase4-shell-boundaries.test.ts` (wording only — `/fatwa/ask` stays on the
 > session-free public list). *CI and staging evidence are recorded when they exist.*
 
+> **News & Events Part 1 — News: `/news`, the press-release, statement and media-coverage listings,
+> every record page and the News archive (owner direction: every section built from A to Z, one item
+> at a time; on `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (DOMAIN_MODEL.md
+> §7.2.2; ROUTE_MAP.md §3.9; INFORMATION_ARCHITECTURE.md §3.8). No route is added or removed, no
+> schema change and no migration; the slug-history 301s, the proxy's legacy mappings, structured
+> data and the Phase-13 refusals are untouched. Events, galleries, photographs, the media archive,
+> Collections and the newsletter are Part 2 and keep working as they were.
+>
+> - **The audit (before).** `/news` and the three family listings were Phase 13's chronicle (the
+>   newest story leading, then rows) behind Previous/Next and `?offset=`, with no total, no figures,
+>   no Topic, year, month or outlet filter, no counts, one order, no chips and a language row of
+>   plain links (`?lang=`); `/news` previewed three of each other family and repeated Events and the
+>   archive (opening and browse list) under one name each, and did not lead to the newsletter.
+>   `/news/archive` was a fifth listing (`?type`, `?lang`, `?year`, `?month`, `?offset`) whose
+>   periods were links but whose records were never reachable from a family listing by date. A
+>   record's page had no Share, no reading time, no newer or older record of its family, "Related
+>   reading" (one topic, else the family's first page) as its only onward way, no link to the
+>   languages it is also published in, and a coverage record's outlet was plain text. Press
+>   releases have no contact or boilerplate in the model (DOMAIN_MODEL.md §7.2.2: "no extra
+>   metadata is invented"), so none is shown — then or now.
+> - **One listing, four addresses (decision).** `components/editorial/news-listing.tsx` renders
+>   every family: the family's figures (records, the years they span, content languages, outlets);
+>   the families as tabs, each counted under the view's Topic, period and language and keeping them;
+>   a GET form of counted filters — Topic, year, month (only once a year is chosen), language and,
+>   for media coverage, outlet — each option counted under every other filter; newest or oldest
+>   first (the reader's language first in the default order, R2's rule); chips that each remove
+>   one filter; "Showing n–m of N"; the newest story leading the first page in the default order;
+>   numbered pages (20); and honest empty, no-results and past-the-end states. The address rules
+>   are one pure module (`news-view.ts`): one address per view, every former spelling (`?lang=`,
+>   `?offset=`, `?sort=latest`, a form's empty controls, another parameter order, a malformed or
+>   repeated value) one redirect, and every link into a listing built by `newsListingHref`.
+> - **`/news` is also the section's front door.** Its own first page — unfiltered, newest first —
+>   opens on Events and the News archive, then the latest stories, then each other family's newest
+>   three (only a family that has any) with "All press releases (N)", News by year (counted, into
+>   the archive) and the rest of News & Events: Collections, the three photograph surfaces and the
+>   newsletter. The browse list no longer repeats the families or Events and the archive (the
+>   tabs, shelves and opening lead there), so nothing is offered twice under one name (ROUTE_MAP.md
+>   §3.9 records the 2026-11-08 direction as superseded in part).
+> - **The archive is an index (decision).** `/news/archive` counts every year and each family's
+>   share of it, with a picture of its months; a year opens on its months, each counted the same
+>   way, with the next and previous year; every count leads into that family's listing for the
+>   period. Only `?year` is its own; a former `?type=` is one redirect to that family's listing for
+>   the same period and language, any other former parameter one redirect to the year. Five bounded
+>   period reads, never a record.
+> - **A record's page.** The header adds the reading time (words of the body at 200 a minute),
+>   Share (the shared island: the device's share sheet or the address copied, present only with
+>   script, sending nothing anywhere), the statement's issuer marked, and a coverage record's outlet
+>   and date. The facts name the family (linked), the other languages it is published in (each the
+>   record's own address in that locale), the contributors and the Centre; a coverage record's
+>   outlet leads to all of its coverage, and its source stays a described outbound link marked as
+>   external. Then its newer and older record of the same family, and related reading: more on its
+>   first Topic (any family), then more of its family, never itself, never a neighbour, never one
+>   record twice, each shelf with the way to all of them. The body, contents, lead figure with its
+>   credit, the fallback-language notice and structured data are as before.
+> - **Reads (Model A).** New Editorial reads `newsListing`, `newsListingFacets` and
+>   `newsNeighbours` (contract `news-listing.ts`, port, adapter in `adapters/editorial/news.ts`,
+>   the read service re-validating every field; bound parameters only; DOMAIN_MODEL.md §7.2.2). The
+>   service's cross-family `newsArchive` and the presentation module's `?offset`/`?lang`/archive
+>   readers and path builders are removed; `newsList`, `newsArchivePeriods` and `newsOnTopic` stay
+>   (the home page, the header and the topic hub use them).
+> - **Messages.** New `news.{listing.*, front.*, detail.*, archivePage.*}` in en/ur/ar;
+>   `news.all.*` now carries the count; removed as unused: `news.{pageEmpty, firstPage,
+>   archiveMonth, archiveMonths, countShort, archiveFilteredEmpty, related, languageFilter,
+>   allLanguages, languageEmpty, typeFilter, allTypes, archiveEverything, eventsBody}`.
+>
+> **Data facts — what staging will show.** Staging's News is Stage 1A's migrated minhaj.org corpus
+> (MIGRATION_STRATEGY.md §17–§18): **259 news items** (147 + 112; English, Urdu and Arabic, each
+> dated by its source, all but a few with a first-party lead image) and **30 English press
+> releases** (25 with a lead image); **no statement and no media coverage** (the §19.1 runs that
+> would add about 4,600 records are planned, not recorded); the demo data adds no News. So staging
+> shows `/news` with its figures (259 news stories, the years they span, three languages), the
+> family tabs (Statements and Media coverage at 0), year, month and language filters (Topic only
+> where a mapping filed one), the lead story with pictures, the press-release shelf, News by year,
+> and the browse list; `/news/press-releases` with its figures and filters; `/news/statements` and
+> `/news/media-coverage` each its honest empty state leading back to News and Events; the archive's
+> years and months over the news items and press releases; and a record's page with its reading
+> time, Share, newer and older neighbours and related reading. The local persistent database was
+> not inspected.
+>
+> **Proof:** `tests/editorial/news-view.test.ts` (new: the listing's and archive's address rules —
+> tolerant reading, canonical writing, every former spelling one redirect, the read query accepted
+> by Editorial's schema); `tests/editorial/news-reading.test.ts` (the listing, facets and neighbour
+> reads refuse seventeen malformed views before any read; the reading time; the removed
+> `newsArchive` refusal is now the listing's); `tests/editorial/news.integration.test.ts` (real SQL
+> Server: the listing's order both ways, pages with the view's total and an honest page past the
+> end, Topic, month, language and outlet narrowing, facets each under every other filter, the
+> family tabs' counts ignoring the outlet, figures, neighbours either side, a draft and another
+> family answering none, a tie at one instant following the listing's tie-break, a withdrawn record
+> skipped; the archive and R2 proofs now read periods through each family's listing — every
+> assertion kept); `tests/editorial/news-presentation.test.ts` (the moved query rules leave it);
+> `tests/architecture/phase13-news-boundaries.test.ts` (the no-picture, no-embed, no-logo rules
+> now hold for the listing and archive modules too, and the new contract joins the no-Media proof);
+> `tests/config/locale.test.ts` (the new modules). `tests/browser/news.spec.ts` — the landing's
+> Events and archive offered once each, counted family tabs, figures, the browse list (the
+> newsletter now linked; the families, Events and the archive no longer repeated there — a
+> design change, stated in the test), the statement shelf's counted link; `?sort=latest` one
+> redirect; a statement's reading time, Share and family link (the signed-in sameness now compared once both pages' Share islands have hydrated); a coverage record's outlet link; the
+> archive's year index, a year's months leading into the statement listing; new: seven former
+> spellings each one redirect, a year chip and range, the counted year and outlet filters, the GET
+> form without script, the no-results and past-the-end states; and every surface at 320 and 1440 px
+> in en, ur and ar with one `h1`, no redirect, no sideways scroll and no serious or critical axe
+> finding at 1440 px. *CI and staging evidence are recorded when they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

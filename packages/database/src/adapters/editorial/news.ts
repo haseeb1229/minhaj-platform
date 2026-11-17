@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 
 import {
+  NEWS_FACET_PAGE,
   NEWS_KINDS,
   NEWS_PAGE,
   type ArticleDetail,
@@ -19,6 +20,7 @@ import {
   type EditorialTransition,
   type EditorialWrite,
   type NewsKind,
+  type NewsListingQuery,
   type NewsSummary,
   type PublicLeadImage,
   type PublicNews,
@@ -219,6 +221,8 @@ interface Family extends Shape {
   readonly topicTable: Prisma.Sql;
   /** Its revisions' translations, for the R2 content-language narrowing. */
   readonly translationTable: Prisma.Sql;
+  /** Its revisions, for a coverage record's outlet (News & Events Part 1). */
+  readonly revisionTable: Prisma.Sql;
   readonly delegates: (client: Client) => Delegates;
 }
 
@@ -231,6 +235,7 @@ const FAMILIES: Readonly<Record<NewsKind, Family>> = {
     table: Prisma.sql`[dbo].[NewsArticle]`,
     topicTable: Prisma.sql`[dbo].[NewsArticleTopic]`,
     translationTable: Prisma.sql`[dbo].[NewsArticleRevisionTranslation]`,
+    revisionTable: Prisma.sql`[dbo].[NewsArticleRevision]`,
     issuer: false,
     coverage: false,
     centre: true,
@@ -246,6 +251,7 @@ const FAMILIES: Readonly<Record<NewsKind, Family>> = {
     table: Prisma.sql`[dbo].[PressRelease]`,
     topicTable: Prisma.sql`[dbo].[PressReleaseTopic]`,
     translationTable: Prisma.sql`[dbo].[PressReleaseRevisionTranslation]`,
+    revisionTable: Prisma.sql`[dbo].[PressReleaseRevision]`,
     issuer: false,
     coverage: false,
     centre: false,
@@ -261,6 +267,7 @@ const FAMILIES: Readonly<Record<NewsKind, Family>> = {
     table: Prisma.sql`[dbo].[Statement]`,
     topicTable: Prisma.sql`[dbo].[StatementTopic]`,
     translationTable: Prisma.sql`[dbo].[StatementRevisionTranslation]`,
+    revisionTable: Prisma.sql`[dbo].[StatementRevision]`,
     issuer: true,
     coverage: false,
     centre: false,
@@ -276,6 +283,7 @@ const FAMILIES: Readonly<Record<NewsKind, Family>> = {
     table: Prisma.sql`[dbo].[MediaCoverage]`,
     topicTable: Prisma.sql`[dbo].[MediaCoverageTopic]`,
     translationTable: Prisma.sql`[dbo].[MediaCoverageRevisionTranslation]`,
+    revisionTable: Prisma.sql`[dbo].[MediaCoverageRevision]`,
     issuer: false,
     coverage: true,
     centre: false,
@@ -993,53 +1001,125 @@ const batchOf = (ids: readonly string[]) => {
   return [...ids];
 };
 
-/**
- * The four families as one relation of (kind, id, chronologyAt, rank),
- * filtered. A NewsArticle's and a PressRelease's chronology is its record's own
- * column (Phase 30-R); a Statement's and a MediaCoverage's is its publication
- * instant.
- *
- * R2: `kind` keeps one family's rows only; `language` keeps the records whose
- * CURRENT revision has a translation in that language; `preferLanguage` ranks
- * those records 0 and every other 1, for an ordering that puts them first.
- * Every value is a bound parameter; the tables are code-owned, never input.
- */
-function timelineRows(filter: {
+/** A family's reader-facing date column (Phase 30-R): chronology, else publication. */
+const chronologyOf = (family: Family): Prisma.Sql =>
+  family.lead ? Prisma.sql`r.[chronologyAt]` : Prisma.sql`r.[publishedAt]`;
+
+/** What narrows a family's published records; every member optional. */
+interface RowFilter {
   readonly from: Date | null;
   readonly to: Date | null;
   readonly topicId: string | null;
-  readonly kind?: NewsKind | null | undefined;
   readonly language?: string | null | undefined;
+  /** Media coverage only: the outlet its current revision names. */
+  readonly outlet?: string | null | undefined;
   readonly preferLanguage?: string | null | undefined;
-}): Prisma.Sql {
+}
+
+/** The UTC bounds of a year, or of one month of it; none without a year. */
+function periodOf(
+  year: number | null,
+  month: number | null,
+): { readonly from: Date | null; readonly to: Date | null } {
+  if (year === null) return { from: null, to: null };
+  return month === null
+    ? { from: new Date(Date.UTC(year, 0, 1)), to: new Date(Date.UTC(year + 1, 0, 1)) }
+    : {
+        from: new Date(Date.UTC(year, month - 1, 1)),
+        to: new Date(Date.UTC(year, month, 1)),
+      };
+}
+
+/**
+ * One family's PUBLISHED records under a filter, and the rank `preferLanguage`
+ * gives them. A NewsArticle's and a PressRelease's date is its record's own
+ * chronology (Phase 30-R); a Statement's and a MediaCoverage's is its
+ * publication instant. `language` keeps the records whose CURRENT revision has
+ * a translation in that language; `preferLanguage` ranks those 0 and every
+ * other 1; `outlet` keeps the coverage records whose current revision names
+ * it, and admits nothing of a family that names no outlet. Every value is a
+ * bound parameter; the tables are code-owned, never input.
+ */
+function familyClauses(
+  family: Family,
+  filter: RowFilter,
+): { readonly where: Prisma.Sql; readonly rank: Prisma.Sql } {
+  const date = chronologyOf(family);
+  const translated = (language: string) =>
+    Prisma.sql`EXISTS (SELECT 1 FROM ${family.translationTable} l WHERE l.[ownerId] = r.[id] AND l.[revisionNumber] = r.[currentRevision] AND l.[languageCode] = ${language})`;
+  const conditions = [Prisma.sql`r.[state] = N'published'`];
+  if (filter.from !== null) conditions.push(Prisma.sql`${date} >= ${filter.from}`);
+  if (filter.to !== null) conditions.push(Prisma.sql`${date} < ${filter.to}`);
+  if (filter.topicId !== null)
+    conditions.push(
+      Prisma.sql`EXISTS (SELECT 1 FROM ${family.topicTable} t WHERE t.[ownerId] = r.[id] AND t.[revisionNumber] = r.[currentRevision] AND t.[topicId] = ${filter.topicId})`,
+    );
+  if (filter.language !== null && filter.language !== undefined)
+    conditions.push(translated(filter.language));
+  if (filter.outlet !== null && filter.outlet !== undefined)
+    conditions.push(
+      family.coverage
+        ? Prisma.sql`EXISTS (SELECT 1 FROM ${family.revisionTable} v WHERE v.[ownerId] = r.[id] AND v.[number] = r.[currentRevision] AND v.[outletName] = ${filter.outlet})`
+        : Prisma.sql`1 = 0`,
+    );
+  return {
+    where: Prisma.join(conditions, ' AND '),
+    rank:
+      filter.preferLanguage === null || filter.preferLanguage === undefined
+        ? Prisma.sql`0`
+        : Prisma.sql`CASE WHEN ${translated(filter.preferLanguage)} THEN 0 ELSE 1 END`,
+  };
+}
+
+/**
+ * The four families as one relation of (kind, id, chronologyAt, rank),
+ * filtered (see `familyClauses`); `kind` keeps one family's rows only (R2).
+ */
+function timelineRows(
+  filter: RowFilter & { readonly kind?: NewsKind | null | undefined },
+): Prisma.Sql {
   const kinds = NEWS_KINDS.filter(
     (kind) => filter.kind === null || filter.kind === undefined || filter.kind === kind,
   );
   return Prisma.join(
     kinds.map((kind) => {
       const family = FAMILIES[kind];
-      const date = family.lead
-        ? Prisma.sql`r.[chronologyAt]`
-        : Prisma.sql`r.[publishedAt]`;
-      const translated = (language: string) =>
-        Prisma.sql`EXISTS (SELECT 1 FROM ${family.translationTable} l WHERE l.[ownerId] = r.[id] AND l.[revisionNumber] = r.[currentRevision] AND l.[languageCode] = ${language})`;
-      const conditions = [Prisma.sql`r.[state] = N'published'`];
-      if (filter.from !== null) conditions.push(Prisma.sql`${date} >= ${filter.from}`);
-      if (filter.to !== null) conditions.push(Prisma.sql`${date} < ${filter.to}`);
-      if (filter.topicId !== null)
-        conditions.push(
-          Prisma.sql`EXISTS (SELECT 1 FROM ${family.topicTable} t WHERE t.[ownerId] = r.[id] AND t.[revisionNumber] = r.[currentRevision] AND t.[topicId] = ${filter.topicId})`,
-        );
-      if (filter.language !== null && filter.language !== undefined)
-        conditions.push(translated(filter.language));
-      const rank =
-        filter.preferLanguage === null || filter.preferLanguage === undefined
-          ? Prisma.sql`0`
-          : Prisma.sql`CASE WHEN ${translated(filter.preferLanguage)} THEN 0 ELSE 1 END`;
-      return Prisma.sql`SELECT CAST(${kind} AS NVARCHAR(16)) AS [kind], r.[id], ${date} AS [chronologyAt], ${rank} AS [rank] FROM ${family.table} r WHERE ${Prisma.join(conditions, ' AND ')}`;
+      const { where, rank } = familyClauses(family, filter);
+      return Prisma.sql`SELECT CAST(${kind} AS NVARCHAR(16)) AS [kind], r.[id], ${chronologyOf(family)} AS [chronologyAt], ${rank} AS [rank] FROM ${family.table} r WHERE ${where}`;
     }),
     ' UNION ALL ',
   );
+}
+
+/**
+ * NEWS & EVENTS PART 1 — one family's published records as (id, revision, at,
+ * rank): its current revision for the facets' joins, and its date.
+ */
+function familyRows(family: Family, filter: RowFilter): Prisma.Sql {
+  const { where, rank } = familyClauses(family, filter);
+  return Prisma.sql`SELECT r.[id], r.[currentRevision] AS [revision], ${chronologyOf(family)} AS [at], ${rank} AS [rank] FROM ${family.table} r WHERE ${where}`;
+}
+
+/** A listing query as a row filter: the period it names, and its narrowing. */
+function listingFilter(query: NewsListingQuery): RowFilter {
+  return {
+    ...periodOf(query.year, query.month),
+    topicId: query.topic,
+    language: query.language,
+    outlet: query.outlet,
+    // Ordering by a preferred language means something only in the default
+    // order of a view no language narrows.
+    preferLanguage:
+      query.sort === 'newest' && query.language === null ? query.prefer : null,
+  };
+}
+
+/** What the driver answers for a `COUNT_BIG`, `COUNT` or `YEAR()` column. */
+type SqlCount = bigint | number;
+
+/** Such a value as a number, whatever the driver returned. */
+function countOf(value: SqlCount | null | undefined): number {
+  return Number(value ?? 0);
 }
 
 /** Reads the cards for a mixed set of (kind, id), in the given order. */
@@ -1070,6 +1150,9 @@ export function newsReads(): Pick<
   | 'publishedNews'
   | 'newsTimeline'
   | 'newsArchivePeriods'
+  | 'newsListing'
+  | 'newsListingFacets'
+  | 'newsNeighbours'
   | 'newsSitemap'
   | 'searchNews'
   | 'searchNewsList'
@@ -1126,21 +1209,10 @@ export function newsReads(): Pick<
 
     async newsTimeline(query) {
       const take = limitOf(query.limit, NEWS_PAGE);
-      const from =
-        query.year === null
-          ? null
-          : new Date(Date.UTC(query.year, (query.month ?? 1) - 1, 1));
-      const to =
-        query.year === null
-          ? null
-          : query.month === null
-            ? new Date(Date.UTC(query.year + 1, 0, 1))
-            : new Date(Date.UTC(query.year, query.month, 1));
       const refs = await db().$queryRaw<
         { kind: string; id: string; chronologyAt: Date }[]
       >`SELECT [kind], [id], [chronologyAt] FROM (${timelineRows({
-        from,
-        to,
+        ...periodOf(query.year, query.month),
         topicId: query.topicId,
         kind: query.kind,
         language: query.language,
@@ -1171,6 +1243,179 @@ export function newsReads(): Pick<
         month: Number(row.month),
         count: Number(row.count),
       }));
+    },
+
+    async newsListing(query) {
+      const family = familyOf(query.kind);
+      const take = limitOf(query.limit, NEWS_PAGE);
+      const rows = familyRows(family, listingFilter(query));
+      const order =
+        query.sort === 'oldest'
+          ? Prisma.sql`[at] ASC, [id] ASC`
+          : Prisma.sql`[rank] ASC, [at] DESC, [id] ASC`;
+      const [refs, totals] = await Promise.all([
+        db().$queryRaw<{ id: string }[]>`SELECT [id] FROM (${rows}) AS [listing]
+          ORDER BY ${order}
+          OFFSET ${offsetOf(query.offset)} ROWS FETCH NEXT ${take + 1} ROWS ONLY`,
+        db().$queryRaw<
+          { total: SqlCount | null }[]
+        >`SELECT COUNT_BIG(*) AS [total] FROM (${rows}) AS [listing]`,
+      ]);
+      const items = await cardsFor(
+        refs.slice(0, take).map((ref) => ({ kind: family.kind, id: ref.id })),
+      );
+      return { items, total: countOf(totals[0]?.total), hasMore: refs.length > take };
+    },
+
+    async newsListingFacets(query) {
+      const family = familyOf(query.kind);
+      const filter: RowFilter = { ...listingFilter(query), preferLanguage: null };
+      // Each facet counts under every OTHER filter, its own left out.
+      const rows = (change: Partial<RowFilter>) =>
+        familyRows(family, { ...filter, ...change });
+      const whole = familyRows(family, { from: null, to: null, topicId: null });
+      const translations = (relation: Prisma.Sql) =>
+        Prisma.sql`(${relation}) AS [x] JOIN ${family.translationTable} l ON l.[ownerId] = [x].[id] AND l.[revisionNumber] = [x].[revision]`;
+      const revisions = (relation: Prisma.Sql) =>
+        Prisma.sql`(${relation}) AS [x] JOIN ${family.revisionTable} v ON v.[ownerId] = [x].[id] AND v.[number] = [x].[revision]`;
+      const nothing = <T>(): Promise<T[]> => Promise.resolve([]);
+      const [
+        all,
+        allLanguages,
+        allOutlets,
+        kinds,
+        topics,
+        years,
+        months,
+        languages,
+        outlets,
+      ] = await Promise.all([
+        db().$queryRaw<
+          {
+            records: SqlCount | null;
+            firstYear: SqlCount | null;
+            lastYear: SqlCount | null;
+          }[]
+        >`
+            SELECT COUNT_BIG(*) AS [records], MIN(YEAR([at])) AS [firstYear], MAX(YEAR([at])) AS [lastYear]
+            FROM (${whole}) AS [x]`,
+        db().$queryRaw<{ total: SqlCount | null }[]>`
+            SELECT COUNT(DISTINCT l.[languageCode]) AS [total] FROM ${translations(whole)}`,
+        family.coverage
+          ? db().$queryRaw<{ total: SqlCount | null }[]>`
+                SELECT COUNT(DISTINCT v.[outletName]) AS [total] FROM ${revisions(whole)}`
+          : nothing<{ total: SqlCount | null }>(),
+        db().$queryRaw<{ kind: string; records: SqlCount | null }[]>`
+            SELECT [kind], COUNT_BIG(*) AS [records]
+            FROM (${timelineRows({ ...filter, outlet: null })}) AS [timeline]
+            GROUP BY [kind]`,
+        db().$queryRaw<{ id: string; records: SqlCount | null }[]>`
+            SELECT TOP (${NEWS_FACET_PAGE + 1}) t.[topicId] AS [id], COUNT_BIG(*) AS [records]
+            FROM (${rows({ topicId: null })}) AS [x]
+            JOIN ${family.topicTable} t ON t.[ownerId] = [x].[id] AND t.[revisionNumber] = [x].[revision]
+            GROUP BY t.[topicId]
+            ORDER BY [records] DESC, t.[topicId] ASC`,
+        db().$queryRaw<{ year: SqlCount | null; records: SqlCount | null }[]>`
+            SELECT TOP (300) YEAR([at]) AS [year], COUNT_BIG(*) AS [records]
+            FROM (${rows({ from: null, to: null })}) AS [x]
+            GROUP BY YEAR([at])
+            ORDER BY [year] DESC`,
+        query.year === null
+          ? nothing<{ month: SqlCount | null; records: SqlCount | null }>()
+          : db().$queryRaw<{ month: SqlCount | null; records: SqlCount | null }[]>`
+                SELECT MONTH([at]) AS [month], COUNT_BIG(*) AS [records]
+                FROM (${rows(periodOf(query.year, null))}) AS [x]
+                GROUP BY MONTH([at])
+                ORDER BY [month] ASC`,
+        db().$queryRaw<{ code: string; records: SqlCount | null }[]>`
+            SELECT l.[languageCode] AS [code], COUNT_BIG(*) AS [records]
+            FROM ${translations(rows({ language: null }))}
+            GROUP BY l.[languageCode]
+            ORDER BY [records] DESC, l.[languageCode] ASC`,
+        family.coverage
+          ? db().$queryRaw<{ name: string; records: SqlCount | null }[]>`
+                SELECT TOP (${NEWS_FACET_PAGE + 1}) v.[outletName] AS [name], COUNT_BIG(*) AS [records]
+                FROM ${revisions(rows({ outlet: null }))}
+                GROUP BY v.[outletName]
+                ORDER BY [records] DESC, v.[outletName] ASC`
+          : nothing<{ name: string; records: SqlCount | null }>(),
+      ]);
+      const [figures] = all;
+      const year = (value: SqlCount | null | undefined): number | null =>
+        value === null || value === undefined ? null : countOf(value);
+      const counted = new Map(kinds.map((row) => [row.kind, countOf(row.records)]));
+      return {
+        all: {
+          records: countOf(figures?.records),
+          languages: countOf(allLanguages[0]?.total),
+          firstYear: year(figures?.firstYear),
+          lastYear: year(figures?.lastYear),
+          outlets: countOf(allOutlets[0]?.total),
+        },
+        kinds: NEWS_KINDS.map((kind) => ({ kind, records: counted.get(kind) ?? 0 })),
+        topics: {
+          items: topics
+            .slice(0, NEWS_FACET_PAGE)
+            .map((row) => ({ id: row.id, records: countOf(row.records) })),
+          hasMore: topics.length > NEWS_FACET_PAGE,
+        },
+        years: years.map((row) => ({
+          year: countOf(row.year),
+          records: countOf(row.records),
+        })),
+        months: months.map((row) => ({
+          month: countOf(row.month),
+          records: countOf(row.records),
+        })),
+        languages: languages.map((row) => ({
+          code: language(row.code),
+          records: countOf(row.records),
+        })),
+        outlets: {
+          items: outlets
+            .slice(0, NEWS_FACET_PAGE)
+            .map((row) => ({ name: row.name, records: countOf(row.records) })),
+          hasMore: outlets.length > NEWS_FACET_PAGE,
+        },
+      };
+    },
+
+    /**
+     * The published record just older and just newer than the one named, in
+     * the family's newest-first order (date, then identifier) — both read in
+     * ONE statement against the record's own stored date, so no precision is
+     * lost in a round trip. Nothing at all for a record not published now.
+     */
+    async newsNeighbours({ kind, slug }) {
+      const family = familyOf(kind);
+      const date = chronologyOf(family);
+      const rows = await db().$queryRaw<{ direction: string; id: string }[]>`
+        WITH [me] AS (
+          SELECT r.[id], ${date} AS [at] FROM ${family.table} r
+          WHERE r.[slug] = ${slug} AND r.[state] = N'published'
+        )
+        SELECT N'older' AS [direction], [o].[id] FROM (
+          SELECT TOP (1) r.[id] FROM ${family.table} r CROSS JOIN [me]
+          WHERE r.[state] = N'published'
+            AND (${date} < [me].[at] OR (${date} = [me].[at] AND r.[id] > [me].[id]))
+          ORDER BY ${date} DESC, r.[id] ASC
+        ) AS [o]
+        UNION ALL
+        SELECT N'newer' AS [direction], [n].[id] FROM (
+          SELECT TOP (1) r.[id] FROM ${family.table} r CROSS JOIN [me]
+          WHERE r.[state] = N'published'
+            AND (${date} > [me].[at] OR (${date} = [me].[at] AND r.[id] < [me].[id]))
+          ORDER BY ${date} ASC, r.[id] DESC
+        ) AS [n]`;
+      const card = async (direction: 'newer' | 'older') => {
+        const row = rows.find((entry) => entry.direction === direction);
+        // A record withdrawn between the two reads is simply absent.
+        return row === undefined
+          ? null
+          : ((await cardsFor([{ kind, id: row.id }]))[0] ?? null);
+      };
+      const [newer, older] = await Promise.all([card('newer'), card('older')]);
+      return { newer, older };
     },
 
     async newsSitemap(kind, offset, limit) {

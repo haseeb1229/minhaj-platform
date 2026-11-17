@@ -3465,10 +3465,10 @@
       "media-coverage": "Media coverage"
     },
     "all": {
-      "news-article": "All news",
-      "press-release": "All press releases",
-      "statement": "All statements",
-      "media-coverage": "All media coverage"
+      "news-article": "All news ({count, number})",
+      "press-release": "All press releases ({count, number})",
+      "statement": "All statements ({count, number})",
+      "media-coverage": "All media coverage ({count, number})"
     },
     "empty": {
       "news-article": "No news has been published yet.",
@@ -3476,21 +3476,15 @@
       "statement": "No statement has been published yet.",
       "media-coverage": "No media coverage has been published yet."
     },
-    "pageEmpty": "There is nothing on this page.",
-    "firstPage": "Back to the first page",
     "sectionsLabel": "News sections",
     "browse": "Browse News and Events",
     "archive": "News archive",
     "archiveBody": "Everything published in News, by the year and month it was published.",
     "archiveAll": "Everything published",
     "archiveYear": "Published in {year}",
-    "archiveMonth": "Published in {month} {year}",
     "archiveYears": "Years",
-    "archiveMonths": "Months",
     "archiveEveryYear": "Every year",
-    "countShort": "{count, number}",
     "archiveEmpty": "Nothing has been published in News yet.",
-    "archiveFilteredEmpty": "Nothing was published in this period.",
     "published": "Published",
     "contributors": "Contributors",
     "topics": "Topics",
@@ -3510,32 +3504,121 @@
     "next": "Next page",
     "centre": "Centre",
     "events": "Events",
-    "eventsBody": "Upcoming and past gatherings, with when and where each is held.",
     "collections": "Collections",
     "collectionsBody": "Curated sets of articles, news, books and videos, each gathered around one theme.",
     "authors": "Authors",
     "updated": "Updated",
     "contents": "On this page",
-    "related": "Related reading",
     "moreNews": "More news",
     "moreArticles": "More articles",
     "allArticles": "All articles",
-    "languageFilter": "Content language",
-    "allLanguages": "All languages",
-    "languageEmpty": "Nothing has been published in this language yet.",
     "languages": {
       "en": "English",
       "ur": "Urdu",
       "ar": "Arabic"
     },
-    "typeFilter": "Type of record",
-    "allTypes": "All types",
-    "archiveEverything": "Show everything published",
     "byYear": "Browse by year",
     "mediaSurface": {
       "photos": "Photographs from events and programmes.",
       "galleries": "Photographs gathered by occasion.",
       "archive": "Every photograph, browsed by date."
+    },
+    "listing": {
+      "eyebrow": "Newsroom",
+      "stats": {
+        "news-article": "{count, plural, one {news story} other {news stories}}",
+        "press-release": "{count, plural, one {press release} other {press releases}}",
+        "statement": "{count, plural, one {statement} other {statements}}",
+        "media-coverage": "{count, plural, one {coverage summary} other {coverage summaries}}",
+        "records": "{count, plural, one {record} other {records}}",
+        "span": "{count, plural, one {year covered} other {years covered}}",
+        "languages": "{count, plural, one {language} other {languages}}",
+        "outlets": "{count, plural, one {outlet} other {outlets}}"
+      },
+      "heading": {
+        "news-article": "All news stories",
+        "press-release": "Every press release",
+        "statement": "Every statement",
+        "media-coverage": "Every coverage summary"
+      },
+      "intro": "Narrow by topic, year, month or language. Each choice says how many records it would show.",
+      "introCoverage": "Narrow by topic, year, month, language or outlet. Each choice says how many records it would show.",
+      "filters": "Filter the listing",
+      "apply": "Show results",
+      "filterYear": "Year",
+      "anyYear": "Any year",
+      "filterMonth": "Month",
+      "anyMonth": "Any month",
+      "anyOutlet": "Any outlet",
+      "oldest": "Oldest first",
+      "summary": "Showing {from}–{to} of {total, number}",
+      "pastEnd": "There is no page {page, number} in this listing.",
+      "noResultsTitle": "Nothing matches these filters",
+      "noResults": "No published record matches every filter chosen. Remove one, or clear them all.",
+      "emptyTitle": "Nothing published here yet",
+      "backToNews": "Go to News and Events",
+      "pages": {
+        "news-article": "Pages of news stories",
+        "press-release": "Pages of press releases",
+        "statement": "Pages of statements",
+        "media-coverage": "Pages of media coverage"
+      },
+      "about": "Every date is the record's own: the day its source first published it where that is known, otherwise the day it was published here.",
+      "topics": "Browse every topic"
+    },
+    "front": {
+      "newsletter": "Newsletter",
+      "newsletterBody": "News and announcements by email, sent only once you confirm your address.",
+      "yearsIntro": "Each year opens on its months in the News archive."
+    },
+    "detail": {
+      "readingTime": "{minutes, plural, one {# minute read} other {# minute read}}",
+      "relatedTopic": "More on {topic}",
+      "topicHub": "Everything on {topic}",
+      "more": {
+        "news-article": "More news",
+        "press-release": "More press releases",
+        "statement": "More statements",
+        "media-coverage": "More media coverage"
+      },
+      "newer": {
+        "news-article": "Newer story",
+        "press-release": "Newer press release",
+        "statement": "Newer statement",
+        "media-coverage": "Newer coverage"
+      },
+      "older": {
+        "news-article": "Older story",
+        "press-release": "Older press release",
+        "statement": "Older statement",
+        "media-coverage": "Older coverage"
+      },
+      "kindNav": {
+        "news-article": "Newer and older news",
+        "press-release": "Newer and older press releases",
+        "statement": "Newer and older statements",
+        "media-coverage": "Newer and older media coverage"
+      },
+      "kind": "Type",
+      "alsoIn": "Also published in",
+      "outletAll": "All coverage by {outlet}"
+    },
+    "archivePage": {
+      "intro": "Each count leads to that kind's own listing for the year.",
+      "months": "{count, plural, one {# month} other {# months}} with something published",
+      "yearKinds": "Published in {year}, by kind",
+      "monthKinds": "Published in {month} {year}, by kind",
+      "counts": {
+        "news-article": "{count, plural, one {# news story} other {# news stories}}",
+        "press-release": "{count, plural, one {# press release} other {# press releases}}",
+        "statement": "{count, plural, one {# statement} other {# statements}}",
+        "media-coverage": "{count, plural, one {# coverage summary} other {# coverage summaries}}"
+      },
+      "yearTotal": "{count, plural, one {# record} other {# records}} published in {year}",
+      "yearEmptyTitle": "Nothing in this year",
+      "yearEmpty": "Nothing was published in News in {year}.",
+      "monthsHeading": "{year}, month by month",
+      "yearNav": "Other years"
     }
   },
   "collections": {

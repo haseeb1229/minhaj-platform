@@ -1,36 +1,16 @@
-import type { Metadata } from 'next';
-import { getTranslations } from 'next-intl/server';
-
-import { NewsLandingPage } from '@/components/editorial/news';
-import { requireLocale } from '@/config/route-locale';
-import { shellMetadata } from '@/seo/metadata';
-import { requireRoute } from '@/shell/registry';
+import { newsListingRoute } from './news-routes';
 
 /**
- * `/{locale}/news` — News and Events, the latest NewsArticles first
- * (ROUTE_MAP.md §3.9). `?sort=latest` names the only order that exists, so it
- * is a query on this one resource and canonical to `/news`, never a path of its
- * own (§2.3); neither it nor a later page is a sitemap entry.
+ * `/{locale}/news` — News and Events: the NewsArticles' listing and the
+ * section's front door (ROUTE_MAP.md §3.9). `?topic, year, month, language,
+ * sort, page`; the former `?sort=latest`, `?lang=` and `?offset=` are one
+ * redirect each to the same view's one address. Every view is canonical to
+ * `/news` and never a sitemap entry (§2.3).
  */
 export const dynamic = 'force-dynamic';
 
-interface NewsParams {
-  readonly params: Promise<{ readonly locale: string }>;
-  readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
-}
+const route = newsListingRoute('news-article');
 
-export async function generateMetadata({ params }: NewsParams): Promise<Metadata> {
-  const locale = await requireLocale(params);
-  const t = await getTranslations({ locale, namespace: 'news' });
-  return shellMetadata({
-    locale,
-    route: requireRoute('news-events'),
-    title: t('title'),
-    description: t('description'),
-  });
-}
+export const generateMetadata = route.generateMetadata;
 
-export default async function NewsPage({ params, searchParams }: NewsParams) {
-  const locale = await requireLocale(params);
-  return <NewsLandingPage locale={locale} query={await searchParams} />;
-}
+export default route.Page;

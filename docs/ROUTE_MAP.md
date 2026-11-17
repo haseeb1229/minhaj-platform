@@ -1124,9 +1124,9 @@ approved activation. A named category, topic view or ruling still answers 404 wh
 
 | Route | Purpose |
 |---|---|
-| `/news` · `/news/{slug}` | News — `?sort=latest`. Phase 13: `/news` is the News and Events entry point, listing the latest NewsArticles; `latest` is a query canonical to `/news`, never a path |
-| `/news/{press-releases\|statements\|media-coverage}` · `/{slug}` | Editorial types — delivered in Phase 13, each family with its own slug history. The three segments and `archive` are reserved: no NewsArticle slug can hold them |
-| `/news/archive` | `?year, month` — every published News record by the UTC year and month of its publication (Phase 13) |
+| `/news` · `/news/{slug}` | News — `?topic, year, month, language, sort, page` (News & Events Part 1). Phase 13: `/news` is the News and Events entry point, listing the latest NewsArticles; `latest` is a query canonical to `/news`, never a path (since Part 1 `?sort=latest` is one redirect to `/news`, the default order) |
+| `/news/{press-releases\|statements\|media-coverage}` · `/{slug}` | Editorial types — delivered in Phase 13, each family with its own slug history. The three segments and `archive` are reserved: no NewsArticle slug can hold them. Since News & Events Part 1 each listing takes the same parameters as `/news`, and `/news/media-coverage` also `?outlet` |
+| `/news/archive` | `?year` — every published News record by the UTC year and month of its chronology, an index into the family listings since News & Events Part 1. *Historical (Phase 13 – R2):* `?year, month` (and R2's `?type`, `?lang`) listed the records themselves; each is now one redirect (below) |
 | `/newsletter` · `/newsletter/confirm` · `/newsletter/unsubscribe` | Subscription — delivered in Phase 21 (DOMAIN_MODEL.md §14.6). `/newsletter` submits an address and always answers the same, whatever its state; nothing is sent until the address confirms. `confirm` and `unsubscribe` are the emailed links (class D, SECURITY_BASELINE.md §7.4): the GET renders only whether the link is still usable and a button, and the POST consumes it — confirmation once, unsubscribe idempotently and without an account. Both are `noindex`, carry no canonical or alternate with the token, and are never sitemap entries |
 | `/events` · `/events/{slug}` · `/events/{slug}/gallery` | Events — `?upcoming, past, country, city, centre`. Delivered in Phase 14: `/events` lists upcoming Events by default and `?when=past` the held ones; `?country=`, `?city=` and `?centre=` narrow to Events held at Centres physically there. Every query is canonical to `/events` and never a sitemap entry; there is no `/events/upcoming` or `/events/past`. `/events/{slug}/gallery` is a `noindex` navigational view over the Event's listed Galleries — each keeps its one canonical `/media/galleries/{slug}` — and exists only for an Event that associates a Gallery. A former Event slug, with or without `/gallery`, answers one 301 |
 | `/media/photos` · `/media/galleries` · `/{slug}` · `/media/archive` · `/media/downloads` | Media — Phase 12 delivers photos, galleries, each Gallery at `/media/galleries/{slug}`, and the archive (`?year, month`). A Photo has no page of its own. `/media/downloads` has **no route** until a rights decision authorises downloads |
@@ -1135,8 +1135,22 @@ approved activation. A named category, topic view or ruling still answers 404 wh
 | `/global/centres` · `/{slug}` · `/{slug}/{news\|events\|contact}` | Centres — `news` and the display-only `contact` delivered in Phase 16; `events` (Local Events, `?when=past` canonical to it) delivered in Phase 14 |
 | `/global/pakistan` | Pakistan structure entry point — a view of the Pakistan Country, canonical to its Country page and never a sitemap entry (Phase 16) |
 
-**Rebaseline R2.** `/news` and each family listing (`/news/press-releases`, `/statements`,
-`/media-coverage`) take **`?lang=en|ur|ar`**, narrowing to records that have a published
+**News & Events Part 1 (2026-11-17).** `/news` and the three family listings are **one listing,
+parameterised by the family**: `?topic` (a Taxonomy identifier), `?year` and `?month` (of the
+record's chronology — a month only with its year), `?language` (`en`, `ur` or `ar`), `?outlet`
+(media coverage only), `?sort=oldest` and `?page` (20 a page). Neutral values are omitted, so each
+unfiltered listing has one address; a form's empty controls, another order of the parameters, a
+malformed or repeated value, R2's `?lang=` (now `?language=`), Phase 13's `?offset=` (the page
+holding the record it began with) and `?sort=latest` are each **one redirect** to the view's one
+address. The family tabs keep a view's Topic, period, language and order. `/news/archive` takes
+only `?year` (every year, or one year's months); a former `?type=` is one redirect to that
+family's listing for the same `?year`, `?month` and `?lang` (as `?language`), and any other
+former archive parameter one redirect to the archive's year. Every view stays canonical to its base
+listing and outside the sitemap. No route is added or removed.
+
+**Rebaseline R2.** *Historical in part, superseded by News & Events Part 1 above:* `/news` and each
+family listing (`/news/press-releases`, `/statements`, `/media-coverage`) took **`?lang=en|ur|ar`**
+(now `?language=`, the archive's `?type` and `?lang` now redirects), narrowing to records that have a published
 translation in that content language; without it every record is listed with the interface
 language's records first (each group still newest first). `/news/archive` also takes
 **`?type=`** — one of the four News families — beside `?lang`, `?year` and `?month`, and counts its
@@ -1149,7 +1163,10 @@ dropped), its `?offset` paging withdrawn (historical, superseded below).
 
 **Owner direction 2026-11-08.** The `/news` landing again opens with links to Events and the News
 archive, and its browse list again names Press releases, Statements, Media coverage and the
-archive beside R2's Events, Collections and photograph rows. `/collections` cards again show their
+archive beside R2's Events, Collections and photograph rows (*superseded in part by News & Events
+Part 1*: the opening keeps Events and the archive, the families are its counted tabs and shelves,
+and the browse list names only what neither offers — Collections, the three photograph surfaces
+and the newsletter — so no destination is offered twice under one name). `/collections` cards again show their
 type and their topics (each a link to `/topics/{slug}`), with the kinds a Collection may hold named
 under the lede. `/global` always offers Find a Centre and lists the Finder, Countries, Centres and
 Pakistan entries whether or not a Centre is published (as at Phase-30 exit), shows local news,

@@ -3465,10 +3465,10 @@
       "media-coverage": "تغطية إعلامية"
     },
     "all": {
-      "news-article": "جميع الأخبار",
-      "press-release": "جميع البيانات الصحفية",
-      "statement": "جميع البيانات الرسمية",
-      "media-coverage": "كل التغطية الإعلامية"
+      "news-article": "جميع الأخبار ({count, number})",
+      "press-release": "جميع البيانات الصحفية ({count, number})",
+      "statement": "جميع البيانات الرسمية ({count, number})",
+      "media-coverage": "كل التغطية الإعلامية ({count, number})"
     },
     "empty": {
       "news-article": "لم يُنشر أي خبر بعد.",
@@ -3476,21 +3476,15 @@
       "statement": "لم يُنشر أي بيان رسمي بعد.",
       "media-coverage": "لم تُنشر أي تغطية إعلامية بعد."
     },
-    "pageEmpty": "لا يوجد شيء في هذه الصفحة.",
-    "firstPage": "العودة إلى الصفحة الأولى",
     "sectionsLabel": "أقسام الأخبار",
     "browse": "تصفّح الأخبار والفعاليات",
     "archive": "أرشيف الأخبار",
     "archiveBody": "كل ما نُشر في الأخبار، بحسب سنة النشر وشهره.",
     "archiveAll": "كل ما نُشر",
     "archiveYear": "المنشور في {year}",
-    "archiveMonth": "المنشور في {month} {year}",
     "archiveYears": "السنوات",
-    "archiveMonths": "الأشهر",
     "archiveEveryYear": "كل السنوات",
-    "countShort": "{count, number}",
     "archiveEmpty": "لم يُنشر شيء في الأخبار بعد.",
-    "archiveFilteredEmpty": "لم يُنشر شيء في هذه الفترة.",
     "published": "تاريخ النشر",
     "contributors": "المساهمون",
     "topics": "الموضوعات",
@@ -3510,32 +3504,121 @@
     "next": "الصفحة التالية",
     "centre": "المركز",
     "events": "الفعاليات",
-    "eventsBody": "التجمعات القادمة والسابقة، مع موعد كل منها ومكان إقامتها.",
     "collections": "المجموعات",
     "collectionsBody": "مختارات من المقالات والأخبار والكتب والمرئيات، تلتئم كلٌّ منها حول موضوع واحد.",
     "authors": "المؤلفون",
     "updated": "آخر تحديث",
     "contents": "في هذه الصفحة",
-    "related": "قراءات ذات صلة",
     "moreNews": "مزيد من الأخبار",
     "moreArticles": "مزيد من المقالات",
     "allArticles": "جميع المقالات",
-    "languageFilter": "لغة المحتوى",
-    "allLanguages": "جميع اللغات",
-    "languageEmpty": "لم يُنشر شيء بهذه اللغة بعد.",
     "languages": {
       "en": "الإنجليزية",
       "ur": "الأردية",
       "ar": "العربية"
     },
-    "typeFilter": "نوع المادة",
-    "allTypes": "جميع الأنواع",
-    "archiveEverything": "عرض كل ما نُشر",
     "byYear": "التصفح حسب السنة",
     "mediaSurface": {
       "photos": "صور من الفعاليات والبرامج.",
       "galleries": "صور مجمّعة حسب المناسبة.",
       "archive": "جميع الصور مرتّبةً حسب التاريخ."
+    },
+    "listing": {
+      "eyebrow": "غرفة الأخبار",
+      "stats": {
+        "news-article": "{count, plural, zero {خبر} one {خبر} two {خبران} few {أخبار} many {خبرًا} other {خبر}}",
+        "press-release": "{count, plural, zero {بيان صحفي} one {بيان صحفي} two {بيانان صحفيان} few {بيانات صحفية} many {بيانًا صحفيًا} other {بيان صحفي}}",
+        "statement": "{count, plural, zero {بيان رسمي} one {بيان رسمي} two {بيانان رسميان} few {بيانات رسمية} many {بيانًا رسميًا} other {بيان رسمي}}",
+        "media-coverage": "{count, plural, zero {ملخص تغطية} one {ملخص تغطية} two {ملخصا تغطية} few {ملخصات تغطية} many {ملخصًا للتغطية} other {ملخص تغطية}}",
+        "records": "{count, plural, zero {سجل} one {سجل} two {سجلان} few {سجلات} many {سجلًا} other {سجل}}",
+        "span": "{count, plural, zero {سنة مشمولة} one {سنة مشمولة} two {سنتان مشمولتان} few {سنوات مشمولة} many {سنة مشمولة} other {سنة مشمولة}}",
+        "languages": "{count, plural, zero {لغة} one {لغة} two {لغتان} few {لغات} many {لغة} other {لغة}}",
+        "outlets": "{count, plural, zero {وسيلة إعلامية} one {وسيلة إعلامية} two {وسيلتان إعلاميتان} few {وسائل إعلامية} many {وسيلة إعلامية} other {وسيلة إعلامية}}"
+      },
+      "heading": {
+        "news-article": "كل الأخبار",
+        "press-release": "كل بيان صحفي",
+        "statement": "كل بيان رسمي",
+        "media-coverage": "كل ملخصات التغطية"
+      },
+      "intro": "ضيّق القائمة حسب الموضوع أو السنة أو الشهر أو اللغة. كل خيار يبيّن عدد السجلات التي سيعرضها.",
+      "introCoverage": "ضيّق القائمة حسب الموضوع أو السنة أو الشهر أو اللغة أو الوسيلة الإعلامية. كل خيار يبيّن عدد السجلات التي سيعرضها.",
+      "filters": "صفِّ القائمة",
+      "apply": "اعرض النتائج",
+      "filterYear": "السنة",
+      "anyYear": "أي سنة",
+      "filterMonth": "الشهر",
+      "anyMonth": "أي شهر",
+      "anyOutlet": "أي وسيلة إعلامية",
+      "oldest": "الأقدم أولًا",
+      "summary": "عرض {from}–{to} من {total, number}",
+      "pastEnd": "لا توجد صفحة {page, number} في هذه القائمة.",
+      "noResultsTitle": "لا شيء يطابق عوامل التصفية هذه",
+      "noResults": "لا يوجد سجل منشور يطابق كل عوامل التصفية المختارة. أزل أحدها أو امسحها كلها.",
+      "emptyTitle": "لم يُنشر شيء هنا بعد",
+      "backToNews": "انتقل إلى الأخبار والفعاليات",
+      "pages": {
+        "news-article": "صفحات الأخبار",
+        "press-release": "صفحات البيانات الصحفية",
+        "statement": "صفحات البيانات الرسمية",
+        "media-coverage": "صفحات التغطية الإعلامية"
+      },
+      "about": "كل تاريخ هو تاريخ السجل نفسه: اليوم الذي نشره فيه مصدره أول مرة حيث يُعرف ذلك، وإلا فاليوم الذي نُشر فيه هنا.",
+      "topics": "تصفّح كل الموضوعات"
+    },
+    "front": {
+      "newsletter": "النشرة الإخبارية",
+      "newsletterBody": "الأخبار والإعلانات عبر البريد الإلكتروني، ولا تُرسل إلا بعد تأكيد عنوانك.",
+      "yearsIntro": "كل سنة تفتح على أشهرها في أرشيف الأخبار."
+    },
+    "detail": {
+      "readingTime": "{minutes, plural, zero {قراءة في # دقيقة} one {قراءة في دقيقة واحدة} two {قراءة في دقيقتين} few {قراءة في # دقائق} many {قراءة في # دقيقة} other {قراءة في # دقيقة}}",
+      "relatedTopic": "المزيد عن {topic}",
+      "topicHub": "كل ما يتعلق بـ{topic}",
+      "more": {
+        "news-article": "مزيد من الأخبار",
+        "press-release": "مزيد من البيانات الصحفية",
+        "statement": "مزيد من البيانات الرسمية",
+        "media-coverage": "مزيد من التغطية الإعلامية"
+      },
+      "newer": {
+        "news-article": "خبر أحدث",
+        "press-release": "بيان صحفي أحدث",
+        "statement": "بيان رسمي أحدث",
+        "media-coverage": "تغطية أحدث"
+      },
+      "older": {
+        "news-article": "خبر أقدم",
+        "press-release": "بيان صحفي أقدم",
+        "statement": "بيان رسمي أقدم",
+        "media-coverage": "تغطية أقدم"
+      },
+      "kindNav": {
+        "news-article": "أخبار أحدث وأقدم",
+        "press-release": "بيانات صحفية أحدث وأقدم",
+        "statement": "بيانات رسمية أحدث وأقدم",
+        "media-coverage": "تغطيات إعلامية أحدث وأقدم"
+      },
+      "kind": "النوع",
+      "alsoIn": "منشور أيضًا بـ",
+      "outletAll": "كل تغطية {outlet}"
+    },
+    "archivePage": {
+      "intro": "يقود كل عدد إلى قائمة نوعه الخاصة بتلك السنة.",
+      "months": "{count, plural, zero {لا أشهر} one {شهر واحد} two {شهران} few {# أشهر} many {# شهرًا} other {# شهر}} فيها منشورات",
+      "yearKinds": "ما نُشر في {year} حسب النوع",
+      "monthKinds": "ما نُشر في {month} {year} حسب النوع",
+      "counts": {
+        "news-article": "{count, plural, zero {لا أخبار} one {خبر واحد} two {خبران} few {# أخبار} many {# خبرًا} other {# خبر}}",
+        "press-release": "{count, plural, zero {لا بيانات صحفية} one {بيان صحفي واحد} two {بيانان صحفيان} few {# بيانات صحفية} many {# بيانًا صحفيًا} other {# بيان صحفي}}",
+        "statement": "{count, plural, zero {لا بيانات رسمية} one {بيان رسمي واحد} two {بيانان رسميان} few {# بيانات رسمية} many {# بيانًا رسميًا} other {# بيان رسمي}}",
+        "media-coverage": "{count, plural, zero {لا تغطيات} one {ملخص تغطية واحد} two {ملخصا تغطية} few {# ملخصات تغطية} many {# ملخصًا للتغطية} other {# ملخص تغطية}}"
+      },
+      "yearTotal": "{count, plural, zero {لا سجلات} one {سجل واحد} two {سجلان} few {# سجلات} many {# سجلًا} other {# سجل}} نُشرت في {year}",
+      "yearEmptyTitle": "لا شيء في هذه السنة",
+      "yearEmpty": "لم يُنشر شيء في الأخبار في {year}.",
+      "monthsHeading": "{year} شهرًا بشهر",
+      "yearNav": "سنوات أخرى"
     }
   },
   "collections": {

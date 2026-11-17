@@ -621,15 +621,20 @@ live('Phase 13 real SQL News workflow', () => {
         { year: 2040, month: 4, count: 1 },
       ]),
     );
-    const year = await reads.newsArchive({ year: 2040, month: null, offset: 0 });
-    expect(year.items.map((item) => [item.kind, item.slug])).toEqual([
-      ['statement', april.slug],
-      ['press-release', march.slug],
-    ]);
-    const month = await reads.newsArchive({ year: 2040, month: 3, offset: 0 });
-    expect(month.items.map((item) => item.slug)).toEqual([march.slug]);
+    // News & Events Part 1: a period is read through each family's own listing
+    // (the archive is an index into them); the draft is in none of them.
+    const inPeriod = async (kind: NewsKind, month: number | null = null) =>
+      (await reads.newsListing({ kind, year: 2040, month })).items.map((item) => [
+        item.kind,
+        item.slug,
+      ]);
+    expect(await inPeriod('statement')).toEqual([['statement', april.slug]]);
+    expect(await inPeriod('press-release')).toEqual([['press-release', march.slug]]);
+    expect(await inPeriod('news-article')).toEqual([]);
+    expect(await inPeriod('press-release', 3)).toEqual([['press-release', march.slug]]);
+    expect(await inPeriod('statement', 3)).toEqual([]);
     await expect(
-      reads.newsArchive({ year: null, month: 3, offset: 0 }),
+      reads.newsListing({ kind: 'press-release', year: null, month: 3 }),
     ).rejects.toThrow();
 
     const onTopic = await reads.newsOnTopic(topicId);
@@ -653,8 +658,14 @@ live('Phase 13 real SQL News workflow', () => {
       'archive',
       publisher,
     );
-    const after = await reads.newsArchive({ year: 2040, month: 4, offset: 0 });
+    const after = await reads.newsListing({ kind: 'statement', year: 2040, month: 4 });
     expect(after.items.map((item) => item.slug)).not.toContain(april.slug);
+    expect(after.total).toBe(0);
+    expect(
+      (await reads.newsArchivePeriods()).find(
+        (period) => period.year === 2040 && period.month === 4,
+      ),
+    ).toBeUndefined();
   });
 
   it('narrows by content language and family, and orders a preferred language first (R2)', async () => {
@@ -699,16 +710,22 @@ live('Phase 13 real SQL News workflow', () => {
     expect(en.english).toBeGreaterThanOrEqual(0);
     expect(en.english).toBeLessThan(en.urdu);
 
-    const month = { year: 2044, month: 6, offset: 0 } as const;
-    expect(
-      (await reads.newsArchive({ ...month, kind: 'statement' })).items.map((i) => i.slug),
-    ).toEqual([urdu.slug, english.slug]);
-    expect(
-      (await reads.newsArchive({ ...month, language: 'ur' })).items.map((i) => i.slug),
-    ).toEqual([urdu.slug]);
-    expect((await reads.newsArchive(month)).items.map((i) => i.slug)).toEqual(
-      expect.arrayContaining([press.slug, urdu.slug, english.slug]),
-    );
+    // The same narrowing through each family's listing (News & Events Part 1).
+    const month = { year: 2044, month: 6 } as const;
+    const slugs = async (query: Record<string, unknown>) =>
+      (await reads.newsListing({ ...month, ...query })).items.map((i) => i.slug);
+    expect(await slugs({ kind: 'statement' })).toEqual([urdu.slug, english.slug]);
+    expect(await slugs({ kind: 'statement', language: 'ur' })).toEqual([urdu.slug]);
+    expect(await slugs({ kind: 'press-release', language: 'ur' })).toEqual([]);
+    expect(await slugs({ kind: 'press-release' })).toEqual([press.slug]);
+    // Preferring a language orders the listing too, and narrowing ignores it.
+    expect(await slugs({ kind: 'statement', prefer: 'en' })).toEqual([
+      english.slug,
+      urdu.slug,
+    ]);
+    expect(await slugs({ kind: 'statement', language: 'ur', prefer: 'en' })).toEqual([
+      urdu.slug,
+    ]);
     expect(await reads.newsArchivePeriods({ kind: 'statement', language: 'ur' })).toEqual(
       expect.arrayContaining([{ year: 2044, month: 6, count: 1 }]),
     );
@@ -717,6 +734,165 @@ live('Phase 13 real SQL News workflow', () => {
         (period) => period.year === 2044 && period.month === 6,
       )?.count,
     ).toBe(1);
+  });
+
+  it('lists one family with its total, counted facets, pages and neighbours (News & Events Part 1)', async () => {
+    // A year no other proof uses, so every count below is exact.
+    const coverage = (outlet: string) => ({
+      ...content('media-coverage'),
+      coverage: { outlet, sourceUrl: null, sourceDate: null },
+    });
+    const slugsOf = (page: { readonly items: readonly { readonly slug: string }[] }) =>
+      page.items.map((item) => item.slug);
+    now = new Date('2047-02-01T09:00:00Z');
+    const a = await published('media-coverage', {
+      ...coverage('Synthetic Outlet A'),
+      topicIds: [topicId],
+    });
+    now = new Date('2047-02-10T09:00:00Z');
+    const b = await published('media-coverage', coverage('Synthetic Outlet B'));
+    now = new Date('2047-05-03T09:00:00Z');
+    const c = await published('media-coverage', {
+      ...coverage('Synthetic Outlet A'),
+      primaryLanguage: 'ur',
+      translations: [
+        {
+          languageCode: 'ur',
+          title: 'مصنوعی کوریج',
+          excerpt: '',
+          seoTitle: '',
+          seoDescription: '',
+          document,
+        },
+      ],
+    });
+    const draft = await create('media-coverage', coverage('Synthetic Outlet A'));
+    now = new Date('2048-01-01T00:00:00Z');
+
+    const year = { kind: 'media-coverage', year: 2047 } as const;
+    const all = await reads.newsListing(year);
+    expect(slugsOf(all)).toEqual([c.slug, b.slug, a.slug]);
+    expect(all).toMatchObject({ total: 3, hasMore: false });
+    expect(JSON.stringify(all)).not.toContain(draft.slug);
+    expect(JSON.stringify(all)).not.toContain(BODY_SENTINEL);
+    expect(slugsOf(await reads.newsListing({ ...year, sort: 'oldest' }))).toEqual([
+      a.slug,
+      b.slug,
+      c.slug,
+    ]);
+
+    // Bounded pages that know the view's total, and an honest page past the end.
+    const first = await reads.newsListing({ ...year, limit: 2 });
+    expect(slugsOf(first)).toEqual([c.slug, b.slug]);
+    expect(first).toMatchObject({ total: 3, hasMore: true });
+    const second = await reads.newsListing({ ...year, limit: 2, offset: 2 });
+    expect(slugsOf(second)).toEqual([a.slug]);
+    expect(second).toMatchObject({ total: 3, hasMore: false });
+    expect(await reads.newsListing({ ...year, offset: 20 })).toEqual({
+      items: [],
+      total: 3,
+      hasMore: false,
+    });
+
+    // Each filter narrows; none widens.
+    expect(
+      slugsOf(await reads.newsListing({ ...year, outlet: 'Synthetic Outlet A' })),
+    ).toEqual([c.slug, a.slug]);
+    expect(slugsOf(await reads.newsListing({ ...year, outlet: 'Nobody' }))).toEqual([]);
+    expect(slugsOf(await reads.newsListing({ ...year, topic: topicId }))).toEqual([
+      a.slug,
+    ]);
+    expect(slugsOf(await reads.newsListing({ ...year, month: 2 }))).toEqual([
+      b.slug,
+      a.slug,
+    ]);
+    expect(slugsOf(await reads.newsListing({ ...year, language: 'ur' }))).toEqual([
+      c.slug,
+    ]);
+    // Another family never answers for this one.
+    expect((await reads.newsListing({ ...year, kind: 'statement' })).total).toBe(0);
+
+    // Each facet counts under every OTHER filter, its own left out.
+    const facets = await reads.newsListingFacets({
+      ...year,
+      outlet: 'Synthetic Outlet A',
+    });
+    expect(facets.kinds).toEqual([
+      { kind: 'news-article', records: 0 },
+      { kind: 'press-release', records: 0 },
+      { kind: 'statement', records: 0 },
+      // The tabs keep the period but not the outlet, which is coverage's own.
+      { kind: 'media-coverage', records: 3 },
+    ]);
+    expect(facets.outlets).toEqual({
+      items: [
+        { name: 'Synthetic Outlet A', records: 2 },
+        { name: 'Synthetic Outlet B', records: 1 },
+      ],
+      hasMore: false,
+    });
+    expect(facets.months).toEqual([
+      { month: 2, records: 1 },
+      { month: 5, records: 1 },
+    ]);
+    expect(facets.languages).toEqual([
+      { code: 'en', records: 1 },
+      { code: 'ur', records: 1 },
+    ]);
+    expect(facets.topics).toEqual({
+      items: [{ id: topicId, records: 1 }],
+      hasMore: false,
+    });
+    expect(facets.years.find((entry) => entry.year === 2047)).toEqual({
+      year: 2047,
+      records: 2,
+    });
+    // The whole family's figures, never narrowed.
+    expect(facets.all.records).toBeGreaterThanOrEqual(3);
+    expect(facets.all.outlets).toBeGreaterThanOrEqual(2);
+    expect(facets.all.languages).toBeGreaterThanOrEqual(2);
+    expect(facets.all.lastYear).toBe(2047);
+    expect(facets.all.firstYear).toBeLessThanOrEqual(2047);
+    // Other families name no outlet and read no month without a year.
+    const statements = await reads.newsListingFacets({ kind: 'statement' });
+    expect(statements.outlets).toEqual({ items: [], hasMore: false });
+    expect(statements.months).toEqual([]);
+    expect(statements.all.outlets).toBe(0);
+
+    // A record's newer and older neighbours in its own family.
+    expect(await reads.newsNeighbours('media-coverage', b.slug)).toMatchObject({
+      newer: { kind: 'media-coverage', slug: c.slug },
+      older: { kind: 'media-coverage', slug: a.slug },
+    });
+    expect((await reads.newsNeighbours('media-coverage', c.slug)).newer).toBeNull();
+    expect(await reads.newsNeighbours('media-coverage', draft.slug)).toEqual({
+      newer: null,
+      older: null,
+    });
+    expect(await reads.newsNeighbours('statement', b.slug)).toEqual({
+      newer: null,
+      older: null,
+    });
+
+    // Two records at one instant: the neighbours follow the listing's own
+    // tie-break, and a withdrawn record is skipped.
+    now = new Date('2047-08-01T00:00:00Z');
+    const x = await published('media-coverage', coverage('Synthetic Outlet B'));
+    const y = await published('media-coverage', coverage('Synthetic Outlet B'));
+    now = new Date('2048-01-01T00:00:00Z');
+    const [p, q] = slugsOf(await reads.newsListing({ ...year, month: 8 }));
+    expect([p, q].sort()).toEqual([x.slug, y.slug].sort());
+    expect((await reads.newsNeighbours('media-coverage', p!)).older?.slug).toBe(q);
+    expect((await reads.newsNeighbours('media-coverage', q!)).newer?.slug).toBe(p);
+    expect((await reads.newsNeighbours('media-coverage', q!)).older?.slug).toBe(c.slug);
+    await transition(
+      'media-coverage',
+      await service.detail({ accountId: author }, 'media-coverage', c.id),
+      'archive',
+      publisher,
+    );
+    expect((await reads.newsNeighbours('media-coverage', q!)).older?.slug).toBe(b.slug);
+    expect((await reads.newsListing(year)).total).toBe(4);
   });
 
   it('bounds a scheduler sweep for each family and catches up the remainder next time', async () => {

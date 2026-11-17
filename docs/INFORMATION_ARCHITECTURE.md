@@ -343,7 +343,7 @@ Phase 14 it links Events too, and each Event links its own photographs (its gall
 Event galleries are reached through their Event rather than a listing of their own. The
 newsletter appears only when its own phase delivers it — since Phase 21 it is delivered at
 `/newsletter` (double opt-in) and linked from Explore's Connect column, the Digital Resources group
-and the footer. Since Phase 14 each Centre page lists
+and the footer, and since News & Events Part 1 from `/news`'s front door as well. Since Phase 14 each Centre page lists
 its Local Events beside its Local News. Since Phase 15 `/news` also links Collections (§3.8,
 the Archive column), a topic hub lists the Collections on its topic, and each Collection links
 its members at their owners' own addresses — a Video at `/watch/videos/{slug}`, a book at
@@ -634,6 +634,17 @@ Works is linked from the section map; the rest are named and marked (ROUTE_MAP.m
 | News | Event Galleries | Media Coverage | Collections |
 | Press Releases | — | Media Downloads | Newsletter |
 | Statements | — | — | — |
+
+**News & Events Part 1 (2026-11-17).** The News column is one listing over four families:
+`/news` (NewsArticles), Press Releases, Statements and Media Coverage each open on their figures,
+the families as counted tabs, counted filters (Topic, year, month, language, and the outlet for
+media coverage), chips, two orders and numbered pages. `/news`'s own first page is also the
+section's front door: after the latest stories, each other family's newest records, News by year
+into the archive, and the rest of News & Events — Collections, the photograph surfaces and the
+newsletter (Events and the News archive open the page). The Archive column's News archive is a
+year-and-month index whose every count leads into a family's listing for that period. A record's
+page states its reading time, offers Share, names its family, the languages it is also published
+in and (coverage) its outlet, and leads to its newer and older neighbours and related reading.
 
 ### 3.9 Global
 
@@ -1136,7 +1147,7 @@ These are reachable from many places and belong to no single section:
 | Collection page | A curated set, possibly of mixed content types |
 | Centre page | A location with its own news, events and contacts |
 | Series / Playlist | Ordered media grouping |
-| Language-filtered browse | Any listing constrained by content language. Since Rebaseline R2 a content card whose content language differs from the interface locale carries a language badge, and News listings take `?lang=` while leading with the interface language's records by default (ROUTE_MAP.md §3.9) |
+| Language-filtered browse | Any listing constrained by content language. Since Rebaseline R2 a content card whose content language differs from the interface locale carries a language badge, and News listings take a content language (R2's `?lang=`, since News & Events Part 1 `?language=` with a count per language) while leading with the interface language's records by default (ROUTE_MAP.md §3.9) |
 
 ---
 

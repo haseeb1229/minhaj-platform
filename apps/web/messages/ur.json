@@ -3465,10 +3465,10 @@
       "media-coverage": "میڈیا کوریج"
     },
     "all": {
-      "news-article": "تمام خبریں",
-      "press-release": "تمام پریس ریلیزیں",
-      "statement": "تمام بیانات",
-      "media-coverage": "تمام میڈیا کوریج"
+      "news-article": "تمام خبریں ({count, number})",
+      "press-release": "تمام پریس ریلیزیں ({count, number})",
+      "statement": "تمام بیانات ({count, number})",
+      "media-coverage": "تمام میڈیا کوریج ({count, number})"
     },
     "empty": {
       "news-article": "ابھی تک کوئی خبر شائع نہیں ہوئی۔",
@@ -3476,21 +3476,15 @@
       "statement": "ابھی تک کوئی بیان شائع نہیں ہوا۔",
       "media-coverage": "ابھی تک کوئی میڈیا کوریج شائع نہیں ہوئی۔"
     },
-    "pageEmpty": "اس صفحے پر کچھ نہیں ہے۔",
-    "firstPage": "پہلے صفحے پر واپس جائیے",
     "sectionsLabel": "خبروں کے حصے",
     "browse": "خبریں اور تقریبات دیکھیے",
     "archive": "خبروں کا آرکائیو",
     "archiveBody": "خبروں کے حصے میں شائع ہونے والی ہر چیز، اشاعت کے سال اور مہینے کے لحاظ سے۔",
     "archiveAll": "تمام شائع شدہ مواد",
     "archiveYear": "{year} میں شائع شدہ",
-    "archiveMonth": "{month} {year} میں شائع شدہ",
     "archiveYears": "سال",
-    "archiveMonths": "مہینے",
     "archiveEveryYear": "تمام سال",
-    "countShort": "{count, number}",
     "archiveEmpty": "خبروں کے حصے میں ابھی تک کچھ شائع نہیں ہوا۔",
-    "archiveFilteredEmpty": "اس مدت میں کچھ شائع نہیں ہوا۔",
     "published": "تاریخِ اشاعت",
     "contributors": "معاونین",
     "topics": "موضوعات",
@@ -3510,32 +3504,121 @@
     "next": "اگلا صفحہ",
     "centre": "مرکز",
     "events": "تقریبات",
-    "eventsBody": "آئندہ اور گزشتہ اجتماعات، ہر ایک کے وقت اور مقام کے ساتھ۔",
     "collections": "مجموعے",
     "collectionsBody": "مضامین، خبروں، کتب اور ویڈیوز کے منتخب مجموعے، ہر ایک کسی ایک موضوع کے گرد مرتب۔",
     "authors": "مصنفین",
     "updated": "تازہ کاری",
     "contents": "اس صفحے پر",
-    "related": "متعلقہ مطالعہ",
     "moreNews": "مزید خبریں",
     "moreArticles": "مزید مضامین",
     "allArticles": "تمام مضامین",
-    "languageFilter": "مواد کی زبان",
-    "allLanguages": "تمام زبانیں",
-    "languageEmpty": "اس زبان میں ابھی کچھ شائع نہیں ہوا۔",
     "languages": {
       "en": "انگریزی",
       "ur": "اردو",
       "ar": "عربی"
     },
-    "typeFilter": "اندراج کی قسم",
-    "allTypes": "تمام اقسام",
-    "archiveEverything": "تمام شائع شدہ مواد دکھائیں",
     "byYear": "سال کے لحاظ سے دیکھیں",
     "mediaSurface": {
       "photos": "تقریبات اور پروگراموں کی تصاویر۔",
       "galleries": "مواقع کے لحاظ سے یکجا تصاویر۔",
       "archive": "تمام تصاویر، تاریخ کے لحاظ سے۔"
+    },
+    "listing": {
+      "eyebrow": "نیوز روم",
+      "stats": {
+        "news-article": "{count, plural, one {خبر} other {خبریں}}",
+        "press-release": "{count, plural, one {پریس ریلیز} other {پریس ریلیزیں}}",
+        "statement": "{count, plural, one {بیان} other {بیانات}}",
+        "media-coverage": "{count, plural, one {کوریج کا خلاصہ} other {کوریج کے خلاصے}}",
+        "records": "{count, plural, one {اندراج} other {اندراجات}}",
+        "span": "{count, plural, one {سال پر محیط} other {سالوں پر محیط}}",
+        "languages": "{count, plural, one {زبان} other {زبانیں}}",
+        "outlets": "{count, plural, one {ذریعۂ ابلاغ} other {ذرائع ابلاغ}}"
+      },
+      "heading": {
+        "news-article": "تمام خبریں",
+        "press-release": "ہر پریس ریلیز",
+        "statement": "ہر بیان",
+        "media-coverage": "کوریج کا ہر خلاصہ"
+      },
+      "intro": "موضوع، سال، مہینے یا زبان کے لحاظ سے محدود کریں۔ ہر انتخاب بتاتا ہے کہ اس سے کتنے اندراجات سامنے آئیں گے۔",
+      "introCoverage": "موضوع، سال، مہینے، زبان یا ذریعۂ ابلاغ کے لحاظ سے محدود کریں۔ ہر انتخاب بتاتا ہے کہ اس سے کتنے اندراجات سامنے آئیں گے۔",
+      "filters": "فہرست کو فلٹر کریں",
+      "apply": "نتائج دکھائیں",
+      "filterYear": "سال",
+      "anyYear": "کوئی بھی سال",
+      "filterMonth": "مہینہ",
+      "anyMonth": "کوئی بھی مہینہ",
+      "anyOutlet": "کوئی بھی ذریعۂ ابلاغ",
+      "oldest": "قدیم ترین پہلے",
+      "summary": "{total, number} میں سے {from}–{to}",
+      "pastEnd": "اس فہرست میں صفحہ {page, number} موجود نہیں۔",
+      "noResultsTitle": "ان فلٹرز سے کچھ نہیں ملا",
+      "noResults": "کوئی شائع شدہ اندراج تمام منتخب فلٹرز پر پورا نہیں اترتا۔ ایک فلٹر ہٹائیں یا سب صاف کر دیں۔",
+      "emptyTitle": "یہاں ابھی کچھ شائع نہیں ہوا",
+      "backToNews": "خبریں اور تقریبات پر جائیں",
+      "pages": {
+        "news-article": "خبروں کے صفحات",
+        "press-release": "پریس ریلیزوں کے صفحات",
+        "statement": "بیانات کے صفحات",
+        "media-coverage": "میڈیا کوریج کے صفحات"
+      },
+      "about": "ہر تاریخ اسی اندراج کی اپنی ہے: جہاں معلوم ہو وہاں وہ دن جب اس کے ماخذ نے اسے پہلی بار شائع کیا، ورنہ وہ دن جب یہ یہاں شائع ہوا۔",
+      "topics": "تمام موضوعات دیکھیں"
+    },
+    "front": {
+      "newsletter": "نیوز لیٹر",
+      "newsletterBody": "خبریں اور اعلانات ای میل کے ذریعے، جو صرف آپ کے پتے کی تصدیق کے بعد بھیجے جاتے ہیں۔",
+      "yearsIntro": "ہر سال خبروں کے آرکائیو میں اپنے مہینوں تک لے جاتا ہے۔"
+    },
+    "detail": {
+      "readingTime": "{minutes, plural, one {# منٹ کا مطالعہ} other {# منٹ کا مطالعہ}}",
+      "relatedTopic": "{topic} پر مزید",
+      "topicHub": "{topic} پر سب کچھ",
+      "more": {
+        "news-article": "مزید خبریں",
+        "press-release": "مزید پریس ریلیزیں",
+        "statement": "مزید بیانات",
+        "media-coverage": "مزید میڈیا کوریج"
+      },
+      "newer": {
+        "news-article": "نئی خبر",
+        "press-release": "نئی پریس ریلیز",
+        "statement": "نیا بیان",
+        "media-coverage": "نئی کوریج"
+      },
+      "older": {
+        "news-article": "پرانی خبر",
+        "press-release": "پرانی پریس ریلیز",
+        "statement": "پرانا بیان",
+        "media-coverage": "پرانی کوریج"
+      },
+      "kindNav": {
+        "news-article": "نئی اور پرانی خبریں",
+        "press-release": "نئی اور پرانی پریس ریلیزیں",
+        "statement": "نئے اور پرانے بیانات",
+        "media-coverage": "نئی اور پرانی میڈیا کوریج"
+      },
+      "kind": "قسم",
+      "alsoIn": "ان زبانوں میں بھی شائع",
+      "outletAll": "{outlet} کی تمام کوریج"
+    },
+    "archivePage": {
+      "intro": "ہر گنتی اس سال کے لیے اپنی قسم کی فہرست تک لے جاتی ہے۔",
+      "months": "{count, plural, one {# مہینہ} other {# مہینے}} جن میں کچھ شائع ہوا",
+      "yearKinds": "{year} میں شائع شدہ، قسم کے لحاظ سے",
+      "monthKinds": "{month} {year} میں شائع شدہ، قسم کے لحاظ سے",
+      "counts": {
+        "news-article": "{count, plural, one {# خبر} other {# خبریں}}",
+        "press-release": "{count, plural, one {# پریس ریلیز} other {# پریس ریلیزیں}}",
+        "statement": "{count, plural, one {# بیان} other {# بیانات}}",
+        "media-coverage": "{count, plural, one {# کوریج کا خلاصہ} other {# کوریج کے خلاصے}}"
+      },
+      "yearTotal": "{year} میں {count, plural, one {# اندراج} other {# اندراجات}} شائع ہوئے",
+      "yearEmptyTitle": "اس سال میں کچھ نہیں",
+      "yearEmpty": "{year} میں خبروں میں کچھ شائع نہیں ہوا۔",
+      "monthsHeading": "{year}، مہینہ بہ مہینہ",
+      "yearNav": "دیگر سال"
     }
   },
   "collections": {

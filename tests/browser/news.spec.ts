@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type { BrowserContext, Page } from '@playwright/test';
+import { AxeBuilder } from '@axe-core/playwright';
+import type { BrowserContext, Page, TestInfo } from '@playwright/test';
 import type { SqlSession } from '../../packages/database/src/lifecycle/sql-connection.ts';
 import {
   accountIdFor,
@@ -23,6 +24,14 @@ import {
  * and never an embed; the static `/news` routes are never shadowed; a former
  * slug is one 301; and Urdu reads right to left at 320 pixels and at 200% zoom
  * with no horizontal scroll.
+ *
+ * NEWS & EVENTS PART 1: the four listings are one listing — figures, counted
+ * family tabs, a GET form of counted filters, chips, an honest range and
+ * honest empty and past-the-end states, one address per view (every former
+ * spelling one redirect); `/news` is also the section's front door; the
+ * archive is a year and month index into the listings; a record's page states
+ * its reading time, offers Share and leads to its family; and every surface is
+ * axe-clean and reflows from 320 to 1440 px in en, ur and ar.
  *
  * EVERYTHING IS SYNTHETIC. Titles say they are fixtures; every address is
  * `.invalid`.
@@ -208,12 +217,34 @@ test('shows News and Events to an anonymous visitor with no cookie, and the same
     await expect(main.locator(`a[href="${href}"]`).first()).toBeVisible();
   // Events (Phase 14) are linked as the other half of News and Events.
   await expect(main.locator('a[href="/events"]').first()).toBeVisible();
-  // The opening's own ways on — Events and the archive — and the browse list,
-  // which names every News family and the archive with what each one holds.
+  // The opening's own ways on — Events and the archive — each offered ONCE
+  // under its name (News & Events Part 1: the browse list no longer repeats
+  // them, nor the families the tabs and shelves already lead to).
   for (const name of ['Events', 'News archive'])
-    await expect(main.getByRole('link', { name, exact: true }).first()).toBeVisible();
-  // The browse list itself: the year links beside it also reach the archive.
+    await expect(main.getByRole('link', { name, exact: true })).toHaveCount(1);
+  // The families as tabs, each counted, the listing's own current.
+  const sections = main.getByRole('navigation', { name: 'News sections' });
+  await expect(sections.getByRole('link')).toHaveCount(4);
+  await expect(sections.getByRole('link', { name: /^News\s*\d+$/ })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  for (const href of ['/news/press-releases', '/news/statements', '/news/media-coverage'])
+    await expect(sections.locator(`a[href="${href}"]`)).toContainText(/\d/);
+  // The family's figures lead the page.
+  await expect(main.locator('header').first()).toContainText(/news stor(y|ies)/);
+  // The front door's browse list: the rest of News and Events, the newsletter
+  // (Phase 21) among them now that News leads to it (owner direction for News
+  // & Events Part 1); the year links beside it reach the archive.
   const browse = main.locator('section[aria-labelledby="news-browse"] > div').first();
+  for (const href of [
+    '/collections',
+    '/media/photos',
+    '/media/galleries',
+    '/media/archive',
+    '/newsletter',
+  ])
+    await expect(browse.locator(`a[href="${href}"]`)).toHaveCount(1);
   for (const href of [
     '/news/press-releases',
     '/news/statements',
@@ -221,10 +252,15 @@ test('shows News and Events to an anonymous visitor with no cookie, and the same
     '/news/archive',
     '/events',
   ])
-    await expect(browse.locator(`a[href="${href}"]`)).toHaveCount(1);
-  // Nothing that does not exist is linked. The newsletter is delivered by
-  // Phase 21 and reached from Explore, not from News.
-  await expect(main.locator('a[href="/newsletter"]')).toHaveCount(0);
+    await expect(browse.locator(`a[href="${href}"]`)).toHaveCount(0);
+  await expect(main.locator('a[href="/newsletter"]')).toHaveCount(1);
+  // Each other family's shelf leads to its listing, counted.
+  await expect(
+    main
+      .locator('section[aria-labelledby="news-statement"]')
+      .getByRole('link', { name: /^All statements \(\d+\)$/ }),
+  ).toHaveAttribute('href', '/news/statements');
+  // Nothing that does not exist is linked.
   await expect(page.locator('a[href^="/rss"]')).toHaveCount(0);
   // No picture in the content: these synthetic stories carry no lead image.
   // (Rebaseline R1: the organisation's official mark appears once, in the
@@ -252,15 +288,27 @@ test('shows News and Events to an anonymous visitor with no cookie, and the same
     'page',
   );
 
-  // `?sort=latest` is the same resource, never a path of its own.
+  // `?sort=latest` is the same resource, never a path of its own — now one
+  // redirect to the one address of the default order (News & Events Part 1).
   expect((await page.goto('/news?sort=latest'))?.status()).toBe(200);
+  expect(new URL(page.url()).pathname + new URL(page.url()).search).toBe('/news');
   expect((await page.request.get('/news/latest')).status()).toBe(404);
 
   // A statement names its authority; the page is the same signed in.
   await page.goto(`/news/statements/${slugs.statement}`);
   await expect(page.getByText(`Issued by ${ISSUER}`).first()).toBeVisible();
+  // News & Events Part 1: how long it takes to read, Share (with script), and
+  // its family as a fact leading to the family's listing.
+  await expect(page.getByText('1 minute read')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Share', exact: true })).toBeVisible();
+  const facts = page.locator('section[aria-labelledby="news-facts"]');
+  await expect(
+    facts.getByRole('link', { name: 'Statements', exact: true }),
+  ).toHaveAttribute('href', '/news/statements');
   const text = await page.getByRole('main').innerText();
   await author.goto(`/news/statements/${slugs.statement}`);
+  // Share appears once its island hydrates; compare both pages hydrated.
+  await expect(author.getByRole('button', { name: 'Share', exact: true })).toBeVisible();
   expect(await author.getByRole('main').innerText()).toBe(text);
   expect(await page.context().cookies()).toHaveLength(0);
 
@@ -272,14 +320,108 @@ test('shows News and Events to an anonymous visitor with no cookie, and the same
   await expect(link).toContainText('(opens an external site)');
   await expect(page.getByText(/summarises coverage published by/)).toBeVisible();
   await expect(page.locator('iframe, embed, object')).toHaveCount(0);
+  // Its outlet leads to every record of coverage by that outlet.
+  await expect(
+    page.getByRole('link', { name: `All coverage by ${OUTLET}`, exact: true }),
+  ).toHaveAttribute('href', `/news/media-coverage?outlet=${OUTLET.replaceAll(' ', '+')}`);
   expect(external).toEqual([]);
 
-  // The archive lists every family with its type, and tolerates a bad query.
+  // The archive is the year and month index of every family (News & Events
+  // Part 1), and tolerates a bad query with one redirect to its one address.
   await page.goto('/news/archive');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('News archive');
-  await expect(page.getByRole('link', { name: TITLE.coverage })).toBeVisible();
-  await expect(page.getByText('Statement', { exact: true }).first()).toBeVisible();
+  const year = new Date().getUTCFullYear();
+  const month = new Date().getUTCMonth() + 1;
+  const years = page.getByRole('navigation', { name: 'Years' });
+  await expect(years.getByRole('link', { name: 'Every year' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await years.locator(`a[href="/news/archive?year=${String(year)}"]`).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    `Published in ${String(year)}`,
+  );
+  // Each month's count of each family leads into that family's listing for it.
+  const into = page
+    .locator('section[aria-labelledby="news-archive-months"]')
+    .locator(`a[href="/news/statements?year=${String(year)}&month=${String(month)}"]`);
+  await expect(into).toContainText(/^\d+ statements?$/);
+  await into.click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Statements');
+  await expect(
+    page.getByRole('main').getByRole('link', { name: TITLE.statement }),
+  ).toBeVisible();
   expect((await page.goto('/news/archive?year=abc&month=99'))?.status()).toBe(200);
+  expect(new URL(page.url()).search).toBe('');
+});
+
+test('lists each family with figures, counted filters, chips and one address per view', async ({
+  page,
+}) => {
+  const year = String(new Date().getUTCFullYear());
+  // One redirect for each former spelling, to the view's one address.
+  for (const [from, to] of [
+    ['/news?lang=ur', '/news?language=ur'],
+    ['/news?offset=20', '/news?page=2'],
+    ['/news?sort=latest', '/news'],
+    ['/ur/news/statements?language=&year=&sort=newest', '/ur/news/statements'],
+    [`/news/archive?type=statement&year=${year}`, `/news/statements?year=${year}`],
+    ['/news/archive?type=media-coverage&lang=en', '/news/media-coverage?language=en'],
+    [`/news/archive?year=${year}&month=1`, `/news/archive?year=${year}`],
+  ] as const) {
+    const response = await page.request.get(from, { maxRedirects: 0 });
+    expect([307, 308], from).toContain(response.status());
+    const location = new URL(response.headers()['location']!, baseUrl());
+    expect(location.pathname + location.search, from).toBe(to);
+  }
+
+  // A year narrows the statements: its chip removes it alone, and the range says how many.
+  await page.goto(`/news/statements?year=${year}`);
+  const main = page.getByRole('main');
+  await expect(main.getByRole('link', { name: TITLE.statement })).toBeVisible();
+  const chips = main.getByRole('list', { name: 'Filters in use' });
+  await expect(
+    chips.getByRole('link', { name: `Remove filter: ${year}`, exact: true }),
+  ).toHaveAttribute('href', '/news/statements');
+  await expect(main.getByText(/^Showing 1–\d+ of \d+$/)).toBeVisible();
+  // The chosen year is offered with its count in the GET form.
+  const filters = main.getByRole('form', { name: 'Filter the listing' });
+  const yearSelect = filters.getByLabel('Year', { exact: true });
+  await expect(yearSelect).toHaveValue(year);
+  await expect(yearSelect.locator('option:checked')).toHaveText(
+    new RegExp(`^${year} \\(\\d+\\)$`),
+  );
+
+  // Media coverage is filtered by its outlet, counted; the GET form submits
+  // without script and the empty controls are dropped by one redirect.
+  await page.goto(`/news/media-coverage?outlet=${encodeURIComponent(OUTLET)}`);
+  const outlet = page
+    .getByRole('form', { name: 'Filter the listing' })
+    .getByLabel('Outlet', { exact: true });
+  await expect(outlet).toHaveValue(OUTLET);
+  await expect(outlet.locator('option:checked')).toHaveText(
+    /^Synthetic Browser Outlet \(\d+\)$/,
+  );
+  await page.getByRole('button', { name: 'Show results', exact: true }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/news/media-coverage\\?outlet=${OUTLET.replaceAll(' ', '\\+')}$`),
+  );
+  await expect(
+    page.getByRole('main').getByRole('link', { name: TITLE.coverage }),
+  ).toBeVisible();
+
+  // Honest states: no match, and a page past the end.
+  await page.goto('/news/statements?year=1901');
+  await expect(page.getByText('Nothing matches these filters')).toBeVisible();
+  await expect(
+    page.getByRole('main').getByRole('link', { name: 'Clear filters' }).first(),
+  ).toHaveAttribute('href', '/news/statements');
+  await page.goto('/news?page=999');
+  await expect(page.getByText('There is no page 999 in this listing.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Go to the first page' })).toHaveAttribute(
+    'href',
+    '/news',
+  );
 });
 
 test('answers a former slug with one 301 and never shadows a static route', async ({
@@ -339,4 +481,65 @@ test('reads right to left at 320 pixels and at 200% zoom with no horizontal scro
   const first = page.getByRole('main').getByRole('link', { name: TITLE.news });
   await first.focus();
   await expect(first).toBeFocused();
+});
+
+/** No serious or critical axe finding; anything lesser is annotated. */
+async function axe(page: Page, target: string, testInfo: TestInfo): Promise<void> {
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  const blocking = results.violations.filter(
+    (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+  );
+  for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+    testInfo.annotations.push({
+      type: 'axe',
+      description: `${target}: ${finding.id} (${String(finding.impact)})`,
+    });
+  expect(
+    blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+    target,
+  ).toEqual([]);
+}
+
+test('is axe-clean and reflows from 320 to 1440 px — so at 200% zoom — in en, ur and ar', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(300_000);
+  const year = String(new Date().getUTCFullYear());
+  for (const [width, height] of [
+    [320, 800],
+    [1440, 900],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    for (const path of [
+      '/news',
+      '/news/statements',
+      `/news/media-coverage?outlet=${encodeURIComponent(OUTLET).replaceAll('%20', '+')}`,
+      '/news/archive',
+      `/news/archive?year=${year}`,
+      `/news/statements/${slugs.statementRenamed}`,
+      `/news/media-coverage/${slugs.coverage}`,
+      `/news/${slugs.news}`,
+      '/ur/news',
+      '/ur/news/press-releases',
+      `/ur/news/archive?year=${year}`,
+      `/ur/news/statements/${slugs.statementRenamed}`,
+      '/ar/news',
+      '/ar/news/media-coverage',
+      '/ar/news/archive',
+      `/ar/news/${slugs.news}`,
+    ]) {
+      const response = await page.goto(path);
+      expect(response?.status(), path).toBe(200);
+      // Each address is already its view's one address: no redirect was taken.
+      expect(new URL(page.url()).pathname + new URL(page.url()).search, path).toBe(path);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow, `${path} at ${String(width)}`).toBeLessThanOrEqual(0);
+      if (width === 1440) await axe(page, path, testInfo);
+    }
+  }
 });

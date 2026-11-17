@@ -672,6 +672,22 @@ records with a translation in that language first, each group still newest first
 opens on what its reader can read without hiding the rest. The archive's year-and-month counts take
 the same `kind` and `language` narrowing (`NewsPeriodFilter`). These are queries, not new state.
 
+**One family's listing (News & Events Part 1).** Three more public reads of the same published
+predicate (`packages/contracts/src/editorial/news-listing.ts`), each validated again by Editorial's
+read service (`newsListingQuerySchema`, `newsNeighboursQuerySchema`) and answered by the Model A
+adapter with bound parameters only: `newsListing` — one family's bounded page (20) newest or
+oldest first, narrowed by Topic, UTC year and month of the chronology (a month only with its year),
+content language and, for MediaCoverage alone, the outlet its current revision names, with the
+view's **total**; `newsListingFacets` — the whole family's figures (records, content languages,
+first and last year, outlets) and each filter's values counted under every **other** filter, plus
+every family's count under the view's Topic, period and language; and `newsNeighbours` — a
+published record's newer and older published neighbours in its own family (chronology, then
+identifier, read in one statement against the stored date). An outlet is the record's own text, so
+it is answered as text; Topics stay Taxonomy identifiers named at Layer 4. The cross-family
+`newsArchive` read of the service was withdrawn with it (the archive is an index into the family
+listings now; historical). No schema change: PressRelease still carries no contact or boilerplate
+(none is modelled, so none is shown).
+
 #### 7.2.3 Event and EventSchedule — as delivered (Phase 14)
 
 Event is an Editorial aggregate of its own — **not a News family, not a Global record and not a

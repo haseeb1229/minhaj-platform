@@ -29,6 +29,13 @@ import type {
   NewsPeriodFilter,
   NewsTimelineQuery,
 } from './news.ts';
+import type {
+  NewsListingFacets,
+  NewsListingPage,
+  NewsListingQuery,
+  NewsNeighbours,
+  NewsNeighboursQuery,
+} from './news-listing.ts';
 import type { EventListQuery, EventPage } from './event.ts';
 import type {
   CollectionMember,
@@ -132,6 +139,14 @@ export interface EditorialPublicReaderPort {
   newsTimeline(query: NewsTimelineQuery): Promise<NewsPage>;
   /** The UTC year and month of every published News record, counted (optionally narrowed). */
   newsArchivePeriods(filter?: NewsPeriodFilter): Promise<readonly NewsArchivePeriod[]>;
+  /**
+   * NEWS & EVENTS PART 1 — one family's listing: a bounded page with the
+   * view's total, its counted facets, and a record's newer and older
+   * neighbours in its family (see `news-listing.ts`).
+   */
+  newsListing(query: NewsListingQuery): Promise<NewsListingPage>;
+  newsListingFacets(query: NewsListingQuery): Promise<NewsListingFacets>;
+  newsNeighbours(query: NewsNeighboursQuery): Promise<NewsNeighbours>;
   newsSitemap(
     kind: NewsKind,
     offset: number,

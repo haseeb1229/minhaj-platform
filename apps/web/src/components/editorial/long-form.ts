@@ -81,6 +81,20 @@ export function withContents(html: string): {
   return entries.length < 2 ? { html, entries: [] } : { html: anchored, entries };
 }
 
+/** The words a reader reads in a minute, the common estimate for prose. */
+export const WORDS_PER_MINUTE = 200;
+
+/**
+ * NEWS & EVENTS PART 1 — about how long a body takes to read, in whole
+ * minutes (at least one), from its words as plain text; `null` for a body with
+ * no words, which states no reading time at all.
+ */
+export function readingMinutes(html: string): number | null {
+  const words = plainText(html.replace(/<\/(p|h[1-6]|li|blockquote)>/gu, ' ')).split(' ');
+  const count = words.filter((word) => /[\p{L}\p{N}]/u.test(word)).length;
+  return count === 0 ? null : Math.max(1, Math.round(count / WORDS_PER_MINUTE));
+}
+
 /**
  * Whether a record was REVISED after it was first published here, so an
  * "Updated" date says something true. A record published once — including a

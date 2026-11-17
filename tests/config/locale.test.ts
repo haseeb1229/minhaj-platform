@@ -169,6 +169,11 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/editorial/editor.tsx',
     'apps/web/src/components/editorial/public-content.tsx',
     'apps/web/src/components/editorial/news.tsx',
+    // News & Events Part 1: the shared News listing (with the /news front door),
+    // the archive's year and month index, and their pure address rules.
+    'apps/web/src/components/editorial/news-listing.tsx',
+    'apps/web/src/components/editorial/news-archive.tsx',
+    'apps/web/src/components/editorial/news-view.ts',
     'apps/web/src/components/editorial/presentation.ts',
     // Phase 30-R: the Article card and the lead image beside it.
     'apps/web/src/components/editorial/article-card.tsx',

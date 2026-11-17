@@ -3,8 +3,9 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import type { PublicNews } from '../../packages/contracts/src/editorial/index.ts';
 
 /**
- * Phase 13 — what a News page claims to search engines, and how its queries
- * are read.
+ * Phase 13 — what a News page claims to search engines. How the News listings
+ * and the archive read their addresses is proved in `news-view.test.ts` (News &
+ * Events Part 1, where those rules moved).
  *
  * THE INDEXING POSTURE IS SET PER TEST. The deployed posture is pre-adoption —
  * nothing is indexable and no structured data is emitted (ROUTE_MAP.md §9.5) —
@@ -151,72 +152,5 @@ describe('canonical and hreflang', () => {
     const metadata = newsMetadata(record(), 'en');
     expect(metadata.robots).toEqual({ index: false, follow: false });
     expect(metadata.alternates).toBeUndefined();
-  });
-});
-
-describe('query semantics', () => {
-  it('reads the archive query tolerantly and bounds the offset', async () => {
-    const { readNewsArchiveQuery, readNewsOffset, newsArchivePath } =
-      await withIndexing(false);
-    expect(readNewsArchiveQuery({ year: '2034', month: '2' })).toEqual({
-      year: 2034,
-      month: 2,
-      offset: 0,
-    });
-    expect(readNewsArchiveQuery({ month: '2' })).toEqual({
-      year: null,
-      month: null,
-      offset: 0,
-    });
-    expect(readNewsArchiveQuery({ year: '1899', month: '13' })).toEqual({
-      year: null,
-      month: null,
-      offset: 0,
-    });
-    expect(readNewsArchiveQuery({ year: ['2034', '2035'] }).year).toBeNull();
-    expect(readNewsOffset({ offset: '40' })).toBe(40);
-    expect(readNewsOffset({ offset: '-1' })).toBe(0);
-    expect(readNewsOffset({ offset: '999999999' })).toBe(0);
-    expect(newsArchivePath('ur', { year: 2034, month: 2 }, 20)).toBe(
-      '/ur/news/archive?year=2034&month=2&offset=20',
-    );
-    expect(newsArchivePath('en', { year: null, month: 2 })).toBe('/news/archive');
-  });
-
-  it('reads the R2 language and family narrowing tolerantly, and writes it back', async () => {
-    const { readNewsFilters, newsListingPath, newsArchivePath } =
-      await withIndexing(false);
-    expect(readNewsFilters({ lang: 'ur', type: 'statement' })).toEqual({
-      language: 'ur',
-      kind: 'statement',
-    });
-    // Anything else is simply absent: another language, a repeated value, a
-    // family that is not one, an overlong value.
-    for (const query of [
-      { lang: 'fr' },
-      { lang: ['en', 'ur'] },
-      { type: 'event' },
-      { type: 'statement'.repeat(4) },
-      { lang: 'EN' },
-    ])
-      expect(readNewsFilters(query), JSON.stringify(query)).toEqual({
-        language: null,
-        kind: null,
-      });
-    expect(newsListingPath('en', '/news', { language: null })).toBe('/news');
-    expect(newsListingPath('ar', '/news/statements', { language: 'ur' }, 40)).toBe(
-      '/ar/news/statements?lang=ur&offset=40',
-    );
-    expect(
-      newsArchivePath('ur', {
-        year: 2034,
-        month: 2,
-        kind: 'press-release',
-        language: 'en',
-      }),
-    ).toBe('/ur/news/archive?type=press-release&lang=en&year=2034&month=2');
-    expect(
-      newsArchivePath('en', { year: null, month: null, kind: null, language: null }),
-    ).toBe('/news/archive');
   });
 });

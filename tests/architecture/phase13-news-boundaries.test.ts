@@ -162,6 +162,7 @@ describe('four Editorial aggregates, and nothing generic', () => {
       ...(await walk('apps/web/src/contexts/editorial')),
       'packages/database/src/adapters/editorial/news.ts',
       'packages/contracts/src/editorial/news.ts',
+      'packages/contracts/src/editorial/news-listing.ts',
     ];
     for (const file of files) {
       const source = uncommented(await read(file));
@@ -251,11 +252,24 @@ describe('authority stays in the Editorial keys', () => {
 describe('the public News tree claims nothing it does not have', () => {
   it('claims no logo or publisher, embeds no third-party content, and pictures only its own first-party lead image', async () => {
     const source = uncommented(await read('apps/web/src/components/editorial/news.tsx'));
-    expect(source).not.toMatch(/['"](image|logo|publisher|thumbnailUrl)['"]\s*:/u);
-    expect(source).not.toMatch(/\bimage\s*:/u);
-    // A picture appears only through the lead-image components — never a raw
-    // tag, an embed or a third-party image component.
-    expect(source).not.toMatch(/<img\b|<iframe\b|next\/image/u);
+    // News & Events Part 1 split the listings and the archive into modules of
+    // their own; each is held to the same rules as the record page.
+    for (const file of [
+      'apps/web/src/components/editorial/news.tsx',
+      'apps/web/src/components/editorial/news-listing.tsx',
+      'apps/web/src/components/editorial/news-archive.tsx',
+    ]) {
+      const module = uncommented(await read(file));
+      expect(module, file).not.toMatch(
+        /['"](image|logo|publisher|thumbnailUrl)['"]\s*:/u,
+      );
+      expect(module, file).not.toMatch(/\bimage\s*:/u);
+      // A picture appears only through the lead-image components — never a raw
+      // tag, an embed or a third-party image component.
+      expect(module, file).not.toMatch(
+        /<img\b|<iframe\b|<embed\b|<object\b|next\/image/u,
+      );
+    }
     // The coverage source is a described outbound link, never an embed.
     expect(source).toMatch(/rel="external noopener noreferrer"/u);
 
