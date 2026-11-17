@@ -1,14 +1,21 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
-import { AudioSeriesListingPage } from '@/components/media/listen';
+import { groupsCanonicalRedirect, readGroupsView } from '@/components/media/groups-view';
+import { AudioSeriesDirectoryPage } from '@/components/media/listen-series';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
 import { requireRoute } from '@/shell/registry';
 
 /**
- * `/{locale}/listen/series` — every published AudioSeries (ROUTE_MAP.md §3.7).
- * Not the Watch series: an audio series groups recordings, not videos.
+ * `/{locale}/listen/series` — every published AudioSeries, `?q, language,
+ * speaker, topic, sort, page` (ROUTE_MAP.md §3.7; rebuilt in Watch Part 3 on
+ * Watch Part 2's directory rules, kind `audio`). Not the Watch series: an
+ * audio series groups recordings, not videos.
+ *
+ * ONE ADDRESS PER VIEW: a form's empty controls, another order, a malformed or
+ * repeated value and the former `?offset=` pager are each one redirect.
  */
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +35,12 @@ export async function generateMetadata({ params }: ListingParams): Promise<Metad
   });
 }
 
-export default async function AudioSeriesPage({ params, searchParams }: ListingParams) {
+export default async function AudioSeriesRoute({ params, searchParams }: ListingParams) {
   const locale = await requireLocale(params);
-  return <AudioSeriesListingPage locale={locale} query={await searchParams} />;
+  const query = await searchParams;
+  const canonical = groupsCanonicalRedirect('audio', locale, query);
+  if (canonical !== null) redirect(canonical);
+  return (
+    <AudioSeriesDirectoryPage locale={locale} view={readGroupsView(query, 'audio')} />
+  );
 }

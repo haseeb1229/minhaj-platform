@@ -327,7 +327,8 @@ an explicit "Listen" grouping so audio was not lost behind a video-shaped label 
 from R1 until R2, Listen was a footer destination only, promoted while published audio exists
 (historical); from R2 until 2026-11-08 the group was named **Watch & Listen** and Listen was one
 of its destinations under the same signal (historical); since 2026-11-08 the Watch mega menu again
-carries its **Listen** column — Listen, Audio lectures, Audio series — always (§3.6).
+carries its **Listen** column — Listen, Audio lectures, Audio series — always, and since Watch
+Part 3 Quran recitations too, at their one address in the Quran section (§3.6).
 
 **Note on "My Minhaj".** This is an account entry point, not a content section. Signed
 out it presents sign-in and the value of an account; signed in it becomes the gateway to
@@ -586,6 +587,18 @@ its first episode, a programme on its latest, a playlist "plays from the start";
 Videos (with the moments a lecture takes up a Quran passage), its speakers, Topics and languages,
 and related groupings of its kind. Speakers is an A–Z directory over People, each name leading to
 the person's profile and each count to the Videos listing filtered by them.
+
+Since Watch Part 3 the Listen column is complete. Its menu links Listen, Audio Lectures, Audio
+Series and Quran Recitations — the last at `/quran/recitations`, the catalogue's one address
+(`/listen/recitations` only redirects there; the IA's "Playlists" under Listen has no audio
+aggregate and is not offered). The Listen landing is the column's front door: its figures, the
+latest recordings, the audio series, ways in by Topic and by speaker with counts (each leading to
+the lectures listing filtered by it), the Quran's recitations previewed from the Quran section
+(only while a corpus is active) and an index of Listen and Watch. Audio Lectures is a listing
+filtered by Topic, language, speaker, series and length with counts; a recording's page places it
+in its series with the previous and next part and offers more with its speaker, on its Topic or in
+its language. Audio Series is a directory on the Watch groupings' pattern, each series opening on
+its first part.
 
 ### 3.7 Fatwa
 

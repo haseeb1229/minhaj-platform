@@ -535,9 +535,11 @@ const WATCH: readonly ShellRoute[] = Object.freeze(
  * links here.
  *
  * `/listen/recitations` HAS NO ENTRY. Phase 18 delivered it as the catalogue
- * projection of Quran-owned recitations, canonical to `/quran/recitations`; it
- * exists only while a Quran corpus is active, so `/listen` links it at runtime
- * rather than through a static entry. An AudioTrack never fills it.
+ * projection of Quran-owned recitations, canonical to `/quran/recitations`
+ * (historical); since Watch Part 3 it is ONE 301 there while a Quran corpus is
+ * active and a 404 otherwise, so it is never a static link — the Watch menu's
+ * Listen column and `/listen` link `quran.recitations` itself. An AudioTrack
+ * never fills it.
  */
 const LISTEN: readonly ShellRoute[] = Object.freeze([
   Object.freeze({
@@ -579,9 +581,9 @@ const LISTEN: readonly ShellRoute[] = Object.freeze([
  * reciter and a topic view are resources and views reached through these,
  * never registry entries.
  *
- * `/listen/recitations` IS NOT HERE EITHER. It is the Listen projection of the
- * Quran-owned catalogue and exists only while a corpus is active, so it cannot
- * be a static link; `/listen` links it when, and only when, it exists.
+ * `/listen/recitations` IS NOT HERE EITHER. Since Watch Part 3 it is a 301 to
+ * `/quran/recitations` while a corpus is active (a 404 otherwise); from Phase
+ * 18 it was the Listen projection of the catalogue (historical).
  */
 const QURAN_SURFACES = Object.freeze([
   'read',

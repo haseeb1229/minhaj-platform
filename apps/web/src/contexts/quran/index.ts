@@ -15,8 +15,9 @@
  *
  * QURAN READS NO OTHER CONTENT CONTEXT, and none reads Quran. Media, Library,
  * Editorial and Hadith are never imported here; a recitation is not an
- * AudioTrack, and `/listen/recitations` is a Layer-4 page over this context's
- * public reader.
+ * AudioTrack, and Listen's landing previews the recitations at Layer 4 over
+ * this context's public reader (`/listen/recitations` is a 301 to
+ * `/quran/recitations` since Watch Part 3).
  */
 export {
   QURAN_REFUSAL_REASONS,

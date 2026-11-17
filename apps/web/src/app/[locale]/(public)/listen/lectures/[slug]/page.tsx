@@ -2,14 +2,15 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { mediaReadRuntime } from '@/composition/media-read';
-import { listenMetadataInput, TrackDetailPage } from '@/components/media/listen';
+import { listenMetadataInput } from '@/components/media/listen';
+import { TrackPage } from '@/components/media/listen-lectures';
 import { audioTrackPath } from '@/components/media/presentation';
 import { requireLocale } from '@/config/route-locale';
 import { contentMetadata } from '@/seo/metadata';
 
 /**
  * `/{locale}/listen/lectures/{slug}` — THE canonical address of one AudioTrack
- * (ROUTE_MAP.md §2.1, §3.7).
+ * (ROUTE_MAP.md §2.1, §3.7; its page rebuilt in Watch Part 3).
  *
  * PUBLISHED ONLY, and the predicate is in the query: a draft or archived track
  * is a 404 here. A FORMER slug never reaches this page — the request proxy
@@ -40,10 +41,10 @@ export async function generateMetadata({ params }: DetailParams): Promise<Metada
   });
 }
 
-export default async function TrackPage({ params }: DetailParams) {
+export default async function TrackRoute({ params }: DetailParams) {
   const locale = await requireLocale(params);
   const { slug } = await params;
   const record = await mediaReadRuntime().audioTrack(slug);
   if (record === null) notFound();
-  return <TrackDetailPage locale={locale} record={record} />;
+  return <TrackPage locale={locale} record={record} />;
 }

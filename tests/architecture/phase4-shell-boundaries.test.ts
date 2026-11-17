@@ -204,8 +204,9 @@ const CONTENT_ROUTE_FILES = [
   // public beside it, through Quran's PUBLIC reader — and the related views
   // compose Library's and Media's public readers — so none can be prerendered;
   // each is proven below to reach no session, no identity service, no logger
-  // and no authentication library. `/listen/recitations` is the Listen
-  // projection of the same Quran-owned catalogue.
+  // and no authentication library. `/listen/recitations` was the Listen
+  // projection of the same Quran-owned catalogue (historical; a 301 since
+  // Watch Part 3).
   // Quran Part 5: the Quran section's layout, which mounts the recitation
   // player once over every Quran page from the PUBLIC recitation catalogue.
   'apps/web/src/app/[locale]/(public)/quran/layout.tsx',
@@ -243,7 +244,9 @@ const CONTENT_ROUTE_FILES = [
   // `quran` Topic, composed from Learning's PUBLIC root — since Quran Part 13
   // the Quran Courses hub, still composed from that public root alone.
   'apps/web/src/app/[locale]/(public)/quran/courses/page.tsx',
-  'apps/web/src/app/[locale]/(public)/listen/recitations/page.tsx',
+  // Watch Part 3: Listen's way to the catalogue — one 301 to
+  // `/quran/recitations` while a corpus is active, a 404 otherwise.
+  'apps/web/src/app/[locale]/(public)/listen/recitations/route.ts',
   // Phase 19. Every Hadith surface reads whether a collection is activated, and
   // what is public in it, through Hadith's PUBLIC reader — and the related views
   // compose Library's and Media's public readers — so none can be prerendered;

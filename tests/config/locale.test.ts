@@ -473,6 +473,11 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/media/groups.tsx',
     'apps/web/src/components/media/groups-view.ts',
     'apps/web/src/components/media/speakers.tsx',
+    // Watch Part 3: the audio lectures listing and a recording's page, the
+    // audio series' directory and pages, and the listing's pure address rules.
+    'apps/web/src/components/media/listen-lectures.tsx',
+    'apps/web/src/components/media/listen-series.tsx',
+    'apps/web/src/components/media/listen-view.ts',
     // Phase 16. The Global Network directory, a Centre's pages and their pure
     // presentation decisions, on the same anonymous public path.
     'apps/web/src/components/global/centre.tsx',

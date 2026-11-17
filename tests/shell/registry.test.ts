@@ -550,10 +550,11 @@ describe('a deferred capability cannot be linked', () => {
 
   it('delivers Listen beside Watch, with no static recitation entry', () => {
     // Phase 11: the landing, the track listing and audio series — reached from
-    // Watch, so none has a placement of its own. `/listen/recitations` is the
-    // Quran-owned catalogue projection Phase 18 delivered; it exists only while
-    // a Quran corpus is active, so `/listen` links it at runtime and it has no
-    // static entry of any kind, reserved or otherwise.
+    // Watch, so none has a placement of its own. `/listen/recitations` was the
+    // Quran-owned catalogue projection Phase 18 delivered (historical); since
+    // Watch Part 3 it is a 301 to `/quran/recitations` while a Quran corpus is
+    // active (a 404 otherwise), so it has no static entry of any kind, reserved
+    // or otherwise.
     const listen = SHELL_ROUTES.filter(
       (route) => route.key === 'listen' || route.key.startsWith('listen.'),
     );

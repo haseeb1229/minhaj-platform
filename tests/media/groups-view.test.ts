@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type {
+  AudioSeriesEntry,
   MediaGroupEntry,
   SpeakerDirectoryEntry,
 } from '../../packages/contracts/src/media/index.ts';
@@ -13,7 +14,9 @@ import {
   groupPageHref,
   groupsCanonicalRedirect,
   groupsFiltered,
+  groupSortParam,
   groupsHref,
+  membersOf,
   readGroupPage,
   readGroupsView,
   readSpeakersView,
@@ -347,5 +350,129 @@ describe('the speakers’ directory', () => {
       'tahir',
       'x',
     ]);
+  });
+});
+
+/* ===========================================================================
+ * Watch Part 3 — the audio series' directory, kind `audio`, by the same rules
+ * ========================================================================= */
+
+function audioEntry(
+  id: string,
+  fields: Partial<AudioSeriesEntry> & { readonly title?: string } = {},
+): AudioSeriesEntry {
+  const { title, ...rest } = fields;
+  return {
+    id,
+    slug: `audio-${id}`,
+    primaryLocale: 'en',
+    labels: [{ locale: 'en', title: title ?? `Audio ${id}`, description: '' }],
+    updatedAt: new Date('2026-01-01T00:00:00Z'),
+    tracks: 1,
+    seconds: 0,
+    firstOn: null,
+    lastOn: null,
+    languages: [],
+    speakers: [],
+    topics: [],
+    ...rest,
+  };
+}
+
+const audioRow = (value: AudioSeriesEntry): GroupRow<AudioSeriesEntry> => ({
+  entry: value,
+  title: value.labels[0]?.title ?? '',
+});
+
+describe('the audio series’ directory — Watch Part 2’s rules, kind `audio`', () => {
+  it('lives at /listen/series and spells its "most" order as recordings', () => {
+    expect(groupsHref('audio', 'en', DEFAULT_GROUPS_VIEW)).toBe('/listen/series');
+    expect(groupsHref('audio', 'ur', { ...DEFAULT_GROUPS_VIEW, sort: 'videos' })).toBe(
+      '/ur/listen/series?sort=recordings',
+    );
+    expect(groupSortParam('audio', 'videos')).toBe('recordings');
+    expect(groupSortParam('audio', 'title')).toBe('title');
+    // Watch's directories keep their own spelling.
+    expect(groupSortParam('series', 'videos')).toBe('videos');
+    expect(readGroupsView({ sort: 'recordings' }, 'audio').sort).toBe('videos');
+    expect(readGroupsView({ sort: 'videos' }, 'audio').sort).toBe('newest');
+    expect(readGroupsView({ sort: 'recordings' }).sort).toBe('newest');
+  });
+
+  it('answers another spelling of an audio view with ONE redirect, and the canonical with none', () => {
+    expect(groupsCanonicalRedirect('audio', 'en', {})).toBeNull();
+    expect(groupsCanonicalRedirect('audio', 'ar', { sort: 'recordings' })).toBeNull();
+    for (const [query, to] of [
+      [{ sort: 'videos' }, '/listen/series'],
+      [{ q: '', language: '', sort: 'newest' }, '/listen/series'],
+      [{ offset: '24' }, '/listen/series'],
+      [{ topic: TOPIC.toUpperCase() }, `/listen/series?topic=${TOPIC}`],
+    ] as const)
+      expect(groupsCanonicalRedirect('audio', 'en', query), JSON.stringify(query)).toBe(
+        to,
+      );
+  });
+
+  it('counts, filters, orders and relates audio series by their published tracks', () => {
+    const seerah = audioEntry('a', {
+      title: 'Seerah talks',
+      tracks: 5,
+      lastOn: '2024-02-01',
+      languages: [{ id: 'ur', tracks: 5 }],
+      speakers: [{ id: PERSON, tracks: 5 }],
+      topics: [{ id: TOPIC, tracks: 2 }],
+    });
+    const fiqh = audioEntry('b', {
+      title: 'Fiqh circle',
+      tracks: 9,
+      lastOn: '2023-01-01',
+      languages: [{ id: 'en', tracks: 9 }],
+      speakers: [{ id: OTHER.toUpperCase(), tracks: 9 }],
+      topics: [{ id: TOPIC, tracks: 1 }],
+    });
+    const waiting = audioEntry('c', { title: 'Awaiting recordings', tracks: 0 });
+    const rows = [seerah, fiqh, waiting].map(audioRow);
+
+    expect(membersOf(fiqh)).toBe(9);
+    expect(membersOf(entry('v', { videos: 4 }))).toBe(4);
+
+    // Each option counts the series choosing it would show, under the others.
+    const facets = groupFacets(rows, { ...DEFAULT_GROUPS_VIEW, language: 'ur' });
+    expect(facets.languages).toEqual([
+      { id: 'en', videos: 1 },
+      { id: 'ur', videos: 1 },
+    ]);
+    expect(facets.speakers).toEqual([{ id: PERSON, videos: 1 }]);
+    expect(
+      rows
+        .filter((value) =>
+          groupMatches(value, { ...DEFAULT_GROUPS_VIEW, speaker: OTHER }),
+        )
+        .map((value) => value.entry.id),
+    ).toEqual(['b']);
+
+    const collator = new Intl.Collator('en');
+    expect(sortGroups(rows, 'videos', collator).map((value) => value.entry.id)).toEqual([
+      'b',
+      'a',
+      'c',
+    ]);
+    expect(sortGroups(rows, 'newest', collator).map((value) => value.entry.id)).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
+
+    // A shared speaker weighs twice a shared Topic; never itself, never an
+    // empty series.
+    const sameTopicEmpty = audioEntry('d', {
+      tracks: 0,
+      topics: [{ id: TOPIC, tracks: 0 }],
+    });
+    expect(
+      relatedGroups(seerah, [seerah, fiqh, waiting, sameTopicEmpty], 3).map(
+        (value) => value.id,
+      ),
+    ).toEqual(['b']);
   });
 });

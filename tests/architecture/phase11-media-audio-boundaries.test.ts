@@ -93,28 +93,39 @@ describe('audio can never become a second Quran recitation authoring path', () =
     }
   });
 
-  it('fills /listen/recitations only from Quran, never from an AudioTrack', async () => {
+  it('leads /listen/recitations only to Quran, never to an AudioTrack', async () => {
     // Phase 11 delivered no recitation catalogue; Phase 18 delivered it as a
-    // Layer-4 projection of Quran's PUBLIC reader (DOMAIN_MODEL.md §8.1). The
-    // route is the only Listen page that names a recitation, and it reaches no
-    // Media composition, context or contract — so an AudioTrack can never fill it.
+    // Layer-4 projection of Quran's PUBLIC reader (DOMAIN_MODEL.md §8.1), and
+    // since Watch Part 3 the address is ONE 301 to the Quran section's own
+    // catalogue. Every other Listen route is a page of Media's audio; this one
+    // is a GET handler that asks Quran's public reader alone whether a corpus
+    // is active and reaches no Media composition, context, contract or Listen
+    // component — so an AudioTrack can never stand behind it.
     const listen = await walk('apps/web/src/app/[locale]/(public)/listen');
     expect(listen.filter((entry) => entry.endsWith('page.tsx')).sort()).toEqual([
       'apps/web/src/app/[locale]/(public)/listen/lectures/[slug]/page.tsx',
       'apps/web/src/app/[locale]/(public)/listen/lectures/page.tsx',
       'apps/web/src/app/[locale]/(public)/listen/page.tsx',
-      'apps/web/src/app/[locale]/(public)/listen/recitations/page.tsx',
       'apps/web/src/app/[locale]/(public)/listen/series/[slug]/page.tsx',
       'apps/web/src/app/[locale]/(public)/listen/series/page.tsx',
     ]);
+    expect(listen.filter((entry) => entry.endsWith('route.ts'))).toEqual([
+      'apps/web/src/app/[locale]/(public)/listen/recitations/route.ts',
+    ]);
 
     const recitations = uncommented(
-      await read('apps/web/src/app/[locale]/(public)/listen/recitations/page.tsx'),
+      await read('apps/web/src/app/[locale]/(public)/listen/recitations/route.ts'),
     );
     expect(recitations).toMatch(/composition\/quran-read/u);
+    expect(recitations).toContain("localizedPath(locale, '/quran/recitations')");
+    expect(recitations).toMatch(/status: 301/u);
     expect(recitations).not.toMatch(
-      /composition\/media|contexts\/media|contracts\/media|components\/media\/listen/u,
+      /composition\/media|contexts\/media|contracts\/media|components\/media/u,
     );
+    // Only a GET exists: the redirect changes nothing.
+    expect(code(recitations).match(/export async function (\w+)/gu)).toEqual([
+      'export async function GET',
+    ]);
   });
 });
 

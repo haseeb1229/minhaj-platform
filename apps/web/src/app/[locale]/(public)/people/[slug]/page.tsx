@@ -8,6 +8,7 @@ import type { ProfileFacetView, PublicPersonProfile } from '@minhaj/contracts/pe
 
 import { peopleReadRuntime } from '@/composition/people-read';
 import { AudioPreview } from '@/components/media/listen';
+import { listenLecturesHref } from '@/components/media/listen-view';
 import { VideoPreview } from '@/components/media/watch';
 import { watchVideosHref } from '@/components/topic-hub/videos-view';
 import { PersonPortraitFigure, portraitPath } from '@/components/people/portrait';
@@ -273,10 +274,7 @@ export default async function ContributorProfilePage({ params }: ProfileParams) 
             heading={t('audio')}
             headingId="person-audio"
             more={{
-              href: localizedPath(
-                locale,
-                `/listen/lectures?speaker=${encodeURIComponent(profile.id)}`,
-              ),
+              href: listenLecturesHref(locale, { speaker: profile.id }),
               text: t('allAudio'),
             }}
           />

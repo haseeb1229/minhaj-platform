@@ -1176,8 +1176,8 @@ function surfacePath(locale: Locale, surface: string): string {
   return localizedPath(locale, `/watch/${surface}`);
 }
 
-/** A way in with its count, as a chip: "Education · 12". */
-function CountChips({
+/** A way in with its count, as a chip: "Education · 12". Shared with Listen's landing. */
+export function CountChips({
   label,
   chips,
 }: {

@@ -44,6 +44,7 @@ import { getDatabaseClient } from '../../client.ts';
 import { requestSearchIndexing } from '../../search-intent.ts';
 import { audioPersistence, audioPublicReader } from './audio.ts';
 import { groupsPublicReader } from './groups.ts';
+import { listenPublicReader } from './listen.ts';
 import { photoPersistence, photoPublicReader } from './photo.ts';
 import {
   bounded,
@@ -1384,6 +1385,7 @@ export function createMediaPublicReader(): MediaPublicReaderPort {
     ...photoPublicReader(),
     ...topicVideosReader(),
     ...groupsPublicReader(),
+    ...listenPublicReader(),
 
     async videos(query) {
       const rows = await db.video.findMany({

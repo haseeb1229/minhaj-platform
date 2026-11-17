@@ -4809,6 +4809,133 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > serious or critical finding) at 1440 px and no sideways scroll at 320 and 1440 px on every
 > directory and page in en, ur and ar. *CI and staging evidence are recorded when they exist.*
 
+> **Watch Part 3 — Listen: the landing, the audio lectures, a recording's page, the audio series and
+> the recitations (owner direction: every section built from A to Z, one item at a time; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (DOMAIN_MODEL.md §8.1, §11;
+> ROUTE_MAP.md §3.7; INFORMATION_ARCHITECTURE.md §2.2, §3.6). No schema change and no migration; the
+> audio byte routes, the native player and its rules (`preload="none"`, no autoplay, no download, no
+> media-src widened — SECURITY_BASELINE.md §16.2), the slug-history 301s and the CSP are untouched.
+> This completes the Watch menu's Listen column.
+>
+> - **The audit (before).** `/listen` was a hero, eight rows by recording date, four series cards by
+>   slug and a five-card browse grid: no figures, no way in by Topic or speaker, no recitation but a
+>   bare link. `/listen/lectures` was a panel of three uncounted selects (the whole Topic tree, the
+>   first 24 series by slug, every content language), a speaker filter reachable only from a
+>   profile, no length filter, one fixed order, no chips, no total, Previous/Next behind `?offset=`
+>   and no one-address rule (its empty controls made a second address for every view). A
+>   recording's page had no Share, no previous or next part — only the first six of the series'
+>   first page, whatever its own place — no related recordings, and said "about this recording" in
+>   the reader's language even when that was the language spoken. `/listen/series` was text-only
+>   cards by slug, 24 a page behind `?offset=`, with no count, dates, running time, speakers,
+>   languages, Topics, figures, search, filter or order; a series' page had no figures, no way to
+>   begin, no speakers, Topics or related series, and Previous/Next behind `?offset=`.
+>   `/listen/recitations` rendered the Quran's catalogue a second time (canonical to
+>   `/quran/recitations`) without the Quran layout's player, so its Play controls were hidden there.
+>   No Listen page had an axe proof, and only five were reflow-checked, at 320 px.
+> - **New reads (Model A).** Media: `audioListing`, `audioListingFacets`, `audioSeriesDirectory`,
+>   `audioSeriesSummary`, `audioSeriesNeighbours` (`packages/contracts/src/media/listen.ts`,
+>   `packages/database/src/adapters/media/listen.ts`; every input parsed by the read service before
+>   any read; bound parameters only; a fixed handful of statements whatever the count, the shown rows
+>   re-read under the public predicate). `audioSeriesDirectory` replaces `audioSeriesList`, removed
+>   with its last consumer; the audio adapter's row select and mapping are shared, not copied.
+> - **The listing.** `/listen/lectures`: the figures of the whole of Listen (recordings, whole hours,
+>   languages — a zero never stated); a GET form of counted filters (Topic, content language, speaker,
+>   audio series, length — each option counting what choosing it would show under the others, a
+>   filter offered only when it has a choice), two orders (most recently recorded — an undated
+>   recording after every dated one — and title in the reader's language), chips that each remove
+>   one filter, the way to a chosen Topic's own hub, a range, numbered pages of 24, past-end and
+>   no-results states and an honest empty state; one address per view (`components/media/
+>   listen-view.ts`), every Listen link into it built by one function (`listenLecturesHref`,
+>   identifiers in lower case — the Topic hub, a person's profile, the home page and the landing).
+>   It reuses the topic hubs' parts (`ExploreHero`, `ExploreFilters`, `ActiveFilters`, `Pager`, and
+>   the new shared `CountedSelect`) and the Videos' length bands (`TOPIC_VIDEO_LENGTHS`).
+> - **A recording's page.** Its kind and content language, "Part n", title in its own language,
+>   length, date, speakers (to their profiles) and Share; the player as before (or the honest
+>   "not available to play right now"); its series named once with "Part n of m" and the previous
+>   and next PUBLISHED part (a draft between them skipped); what it is about, said to describe a
+>   recording in another language only when it does; the transcript where the organisation holds one;
+>   its facts and Topics; then more with its first speaker, on its first Topic, or — only when
+>   neither has more — in its language, each to the listing filtered by it, never one recording
+>   twice or itself. **No "listen from" moments:** the model records no timed reference for audio,
+>   so none is offered or inferred.
+> - **The audio series (Watch Part 2's design).** The directory is the Watch groupings' rules for one
+>   more directory kind, `audio` (`groups-view`'s filters, orders, related groupings and one-address
+>   rule, generalised over an AudioSeries' entry; its "most recordings" order spelled
+>   `?sort=recordings`): figures (series, recordings, hours, languages, speakers), a title search,
+>   counted language, speaker and Topic filters, three orders, chips and numbered pages; each card a
+>   drawn audio tile with sheets behind it and its count, the title, description, years, running
+>   time, languages and speakers. A series' page: its figures, "Start from part n" (its first
+>   PUBLISHED part's own number) then "Latest recording" when that differs, its numbered recordings
+>   24 a page (`?page`; a former `?offset=` one redirect), its speakers (Watch Part 2's speaker list,
+>   now shared), Topics and languages, a line saying what an audio series is, and up to three related
+>   series.
+> - **The landing.** Breadcrumbs, the hero with the figures and "Browse every recording", the latest
+>   six recordings (with "See all n" when there are more), the three newest audio series, ways in by
+>   Topic and by speaker as counted chips (each to the filtered listing), the Quran's recitations
+>   (below), and an index — Listen (Audio lectures, Audio series, Quran recitations) and Find
+>   (Topics, Watch, Speakers on video) — so every Listen and Watch way in is linked once under one
+>   name. Nothing is "featured": the model records no such choice for audio. With nothing published it
+>   says so and leads to Watch.
+> - **Recitations (decision).** `/listen/recitations` is now ONE 301 to `/quran/recitations` (a route
+>   handler, `noindex`, `no-store`, the locale kept) while a Quran corpus is active, and a 404
+>   otherwise, as before. The catalogue keeps one address — the Quran section's, whose Play controls
+>   answer its layout's player under the Quran routes' own media policy — instead of a second,
+>   weaker rendering of the same view. Listen's landing composes a preview of Quran's own cards
+>   (`RecitationPreview`, `components/quran/recitations.tsx`, over Quran's public reader at Layer 4;
+>   Media still reads nothing of Quran) with the fixture banner where it applies, and the Watch menu's
+>   Listen column gains `quran.recitations` (IA §3.6). `ListenRecitationsPage` is removed.
+> - **Messages.** `listen.*` gains `seriesCount`, `stats.*`, `landing.*`, `lectures.*`, `track.*`,
+>   `series.*`, `sections.watchSpeakers` and `sectionBody.watchSpeakers`; `sectionBody.lectures`
+>   reworded (it names the new filters); removed as unused: `listen.{filters, filterTopic,
+>   filterSeries, filterLanguage, filterAny, filterApply, filterClear, speakerActive, speakerClear,
+>   moreFromSeries, browseIntro}`. `readMediaQuery`/`mediaQueryPath` (the old listing's reader, its
+>   last consumer gone) are removed with their tests; the new rules are proved in their place.
+>
+> **Data facts — what staging will show.** Staging holds **no AudioTrack and no AudioSeries**: the
+> Minhaj.TV audio is SoundCloud embeds the storage-backed model cannot hold (MIGRATION_STRATEGY.md
+> §16, §19 — source-limited), and the demo data adds none. So staging shows the Listen landing's
+> honest "No recordings yet" leading to Watch, no figures, no series, Topic or speaker sections, and
+> its index; `/listen/lectures` and `/listen/series` their empty states leading to Listen; no
+> recording or series page exists (each such address is a 404). The recitations section appears on
+> the landing — Quran's own cards for the first three recitations in the catalogue's order — only
+> while the staging Quran reference preview is active and recitations are public (the operator's
+> `quran-reference.sh recitations-mp3quran`/`recitations-irfan-urdu` imports); then
+> `/listen/recitations` answers one 301 to `/quran/recitations`, else a 404. Everything above
+> appears as audio is published. The local persistent database was not inspected.
+>
+> **Proof:** `tests/media/listen.test.ts` (new: every listing view, series identifier and place parsed
+> before any read; sixteen malformed, unknown, out-of-range or foreign fields refused with no read;
+> the directory takes nothing); `tests/media/listen-view.test.ts` (new: the view an address means,
+> the former `?offset=`, one address per view, eight one-redirect spellings, every link from the
+> unfiltered first page, what Media is asked); `tests/media/groups-view.test.ts` (the audio
+> directory kind: its path, its `recordings` order, redirects, counted facets, orders and related
+> series over AudioSeries entries — every Watch expectation unchanged);
+> `tests/media/media-listen.integration.test.ts` (new, real SQL Server: published tracks only, newest
+> recorded with the undated last, title order in the reader's language, every filter, a draft series
+> admitting nothing, a track in a draft series naming none, pages and totals past the end; the whole
+> of Listen's figures never narrowed and each facet under the others; the directory's published
+> series only with what their published tracks say; a summary's first and latest; neighbours
+> skipping a draft); `tests/media/presentation.test.ts` (the removed helpers' three tests removed);
+> `tests/architecture/phase11-media-audio-boundaries.test.ts` (`/listen/recitations` a GET-only 301
+> handler reading Quran's public reader alone — no Media composition, context, contract or
+> component — and the Listen pages exactly the five);
+> `tests/architecture/phase4-shell-boundaries.test.ts`, `tests/architecture/phase18-quran-boundaries.test.ts`
+> and `tests/identity/protocol.test.ts` (the handler listed: dynamic, session-free, read-only — 33);
+> `tests/config/locale.test.ts` (the new modules); `tests/shell/menus.test.ts` (the Listen column's
+> four links); `tests/shell/registry.test.ts` (wording only). `tests/browser/listen.spec.ts` — the
+> landing's figures, latest list, series, Topic and speaker chips, index, and recitations only at
+> `/quran/recitations` (exactly while a corpus is active); the listing's figures, the language chip,
+> another order as one redirect, the no-results state, the series option "… (2)" submitted without
+> script to its one address with its chip, the speaker chip, six one-redirect spellings; the series'
+> page ("2 recordings", "Start from part 1", no "Latest recording", its speaker, its past-end page);
+> the directory searched by title (card "2 recordings", chip); "Part 1 of 2" with next and previous
+> recording and Share; `/ur/listen/recitations` a 301 to `/ur/quran/recitations` (no-store,
+> noindex) or a 404; and axe (no serious or critical finding) at 1440 px with no sideways scroll at
+> 320 and 1440 px on every Listen surface in en, ur and ar — every earlier Listen proof kept.
+> `tests/browser/quran.spec.ts` — Listen's landing previews Quran's two fixture recitations under the
+> fixture banner, links the catalogue, never the alias, and `/listen/recitations` and
+> `/ar/listen/recitations` are one 301 each. *CI and staging evidence are recorded when they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

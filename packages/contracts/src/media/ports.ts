@@ -10,6 +10,15 @@ import type {
   AudioTrackValue,
 } from './audio.ts';
 import type {
+  AudioListingFacets,
+  AudioListingPage,
+  AudioListingQuery,
+  AudioSeriesDirectory,
+  AudioSeriesNeighbours,
+  AudioSeriesNeighboursQuery,
+  AudioSeriesSummary,
+} from './listen.ts';
+import type {
   ArchiveMonth,
   ArchiveYear,
   GalleryDetail,
@@ -228,11 +237,32 @@ export interface MediaPublicReaderPort {
   audioTrack(slug: string): Promise<AudioTrackRecord | null>;
   /** The current slug a current or FORMER slug of a published AudioTrack resolves to. */
   audioTrackCanonicalSlug(slug: string): Promise<string | null>;
-  audioSeriesList(offset: number): Promise<AudioSeriesPage>;
   audioSeries(slug: string): Promise<AudioSeriesRecord | null>;
   audioSeriesCanonicalSlug(slug: string): Promise<string | null>;
   /** One page of a published AudioSeries' published tracks, in series order. */
   audioSeriesTracks(seriesId: string, offset: number): Promise<AudioTrackPage>;
+
+  /**
+   * WATCH PART 3 — LISTEN. One bounded, ordered page of the published tracks
+   * a view admits (`audioListingQuerySchema`), with the total; and the
+   * listing's aggregates — the whole of Listen's figures and each filter's
+   * values counted under every other filter. A handful of bound statements.
+   */
+  audioListing(query: AudioListingQuery): Promise<AudioListingPage>;
+  audioListingFacets(query: AudioListingQuery): Promise<AudioListingFacets>;
+  /**
+   * Every published AudioSeries (at most `AUDIO_SERIES_DIRECTORY_MAX`, the
+   * busiest first) with what its published tracks say. Replaces the former
+   * slug-ordered `audioSeriesList`.
+   */
+  audioSeriesDirectory(): Promise<AudioSeriesDirectory>;
+  /** One published AudioSeries' entry, its first and its latest published track. */
+  audioSeriesSummary(seriesId: string): Promise<AudioSeriesSummary | null>;
+  /** A track's published neighbours in its published series, and the series' count. */
+  audioSeriesNeighbours(
+    query: AudioSeriesNeighboursQuery,
+  ): Promise<AudioSeriesNeighbours>;
+
   audioSitemap(
     kind: 'track' | 'series',
     offset: number,

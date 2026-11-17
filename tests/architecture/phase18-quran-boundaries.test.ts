@@ -250,7 +250,8 @@ describe('the public Quran reader holds no session', () => {
     const files = [
       ...(await sources(PUBLIC)),
       ...(await sources('apps/web/src/components/quran')),
-      'apps/web/src/app/[locale]/(public)/listen/recitations/page.tsx',
+      // Watch Part 3: Listen's way to the catalogue, now a 301 handler.
+      'apps/web/src/app/[locale]/(public)/listen/recitations/route.ts',
       'apps/web/src/composition/quran-read.ts',
     ];
     expect(files.length).toBeGreaterThan(2);

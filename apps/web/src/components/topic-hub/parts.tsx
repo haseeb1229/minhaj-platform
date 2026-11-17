@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import type { Locale } from '@minhaj/contracts';
 
-import { Button, Icon, Stat } from '@/components/ui';
+import { Button, Field, Icon, Select, Stat } from '@/components/ui';
 
 /**
  * THE TOPIC HUBS' SHARED PARTS (Quran Part 10; shared by the Quran and Hadith
@@ -14,6 +14,7 @@ import { Button, Icon, Stat } from '@/components/ui';
  *                    can truthfully state, and the ways onward;
  *   ExploreFilters   a GET form of plain controls — every view an address,
  *                    usable without script;
+ *   CountedSelect    one filter of counted options in that form;
  *   ActiveFilters    what narrows the view now, each removable by a link;
  *   languageName     a content language named in the interface language.
  *
@@ -211,6 +212,57 @@ export function LetterIndex({
         ))}
       </ul>
     </nav>
+  );
+}
+
+/**
+ * ONE FILTER OF COUNTED OPTIONS (Watch Part 3, for Listen): "Any …", then each
+ * value with how many records choosing it would show ("Urdu (12)"), the
+ * current one selected. A plain select in the GET form — no script.
+ */
+export function CountedSelect({
+  id,
+  label,
+  name,
+  value,
+  any,
+  options,
+  optionText,
+}: {
+  readonly id: string;
+  readonly label: string;
+  readonly name: string;
+  /** The chosen value, or '' for none. */
+  readonly value: string;
+  /** The neutral option's words ("Any speaker"). */
+  readonly any: string;
+  readonly options: readonly {
+    readonly value: string;
+    readonly name: string;
+    readonly count: number;
+    /** The option's own language, where its name is content (a title). */
+    readonly lang?: string;
+  }[];
+  /** "{name} ({count})", in the interface language. */
+  readonly optionText: (name: string, count: number) => string;
+}) {
+  return (
+    <Field id={id} label={label}>
+      {(props) => (
+        <Select {...props} name={name} defaultValue={value}>
+          <option value="">{any}</option>
+          {options.map((option) => (
+            <option
+              key={option.value}
+              value={option.value}
+              {...(option.lang === undefined ? {} : { lang: option.lang })}
+            >
+              {optionText(option.name, option.count)}
+            </option>
+          ))}
+        </Select>
+      )}
+    </Field>
   );
 }
 

@@ -984,7 +984,8 @@ published recitation always has audio. Media holds no recitation column, table o
 `/listen/recitations` is a Layer-4 projection of Quran's public reader. Nothing is downloadable.
 *(As at Phase 18. Since Quran Part 5 a recitation also records the language heard, may be STREAMED
 from an allowlisted provider instead of holding Storage assets, and a segment may carry per-Ayah
-timing — §8.5.)*
+timing — §8.5. Since Watch Part 3 `/listen/recitations` is one 301 to `/quran/recitations` and
+Listen's landing previews the recitations at Layer 4 over the same public reader — §11.)*
 
 **Typed topic assignment.** `QuranTopic` targets the **Ayah** — the canonical citation unit —
 with real foreign keys to the Ayah and the Topic. Surah-level assignment would be a separate typed
@@ -1895,6 +1896,32 @@ removed with their last consumers (`seriesVideos` stays: a Video's page and the 
 Filtering, ordering and paging a directory is Layer 4's, over that bounded answer; names are People's
 and Taxonomy's, resolved in bounded batches. No schema change.
 
+**Listen (Watch Part 3).** Five public reads over AudioTrack and AudioSeries
+(`packages/contracts/src/media/listen.ts`), each under the ordinary public predicate (a track only
+while published; an AudioSeries named, filtered by or counted only while published, and only its
+published tracks counted), parameterised SQL, bounded, every input parsed by the read service
+before any read: `audioListing(query)` — one page (at most 24) of the published tracks a view admits
+(`audioListingQuerySchema`: Topic, content language, speaker, audio series and length band — the
+Videos' `TOPIC_VIDEO_LENGTHS`, one definition — each narrowing; the most recently recorded first
+with an undated track last, or by title in the reader's language), with the total, each track with
+its series and place while that series is published; `audioListingFacets(query)` — the whole of
+Listen's figures (tracks, recorded running time, content languages; never narrowed) and each
+filter's values counted under every OTHER filter (at most `MEDIA_FACET_PAGE` each, more stated);
+`audioSeriesDirectory()` — every published AudioSeries (at most `AUDIO_SERIES_DIRECTORY_MAX` = 1000,
+the busiest first) with what its published tracks say: count, running time, first and last
+recording dates, languages, speakers and Topics (commonest first, at most 50 each);
+`audioSeriesSummary(id)` — one published series' entry, its first published track in series order
+and its latest (the newest dated, an undated one only when none is dated); and
+`audioSeriesNeighbours({ series, position })` — the published track just before and after a place (a
+draft between skipped) and the published count. `audioSeriesDirectory` replaces the slug-ordered
+`audioSeriesList`, removed with its last consumer; `audioTracks` stays (the home page reads it). The
+audio series' directory is filtered, ordered and paged at Layer 4 by Watch Part 2's grouping rules.
+**No "listen from" moments exist**: the model records no timed reference for audio, and none is
+inferred. **Recitations (decision):** the Quran's catalogue has one address, `/quran/recitations`;
+`/listen/recitations` answers one 301 there (a 404 while no corpus is active), and Listen's landing
+previews Quran's own recitation cards over Quran's public reader at Layer 4 — Media still reads
+nothing of Quran, and an AudioTrack never appears among them. No schema change.
+
 As delivered (Phase 11) — AudioTrack and AudioSeries, **non-Quran audio only**:
 
 | Aggregate | Carries |
@@ -1906,7 +1933,8 @@ As delivered (Phase 11) — AudioTrack and AudioSeries, **non-Quran audio only**
 - **No AudioTrack can describe a Quran recitation.** There is no reciter, Surah, Ayah, Juz,
   range, recitation kind or `isQuran` field, and the input schemas are strict, so such a field
   is refused rather than ignored. `/listen/recitations` stays absent until Quran delivers its
-  own catalogue; an AudioTrack never fills it (§8.1).
+  own catalogue; an AudioTrack never fills it (§8.1). *(Historical wording: Phase 18 delivered
+  it as a projection, and since Watch Part 3 it is one 301 to `/quran/recitations`.)*
 - **The file is Storage's; its meaning is Media's.** A track names exactly one `Asset` by a
   foreign key that never cascades, and one Asset serves at most one track. The asset
   identifier is never accepted from a form: a file is attached only by uploading it to that

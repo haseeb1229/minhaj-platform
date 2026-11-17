@@ -1,17 +1,17 @@
-import { localizedPath } from '@minhaj/contracts';
 import type { Locale } from '@minhaj/contracts';
 import type { AudioTrackListing } from '@minhaj/contracts/media';
 import { getTranslations } from 'next-intl/server';
 
-import { TrackList } from '@/components/media/listen';
+import { AudioCards } from '@/components/media/listen';
+import { listenLecturesHref } from '@/components/media/listen-view';
 
 import { HomeSection } from './section';
 
 /**
  * LISTEN (restored from the pre-R2 portal): the newest audio lectures beside
- * the Watch shelf, through Listen's own track list, and the way to every audio
- * lecture at `/listen/lectures`. Media's own first page, in its own order;
- * nothing renders when no track is published.
+ * the Watch shelf, as Listen's own cards (since Watch Part 3), and the way to
+ * every audio lecture at `/listen/lectures`. Media's own first page, in its
+ * own order; nothing renders when no track is published.
  */
 export async function ListenModule({
   locale,
@@ -29,17 +29,12 @@ export async function ListenModule({
       header={{
         heading: listen('title'),
         action: {
-          href: localizedPath(locale, '/listen/lectures'),
+          href: listenLecturesHref(locale),
           text: listen('allTracks'),
         },
       }}
     >
-      <TrackList
-        locale={locale}
-        tracks={tracks}
-        label={listen('title')}
-        headingLevel="h3"
-      />
+      <AudioCards locale={locale} tracks={tracks} label={listen('title')} />
     </HomeSection>
   );
 }

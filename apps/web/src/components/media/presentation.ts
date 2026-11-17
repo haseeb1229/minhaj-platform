@@ -10,7 +10,6 @@ import {
   type PartialDate,
   type SeriesKind,
   type VideoFormat,
-  type VideoQuery,
   type VideoRecord,
 } from '@minhaj/contracts/media';
 
@@ -190,63 +189,6 @@ export function mediaLocales(record: {
 /* ===========================================================================
  * Queries
  * ========================================================================= */
-
-const uuid = z.uuid();
-
-/**
- * A URL's listing filters — the Watch video listings' and, with the same four
- * filters, the Listen track listing's — TOLERATED and then re-validated by the
- * read service. A mistyped or repeated parameter is the unfiltered listing,
- * never an error page, and nothing here can widen what is public.
- */
-export function readMediaQuery(
-  query: Record<string, string | string[] | undefined>,
-): Omit<VideoQuery, 'format' | 'featured'> {
-  const text = (key: string, max: number): string | null => {
-    const raw = query[key];
-    return typeof raw === 'string' && raw !== '' && raw.length <= max ? raw : null;
-  };
-  const id = (key: string): string | null => {
-    const value = text(key, 64);
-    return value !== null && uuid.safeParse(value).success ? value : null;
-  };
-  const language = text('language', 16);
-  return {
-    offset: z.coerce
-      .number()
-      .int()
-      .min(0)
-      .max(25_000)
-      .catch(0)
-      .parse(text('offset', 8) ?? 0),
-    topic: id('topic'),
-    speaker: id('speaker'),
-    series: id('series'),
-    language:
-      language !== null && /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(language)
-        ? language
-        : null,
-  };
-}
-
-export type MediaFilters = ReturnType<typeof readMediaQuery>;
-
-/** The listing address for a set of filters, neutral values omitted. */
-export function mediaQueryPath(
-  base: string,
-  filters: MediaFilters,
-  overrides: Partial<MediaFilters> = {},
-): string {
-  const merged = { ...filters, ...overrides };
-  const search = new URLSearchParams();
-  if (merged.topic !== null) search.set('topic', merged.topic);
-  if (merged.speaker !== null) search.set('speaker', merged.speaker);
-  if (merged.series !== null) search.set('series', merged.series);
-  if (merged.language !== null) search.set('language', merged.language);
-  if (merged.offset > 0) search.set('offset', String(merged.offset));
-  const encoded = search.toString();
-  return encoded === '' ? base : `${base}?${encoded}`;
-}
 
 /** `/watch?sort=featured|latest`. Anything else is the default, `featured`. */
 export function readWatchSort(

@@ -2463,20 +2463,23 @@ test.describe('a fixture corpus', () => {
     expect(await page.locator('audio[autoplay]').count()).toBe(0);
   });
 
-  test('Listen projects Quran’s recitation catalogue — and only Quran’s', async ({
+  test('Listen leads to Quran’s recitation catalogue at its one address — and only Quran’s', async ({
     page,
+    request,
   }) => {
+    // Watch Part 3: Listen's landing previews Quran's own cards, under the
+    // fixture banner, and links the catalogue itself — never a second page of it.
     await page.goto('/listen');
-    expect(await hrefsIn(page)).toContain('/listen/recitations');
-
-    await visitFixture(page, '/listen/recitations');
+    const section = page.getByRole('region', { name: 'Quran recitations' });
     await expect(
-      page.getByRole('heading', { level: 1, name: 'Recitations' }),
+      section.getByRole('note').filter({ hasText: BANNER.en }).first(),
     ).toBeVisible();
     await expect(
-      page.getByRole('link', { name: 'All recitations in the Quran section' }),
+      section.getByRole('link', { name: 'All recitations in the Quran section' }),
     ).toHaveAttribute('href', '/quran/recitations');
-    const rows = page.getByRole('list', { name: 'Recitations' }).getByRole('listitem');
+    const rows = section
+      .getByRole('list', { name: 'Quran recitations' })
+      .getByRole('listitem');
     // Quran Part 5 adds an untimed narration by a second fictional reciter.
     await expect(rows).toHaveCount(2);
     const row = rows.filter({
@@ -2487,10 +2490,25 @@ test.describe('a fixture corpus', () => {
       'href',
       `/quran/recitations/${slug.reciter}`,
     );
-    // Nothing of Media's: no lecture, no audio track, no Media byte route.
-    const hrefs = await hrefsIn(page);
-    expect(hrefs.filter((href) => href.includes('/listen/lectures'))).toEqual([]);
-    await expect(page.locator('audio[src*="/assets/media/"]')).toHaveCount(0);
+    // Nothing of Media's in it: no lecture, no audio track, no Media byte route.
+    const inSection = await section
+      .getByRole('link')
+      .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
+    expect(inSection.filter((href) => href.includes('/listen/'))).toEqual([]);
+    await expect(section.locator('audio')).toHaveCount(0);
+    // The landing never links the alias.
+    expect(await hrefsIn(page)).not.toContain('/listen/recitations');
+
+    // The former Listen address is ONE 301 to the catalogue, the locale kept.
+    for (const [from, to] of [
+      ['/listen/recitations', '/quran/recitations'],
+      ['/ar/listen/recitations', '/ar/quran/recitations'],
+    ]) {
+      const response = await request.get(from, { maxRedirects: 0 });
+      expect(response.status(), from).toBe(301);
+      expect(response.headers()['location'], from).toBe(to);
+      expect(response.headers()['set-cookie'], from).toBeUndefined();
+    }
 
     // The Quran section's own catalogue lists the same recitation.
     await visitFixture(page, '/quran/recitations');

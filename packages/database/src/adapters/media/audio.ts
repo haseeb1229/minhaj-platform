@@ -73,8 +73,11 @@ const SPEAKERS = {
   orderBy: [{ position: 'asc' }, { personId: 'asc' }],
 } satisfies Prisma.AudioTrack$speakersArgs;
 
-/** What a row needs: never the transcript. */
-const LISTING_SELECT = {
+/**
+ * What a row needs: never the transcript. Shared with the Listen half
+ * (`./listen.ts`), so a row is selected and mapped by ONE definition.
+ */
+export const LISTING_SELECT = {
   id: true,
   slug: true,
   primaryLocale: true,
@@ -114,7 +117,7 @@ const SERIES_SELECT = {
  * order puts an undated track last, and the slug — unique — makes it total.
  */
 const LATEST = [{ recordedOn: 'desc' }, { slug: 'asc' }, { id: 'asc' }] as const;
-const IN_SERIES = [{ seriesPosition: 'asc' }, { id: 'asc' }] as const;
+export const IN_SERIES = [{ seriesPosition: 'asc' }, { id: 'asc' }] as const;
 
 /** How many AudioSeries the track form offers. */
 const SERIES_CHOICES = 200;
@@ -161,7 +164,7 @@ interface SeriesRow {
   readonly labels: readonly LabelRow[];
 }
 
-function toListing(row: ListingRow): AudioTrackListing {
+export function toListing(row: ListingRow): AudioTrackListing {
   return {
     id: row.id,
     slug: row.slug,
@@ -607,7 +610,6 @@ type AudioPublicReader = Pick<
   | 'audioTracks'
   | 'audioTrack'
   | 'audioTrackCanonicalSlug'
-  | 'audioSeriesList'
   | 'audioSeries'
   | 'audioSeriesCanonicalSlug'
   | 'audioSeriesTracks'
@@ -656,17 +658,6 @@ export function audioPublicReader(): AudioPublicReader {
         select: { track: { select: { slug: true } } },
       });
       return row?.track.slug ?? null;
-    },
-
-    async audioSeriesList(offset) {
-      const rows = await db.audioSeries.findMany({
-        where: PUBLISHED,
-        select: SERIES_SELECT,
-        orderBy: [{ slug: 'asc' }, { id: 'asc' }],
-        skip: boundedOffset(offset),
-        take: MEDIA_PAGE + 1,
-      });
-      return seriesPage(rows);
     },
 
     async audioSeries(slug) {

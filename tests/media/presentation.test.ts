@@ -11,11 +11,9 @@ import {
   mediaLabel,
   playlistPathOf,
   readOffset,
-  readMediaQuery,
   readWatchSort,
   seriesPathOf,
   videoPathOf,
-  mediaQueryPath,
   videoStructuredData,
   viewOfFormat,
   watchLanding,
@@ -61,35 +59,6 @@ describe('addresses', () => {
 });
 
 describe('query state', () => {
-  it('tolerates a malformed or repeated parameter as the unfiltered listing', () => {
-    expect(
-      readMediaQuery({
-        topic: 'not-a-uuid',
-        speaker: [UUID, UUID],
-        series: '',
-        language: 'english language',
-        offset: '-4',
-      }),
-    ).toEqual({ offset: 0, topic: null, speaker: null, series: null, language: null });
-  });
-
-  it('keeps valid filters and omits neutral values from the address', () => {
-    const filters = readMediaQuery({ topic: UUID, language: 'ur', offset: '24' });
-    expect(filters).toEqual({
-      offset: 24,
-      topic: UUID,
-      speaker: null,
-      series: null,
-      language: 'ur',
-    });
-    expect(mediaQueryPath('/en/watch/videos', filters, { offset: 0 })).toBe(
-      `/en/watch/videos?topic=${UUID}&language=ur`,
-    );
-    expect(mediaQueryPath('/en/watch/videos', readMediaQuery({}))).toBe(
-      '/en/watch/videos',
-    );
-  });
-
   it('reads the landing sort and a bounded offset', () => {
     expect(readWatchSort({})).toBe('featured');
     expect(readWatchSort({ sort: 'latest' })).toBe('latest');
@@ -188,13 +157,5 @@ describe('Listen addresses (Phase 11)', () => {
     );
     // An identifier cannot smuggle a path segment into either address.
     expect(audioAssetPath('../x', 'y/z')).toBe('/assets/media/audio/..%2Fx/y%2Fz');
-  });
-
-  it('reads the Listen filters with the same tolerant rules as Watch', () => {
-    const filters = readMediaQuery({ series: UUID, language: 'ur', speaker: 'nope' });
-    expect(filters).toMatchObject({ series: UUID, language: 'ur', speaker: null });
-    expect(mediaQueryPath('/en/listen/lectures', filters)).toBe(
-      `/en/listen/lectures?series=${UUID}&language=ur`,
-    );
   });
 });

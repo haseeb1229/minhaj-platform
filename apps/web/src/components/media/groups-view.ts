@@ -1,5 +1,6 @@
 import {
   MEDIA_GROUP_EPISODES_PAGE,
+  type AudioSeriesEntry,
   type MediaCount,
   type MediaGroupEntry,
   type MediaGroupKind,
@@ -36,6 +37,12 @@ import {
  * GROUPINGS (or speakers) choosing them would show, under every other filter;
  * Media's read says which languages, speakers and Topics a grouping's
  * published Videos have, and nothing here guesses one.
+ *
+ * WATCH PART 3 — THE AUDIO SERIES' DIRECTORY IS ONE MORE DIRECTORY OF THESE
+ * RULES (`/listen/series`, the directory kind `audio`): an AudioSeries' entry
+ * says the same things of its published tracks, so the filters, orders,
+ * related groupings and one-address rule are these, not a second copy. Its
+ * "most" order is spelled `?sort=recordings`.
  */
 
 /* ===========================================================================
@@ -50,6 +57,27 @@ const MAX_PAGE = 1000;
 
 export const GROUP_SORTS = Object.freeze(['newest', 'title', 'videos'] as const);
 export type GroupSort = (typeof GROUP_SORTS)[number];
+
+/** A directory these rules govern: a Watch grouping kind, or Listen's audio series. */
+export type GroupDirectoryKind = MediaGroupKind | 'audio';
+
+/** One grouping as a directory reads it: a Watch grouping or an AudioSeries. */
+export type GroupEntry = MediaGroupEntry | AudioSeriesEntry;
+
+/** How many published members a grouping holds: its Videos, or an AudioSeries' tracks. */
+export function membersOf(entry: GroupEntry): number {
+  return 'tracks' in entry ? entry.tracks : entry.videos;
+}
+
+/** How the "most members" order is spelled in a directory's address. */
+function mostOf(kind: GroupDirectoryKind): string {
+  return kind === 'audio' ? 'recordings' : 'videos';
+}
+
+/** An order as a directory's address (and its form's option) spells it. */
+export function groupSortParam(kind: GroupDirectoryKind, sort: GroupSort): string {
+  return sort === 'videos' ? mostOf(kind) : sort;
+}
 
 export interface GroupsView {
   /** A content language: groupings with a published Video in it. */
@@ -74,13 +102,15 @@ export const DEFAULT_GROUPS_VIEW: GroupsView = Object.freeze({
   page: 1,
 });
 
-/** A grouping kind's directory, as a locale-free path. */
-export function groupsPathOf(kind: MediaGroupKind): string {
-  return kind === 'program'
-    ? '/watch/programs'
-    : kind === 'playlist'
-      ? '/watch/playlists'
-      : '/watch/series';
+/** A directory, as a locale-free path. */
+export function groupsPathOf(kind: GroupDirectoryKind): string {
+  return kind === 'audio'
+    ? '/listen/series'
+    : kind === 'program'
+      ? '/watch/programs'
+      : kind === 'playlist'
+        ? '/watch/playlists'
+        : '/watch/series';
 }
 
 /**
@@ -98,14 +128,20 @@ const GROUPS_KEYS: ReadonlySet<string> = new Set([
   'offset',
 ]);
 
-export function readGroupsView(query: Query): GroupsView {
+export function readGroupsView(
+  query: Query,
+  kind: GroupDirectoryKind = 'series',
+): GroupsView {
   const sort = single(query, 'sort', 16);
   return {
     language: language(query),
     speaker: identifier(query, 'speaker'),
     topic: identifier(query, 'topic'),
     q: nameQuery(query),
-    sort: GROUP_SORTS.find((entry) => entry === sort) ?? 'newest',
+    sort:
+      sort === mostOf(kind)
+        ? 'videos'
+        : (GROUP_SORTS.find((entry) => entry !== 'videos' && entry === sort) ?? 'newest'),
     page: whole(single(query, 'page', 5), 1, MAX_PAGE) ?? 1,
   };
 }
@@ -115,7 +151,7 @@ export function readGroupsView(query: Query): GroupsView {
  * page — page 7 of another result set means nothing.
  */
 export function groupsHref(
-  kind: MediaGroupKind,
+  kind: GroupDirectoryKind,
   locale: string,
   view: GroupsView,
   change: Partial<GroupsView> = {},
@@ -127,14 +163,14 @@ export function groupsHref(
   if (next.language !== null) search.set('language', next.language);
   if (next.speaker !== null) search.set('speaker', next.speaker.toLowerCase());
   if (next.topic !== null) search.set('topic', next.topic.toLowerCase());
-  if (next.sort !== 'newest') search.set('sort', next.sort);
+  if (next.sort !== 'newest') search.set('sort', groupSortParam(kind, next.sort));
   if (page > 1) search.set('page', String(page));
   return hubHref(locale, groupsPathOf(kind), search);
 }
 
 /** The canonical address of the request's view, or `null` when it already is. */
 export function groupsCanonicalRedirect(
-  kind: MediaGroupKind,
+  kind: GroupDirectoryKind,
   locale: string,
   query: Query,
 ): string | null {
@@ -143,7 +179,7 @@ export function groupsCanonicalRedirect(
     groupsPathOf(kind),
     query,
     GROUPS_KEYS,
-    groupsHref(kind, locale, readGroupsView(query)),
+    groupsHref(kind, locale, readGroupsView(query, kind)),
   );
 }
 
@@ -158,20 +194,20 @@ export function groupsFiltered(view: GroupsView): boolean {
 }
 
 /** One grouping as the directory works on it: Media's entry and the titles a reader may search. */
-export interface GroupRow {
-  readonly entry: MediaGroupEntry;
+export interface GroupRow<E extends GroupEntry = MediaGroupEntry> {
+  readonly entry: E;
   /** The title the reader is shown. */
   readonly title: string;
 }
 
 type GroupFilter = 'language' | 'speaker' | 'topic' | 'q';
 
-const holds = (counts: readonly MediaCount[], id: string) =>
+const holds = (counts: readonly { readonly id: string }[], id: string) =>
   counts.some((entry) => entry.id.toLowerCase() === id.toLowerCase());
 
 /** Whether a grouping passes the view's filters, `omit` excepted. */
-export function groupMatches(
-  row: GroupRow,
+export function groupMatches<E extends GroupEntry>(
+  row: GroupRow<E>,
   view: GroupsView,
   omit?: GroupFilter,
 ): boolean {
@@ -196,8 +232,8 @@ export function groupMatches(
  * Each filter's options with how many groupings choosing it would show —
  * counted under every OTHER filter — commonest first, then by identifier.
  */
-export function groupFacets(
-  rows: readonly GroupRow[],
+export function groupFacets<E extends GroupEntry>(
+  rows: readonly GroupRow<E>[],
   view: GroupsView,
 ): {
   readonly languages: readonly MediaCount[];
@@ -206,7 +242,7 @@ export function groupFacets(
 } {
   const tally = (
     omit: 'language' | 'speaker' | 'topic',
-    of: (entry: MediaGroupEntry) => readonly MediaCount[],
+    of: (entry: E) => readonly { readonly id: string }[],
   ) => {
     const counts = new Map<string, number>();
     for (const row of rows) {
@@ -233,16 +269,17 @@ export function groupFacets(
  * the reader's collation; `videos`: the most Videos first. Every order ends on
  * the title and then the identifier, so a page never repeats or skips one.
  */
-export function sortGroups(
-  rows: readonly GroupRow[],
+export function sortGroups<E extends GroupEntry>(
+  rows: readonly GroupRow<E>[],
   sort: GroupSort,
   collator: Intl.Collator,
-): GroupRow[] {
-  const byTitle = (a: GroupRow, b: GroupRow) =>
+): GroupRow<E>[] {
+  const byTitle = (a: GroupRow<E>, b: GroupRow<E>) =>
     collator.compare(a.title, b.title) ||
     (a.entry.id < b.entry.id ? -1 : a.entry.id > b.entry.id ? 1 : 0);
   return [...rows].sort((a, b) => {
-    if (sort === 'videos') return b.entry.videos - a.entry.videos || byTitle(a, b);
+    if (sort === 'videos')
+      return membersOf(b.entry) - membersOf(a.entry) || byTitle(a, b);
     if (sort === 'newest') {
       const x = a.entry.lastOn;
       const y = b.entry.lastOn;
@@ -262,16 +299,16 @@ export function sortGroups(
  * twice a shared Topic — with at least one published Video, most shared
  * first, then the latest, then the identifier. Never itself.
  */
-export function relatedGroups(
-  entry: MediaGroupEntry,
-  candidates: readonly MediaGroupEntry[],
+export function relatedGroups<E extends GroupEntry>(
+  entry: E,
+  candidates: readonly E[],
   max: number,
-): MediaGroupEntry[] {
+): E[] {
   const speakers = new Set(entry.speakers.map((value) => value.id.toLowerCase()));
   const topics = new Set(entry.topics.map((value) => value.id.toLowerCase()));
   return candidates
     .flatMap((other) => {
-      if (other.id.toLowerCase() === entry.id.toLowerCase() || other.videos === 0)
+      if (other.id.toLowerCase() === entry.id.toLowerCase() || membersOf(other) === 0)
         return [];
       const score =
         2 *

@@ -21,13 +21,12 @@ import { quranReadRuntime } from '@/composition/quran-read';
 import { BreadcrumbData } from '@/components/media/parts';
 import {
   Badge,
-  Breadcrumbs,
-  Container,
   EmptyState,
   Icon,
   PageHeading,
   Panel,
   Prose,
+  SectionHeader,
   TextLink,
 } from '@/components/ui';
 import {
@@ -45,7 +44,13 @@ import {
   surahPath,
   withReading,
 } from './presentation';
-import { quranIndexable, readRecitations, readSurahs } from './read';
+import {
+  corpusNotice,
+  quranAvailability,
+  quranIndexable,
+  readRecitations,
+  readSurahs,
+} from './read';
 import { recitationGroups } from './recitation-plan';
 
 /**
@@ -58,12 +63,14 @@ import { recitationGroups } from './recitation-plan';
  * People's public names — never Media: an AudioTrack can neither fill nor
  * appear in this catalogue.
  *
- * `/listen/recitations` is the SAME catalogue projected into Listen at Layer 4,
- * canonical to `/quran/recitations`, so the two never compete.
+ * The catalogue has ONE address, `/quran/recitations`: since Watch Part 3
+ * `/listen/recitations` answers one 301 there (from Phase 18 it was a Layer-4
+ * projection canonical to it — historical), and Listen's landing composes a
+ * preview of the same cards (`RecitationPreview`).
  *
  * PLAYED BY THE QURAN SECTION'S PLAYER. With JavaScript, a Play control hands
  * the recitation to the player the Quran layout keeps (shown only where that
- * player exists — never on the Listen projection, which is outside the Quran
+ * player exists — never on Listen's landing, which is outside the Quran
  * layout). Without it, every recitation still has a way to be heard: its
  * reciter's page lists the browser's own `<audio controls>`, and each Surah
  * opens with the recitation chosen. No autoplay, nothing fetched until asked,
@@ -500,56 +507,76 @@ export async function RecitationsPage({
 }
 
 /* ===========================================================================
- * /listen/recitations — the Listen projection of the same catalogue
+ * Listen's landing — a preview of the same catalogue (Watch Part 3)
  * ========================================================================= */
 
+/** How many recitations Listen's landing previews. */
+const LISTEN_PREVIEW = 3;
+
 /**
- * The recitation catalogue as Listen shows it: Listen's trail, Quran's data.
- * The page passes the reader's own list in, so this projection cannot be filled
- * from anywhere else.
+ * THE QURAN'S RECITATIONS ON LISTEN'S LANDING — Quran's own cards over its
+ * PUBLIC reader, in the catalogue's order, composed by Listen at Layer 4; no
+ * Media read reaches them, so an AudioTrack can never appear here. NOTHING at
+ * all while no corpus is active or no recitation is public, so the landing
+ * carries no empty frame. The catalogue itself has ONE address,
+ * `/quran/recitations` (`/listen/recitations` answers one 301 there since
+ * Watch Part 3), and this section leads to it. Fixture text carries its
+ * banner; a card's Play control appears only where the Quran's player exists.
  */
-export async function ListenRecitationsPage({
+export async function RecitationPreview({
   locale,
-  availability,
-  recitations,
+  headingId,
+  heading,
+  intro,
 }: {
   readonly locale: Locale;
-  readonly availability: QuranAvailability;
-  readonly recitations: readonly PublicRecitation[];
+  readonly headingId: string;
+  readonly heading: string;
+  readonly intro: string;
 }) {
+  const availability = await quranAvailability();
+  if (!availability.active) return null;
+  const recitations = await readRecitations();
+  if (recitations.length === 0) return null;
   const t = await getTranslations({ locale, namespace: 'quran' });
-  const listen = await getTranslations({ locale, namespace: 'listen' });
-  const shell = await getTranslations({ locale, namespace: 'shell' });
-  const title = t('sections.recitations');
-
+  const [names, languages] = await Promise.all([
+    referenceNames(
+      { personIds: recitations.map((recitation) => recitation.reciterId), topicIds: [] },
+      locale,
+    ),
+    contentLanguages(),
+  ]);
+  const shown = grouped(recitations, names, locale)
+    .flatMap((group) => group.recitations)
+    .slice(0, LISTEN_PREVIEW);
   return (
-    <Container>
-      <div className="flex flex-col gap-8 pt-6 pb-[var(--space-section)]">
+    <section aria-labelledby={headingId} className="flex flex-col gap-5">
+      <SectionHeader
+        id={headingId}
+        heading={heading}
+        intro={intro}
+        action={{ href: quranPath(locale, 'recitations'), text: t('recitationsHome') }}
+      />
+      {corpusNotice(availability) === 'fixture' ? (
         <CorpusNotice locale={locale} availability={availability} />
-        <Breadcrumbs
-          label={shell('nav.breadcrumbs')}
-          trail={[
-            { href: localizedPath(locale, ''), text: shell('nav.home') },
-            { href: localizedPath(locale, '/listen'), text: listen('title') },
-            { text: title },
-          ]}
-        />
-        <Prose>
-          <PageHeading>{title}</PageHeading>
-          <p>{t('sectionBody.recitations')}</p>
-          <p>
-            <TextLink href={quranPath(locale, 'recitations')}>
-              {t('recitationsHome')}
-            </TextLink>
-          </p>
-        </Prose>
-        {recitations.length === 0 ? (
-          <EmptyState>{t('worksEmpty.recitations')}</EmptyState>
-        ) : (
-          <RecitationList locale={locale} recitations={recitations} label={title} />
-        )}
-      </div>
-    </Container>
+      ) : null}
+      <ul
+        aria-label={heading}
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      >
+        {shown.map((recitation) => (
+          <RecitationCard
+            key={recitation.id}
+            locale={locale}
+            recitation={recitation}
+            names={names}
+            languages={languages}
+            t={t}
+            headingLevel="h3"
+          />
+        ))}
+      </ul>
+    </section>
   );
 }
 

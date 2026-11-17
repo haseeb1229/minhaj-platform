@@ -215,6 +215,18 @@ describe('the mega menus follow INFORMATION_ARCHITECTURE.md §3', () => {
 
     expect(paths).toContain('/listen');
     expect(paths).toContain('/listen/lectures');
+    // Watch Part 3: the Listen column (IA §3.6) is the landing, both
+    // listings and the Quran's recitations at their one address — never the
+    // `/listen/recitations` alias, which only redirects there.
+    const listen = domainMenus('all')
+      .find((menu) => menu.key === 'watch')!
+      .columns.find((column) => column.key === 'menu.columns.listen');
+    expect(listen?.links.map((link: MenuLink) => link.route.path)).toEqual([
+      '/listen',
+      '/listen/lectures',
+      '/listen/series',
+      '/quran/recitations',
+    ]);
   });
 });
 

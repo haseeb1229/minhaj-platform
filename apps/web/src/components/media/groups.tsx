@@ -16,6 +16,7 @@ import {
   type PlaylistRecord,
   type SeriesRecord,
 } from '@minhaj/contracts/media';
+import type { PublicPersonCard } from '@minhaj/contracts/people';
 
 import { mediaReadRuntime } from '@/composition/media-read';
 import {
@@ -126,15 +127,18 @@ function groupPath(
     : seriesPath(locale, entry.kind, entry.slug);
 }
 
-/** Whole hours, else whole minutes, of a running time — never more than the truth. */
-function runningTime(t: WatchTranslator, seconds: number): string | null {
+/**
+ * Whole hours, else whole minutes, of a running time — never more than the
+ * truth. Shared with Listen's audio series (Watch Part 3).
+ */
+export function runningTime(t: WatchTranslator, seconds: number): string | null {
   if (seconds >= 3600) return t('groups.hours', { count: Math.floor(seconds / 3600) });
   if (seconds >= 60) return t('groups.minutes', { count: Math.floor(seconds / 60) });
   return null;
 }
 
-/** "2019–2023", or one year, or nothing. */
-function spanText(
+/** "2019–2023", or one year, or nothing. Shared with Listen's audio series. */
+export function spanText(
   locale: string,
   t: WatchTranslator,
   entry: Pick<MediaGroupEntry, 'firstOn' | 'lastOn'>,
@@ -863,6 +867,62 @@ function EpisodeRow({
   );
 }
 
+/**
+ * WHO SPEAKS IN A GROUPING — each named by People: portrait or initial, the
+ * name in the language People resolved it in, linked to the canonical
+ * profile, and how much of the grouping is theirs. Shared with Listen's audio
+ * series (Watch Part 3). A speaker People does not name is left out.
+ */
+export function SpeakerList({
+  locale,
+  speakers,
+  people,
+  portraits,
+}: {
+  readonly locale: Locale;
+  readonly speakers: readonly { readonly id: string; readonly count: string }[];
+  /** People's names, keyed in lower case. */
+  readonly people: Names;
+  /** People's public cards, keyed in lower case. */
+  readonly portraits: ReadonlyMap<string, PublicPersonCard>;
+}) {
+  return (
+    <ul className="flex list-none flex-col gap-4 p-0">
+      {speakers.flatMap((speaker) => {
+        const person = people.get(speaker.id.toLowerCase());
+        if (person === undefined) return [];
+        const card = portraits.get(speaker.id.toLowerCase());
+        const nameLocale = card?.resolvedLocale ?? null;
+        const own =
+          nameLocale === null
+            ? { dir: 'auto' as const }
+            : { lang: nameLocale, dir: directionOf(nameLocale) };
+        return [
+          <li key={speaker.id} className="flex min-w-0 items-center gap-3">
+            <PersonMark
+              personId={speaker.id}
+              portrait={card?.portrait ?? null}
+              letter={initialOf(person.name, locale)}
+              size="small"
+              own={own}
+            />
+            <div className="flex min-w-0 flex-col">
+              <a
+                href={localizedPath(locale, `/people/${encodeURIComponent(person.slug)}`)}
+                className="font-semibold wrap-anywhere text-foreground no-underline decoration-accent-rule underline-offset-4 hover:underline"
+                {...own}
+              >
+                {card?.name ?? person.name}
+              </a>
+              <span className="text-sm text-foreground-muted">{speaker.count}</span>
+            </div>
+          </li>,
+        ];
+      })}
+    </ul>
+  );
+}
+
 /** How many related groupings a page offers. */
 const RELATED = 3;
 
@@ -1163,44 +1223,15 @@ export async function GroupPage({
                 <h2 id="group-speakers" className="text-subheading font-semibold">
                   {t('speakers')}
                 </h2>
-                <ul className="flex list-none flex-col gap-4 p-0">
-                  {entry.speakers.flatMap((speaker) => {
-                    const person = people.get(speaker.id.toLowerCase());
-                    if (person === undefined) return [];
-                    const card = portraits.get(speaker.id.toLowerCase());
-                    const nameLocale = card?.resolvedLocale ?? null;
-                    const own =
-                      nameLocale === null
-                        ? { dir: 'auto' as const }
-                        : { lang: nameLocale, dir: directionOf(nameLocale) };
-                    return [
-                      <li key={speaker.id} className="flex min-w-0 items-center gap-3">
-                        <PersonMark
-                          personId={speaker.id}
-                          portrait={card?.portrait ?? null}
-                          letter={initialOf(person.name, locale)}
-                          size="small"
-                          own={own}
-                        />
-                        <div className="flex min-w-0 flex-col">
-                          <a
-                            href={localizedPath(
-                              locale,
-                              `/people/${encodeURIComponent(person.slug)}`,
-                            )}
-                            className="font-semibold wrap-anywhere text-foreground no-underline decoration-accent-rule underline-offset-4 hover:underline"
-                            {...own}
-                          >
-                            {card?.name ?? person.name}
-                          </a>
-                          <span className="text-sm text-foreground-muted">
-                            {t(`groups.${kind}.count`, { count: speaker.videos })}
-                          </span>
-                        </div>
-                      </li>,
-                    ];
-                  })}
-                </ul>
+                <SpeakerList
+                  locale={locale}
+                  speakers={entry.speakers.map((speaker) => ({
+                    id: speaker.id,
+                    count: t(`groups.${kind}.count`, { count: speaker.videos }),
+                  }))}
+                  people={people}
+                  portraits={portraits}
+                />
               </section>
             )}
 

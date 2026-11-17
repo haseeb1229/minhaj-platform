@@ -992,8 +992,8 @@ and out of the sitemap. Record addresses and their slug-history 301s are unchang
 | `/watch/series` · `/{slug}` · `/watch/programs` · `/{slug}` · `/watch/playlists` · `/{slug}` | Groupings — a programme is a Series of kind `program`; each Series is canonical under exactly one of the two families, and the other answers one 301 (Phase 10). Each directory takes `?q, language, speaker, topic, sort, page` and each grouping's page `?page` (Watch Part 2; `?offset` until then, historical) |
 | `/watch/speakers` | Speaker directory — `?letter, q, language, sort, page` (Watch Part 2; `?offset` until then, historical); **details 301 → `/people/{slug}`** |
 | `/watch/topics/{slug}` | **301 → `/watch/videos?topic={id}`** (Watch Part 1, §2.2; a filtered view canonical → `/topics/{slug}` until then, historical) |
-| `/listen` · `/listen/lectures` · `/{slug}` · `/listen/series` · `/{slug}` | Audio — a **sibling** of `/watch`, not a child. `/listen/lectures` takes `?topic, speaker, series, language`; each track and audio series is canonical at exactly one address (Phase 11) |
-| `/listen/recitations` | **Catalogue projection of Quran-owned recitations**, canonical → `/quran/recitations`. Delivered in Phase 18 as a Layer-4 page over Quran's public reader, present only while a corpus is active — never filled by an AudioTrack |
+| `/listen` · `/listen/lectures` · `/{slug}` · `/listen/series` · `/{slug}` | Audio — a **sibling** of `/watch`, not a child. `/listen/lectures` takes `?topic, language, speaker, series, length, sort, page` (Watch Part 3; `?topic, speaker, series, language, offset` until then, historical); `/listen/series` takes `?q, language, speaker, topic, sort, page` and an audio series' page `?page` (Watch Part 3; `?offset` until then, historical); each track and audio series is canonical at exactly one address (Phase 11) |
+| `/listen/recitations` | **301 → `/quran/recitations`** while a Quran corpus is active, a `404` otherwise (Watch Part 3; a route handler, `noindex`, `no-store`, the locale kept). From Phase 18 until Watch Part 3 it was a catalogue projection of Quran-owned recitations, a Layer-4 page canonical → `/quran/recitations` (historical) — never filled by an AudioTrack |
 
 **Rebaseline R2 — one press plays.** `/watch` is a poster-led landing and `/watch/videos/{slug}`
 keeps its privacy facade: no provider request until the visitor presses Play, and that one press now
@@ -1041,6 +1041,29 @@ the offset counted in), to the page holding the Video it began with on a groupin
 order, 24 a page). Every filtered, ordered or paged view stays canonical to its bare address and out
 of the sitemap; record addresses, their slug-history 301s and the speaker alias are unchanged. No
 route is added or removed.
+
+**Watch Part 3 — Listen.** `/listen/lectures` is the audio lectures listing over every published
+AudioTrack (DOMAIN_MODEL.md §11, `audioListing`/`audioListingFacets`): figures, filters with counts
+— Topic, content language, speaker, audio series, length — two orders (most recently recorded,
+title), removable chips and numbered pages of 24. It takes **`?topic, language, speaker, series,
+length, sort, page`** — every parameter it took before plus `length`, `sort` and `page`. `/listen/series`
+is the audio series' directory on Watch Part 2's rules (`audioSeriesDirectory`, the directory kind
+`audio`): **`?q, language, speaker, topic, sort, page`**, its "most recordings" order spelled
+`?sort=recordings`; an audio series' page takes **`?page`** (24 of its recordings a page, in series
+order). One address per view on all of them: a form's empty controls, another order, a malformed
+or repeated value and a former `?offset=` are one redirect — to the page holding the recording it
+began with on the listing and on a series' page (the same order, 24 a page), to the first page of
+the directory (its order is no longer by slug). Every filtered, ordered or paged view stays
+canonical to its bare address and out of the sitemap; record addresses and their slug-history
+301s are unchanged. **`/listen/recitations` (decision): one 301 to `/quran/recitations`** while a
+corpus is active and a `404` otherwise — the Quran's catalogue has one address, whose Play controls
+answer the Quran layout's player under the Quran routes' own media policy; Listen's landing
+previews the same Quran-owned cards at Layer 4 and links the catalogue, and the Watch menu's Listen
+column links `quran.recitations` itself. A recording's page keeps its address; it adds its series
+with the previous and next published part ("Part n of m"), Share, and more with its speaker, on its
+Topic or in its language (each linked to the listing filtered by it). No "listen from" moments: the
+model records none for audio. No page is added; the one route file `/listen/recitations` changes
+from a page to a handler.
 
 ### 3.8 Fatwa
 

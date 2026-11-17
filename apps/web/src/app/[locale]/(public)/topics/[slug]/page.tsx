@@ -19,6 +19,7 @@ import { CollectionTopicSection } from '@/components/editorial/collections';
 import { EventTopicSection } from '@/components/editorial/events';
 import { NewsTopicSection } from '@/components/editorial/news';
 import { AudioPreview } from '@/components/media/listen';
+import { listenLecturesHref } from '@/components/media/listen-view';
 import { FatwaTopicSection } from '@/components/fatwa/topics';
 import { HadithTopicSection } from '@/components/hadith/topics';
 import { courseBrowseHref } from '@/components/learning/presentation';
@@ -490,7 +491,7 @@ export default async function TopicPage({ params }: TopicParams) {
               heading={t('audio')}
               headingId="topic-audio"
               more={{
-                href: localizedPath(locale, `/listen/lectures?topic=${topicParam}`),
+                href: listenLecturesHref(locale, { topic: topic.id }),
                 text: t('allAudio'),
               }}
             />

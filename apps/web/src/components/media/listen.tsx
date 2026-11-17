@@ -1,95 +1,80 @@
-import { localizedPath } from '@minhaj/contracts';
+import 'server-only';
+
 import { getTranslations } from 'next-intl/server';
 
-import type { Locale } from '@minhaj/contracts';
-import {
-  MEDIA_PAGE,
-  type AudioSeriesRecord,
-  type AudioTrackListing,
-  type AudioTrackRecord,
+import { localizedPath, type Locale } from '@minhaj/contracts';
+import type {
+  AudioSeriesEntry,
+  AudioSeriesRecord,
+  AudioTrackListing,
+  AudioTrackRecord,
+  AudioTrackSeries,
 } from '@minhaj/contracts/media';
 
-import { audioPlayable } from '@/composition/media-assets';
 import { mediaReadRuntime } from '@/composition/media-read';
-import { quranReadRuntime } from '@/composition/quran-read';
-import {
-  contentLanguages,
-  referenceNames,
-  type ContentLanguage,
-} from '@/composition/public-references';
-import { taxonomyRuntime } from '@/composition/taxonomy';
-import { paragraphsOf } from '@/components/library/scholarly-presentation';
+import { contributorNames, referenceNames } from '@/composition/public-references';
+import { contentLanguageBadge } from '@/components/content-language';
+import { RecitationPreview } from '@/components/quran/recitations';
+import { quranAvailability } from '@/components/quran/read';
+import { caseless } from '@/components/topic-hub/address';
 import {
   ActionLink,
-  Alert,
   Breadcrumbs,
-  Button,
-  CardGrid,
   Container,
-  DetailRow,
   EmptyState,
-  Field,
-  LinkCard,
+  Hero,
+  Icon,
+  LanguageBadge,
   MetaRow,
-  PageHero,
-  Panel,
-  Prose,
   SectionHeader,
-  Select,
-  TextLink,
-  TopicChips,
+  Stat,
 } from '@/components/ui';
 import { directionOf } from '@/config/locale';
-import { AudioPlayer } from './audio-player';
-import {
-  BreadcrumbData,
-  Duration,
-  formatDate,
-  MEDIA_CARD,
-  MEDIA_CARD_LINK,
-  MediaPageHeader,
-  Pagination,
-} from './parts';
+import { runningTime, spanText } from './groups';
+import { listenLecturesHref } from './listen-view';
+import { Duration, formatDate } from './parts';
 import {
   audioSeriesPath,
   audioTrackPath,
   mediaLabel,
   mediaLocales,
-  mediaQueryPath,
-  offsetPath,
-  readMediaQuery,
-  readOffset,
 } from './presentation';
+import { CountChips } from './watch';
 
 /**
- * The public Listen surfaces (ROUTE_MAP.md §3.7) — non-Quran AudioTrack and
- * AudioSeries (Phase 11).
+ * LISTEN — the public audio surfaces (ROUTE_MAP.md §3.7; Phase 11, rebuilt in
+ * Watch Part 3): this module's shared parts — a recording's card, an audio
+ * series' card, the trail, the preview other owners' pages compose, the
+ * metadata — and the landing. The audio lectures listing and a recording's
+ * page are `./listen-lectures`; the audio series' directory and pages
+ * `./listen-series`.
  *
  * SERVER COMPONENTS, SESSION-FREE BY CONSTRUCTION. Every read goes through
- * `@/composition/media-read`, `@/composition/media-assets`,
- * `@/composition/public-references` and `@/composition/taxonomy`, none of which
- * reaches Identity, a session or a cookie, so a signed-in listener sees exactly
- * what an anonymous one does, and nothing about a visit is recorded. The one
- * client island is the native audio player.
+ * Media's, People's, Taxonomy's and Quran's PUBLIC compositions, none of which
+ * reaches Identity, a session or a cookie, so a signed-in listener sees
+ * exactly what an anonymous one does, and nothing about a visit is recorded.
  *
- * HONEST PRESENTATION. There is no cover art, because no track has one: a row is
- * marked with a first-party audio glyph, never a stock image or a generated
- * picture. Every fact shown is one the record has — an unknown duration or date
- * is absent, never a dash — and a missing transcript is said to be missing.
+ * HONEST PRESENTATION. No track or series has cover art, so none is painted: a
+ * recording is marked by a drawn first-party audio tile, never a stock image or
+ * a generated picture. Every fact shown is one the record has — an unknown
+ * duration or date is absent, never a dash — and a figure of zero is never
+ * stated. Nothing is "featured": the model records no such choice for audio.
  *
- * NO RECITATION IS HERE. Everything on these pages is non-Quran audio; Quran
- * recitations are Quran's. `/listen/recitations` is Quran's catalogue projected
- * into Listen (Phase 18), and the landing links it only while a Quran corpus is
- * active — the one question it asks of Quran's public reader.
+ * NO RECITATION IS MEDIA'S. Everything Media answers here is non-Quran audio.
+ * The landing's recitations are Quran's own cards over Quran's public reader
+ * (`RecitationPreview`), composed here at Layer 4, and their catalogue is
+ * `/quran/recitations` alone.
  */
 
-type ListenTranslator = Awaited<ReturnType<typeof getTranslations<'listen'>>>;
-type NameMap = ReadonlyMap<string, { readonly slug: string; readonly name: string }>;
+export type ListenTranslator = Awaited<ReturnType<typeof getTranslations<'listen'>>>;
+type Names = ReadonlyMap<string, { readonly slug: string; readonly name: string }>;
 
-/** Home / Listen / … — the trail every Listen page starts with. */
-async function listenTrail(locale: Locale) {
-  const shell = await getTranslations({ locale, namespace: 'shell' });
-  const t = await getTranslations({ locale, namespace: 'listen' });
+/** Home › Listen › … — the trail every Listen page starts with. */
+export async function listenTrail(locale: Locale) {
+  const [shell, t] = await Promise.all([
+    getTranslations({ locale, namespace: 'shell' }),
+    getTranslations({ locale, namespace: 'listen' }),
+  ]);
   return {
     label: shell('nav.breadcrumbs'),
     home: { href: localizedPath(locale, ''), text: shell('nav.home') },
@@ -97,964 +82,275 @@ async function listenTrail(locale: Locale) {
   };
 }
 
-function pages(t: ListenTranslator) {
-  return { previousLabel: t('previous'), nextLabel: t('next') };
-}
+/** A grid of cards: one column on a phone, up to three on a laptop. */
+export const LISTEN_GRID =
+  'grid list-none grid-cols-1 gap-x-6 gap-y-6 p-0 *:min-w-0 sm:grid-cols-2 lg:grid-cols-3';
 
-/* ===========================================================================
- * Rows
- * ========================================================================= */
-
-/**
- * The first-party audio mark. DECORATIVE, drawn inline, and the same for every
- * track: a row says what the recording is in words, not in a picture.
- */
-function AudioMark() {
+/** The drawn audio tile — decorative, the same for every recording. */
+export function AudioTile({ size = 'card' }: { readonly size?: 'card' | 'row' }) {
   return (
     <span
       aria-hidden="true"
-      className="flex size-12 shrink-0 items-center justify-center rounded-control bg-surface-sunken text-action"
+      className={`flex shrink-0 items-center justify-center rounded-control border border-accent-rule bg-accent-surface text-accent ${size === 'card' ? 'size-14' : 'size-11'}`}
     >
-      <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor">
-        <path
-          strokeWidth="1.75"
-          strokeLinecap="round"
-          d="M4 14v-2a8 8 0 0 1 16 0v2M4 14v3a2 2 0 0 0 2 2h1v-7H6a2 2 0 0 0-2 2Zm16 0v3a2 2 0 0 1-2 2h-1v-7h1a2 2 0 0 1 2 2Z"
-        />
-      </svg>
+      <Icon name="audio" size={size === 'card' ? 24 : 20} />
     </span>
   );
 }
 
-function TrackRow({
+/** The speakers of a recording, as one plain line of People's names. */
+export function speakerLine(speakerIds: readonly string[], people: Names): string {
+  return speakerIds
+    .flatMap((id) => {
+      const person = people.get(id.toLowerCase());
+      return person === undefined ? [] : [person.name];
+    })
+    .join(' · ');
+}
+
+/**
+ * ONE RECORDING AS A CARD: the drawn audio tile; its content language; its
+ * title in its own language as ONE link stretched over the card; who speaks;
+ * its length and recording date; and its place in its audio series, while
+ * that series is published.
+ */
+export function AudioCard({
   locale,
   track,
   people,
-  languages,
   t,
-  headingLevel,
-  position,
+  headingLevel = 'h3',
 }: {
   readonly locale: Locale;
-  readonly track: AudioTrackListing;
-  readonly people: NameMap;
-  readonly languages: ReadonlyMap<string, ContentLanguage>;
+  readonly track: AudioTrackListing & { readonly series?: AudioTrackSeries | null };
+  readonly people: Names;
   readonly t: ListenTranslator;
-  readonly headingLevel: 'h2' | 'h3';
-  /** Show the track's place, for a series page. */
-  readonly position: boolean;
+  readonly headingLevel?: 'h2' | 'h3';
 }) {
-  const label = mediaLabel(track, locale);
   const Heading = headingLevel;
-  const language = languages.get(track.languageCode);
-  const speakers = track.speakerIds.flatMap((id) => {
-    const person = people.get(id);
-    return person === undefined ? [] : [person.name];
-  });
-
+  const label = mediaLabel(track, locale);
+  const language = contentLanguageBadge(track.languageCode, locale);
+  const speakers = speakerLine(track.speakerIds, people);
+  const series =
+    track.series === undefined || track.series === null
+      ? null
+      : { ...mediaLabel(track.series, locale), position: track.series.position };
   return (
-    <li className={MEDIA_CARD}>
-      <div className="flex min-w-0 flex-1 items-start gap-4 p-4">
-        <AudioMark />
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          {position && track.seriesPosition !== null ? (
-            <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
-              {t('fact.position', { number: track.seriesPosition })}
-            </p>
-          ) : null}
-          <Heading
-            className="text-subheading font-semibold wrap-anywhere"
-            lang={label.locale}
-            dir={directionOf(label.locale)}
+    <li className="card-surface group relative flex min-w-0 items-start gap-4 rounded-panel border border-border bg-surface-raised p-4">
+      <AudioTile />
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        {language === undefined ? null : (
+          <span className="flex">
+            <LanguageBadge {...language} />
+          </span>
+        )}
+        <Heading
+          className="text-subheading font-semibold text-balance wrap-anywhere"
+          lang={label.locale}
+          dir={directionOf(label.locale)}
+        >
+          <a
+            href={audioTrackPath(locale, track.slug)}
+            className="card-link text-foreground no-underline decoration-accent-rule decoration-1 underline-offset-4 group-hover:underline active:text-action"
           >
-            <a href={audioTrackPath(locale, track.slug)} className={MEDIA_CARD_LINK}>
-              {label.title}
-            </a>
-          </Heading>
-          {speakers.length === 0 ? null : (
-            <p
-              className="line-clamp-2 text-sm wrap-anywhere text-foreground-muted"
-              dir="auto"
-            >
-              <span className="sr-only">{t('speakers')}: </span>
-              {speakers.join(' · ')}
-            </p>
-          )}
-          <div className="mt-auto pt-1">
-            <MetaRow
-              items={[
-                track.durationSeconds === null ? null : (
-                  <Duration seconds={track.durationSeconds} />
-                ),
-                track.recordedOn === null ? null : (
-                  <time dateTime={track.recordedOn}>
-                    {formatDate(track.recordedOn, locale)}
-                  </time>
-                ),
-                <span lang={track.languageCode} dir={language?.direction ?? 'auto'}>
-                  {language?.name ?? track.languageCode}
-                </span>,
-              ]}
-            />
-          </div>
-        </div>
+            {label.title}
+          </a>
+        </Heading>
+        {speakers === '' ? null : (
+          <p
+            className="line-clamp-2 text-sm wrap-anywhere text-foreground-muted"
+            dir="auto"
+          >
+            <span className="sr-only">{t('speakers')}: </span>
+            {speakers}
+          </p>
+        )}
+        <MetaRow
+          items={[
+            track.durationSeconds === null ? null : (
+              <span>
+                <span className="sr-only">{t('fact.duration')}: </span>
+                <Duration seconds={track.durationSeconds} />
+              </span>
+            ),
+            track.recordedOn === null ? null : (
+              <time dateTime={track.recordedOn}>
+                {formatDate(track.recordedOn, locale)}
+              </time>
+            ),
+          ]}
+        />
+        {series === null ? null : (
+          <p className="text-caption wrap-anywhere text-foreground-muted">
+            {t('fact.position', { number: series.position })}
+            {' · '}
+            <span lang={series.locale} dir={directionOf(series.locale)}>
+              {series.title}
+            </span>
+          </p>
+        )}
       </div>
     </li>
   );
 }
 
 /**
- * A page of rows with every speaker's name resolved in ONE People call and the
- * content languages in ONE Taxonomy call — never a call per row. Also composed
- * by the home page's Listen module.
+ * Recordings as cards, every speaker on them named in ONE People call. Nothing
+ * when there are none.
  */
-export async function TrackList({
+export async function AudioCards({
   locale,
   tracks,
   label,
-  headingLevel = 'h2',
-  ordered = false,
+  headingLevel = 'h3',
 }: {
   readonly locale: Locale;
-  readonly tracks: readonly AudioTrackListing[];
+  readonly tracks: readonly (AudioTrackListing & {
+    readonly series?: AudioTrackSeries | null;
+  })[];
   readonly label: string;
   readonly headingLevel?: 'h2' | 'h3';
-  /** A series is read in order, so it is an ordered list with its places shown. */
-  readonly ordered?: boolean;
 }) {
-  const t = await getTranslations({ locale, namespace: 'listen' });
-  const [references, languages] = await Promise.all([
+  if (tracks.length === 0) return null;
+  const [t, names] = await Promise.all([
+    getTranslations({ locale, namespace: 'listen' }),
     referenceNames(
       { personIds: tracks.flatMap((track) => track.speakerIds), topicIds: [] },
       locale,
     ),
-    contentLanguages(),
   ]);
-  const List = ordered ? 'ol' : 'ul';
-
+  const people = caseless(names.people);
   return (
-    <List
-      aria-label={label}
-      className="grid list-none grid-cols-1 gap-4 p-0 *:min-w-0 lg:grid-cols-2"
-    >
+    <ul aria-label={label} className={LISTEN_GRID}>
       {tracks.map((track) => (
-        <TrackRow
+        <AudioCard
           key={track.id}
           locale={locale}
           track={track}
-          people={references.people}
-          languages={languages}
+          people={people}
           t={t}
           headingLevel={headingLevel}
-          position={ordered}
         />
       ))}
-    </List>
+    </ul>
   );
 }
 
-/* ===========================================================================
- * /listen/lectures
- * ========================================================================= */
-
 /**
- * Every published track, most recently recorded first, with a REAL GET form:
- * every filter works without JavaScript, every filtered view is a shareable
- * address canonical to its base, and the options are bounded vocabularies —
- * active topics, published audio series, Taxonomy's content languages.
- *
- * A SPEAKER is a filter a person's profile links to rather than a menu here:
- * the filtered view names who it is showing and offers the way back.
+ * ONE AUDIO SERIES AS A CARD: the drawn audio tile with sheets behind it — a
+ * run of recordings, not one — and its count on the corner; then the title in
+ * its own language (ONE link to its one address), the start of its
+ * description, its span of years, running time, languages and speakers.
  */
-export async function TrackListingPage({
+export function AudioSeriesCard({
   locale,
-  query,
+  entry,
+  people,
+  t,
+  tw,
+  headingLevel = 'h3',
 }: {
   readonly locale: Locale;
-  readonly query: Record<string, string | string[] | undefined>;
+  readonly entry: AudioSeriesEntry;
+  readonly people: Names;
+  readonly t: ListenTranslator;
+  readonly tw: Awaited<ReturnType<typeof getTranslations<'watch'>>>;
+  readonly headingLevel?: 'h2' | 'h3';
 }) {
-  const t = await getTranslations({ locale, namespace: 'listen' });
-  const trail = await listenTrail(locale);
-  const filters = readMediaQuery(query);
-  const base = localizedPath(locale, '/listen/lectures');
-  const title = t('sections.lectures');
-
-  const reads = mediaReadRuntime();
-  const [page, languages, topics, series, speaker] = await Promise.all([
-    reads.audioTracks(filters),
-    contentLanguages(),
-    taxonomyRuntime().taxonomy.listTree({ locale, includeArchived: false }),
-    reads.audioSeriesList(0),
-    filters.speaker === null
-      ? Promise.resolve(null)
-      : referenceNames({ personIds: [filters.speaker], topicIds: [] }, locale).then(
-          (names) => names.people.get(filters.speaker ?? '') ?? null,
-        ),
-  ]);
-
-  const filtered =
-    filters.topic !== null ||
-    filters.speaker !== null ||
-    filters.series !== null ||
-    filters.language !== null;
-
+  const Heading = headingLevel;
+  const label = mediaLabel(entry, locale);
+  const content = { lang: label.locale, dir: directionOf(label.locale) };
+  const only = entry.languages.length === 1 ? entry.languages[0] : undefined;
+  const language = only === undefined ? undefined : contentLanguageBadge(only.id, locale);
+  const named = entry.speakers.flatMap((speaker) => {
+    const person = people.get(speaker.id.toLowerCase());
+    return person === undefined ? [] : [person.name];
+  });
+  const speakers =
+    named.length === 0
+      ? null
+      : named.length > 2
+        ? tw('groups.andMore', {
+            names: named.slice(0, 2).join(' · '),
+            count: named.length - 2,
+          })
+        : named.join(' · ');
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-[var(--space-page)]">
-        <MediaPageHeader
-          crumbs={{
-            label: trail.label,
-            trail: [trail.home, trail.listen, { text: title }],
-          }}
-          eyebrow={trail.listen.text}
-          title={title}
-          lede={t('sectionBody.lectures')}
+    <li className="card-surface group relative flex min-w-0 flex-col gap-3 rounded-panel pt-2">
+      <span className="relative block">
+        <span
+          aria-hidden="true"
+          className="absolute inset-x-5 -top-2 h-8 rounded-panel border border-accent-rule bg-accent-surface"
         />
-
-        <Panel>
-          <form
-            method="get"
-            action={base}
-            className="flex flex-col gap-4"
-            aria-label={t('filters')}
+        <span
+          aria-hidden="true"
+          className="absolute inset-x-2.5 -top-1 h-8 rounded-panel border border-border bg-surface-sunken"
+        />
+        <span className="relative flex aspect-[5/2] w-full items-center justify-center rounded-panel border border-accent-rule bg-accent-surface">
+          <Icon name="audio" size={24} className="text-accent" />
+          <span className="absolute end-2 bottom-2 inline-flex items-center gap-1 rounded-control bg-ink/85 px-1.5 py-0.5 text-caption font-semibold text-ink-foreground tabular-nums">
+            <Icon name="list" size={16} />
+            {t('seriesCount', { count: entry.tracks })}
+          </span>
+        </span>
+      </span>
+      <div className="flex min-w-0 flex-col gap-1.5">
+        {language === undefined ? null : (
+          <span className="flex">
+            <LanguageBadge {...language} />
+          </span>
+        )}
+        <Heading
+          className="text-subheading font-semibold text-balance wrap-anywhere"
+          {...content}
+        >
+          <a
+            href={audioSeriesPath(locale, entry.slug)}
+            className="card-link text-foreground no-underline decoration-accent-rule decoration-1 underline-offset-4 group-hover:underline active:text-action"
           >
-            {filters.speaker === null ? null : (
-              <input type="hidden" name="speaker" value={filters.speaker} />
-            )}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field id="filter-topic" label={t('filterTopic')}>
-                {(props) => (
-                  <Select {...props} name="topic" defaultValue={filters.topic ?? ''}>
-                    <option value="">{t('filterAny')}</option>
-                    {topics.map((topic) => (
-                      <option key={topic.id} value={topic.id}>
-                        {topic.label.name}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-              <Field id="filter-series" label={t('filterSeries')}>
-                {(props) => (
-                  <Select {...props} name="series" defaultValue={filters.series ?? ''}>
-                    <option value="">{t('filterAny')}</option>
-                    {series.items.map((group) => (
-                      <option key={group.id} value={group.id}>
-                        {mediaLabel(group, locale).title}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-              <Field id="filter-language" label={t('filterLanguage')}>
-                {(props) => (
-                  <Select
-                    {...props}
-                    name="language"
-                    defaultValue={filters.language ?? ''}
-                  >
-                    <option value="">{t('filterAny')}</option>
-                    {[...languages.values()].map((language) => (
-                      <option key={language.code} value={language.code}>
-                        {language.name}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-            </div>
-            <div className="flex flex-wrap items-center gap-4">
-              <Button tone="secondary">{t('filterApply')}</Button>
-              {filtered ? <TextLink href={base}>{t('filterClear')}</TextLink> : null}
-            </div>
-          </form>
-        </Panel>
-
-        {speaker === null ? null : (
+            {label.title}
+          </a>
+        </Heading>
+        {label.description === '' ? null : (
           <p
-            className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-control border border-accent-rule bg-accent-surface px-4 py-2 text-sm"
-            dir="auto"
+            className="line-clamp-2 text-sm wrap-anywhere text-foreground-muted"
+            {...content}
           >
-            <span>{t('speakerActive')}</span>
-            <TextLink
-              href={localizedPath(locale, `/people/${encodeURIComponent(speaker.slug)}`)}
-            >
-              {speaker.name}
-            </TextLink>
-            <span aria-hidden="true">·</span>
-            <TextLink href={mediaQueryPath(base, filters, { speaker: null, offset: 0 })}>
-              {t('speakerClear')}
-            </TextLink>
+            {label.description}
           </p>
         )}
-
-        {page.items.length === 0 ? (
-          <EmptyState>
-            {filtered ? (
-              <span className="flex flex-col gap-2">
-                <span>{t('emptyFiltered')}</span>
-                <TextLink href={base}>{t('filterClear')}</TextLink>
+        <MetaRow
+          items={[
+            spanText(locale, tw, entry),
+            runningTime(tw, entry.seconds),
+            entry.languages.length > 1
+              ? tw('groups.languages', { count: entry.languages.length })
+              : null,
+            speakers === null ? null : (
+              <span dir="auto">
+                <span className="sr-only">{t('speakers')}: </span>
+                {speakers}
               </span>
-            ) : (
-              t('empty')
-            )}
-          </EmptyState>
-        ) : (
-          <TrackList locale={locale} tracks={page.items} label={title} />
-        )}
-
-        <Pagination
-          label={title}
-          previous={
-            filters.offset > 0
-              ? mediaQueryPath(base, filters, {
-                  offset: Math.max(0, filters.offset - MEDIA_PAGE),
-                })
-              : null
-          }
-          next={
-            page.hasMore
-              ? mediaQueryPath(base, filters, { offset: filters.offset + MEDIA_PAGE })
-              : null
-          }
-          {...pages(t)}
+            ),
+          ]}
         />
-      </div>
-    </Container>
-  );
-}
-
-/* ===========================================================================
- * /listen/lectures/{slug}
- * ========================================================================= */
-
-/** The breadcrumb names and paths of one track's page, shared with JSON-LD. */
-function trackTrail(
-  locale: Locale,
-  record: AudioTrackRecord,
-  labels: { readonly home: string; readonly listen: string; readonly lectures: string },
-) {
-  return [
-    { name: labels.home, path: localizedPath(locale, '') },
-    { name: labels.listen, path: localizedPath(locale, '/listen') },
-    { name: labels.lectures, path: localizedPath(locale, '/listen/lectures') },
-    { name: mediaLabel(record, locale).title, path: audioTrackPath(locale, record.slug) },
-  ];
-}
-
-/** How many other tracks of the same series a track's page previews. */
-const SERIES_PREVIEW = 6;
-
-/**
- * One track's page: what it is and who speaks, then the player — or, when the
- * file cannot be served right now, an honest statement — then its facts, its
- * transcript where the organisation holds one, its topics and its series.
- */
-export async function TrackDetailPage({
-  locale,
-  record,
-}: {
-  readonly locale: Locale;
-  readonly record: AudioTrackRecord;
-}) {
-  const t = await getTranslations({ locale, namespace: 'listen' });
-  const parts = await listenTrail(locale);
-  const reads = mediaReadRuntime();
-
-  const [references, languages, siblings, playable] = await Promise.all([
-    referenceNames({ personIds: record.speakerIds, topicIds: record.topicIds }, locale),
-    contentLanguages(),
-    record.series === null
-      ? Promise.resolve(null)
-      : reads.audioSeriesTracks(record.series.id, 0),
-    // The SAME two decisions the byte route makes: a published track can still
-    // be unplayable when its file is missing or not cleared, and then no player
-    // is offered.
-    record.assetId === null
-      ? Promise.resolve(false)
-      : audioPlayable({ trackId: record.id, assetId: record.assetId }),
-  ]);
-
-  const label = mediaLabel(record, locale);
-  const direction = directionOf(label.locale);
-  const language = languages.get(record.languageCode);
-  const contentDirection = language?.direction ?? 'ltr';
-  const trail = trackTrail(locale, record, {
-    home: parts.home.text,
-    listen: parts.listen.text,
-    lectures: t('sections.lectures'),
-  });
-  const speakers = record.speakerIds.flatMap((id) => {
-    const person = references.people.get(id);
-    return person === undefined ? [] : [person];
-  });
-  const topics = record.topicIds.flatMap((id) => {
-    const topic = references.topics.get(id);
-    return topic === undefined ? [] : [topic];
-  });
-  const seriesLabel = record.series === null ? null : mediaLabel(record.series, locale);
-  const others =
-    siblings === null
-      ? []
-      : siblings.items.filter((track) => track.id !== record.id).slice(0, SERIES_PREVIEW);
-  const hasStory = label.description !== '' || record.transcript !== null;
-
-  return (
-    <Container>
-      <article className="flex flex-col gap-10 py-[var(--space-page)]">
-        <MediaPageHeader
-          crumbs={{
-            label: parts.label,
-            trail: [
-              ...trail
-                .slice(0, -1)
-                .map((entry) => ({ href: entry.path, text: entry.name })),
-              { text: label.title },
-            ],
-          }}
-          eyebrow={
-            record.series === null
-              ? parts.listen.text
-              : t('fact.position', { number: record.series.position })
-          }
-          title={label.title}
-          lang={label.locale}
-          dir={direction}
-          {...(speakers.length === 0
-            ? {}
-            : {
-                lede: (
-                  <p className="text-base" dir="auto">
-                    <span>{t('speakers')}: </span>
-                    {speakers.map((person, index) => (
-                      <span key={person.slug}>
-                        {index === 0 ? null : ' · '}
-                        <TextLink
-                          href={localizedPath(
-                            locale,
-                            `/people/${encodeURIComponent(person.slug)}`,
-                          )}
-                        >
-                          {person.name}
-                        </TextLink>
-                      </span>
-                    ))}
-                  </p>
-                ),
-              })}
-          meta={
-            <MetaRow
-              items={[
-                record.durationSeconds === null ? null : (
-                  <Duration seconds={record.durationSeconds} />
-                ),
-                record.recordedOn === null ? null : (
-                  <time dateTime={record.recordedOn}>
-                    {formatDate(record.recordedOn, locale)}
-                  </time>
-                ),
-                <span lang={record.languageCode} dir={contentDirection}>
-                  {language?.name ?? record.languageCode}
-                </span>,
-              ]}
-            />
-          }
-        />
-
-        <section
-          aria-labelledby="audio-player"
-          className="max-w-4xl rounded-panel border border-border bg-surface-raised p-5 shadow-panel"
-        >
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-4">
-              <AudioMark />
-              <h2 id="audio-player" className="text-subheading font-semibold">
-                {t('playerHeading')}
-              </h2>
-            </div>
-            {playable && record.assetId !== null ? (
-              <AudioPlayer
-                trackId={record.id}
-                assetId={record.assetId}
-                mode="public"
-                describedBy="audio-transcript-status"
-                labels={{
-                  player: t('player.name', { title: label.title }),
-                  unsupported: t('player.unsupported'),
-                  failed: t('player.failed'),
-                }}
-              />
-            ) : (
-              <Alert tone="info">{t('player.unavailable')}</Alert>
-            )}
-          </div>
-        </section>
-
-        <div
-          className={`grid gap-10 ${hasStory ? 'lg:grid-cols-[minmax(0,1fr)_20rem]' : ''}`}
-        >
-          {hasStory ? (
-            <div className="flex min-w-0 flex-col gap-10">
-              {label.description === '' ? null : (
-                <section className="flex flex-col gap-4" aria-labelledby="audio-about">
-                  <h2 id="audio-about" className="text-heading font-semibold">
-                    {t('aboutHeading')}
-                  </h2>
-                  <Prose>
-                    {paragraphsOf(label.description).map((paragraph, index) => (
-                      <p key={index} lang={label.locale} dir={direction}>
-                        {paragraph}
-                      </p>
-                    ))}
-                    <p className="text-caption border-s-2 border-accent-rule ps-3 text-foreground-muted">
-                      {t('metadataNotice')}
-                    </p>
-                  </Prose>
-                </section>
-              )}
-
-              {record.transcript === null ? null : (
-                <section
-                  className="flex flex-col gap-4"
-                  aria-labelledby="audio-transcript"
-                >
-                  <h2 id="audio-transcript" className="text-heading font-semibold">
-                    {t('fact.transcript')}
-                  </h2>
-                  <details className="rounded-panel border border-border bg-surface-raised px-5 py-2">
-                    <summary className="min-h-11 cursor-pointer py-2.5 font-medium">
-                      {t('transcriptShow')}
-                    </summary>
-                    <div
-                      className="library-reader flex max-w-[var(--measure-prose)] flex-col gap-4 pt-2 pb-4"
-                      lang={record.languageCode}
-                      dir={contentDirection}
-                    >
-                      {paragraphsOf(record.transcript).map((paragraph, index) => (
-                        <p key={index}>{paragraph}</p>
-                      ))}
-                    </div>
-                  </details>
-                </section>
-              )}
-            </div>
-          ) : null}
-
-          <aside className="flex min-w-0 flex-col gap-8">
-            <section
-              className="flex flex-col gap-3 rounded-panel border border-border bg-surface-raised p-5"
-              aria-labelledby="audio-facts"
-            >
-              <h2 id="audio-facts" className="text-subheading font-semibold">
-                {t('facts')}
-              </h2>
-              <dl
-                className={`grid gap-x-8 divide-y divide-border ${
-                  hasStory ? '' : 'sm:grid-cols-2 sm:divide-y-0'
-                }`}
-              >
-                <DetailRow term={t('fact.language')}>
-                  <span lang={record.languageCode} dir={contentDirection}>
-                    {language?.name ?? record.languageCode}
-                  </span>
-                </DetailRow>
-                {record.durationSeconds === null ? null : (
-                  <DetailRow term={t('fact.duration')}>
-                    <Duration seconds={record.durationSeconds} />
-                  </DetailRow>
-                )}
-                {record.recordedOn === null ? null : (
-                  <DetailRow term={t('fact.recorded')}>
-                    <time dateTime={record.recordedOn}>
-                      {formatDate(record.recordedOn, locale)}
-                    </time>
-                  </DetailRow>
-                )}
-                {record.series === null || seriesLabel === null ? null : (
-                  <DetailRow term={t('fact.partOf')}>
-                    <TextLink href={audioSeriesPath(locale, record.series.slug)}>
-                      <span
-                        lang={seriesLabel.locale}
-                        dir={directionOf(seriesLabel.locale)}
-                      >
-                        {seriesLabel.title}
-                      </span>
-                    </TextLink>
-                    {' · '}
-                    {t('fact.position', { number: record.series.position })}
-                  </DetailRow>
-                )}
-                <DetailRow term={t('fact.transcript')}>
-                  <span id="audio-transcript-status">
-                    {record.transcript === null
-                      ? t('transcriptNone')
-                      : t('transcriptBelow')}
-                  </span>
-                </DetailRow>
-              </dl>
-            </section>
-
-            {topics.length === 0 ? null : (
-              <section className="flex flex-col gap-3" aria-labelledby="audio-topics">
-                <h2 id="audio-topics" className="text-subheading font-semibold">
-                  {t('topics')}
-                </h2>
-                <TopicChips
-                  label={t('topics')}
-                  topics={topics.map((topic) => ({
-                    href: localizedPath(
-                      locale,
-                      `/topics/${encodeURIComponent(topic.slug)}`,
-                    ),
-                    text: topic.name,
-                  }))}
-                />
-              </section>
-            )}
-          </aside>
-        </div>
-
-        {record.series === null || others.length === 0 ? null : (
-          <section className="flex flex-col gap-5" aria-labelledby="audio-series-more">
-            <SectionHeader
-              id="audio-series-more"
-              heading={t('moreFromSeries')}
-              action={{
-                href: audioSeriesPath(locale, record.series.slug),
-                text: t('allInSeries'),
-              }}
-            />
-            <TrackList
-              locale={locale}
-              tracks={others}
-              label={t('moreFromSeries')}
-              headingLevel="h3"
-              ordered
-            />
-          </section>
-        )}
-
-        <BreadcrumbData contentLocales={mediaLocales(record)} trail={trail} />
-      </article>
-    </Container>
-  );
-}
-
-/* ===========================================================================
- * /listen/series and /listen/series/{slug}
- * ========================================================================= */
-
-function SeriesCard({
-  locale,
-  record,
-  headingLevel,
-}: {
-  readonly locale: Locale;
-  readonly record: AudioSeriesRecord;
-  readonly headingLevel: 'h2' | 'h3';
-}) {
-  const label = mediaLabel(record, locale);
-  const direction = directionOf(label.locale);
-  const Heading = headingLevel;
-  return (
-    <li className={MEDIA_CARD}>
-      <div className="flex min-w-0 flex-1 items-start gap-4 p-4">
-        <AudioMark />
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <Heading
-            className="text-subheading font-semibold wrap-anywhere"
-            lang={label.locale}
-            dir={direction}
-          >
-            <a href={audioSeriesPath(locale, record.slug)} className={MEDIA_CARD_LINK}>
-              {label.title}
-            </a>
-          </Heading>
-          {label.description === '' ? null : (
-            <p
-              className="line-clamp-3 text-sm wrap-anywhere text-foreground-muted"
-              lang={label.locale}
-              dir={direction}
-            >
-              {label.description}
-            </p>
-          )}
-        </div>
       </div>
     </li>
   );
 }
 
-export async function AudioSeriesListingPage({
-  locale,
-  query,
-}: {
-  readonly locale: Locale;
-  readonly query: Record<string, string | string[] | undefined>;
-}) {
-  const t = await getTranslations({ locale, namespace: 'listen' });
-  const trail = await listenTrail(locale);
-  const offset = readOffset(query);
-  const base = localizedPath(locale, '/listen/series');
-  const title = t('sections.series');
-  const page = await mediaReadRuntime().audioSeriesList(offset);
-
-  return (
-    <Container>
-      <div className="flex flex-col gap-8 py-[var(--space-page)]">
-        <MediaPageHeader
-          crumbs={{
-            label: trail.label,
-            trail: [trail.home, trail.listen, { text: title }],
-          }}
-          eyebrow={trail.listen.text}
-          title={title}
-          lede={t('sectionBody.series')}
-        />
-        {page.items.length === 0 ? (
-          <EmptyState>{t('seriesListEmpty')}</EmptyState>
-        ) : (
-          <CardGrid label={title} columns={2}>
-            {page.items.map((record) => (
-              <SeriesCard
-                key={record.id}
-                locale={locale}
-                record={record}
-                headingLevel="h2"
-              />
-            ))}
-          </CardGrid>
-        )}
-        <Pagination
-          label={title}
-          previous={
-            offset > 0 ? offsetPath(base, Math.max(0, offset - MEDIA_PAGE)) : null
-          }
-          next={page.hasMore ? offsetPath(base, offset + MEDIA_PAGE) : null}
-          {...pages(t)}
-        />
-      </div>
-    </Container>
-  );
-}
-
-/**
- * An AudioSeries and its published tracks, IN SERIES ORDER, in bounded pages,
- * with an honest empty state while none of them is published yet.
- */
-export async function AudioSeriesDetailPage({
-  locale,
-  record,
-  query,
-}: {
-  readonly locale: Locale;
-  readonly record: AudioSeriesRecord;
-  readonly query: Record<string, string | string[] | undefined>;
-}) {
-  const t = await getTranslations({ locale, namespace: 'listen' });
-  const parts = await listenTrail(locale);
-  const offset = readOffset(query);
-  const path = audioSeriesPath(locale, record.slug);
-  const tracks = await mediaReadRuntime().audioSeriesTracks(record.id, offset);
-  const label = mediaLabel(record, locale);
-  const direction = directionOf(label.locale);
-  const sectionTitle = t('sections.series');
-  const trail = [
-    { name: parts.home.text, path: parts.home.href },
-    { name: parts.listen.text, path: parts.listen.href },
-    { name: sectionTitle, path: localizedPath(locale, '/listen/series') },
-    { name: label.title, path },
-  ];
-  const description = paragraphsOf(label.description);
-
-  return (
-    <Container>
-      <article className="flex flex-col gap-10 py-[var(--space-page)]">
-        <MediaPageHeader
-          crumbs={{
-            label: parts.label,
-            trail: [
-              ...trail
-                .slice(0, -1)
-                .map((entry) => ({ href: entry.path, text: entry.name })),
-              { text: label.title },
-            ],
-          }}
-          eyebrow={sectionTitle}
-          title={label.title}
-          lang={label.locale}
-          dir={direction}
-        >
-          {description.length === 0 ? null : (
-            <div className="flex max-w-[var(--measure-prose)] flex-col gap-3 pt-1">
-              {description.map((paragraph, index) => (
-                <p key={index} lang={label.locale} dir={direction}>
-                  {paragraph}
-                </p>
-              ))}
-            </div>
-          )}
-        </MediaPageHeader>
-
-        <section className="flex flex-col gap-5" aria-labelledby="series-tracks">
-          <SectionHeader id="series-tracks" heading={t('seriesTracks')} />
-          {tracks.items.length === 0 ? (
-            <EmptyState>{t('seriesEmpty')}</EmptyState>
-          ) : (
-            <TrackList
-              locale={locale}
-              tracks={tracks.items}
-              label={t('seriesTracks')}
-              headingLevel="h3"
-              ordered
-            />
-          )}
-          <Pagination
-            label={t('seriesTracks')}
-            previous={
-              offset > 0 ? offsetPath(path, Math.max(0, offset - MEDIA_PAGE)) : null
-            }
-            next={tracks.hasMore ? offsetPath(path, offset + MEDIA_PAGE) : null}
-            {...pages(t)}
-          />
-        </section>
-
-        <BreadcrumbData contentLocales={mediaLocales(record)} trail={trail} />
-      </article>
-    </Container>
-  );
-}
-
 /* ===========================================================================
- * The landing page, and previews composed into other owners' pages
+ * Previews composed into other owners' pages
  * ========================================================================= */
 
-/** How many recent tracks the landing shows, and how many series. */
-const LANDING_TRACKS = 8;
-const LANDING_SERIES = 4;
-
-/**
- * `/listen` — the newest recordings, the audio series, and the ways in. The
- * browse list names only what exists: lectures, series and topics, Watch for
- * video, and — only while a Quran corpus is active — the recitation catalogue
- * Quran owns. No "coming soon".
- */
-export async function ListenLandingPage({ locale }: { readonly locale: Locale }) {
-  const t = await getTranslations({ locale, namespace: 'listen' });
-  const trail = await listenTrail(locale);
-  const reads = mediaReadRuntime();
-  const [latest, series, quran] = await Promise.all([
-    reads.audioTracks({}),
-    reads.audioSeriesList(0),
-    quranReadRuntime().reader.availability(),
-  ]);
-
-  const browse = [
-    { href: localizedPath(locale, '/listen/lectures'), key: 'lectures' },
-    { href: localizedPath(locale, '/listen/series'), key: 'series' },
-    ...(quran.active
-      ? [
-          {
-            href: localizedPath(locale, '/listen/recitations'),
-            key: 'recitations',
-          } as const,
-        ]
-      : []),
-    { href: localizedPath(locale, '/topics'), key: 'topics' },
-    { href: localizedPath(locale, '/watch'), key: 'watch' },
-  ] as const;
-
-  return (
-    <>
-      <Container>
-        <div className="pt-6">
-          <Breadcrumbs label={trail.label} trail={[trail.home, { text: t('title') }]} />
-        </div>
-      </Container>
-      <PageHero
-        title={t('title')}
-        lede={t('description')}
-        actions={
-          <ActionLink href={localizedPath(locale, '/listen/lectures')}>
-            {t('allTracks')}
-          </ActionLink>
-        }
-      />
-
-      <Container>
-        <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
-          <section className="flex flex-col gap-5" aria-labelledby="listen-latest">
-            <SectionHeader
-              id="listen-latest"
-              heading={t('latest')}
-              intro={t('latestIntro')}
-            />
-            {latest.items.length === 0 ? (
-              <EmptyState>{t('empty')}</EmptyState>
-            ) : (
-              <TrackList
-                locale={locale}
-                tracks={latest.items.slice(0, LANDING_TRACKS)}
-                label={t('latest')}
-                headingLevel="h3"
-              />
-            )}
-          </section>
-
-          {series.items.length === 0 ? null : (
-            <section className="flex flex-col gap-5" aria-labelledby="listen-series">
-              <SectionHeader
-                id="listen-series"
-                heading={t('sections.series')}
-                intro={t('sectionBody.series')}
-                action={{
-                  href: localizedPath(locale, '/listen/series'),
-                  text: t('allSeries'),
-                }}
-              />
-              <CardGrid label={t('sections.series')} columns={2}>
-                {series.items.slice(0, LANDING_SERIES).map((record) => (
-                  <SeriesCard
-                    key={record.id}
-                    locale={locale}
-                    record={record}
-                    headingLevel="h3"
-                  />
-                ))}
-              </CardGrid>
-            </section>
-          )}
-
-          <section className="flex flex-col gap-5" aria-labelledby="listen-browse">
-            <SectionHeader
-              id="listen-browse"
-              heading={t('browse')}
-              intro={t('browseIntro')}
-            />
-            <CardGrid columns={browse.length >= 5 ? 3 : 4}>
-              {browse.map((entry) => (
-                <LinkCard
-                  key={entry.key}
-                  href={entry.href}
-                  title={t(`sections.${entry.key}`)}
-                  description={t(`sectionBody.${entry.key}`)}
-                />
-              ))}
-            </CardGrid>
-          </section>
-        </div>
-      </Container>
-    </>
-  );
-}
-
-/** How many tracks a topic hub or a profile previews. */
+/** How many recordings a topic hub or a profile previews. */
 const PREVIEW = 4;
 
 /**
- * A bounded preview of public tracks — on a topic hub or a speaker's profile,
- * composed there at Layer 4 through Media's public reader. Renders NOTHING when
- * there are none, so no page carries an empty frame (ROUTE_MAP.md §5.2).
+ * A bounded preview of public recordings — on a topic hub or a speaker's
+ * profile, composed there at Layer 4 through Media's public reader. Renders
+ * NOTHING when there are none, so no page carries an empty frame
+ * (ROUTE_MAP.md §5.2).
  */
 export async function AudioPreview({
   locale,
@@ -1069,17 +365,16 @@ export async function AudioPreview({
   readonly headingId: string;
   readonly more: { readonly href: string; readonly text: string };
 }) {
-  const page = await mediaReadRuntime().audioTracks(filter);
+  const page = await mediaReadRuntime().audioListing({
+    ...filter,
+    titleLocale: locale,
+    limit: PREVIEW,
+  });
   if (page.items.length === 0) return null;
   return (
     <section className="flex flex-col gap-5" aria-labelledby={headingId}>
       <SectionHeader id={headingId} heading={heading} action={more} />
-      <TrackList
-        locale={locale}
-        tracks={page.items.slice(0, PREVIEW)}
-        label={heading}
-        headingLevel="h3"
-      />
+      <AudioCards locale={locale} tracks={page.items} label={heading} />
     </section>
   );
 }
@@ -1104,4 +399,327 @@ export function listenMetadataInput(
     primaryLocale: record.primaryLocale,
     pathFor,
   };
+}
+
+/* ===========================================================================
+ * /listen — the landing
+ * ========================================================================= */
+
+/** How many recordings the landing opens with. */
+const LANDING_TRACKS = 6;
+/** How many audio series it shows. */
+const LANDING_SERIES = 3;
+/** How many Topics and speakers it offers as ways in. */
+const TOPIC_CHIPS = 12;
+const SPEAKER_CHIPS = 10;
+
+/**
+ * The browse index: Listen's own surfaces — the Quran's recitations only while
+ * a corpus is active, at their one address — then the ways to find by Topic
+ * and Watch, Listen's sibling for video. Together with the Topic and speaker
+ * ways in, every item of the Watch menu's Listen column.
+ */
+const LANDING_GROUPS = [
+  { key: 'listen', surfaces: ['lectures', 'series', 'recitations'] },
+  { key: 'find', surfaces: ['topics', 'watch', 'watchSpeakers'] },
+] as const;
+
+function surfacePath(locale: Locale, surface: string): string {
+  switch (surface) {
+    case 'recitations':
+      return localizedPath(locale, '/quran/recitations');
+    case 'topics':
+      return localizedPath(locale, '/topics');
+    case 'watch':
+      return localizedPath(locale, '/watch');
+    case 'watchSpeakers':
+      return localizedPath(locale, '/watch/speakers');
+    default:
+      return localizedPath(locale, `/listen/${surface}`);
+  }
+}
+
+/**
+ * `/listen` — THE FRONT DOOR. What Listen holds, from ONE facet read of every
+ * published recording (recordings, hours, languages, Topics and speakers — a
+ * zero never stated, a bounded count never overstated); the latest
+ * recordings; the audio series; the ways in by Topic and by speaker with
+ * counts, each leading to the listing filtered by it; the Quran's recitations
+ * (Quran's own cards, only while a corpus is active); and a compact index of
+ * every surface. Each section only when it has something in it.
+ */
+export async function ListenLandingPage({ locale }: { readonly locale: Locale }) {
+  const [t, tw, trail] = await Promise.all([
+    getTranslations({ locale, namespace: 'listen' }),
+    getTranslations({ locale, namespace: 'watch' }),
+    listenTrail(locale),
+  ]);
+  const reads = mediaReadRuntime();
+  const [latest, facets, directory, quran] = await Promise.all([
+    reads.audioListing({ titleLocale: locale, limit: LANDING_TRACKS }),
+    reads.audioListingFacets({ titleLocale: locale }),
+    reads.audioSeriesDirectory(),
+    quranAvailability(),
+  ]);
+  const topicFacets = facets.topics.items.slice(0, TOPIC_CHIPS);
+  const speakerFacets = facets.speakers.items.slice(0, SPEAKER_CHIPS);
+  // The newest series first: the one whose latest recording is newest.
+  const series = [...directory.items]
+    .filter((entry) => entry.tracks > 0)
+    .sort((a, b) => {
+      const x = a.lastOn ?? '';
+      const y = b.lastOn ?? '';
+      return x === y ? b.tracks - a.tracks : x < y ? 1 : -1;
+    })
+    .slice(0, LANDING_SERIES);
+  const [names, seriesPeople] = await Promise.all([
+    referenceNames(
+      {
+        personIds: speakerFacets.map((facet) => facet.id),
+        topicIds: topicFacets.map((facet) => facet.id),
+      },
+      locale,
+    ),
+    contributorNames(
+      series.flatMap((entry) => entry.speakers.slice(0, 3).map((speaker) => speaker.id)),
+      locale,
+    ),
+  ]);
+  const topics = caseless(names.topics);
+  const people = caseless(names.people);
+
+  const number = (value: number) => new Intl.NumberFormat(locale).format(value);
+  const all = facets.all;
+  const hours = Math.floor(all.seconds / 3600);
+  const stats = [
+    ...(all.tracks === 0
+      ? []
+      : [
+          {
+            value: number(all.tracks),
+            label: t('stats.recordings', { count: all.tracks }),
+          },
+        ]),
+    ...(hours === 0
+      ? []
+      : [{ value: number(hours), label: t('stats.hours', { count: hours }) }]),
+    ...(all.languages < 2
+      ? []
+      : [
+          {
+            value: number(all.languages),
+            label: t('stats.languages', { count: all.languages }),
+          },
+        ]),
+    ...(facets.topics.items.length === 0 || facets.topics.hasMore
+      ? []
+      : [
+          {
+            value: number(facets.topics.items.length),
+            label: t('stats.topics', { count: facets.topics.items.length }),
+          },
+        ]),
+    ...(facets.speakers.items.length === 0 || facets.speakers.hasMore
+      ? []
+      : [
+          {
+            value: number(facets.speakers.items.length),
+            label: t('stats.speakers', { count: facets.speakers.items.length }),
+          },
+        ]),
+  ];
+  const topicChips = topicFacets.flatMap((facet) => {
+    const topic = topics.get(facet.id.toLowerCase());
+    return topic === undefined
+      ? []
+      : [
+          {
+            href: listenLecturesHref(locale, { topic: facet.id }),
+            text: topic.name,
+            count: number(facet.tracks),
+          },
+        ];
+  });
+  const speakerChips = speakerFacets.flatMap((facet) => {
+    const person = people.get(facet.id.toLowerCase());
+    return person === undefined
+      ? []
+      : [
+          {
+            href: listenLecturesHref(locale, { speaker: facet.id }),
+            text: person.name,
+            count: number(facet.tracks),
+          },
+        ];
+  });
+  const groups = LANDING_GROUPS.map((group) => ({
+    ...group,
+    surfaces: group.surfaces.filter(
+      (surface) => surface !== 'recitations' || quran.active,
+    ),
+  }));
+
+  return (
+    <>
+      <Container>
+        <div className="pt-6">
+          <Breadcrumbs label={trail.label} trail={[trail.home, { text: t('title') }]} />
+        </div>
+      </Container>
+      <Hero
+        title={t('title')}
+        lede={t('description')}
+        actions={
+          all.tracks === 0 ? undefined : (
+            <ActionLink href={listenLecturesHref(locale)}>
+              <span className="inline-flex items-center gap-2">
+                <Icon name="audio" size={16} />
+                {t('landing.browseAll')}
+              </span>
+            </ActionLink>
+          )
+        }
+      >
+        {stats.length === 0 ? null : (
+          <div className="flex flex-wrap gap-x-10 gap-y-4 pt-2">
+            {stats.map((stat) => (
+              <Stat key={stat.label} value={stat.value} label={stat.label} />
+            ))}
+          </div>
+        )}
+      </Hero>
+
+      <Container>
+        <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
+          <section className="flex flex-col gap-5" aria-labelledby="listen-latest">
+            <SectionHeader
+              id="listen-latest"
+              heading={t('latest')}
+              intro={t('latestIntro')}
+              {...(latest.total > latest.items.length
+                ? {
+                    action: {
+                      href: listenLecturesHref(locale),
+                      text: t('landing.seeAll', { count: latest.total }),
+                    },
+                  }
+                : {})}
+            />
+            {latest.items.length === 0 ? (
+              <EmptyState
+                icon="audio"
+                title={t('landing.emptyTitle')}
+                action={{
+                  href: localizedPath(locale, '/watch'),
+                  text: t('landing.watchInstead'),
+                }}
+              >
+                {t('empty')}
+              </EmptyState>
+            ) : (
+              <AudioCards locale={locale} tracks={latest.items} label={t('latest')} />
+            )}
+          </section>
+
+          {series.length === 0 ? null : (
+            <section className="flex flex-col gap-6" aria-labelledby="listen-series">
+              <SectionHeader
+                id="listen-series"
+                heading={t('sections.series')}
+                intro={t('landing.seriesIntro')}
+                action={{
+                  href: localizedPath(locale, '/listen/series'),
+                  text: t('allSeries'),
+                }}
+              />
+              <ul aria-label={t('sections.series')} className={LISTEN_GRID}>
+                {series.map((entry) => (
+                  <AudioSeriesCard
+                    key={entry.id}
+                    locale={locale}
+                    entry={entry}
+                    people={caseless(seriesPeople)}
+                    t={t}
+                    tw={tw}
+                  />
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {topicChips.length === 0 ? null : (
+            <section className="flex flex-col gap-5" aria-labelledby="listen-topics">
+              <SectionHeader
+                id="listen-topics"
+                heading={t('landing.topicsHeading')}
+                intro={t('landing.topicsIntro')}
+              />
+              <CountChips label={t('landing.topicsHeading')} chips={topicChips} />
+            </section>
+          )}
+
+          {speakerChips.length === 0 ? null : (
+            <section className="flex flex-col gap-5" aria-labelledby="listen-speakers">
+              <SectionHeader
+                id="listen-speakers"
+                heading={t('landing.speakersHeading')}
+                intro={t('landing.speakersIntro')}
+              />
+              <CountChips label={t('landing.speakersHeading')} chips={speakerChips} />
+            </section>
+          )}
+
+          <RecitationPreview
+            locale={locale}
+            headingId="listen-recitations"
+            heading={t('sections.recitations')}
+            intro={t('landing.recitationsIntro')}
+          />
+
+          {/* Every surface, as a compact index rather than a wall of cards. */}
+          <nav aria-labelledby="listen-browse" className="flex flex-col gap-6">
+            <h2 id="listen-browse" className="text-heading font-semibold">
+              {t('browse')}
+            </h2>
+            <div className="grid gap-x-10 gap-y-8 border-t border-border pt-6 sm:grid-cols-2">
+              {groups.map((group) => (
+                <div key={group.key} className="flex min-w-0 flex-col gap-3">
+                  <div className="flex flex-col gap-1">
+                    <h3 className="text-subheading font-semibold">
+                      {t(`landing.${group.key}Heading`)}
+                    </h3>
+                    <p className="text-sm text-foreground-muted">
+                      {t(`landing.${group.key}Intro`)}
+                    </p>
+                  </div>
+                  <ul className="flex list-none flex-col p-0">
+                    {group.surfaces.map((surface) => (
+                      <li key={surface}>
+                        <a
+                          href={surfacePath(locale, surface)}
+                          className="group flex min-h-11 flex-col justify-center gap-0.5 border-b border-border py-2.5 no-underline"
+                        >
+                          <span className="inline-flex items-center gap-1.5 font-semibold text-foreground decoration-accent-rule underline-offset-4 group-hover:underline">
+                            {t(`sections.${surface}`)}
+                            <Icon
+                              name="arrow-end"
+                              size={16}
+                              className="text-accent opacity-0 transition-opacity duration-[var(--duration-fast)] group-hover:opacity-100 group-focus-visible:opacity-100"
+                            />
+                          </span>
+                          <span className="text-sm text-foreground-muted">
+                            {t(`sectionBody.${surface}`)}
+                          </span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </nav>
+        </div>
+      </Container>
+    </>
+  );
 }

@@ -465,6 +465,10 @@ describe('the mutation surface', () => {
         // exactly, so a handler) to the Videos listing filtered by the Topic.
         // It reads Taxonomy alone — no session — and mutates nothing.
         'apps/web/src/app/[locale]/(public)/watch/topics/[slug]/route.ts',
+        // Watch Part 3: Listen's way to the Quran's recitations, a GET-only
+        // 301 to `/quran/recitations` while a corpus is active (a 404
+        // otherwise). It reads Quran's public reader alone and mutates nothing.
+        'apps/web/src/app/[locale]/(public)/listen/recitations/route.ts',
         // Phase 23: the Learn teacher alias — the same shared, GET-only 301 to
         // `/people/{slug}` the author and speaker aliases are.
         'apps/web/src/app/[locale]/(public)/learn/teachers/[slug]/route.ts',
@@ -580,12 +584,12 @@ describe('the mutation surface', () => {
       ].sort(),
     );
 
-    // And the thirty-two others (Phase 23 added the Learn teacher alias, Phase 24
+    // And the thirty-three others (Phase 23 added the Learn teacher alias, Phase 24
     // the three attachment byte routes, Phase 30-R the six picture routes,
     // Rebaseline R2 their six derivative routes, Quran Part 5 the recitation
-    // plan, Watch Part 1 the Topic view's 301) genuinely are read-only: a mutating
-    // verb on any of them would be a state-changing endpoint outside the
-    // Class-A controls.
+    // plan, Watch Part 1 the Topic view's 301, Watch Part 3 Listen's recitations
+    // 301) genuinely are read-only: a mutating verb on any of them would be a
+    // state-changing endpoint outside the Class-A controls.
     const { readFile } = await import('node:fs/promises');
 
     const readOnly = routes.filter(
@@ -595,7 +599,7 @@ describe('the mutation surface', () => {
         !entry.includes('/api/my/') &&
         !entry.includes('/api/messaging/'),
     );
-    expect(readOnly).toHaveLength(32);
+    expect(readOnly).toHaveLength(33);
 
     for (const route of readOnly) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');

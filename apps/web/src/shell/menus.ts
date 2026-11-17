@@ -35,10 +35,12 @@ import {
  * WHAT IS ABSENT IS ABSENT. An IA entry with no delivered route — Quran
  * Articles, Hadith Scholars, Training, Regions and Cities as listings, Local
  * News — is simply not listed. Neither is anything whose existence is a RUNTIME
- * fact: `/listen/recitations` exists only while a Quran corpus is active, and a
- * topic's address exists only while that topic does, so neither can be a
- * static link in the shell. Query views (`/fatwa?sort=latest`) are
- * views of a route already listed, not routes of their own.
+ * fact: `/listen/recitations` exists only while a Quran corpus is active (and,
+ * since Watch Part 3, only as a 301 to `/quran/recitations`, which the Listen
+ * column links directly), and a topic's address exists only while that topic
+ * does, so neither can be a static link in the shell. Query views
+ * (`/fatwa?sort=latest`) are views of a route already listed, not routes of
+ * their own.
  *
  * LABELS ARE MESSAGE KEYS in the `shell` namespace. By default a link uses its
  * registry label; a few registry labels are written to stand alone in the
@@ -255,10 +257,13 @@ const WATCH: DomainMenuSpec = {
       link('watch.playlists'),
     ]),
     column('menu.columns.byTopic', [link('topics'), link('watch.speakers')]),
+    // Watch Part 3: the Quran's recitations at their one address — Quran's
+    // catalogue, offered beside audio as IA §3.6 places it.
     column('menu.columns.listen', [
       link('listen'),
       link('listen.lectures'),
       link('listen.series'),
+      link('quran.recitations'),
     ]),
   ],
 };

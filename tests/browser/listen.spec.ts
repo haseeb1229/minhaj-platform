@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import type { BrowserContext, Page, Request } from '@playwright/test';
+import { AxeBuilder } from '@axe-core/playwright';
+import type { BrowserContext, Page, Request, TestInfo } from '@playwright/test';
 
 import type { SqlSession } from '../../packages/database/src/lifecycle/sql-connection.ts';
 import {
@@ -52,6 +53,7 @@ test.describe.configure({ mode: 'serial' });
 
 let sql: SqlSession;
 let people: Phase5Fixture;
+let educationId: string;
 const contexts: BrowserContext[] = [];
 
 const run = randomUUID().replaceAll('-', '').slice(0, 10);
@@ -129,12 +131,32 @@ function thirdPartyRequests(page: Page): Request[] {
 const bytesRoute = (trackId: string, assetId: string) =>
   `/assets/media/audio/${trackId}/${assetId}`;
 
+/** No serious or critical axe finding; anything lesser is annotated. */
+async function axe(page: Page, target: string, testInfo: TestInfo): Promise<void> {
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  const blocking = results.violations.filter(
+    (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+  );
+  for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+    testInfo.annotations.push({
+      type: 'axe',
+      description: `${target}: ${finding.id} (${String(finding.impact)})`,
+    });
+  expect(
+    blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+    target,
+  ).toEqual([]);
+}
+
 /**
  * Is a Quran corpus active in this run's database?
  *
- * PHASE 18 MADE `/listen/recitations` CONDITIONAL. It is Quran's recitation
- * catalogue projected into Listen: absent (404) and unlinked while no corpus is
- * active, present once one is. The corpus is a database singleton that
+ * PHASE 18 MADE `/listen/recitations` CONDITIONAL; WATCH PART 3 MADE IT A 301.
+ * It leads to Quran's recitation catalogue at its one address: absent (404)
+ * and unlinked while no corpus is active, one 301 to `/quran/recitations`
+ * once one is. The corpus is a database singleton that
  * `quran.spec.ts` activates part-way through its own journey, and spec files
  * run in parallel against one database, so this file cannot choose the state —
  * it reads it, and holds the page to the contract for the state it finds. The
@@ -174,6 +196,7 @@ test.beforeAll(async () => {
     "SELECT [id] FROM [Topic] WHERE [slug] = N'education';",
   );
   if (topic === undefined) throw new Error('The canonical education topic is missing.');
+  educationId = topic.id.toLowerCase();
 
   await seedAsset(lectureAsset);
   // Recorded clean, bytes missing — as after a restore that lost the file.
@@ -225,15 +248,37 @@ test.afterAll(async () => {
 /* ========================================================================== */
 
 test.describe('an anonymous visitor listens', () => {
-  test('lands on Listen signed out, with the recordings and only real surfaces', async ({
+  test('lands on Listen signed out, with its figures, the recordings and only real surfaces', async ({
     page,
   }) => {
     const response = await page.goto('/listen');
     expect(response?.status()).toBe(200);
     expect(response?.headers()['set-cookie']).toBeUndefined();
     await expect(page.getByRole('heading', { level: 1, name: 'Listen' })).toBeVisible();
-    await expect(page.getByRole('link', { name: LECTURE_TITLE })).toBeVisible();
+    const main = page.getByRole('main');
+    // The figures the data supports (Watch Part 3).
+    await expect(main).toContainText(/\d+\s*recordings/);
+    await expect(
+      main
+        .getByRole('list', { name: 'Latest recordings' })
+        .getByRole('link', { name: LECTURE_TITLE }),
+    ).toBeVisible();
     await expect(page.getByText('Synthetic hidden draft recording')).toHaveCount(0);
+    // The audio series, and the ways in by Topic and by speaker — each a view
+    // of the listing, its identifier in lower case.
+    await expect(
+      main
+        .getByRole('list', { name: 'Audio series' })
+        .getByRole('link', { name: SERIES_TITLE }),
+    ).toHaveAttribute('href', `/listen/series/${seriesSlug}`);
+    await expect(
+      main.getByRole('list', { name: 'Browse by topic' }).getByRole('link', {
+        name: /^Education\s*\d+$/,
+      }),
+    ).toHaveAttribute('href', `/listen/lectures?topic=${educationId}`);
+    await expect(
+      main.locator(`a[href="/listen/lectures?speaker=${people.linkedPersonId}"]`),
+    ).toHaveCount(1);
 
     const { active, observed: hrefs } = await inStableQuranState(async () => {
       await page.goto('/listen');
@@ -242,37 +287,89 @@ test.describe('an anonymous visitor listens', () => {
         .getByRole('link')
         .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
     });
-    for (const surface of ['/listen/lectures', '/listen/series', '/watch']) {
+    for (const surface of [
+      '/listen/lectures',
+      '/listen/series',
+      '/topics',
+      '/watch',
+      '/watch/speakers',
+    ]) {
       expect(hrefs).toContain(surface);
     }
-    // The recitation catalogue is linked exactly when Quran has one to show,
-    // and only at its Listen address — never anything else "recitation".
-    expect(hrefs.filter((href) => href.includes('recitation'))).toEqual(
-      active ? ['/listen/recitations'] : [],
-    );
+    // The Quran's recitations are linked exactly when Quran has some to show,
+    // at their ONE address in the Quran section — never the Listen alias.
+    const recitations = hrefs.filter((href) => href.includes('recitation'));
+    expect(recitations.every((href) => href.startsWith('/quran/recitations'))).toBe(true);
+    expect(recitations.includes('/quran/recitations')).toBe(active);
     // No cover art is invented: a row paints no image at all.
     await expect(page.locator('main img')).toHaveCount(0);
   });
 
-  test('filters recordings by language and by series, and says so when nothing matches', async ({
+  test('filters recordings with counted options and chips, at one address per view', async ({
     page,
+    request,
   }) => {
-    await page.goto('/listen/lectures?language=ur');
-    await expect(page.getByRole('link', { name: URDU_TITLE })).toBeVisible();
-    await expect(page.getByRole('link', { name: LECTURE_TITLE })).toHaveCount(0);
+    await page.goto('/listen/lectures');
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Audio lectures' }),
+    ).toBeVisible();
+    await expect(page.getByRole('main')).toContainText(/\d+\s*recordings/);
 
+    await page.goto('/listen/lectures?language=ur');
+    const list = page.getByRole('list', { name: 'Audio lectures' });
+    await expect(list.getByRole('link', { name: URDU_TITLE })).toBeVisible();
+    await expect(list.getByRole('link', { name: LECTURE_TITLE })).toHaveCount(0);
+    const chips = page.getByRole('list', { name: 'Filters in use' });
+    await expect(
+      chips.getByRole('link', { name: 'Remove filter: Urdu' }),
+    ).toHaveAttribute('href', '/listen/lectures');
+
+    // Another order of the same view is ONE redirect to its spelling; a view
+    // nothing matches says so and leads back.
     await page.goto(`/listen/lectures?series=${seriesId}&language=ar`);
+    await expect(page).toHaveURL(`/listen/lectures?language=ar&series=${seriesId}`);
     await expect(
       page.getByText('No published recording matches these filters.'),
     ).toBeVisible();
-    await page.getByRole('link', { name: 'Clear all filters' }).first().click();
+    await page.getByRole('link', { name: 'Clear filters' }).first().click();
     await expect(page).toHaveURL(/\/listen\/lectures$/);
 
-    // A speaker's filter names who it is showing, and offers the way back.
+    // The series option counts its PUBLISHED recordings; chosen without
+    // script, the GET form lands on the view's one address with its chip.
+    const series = page.locator('#lectures-series');
+    await expect(series.locator(`option[value="${seriesId}"]`)).toHaveText(
+      `${SERIES_TITLE} (2)`,
+    );
+    await series.selectOption(seriesId);
+    await page.getByRole('button', { name: 'Show recordings' }).click();
+    await expect(page).toHaveURL(`/listen/lectures?series=${seriesId}`);
+    await expect(list.getByRole('heading')).toHaveText([LECTURE_TITLE, URDU_TITLE]);
+    await expect(
+      chips.getByRole('link', { name: `Remove filter: ${SERIES_TITLE}` }),
+    ).toHaveAttribute('href', '/listen/lectures');
+
+    // A speaker is a filter of its own, named by its chip.
     await page.goto(`/listen/lectures?speaker=${people.linkedPersonId}`);
-    await expect(page.getByText('Showing recordings with')).toBeVisible();
-    await expect(page.getByRole('link', { name: LECTURE_TITLE })).toBeVisible();
-    await expect(page.getByRole('link', { name: URDU_TITLE })).toHaveCount(0);
+    await expect(chips.getByRole('link')).toHaveCount(1);
+    await expect(list.getByRole('link', { name: LECTURE_TITLE })).toBeVisible();
+    await expect(list.getByRole('link', { name: URDU_TITLE })).toHaveCount(0);
+
+    for (const [from, to] of [
+      ['/listen/lectures?offset=24', '/listen/lectures?page=2'],
+      ['/listen/lectures?topic=&language=&sort=newest', '/listen/lectures'],
+      [
+        `/ur/listen/lectures?series=${seriesId.toUpperCase()}`,
+        `/ur/listen/lectures?series=${seriesId}`,
+      ],
+      ['/listen/series?sort=videos', '/listen/series'],
+      ['/ar/listen/series?offset=24&q=', '/ar/listen/series'],
+      [`/listen/series/${seriesSlug}?page=1`, `/listen/series/${seriesSlug}`],
+    ]) {
+      const response = await request.get(from, { maxRedirects: 0 });
+      expect(response.status(), from).toBe(307);
+      const target = new URL(response.headers()['location'] ?? '', baseUrl());
+      expect(`${target.pathname}${target.search}`, from).toBe(to);
+    }
   });
 
   test('shows a track with its facts and transcript, playing only from this origin', async ({
@@ -408,7 +505,7 @@ test.describe('an anonymous visitor listens', () => {
     }
   });
 
-  test('never serves a draft page, and serves a recitation catalogue only from Quran', async ({
+  test('never serves a draft page, and leads to recitations only in the Quran section', async ({
     request,
   }) => {
     for (const missing of [`/listen/lectures/${draftSlug}`, '/listen/podcasts']) {
@@ -417,38 +514,97 @@ test.describe('an anonymous visitor listens', () => {
     }
 
     const { active, observed } = await inStableQuranState(async () => {
-      const response = await request.get('/listen/recitations', { maxRedirects: 0 });
+      const response = await request.get('/ur/listen/recitations', { maxRedirects: 0 });
       return {
         status: response.status(),
-        cookie: response.headers()['set-cookie'],
+        headers: response.headers(),
         body: await response.text(),
       };
     });
-    expect(observed.cookie).toBeUndefined();
+    expect(observed.headers['set-cookie']).toBeUndefined();
+    expect(observed.headers['cache-control']).toBe('no-store');
+    expect(observed.headers['x-robots-tag']).toBe('noindex');
     if (!active) {
-      // No corpus, no catalogue: absent, not an empty frame.
+      // No corpus, no catalogue: absent, never a redirect into nothing.
       expect(observed.status).toBe(404);
       return;
     }
-    // A corpus is active: Quran's catalogue, projected — pointing at its home in
-    // the Quran section, never indexable on this deployment, and holding none
-    // of Media's recordings.
-    expect(observed.status).toBe(200);
-    expect(observed.body).toContain('href="/quran/recitations"');
-    expect(observed.body).toMatch(/<meta name="robots" content="noindex/);
-    expect(observed.body).not.toContain('rel="canonical"');
-    for (const title of [LECTURE_TITLE, URDU_TITLE, WITHDRAWN_TITLE])
-      expect(observed.body).not.toContain(title);
-    expect(observed.body).not.toContain('/listen/lectures/');
-    expect(observed.body).not.toContain('/assets/media/');
+    // A corpus is active: ONE 301 to the catalogue's one address, the locale
+    // kept — never a second page of the same catalogue, never Media's audio.
+    expect(observed.status).toBe(301);
+    expect(observed.headers['location']).toBe('/ur/quran/recitations');
+    expect(observed.body).toBe('');
   });
 
-  test('lists an audio series in its own order', async ({ page }) => {
+  test('lists an audio series in its own order, opening on where to begin', async ({
+    page,
+  }) => {
     await page.goto(`/listen/series/${seriesSlug}`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(SERIES_TITLE);
+    const main = page.getByRole('main');
+    await expect(main).toContainText(/2\s*recordings/);
+    // Its first published part, by its own number; its latest is its first
+    // (the other is undated), so no second way in is offered.
+    await expect(main.getByRole('link', { name: 'Start from part 1' })).toHaveAttribute(
+      'href',
+      `/listen/lectures/${lectureSlug}`,
+    );
+    await expect(main.getByRole('link', { name: 'Latest recording' })).toHaveCount(0);
     const tracks = page.getByRole('list', { name: 'Recordings' });
     await expect(tracks.getByRole('heading')).toHaveText([LECTURE_TITLE, URDU_TITLE]);
     await expect(tracks.getByText('Part 1')).toBeVisible();
+    // Who speaks in it, by People's name and profile.
+    await expect(
+      page
+        .getByRole('region', { name: 'Speakers' })
+        .locator(`a[href="/people/${people.linkedSlug}"]`),
+    ).toHaveCount(1);
+    // Past its last page: said so, with the way back.
+    await page.goto(`/listen/series/${seriesSlug}?page=2`);
+    await expect(page.getByText('This page is empty')).toBeVisible();
+  });
+
+  test('finds an audio series by its title, with its count and chip', async ({
+    page,
+  }) => {
+    await page.goto('/listen/series');
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Audio series' }),
+    ).toBeVisible();
+    await page.getByRole('searchbox', { name: 'Title' }).fill(run);
+    await page.getByRole('button', { name: 'Show', exact: true }).click();
+    await expect(page).toHaveURL(`/listen/series?q=${run}`);
+    const card = page
+      .getByRole('list', { name: 'Audio series' })
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('link', { name: SERIES_TITLE }) });
+    await expect(card).toContainText('2 recordings');
+    await expect(
+      page
+        .getByRole('list', { name: 'Filters in use' })
+        .getByRole('link', { name: `Remove filter: Title: ${run}` }),
+    ).toHaveAttribute('href', '/listen/series');
+  });
+
+  test('places a recording in its series, with the previous and next part and Share', async ({
+    page,
+  }) => {
+    await page.goto(`/listen/lectures/${lectureSlug}`);
+    const series = page.getByRole('region', { name: SERIES_TITLE });
+    await expect(series.getByText('Part 1 of 2')).toBeVisible();
+    await expect(series.getByRole('link', { name: /Next recording/ })).toHaveAttribute(
+      'href',
+      `/listen/lectures/${urduSlug}`,
+    );
+    await expect(series.getByRole('link', { name: /Previous recording/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Share' })).toBeVisible();
+
+    await page.goto(`/listen/lectures/${urduSlug}`);
+    await expect(
+      page
+        .getByRole('region', { name: SERIES_TITLE })
+        .getByRole('link', { name: /Previous recording/ }),
+    ).toHaveAttribute('href', `/listen/lectures/${lectureSlug}`);
   });
 
   test('answers every former address with exactly one 301 to the current one', async ({
@@ -493,22 +649,38 @@ test.describe('an anonymous visitor listens', () => {
     await expect(page.getByRole('heading', { name: 'یہ ریکارڈنگ سنیں' })).toBeVisible();
   });
 
-  test('reflows at 320px — and so at 200% zoom — without horizontal scroll', async ({
+  test('is axe-clean and reflows from 320 to 1440 px — so at 200% zoom — in en, ur and ar', async ({
     page,
-  }) => {
-    await page.setViewportSize({ width: 320, height: 800 });
-    for (const path of [
-      '/listen',
-      '/listen/lectures',
-      `/listen/lectures/${lectureSlug}`,
-      `/ur/listen/lectures/${lectureSlug}`,
-      `/ar/listen/series/${seriesSlug}`,
-    ]) {
-      await page.goto(path);
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      );
-      expect(overflow, path).toBeLessThanOrEqual(0);
+  }, testInfo) => {
+    test.setTimeout(300_000);
+    for (const [width, height] of [
+      [320, 800],
+      [1440, 900],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      for (const path of [
+        '/listen',
+        '/listen/lectures',
+        `/listen/lectures?series=${seriesId}`,
+        `/listen/lectures/${lectureSlug}`,
+        '/listen/series',
+        `/listen/series/${seriesSlug}`,
+        '/ur/listen',
+        '/ur/listen/lectures',
+        `/ur/listen/lectures/${lectureSlug}`,
+        `/ur/listen/series/${seriesSlug}`,
+        '/ar/listen/lectures',
+        '/ar/listen/series',
+        `/ar/listen/series/${seriesSlug}`,
+      ]) {
+        await page.goto(path);
+        const overflow = await page.evaluate(
+          () =>
+            document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+        expect(overflow, `${path} at ${String(width)}`).toBeLessThanOrEqual(0);
+        if (width === 1440) await axe(page, path, testInfo);
+      }
     }
   });
 });

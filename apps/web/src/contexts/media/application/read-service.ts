@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 import {
+  audioListingQuerySchema,
+  audioSeriesNeighboursQuerySchema,
   audioTrackQuerySchema,
   groupEpisodesQuerySchema,
   mediaGroupKindSchema,
@@ -151,10 +153,6 @@ export function createMediaReadService(reader: MediaPublicReaderPort) {
         : Promise.resolve(null);
     },
 
-    audioSeriesList(offset = 0) {
-      return reader.audioSeriesList(browseOffset.parse(offset));
-    },
-
     audioSeries(slug: string) {
       return validSlug(slug) ? reader.audioSeries(slug) : Promise.resolve(null);
     },
@@ -170,6 +168,32 @@ export function createMediaReadService(reader: MediaPublicReaderPort) {
         mediaIdSchema.parse(seriesId),
         browseOffset.parse(offset),
       );
+    },
+
+    /**
+     * Watch Part 3 — the Listen listing, its aggregates, the audio series'
+     * directory, a series' summary and a track's neighbours. Every input is
+     * parsed here, before any read; the directory takes nothing a visitor
+     * could shape.
+     */
+    audioListing(raw: unknown = {}) {
+      return reader.audioListing(audioListingQuerySchema.parse(raw));
+    },
+
+    audioListingFacets(raw: unknown = {}) {
+      return reader.audioListingFacets(audioListingQuerySchema.parse(raw));
+    },
+
+    audioSeriesDirectory() {
+      return reader.audioSeriesDirectory();
+    },
+
+    audioSeriesSummary(seriesId: string) {
+      return reader.audioSeriesSummary(mediaIdSchema.parse(seriesId));
+    },
+
+    audioSeriesNeighbours(raw: unknown) {
+      return reader.audioSeriesNeighbours(audioSeriesNeighboursQuerySchema.parse(raw));
     },
 
     audioSitemap(kind: 'track' | 'series', offset: number, limit: number) {
