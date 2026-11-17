@@ -207,7 +207,7 @@ Every route is localised per §1.1: unprefixed in English, under `/ur` or `/ar` 
 | `/sitemap` | Human-readable sitemap |
 | `/topics` · `/topics/{slug}` | **Canonical taxonomy browser and topic hub** |
 | `/people/{slug}` | **Canonical contributor profile** |
-| `/collections` · `/collections/{slug}` | Editorial collections. Delivered in Phase 15: `/collections` lists published Collections newest first (`?offset=` is a page of it, canonical to it); a Collection page lists its currently public members in their one order, each linking to its OWNER's canonical address — there is no second member address under `/collections`. There is no `/collections/latest`, `/popular` or `/featured`. A former Collection slug answers one 301; the `collections` sitemap segment lists published Collections at their current slug in the languages they genuinely have |
+| `/collections` · `/collections/{slug}` | Editorial collections. Delivered in Phase 15: `/collections` lists published Collections newest first (*historical:* `?offset=` was a page of it; since News & Events Part 2 it takes `?topic, holds, language, sort, page` and a former `?offset=` is one redirect — §3.9); a Collection page lists its currently public members in their one order, each linking to its OWNER's canonical address — there is no second member address under `/collections`. There is no `/collections/latest`, `/popular` or `/featured`. A former Collection slug answers one 301; the `collections` sitemap segment lists published Collections at their current slug in the languages they genuinely have |
 | `/membership` · `/contact` · `/help` · `/help/{article}` · `/feedback` | Utility destinations |
 
 `/topics/{slug}` is among the most important routes on the platform — the realisation of the
@@ -1128,8 +1128,8 @@ approved activation. A named category, topic view or ruling still answers 404 wh
 | `/news/{press-releases\|statements\|media-coverage}` · `/{slug}` | Editorial types — delivered in Phase 13, each family with its own slug history. The three segments and `archive` are reserved: no NewsArticle slug can hold them. Since News & Events Part 1 each listing takes the same parameters as `/news`, and `/news/media-coverage` also `?outlet` |
 | `/news/archive` | `?year` — every published News record by the UTC year and month of its chronology, an index into the family listings since News & Events Part 1. *Historical (Phase 13 – R2):* `?year, month` (and R2's `?type`, `?lang`) listed the records themselves; each is now one redirect (below) |
 | `/newsletter` · `/newsletter/confirm` · `/newsletter/unsubscribe` | Subscription — delivered in Phase 21 (DOMAIN_MODEL.md §14.6). `/newsletter` submits an address and always answers the same, whatever its state; nothing is sent until the address confirms. `confirm` and `unsubscribe` are the emailed links (class D, SECURITY_BASELINE.md §7.4): the GET renders only whether the link is still usable and a button, and the POST consumes it — confirmation once, unsubscribe idempotently and without an account. Both are `noindex`, carry no canonical or alternate with the token, and are never sitemap entries |
-| `/events` · `/events/{slug}` · `/events/{slug}/gallery` | Events — `?upcoming, past, country, city, centre`. Delivered in Phase 14: `/events` lists upcoming Events by default and `?when=past` the held ones; `?country=`, `?city=` and `?centre=` narrow to Events held at Centres physically there. Every query is canonical to `/events` and never a sitemap entry; there is no `/events/upcoming` or `/events/past`. `/events/{slug}/gallery` is a `noindex` navigational view over the Event's listed Galleries — each keeps its one canonical `/media/galleries/{slug}` — and exists only for an Event that associates a Gallery. A former Event slug, with or without `/gallery`, answers one 301 |
-| `/media/photos` · `/media/galleries` · `/{slug}` · `/media/archive` · `/media/downloads` | Media — Phase 12 delivers photos, galleries, each Gallery at `/media/galleries/{slug}`, and the archive (`?year, month`). A Photo has no page of its own. `/media/downloads` has **no route** until a rights decision authorises downloads |
+| `/events` · `/events/{slug}` · `/events/{slug}/gallery` · `/events/{slug}/calendar` | Events — `?when, topic, year, month, country, city, centre, page` (News & Events Part 2; Phase 14: `?upcoming, past, country, city, centre`, with `?offset=`). Delivered in Phase 14: `/events` lists upcoming Events by default and `?when=past` the held ones; `?country=`, `?city=` and `?centre=` narrow to Events held at Centres physically there. Every query is canonical to `/events` and never a sitemap entry; there is no `/events/upcoming` or `/events/past`. `/events/{slug}/gallery` is a `noindex` navigational view over the Event's listed Galleries — each keeps its one canonical `/media/galleries/{slug}` — and exists only for an Event that associates a Gallery. A former Event slug, with or without `/gallery`, answers one 301. Since News & Events Part 2, `/events/{slug}/calendar` is the published Event as an iCalendar file (a GET read: `text/calendar` attachment, `noindex`, `no-store`, no session; a former slug with the suffix answers the same one 301) |
+| `/media/photos` · `/media/galleries` · `/{slug}` · `/media/archive` · `/media/downloads` | Media — Phase 12 delivers photos, galleries, each Gallery at `/media/galleries/{slug}`, and the archive (*historical:* `?year, month`, a listing of its own; since News & Events Part 2 `/media/photos` takes `?year, month, gallery, language, sort, page`, `/media/galleries` `?sort, page`, a Gallery `?page`, and the archive only `?year` — an index into the photos listing; §3.9 below). A Photo has no page of its own. `/media/downloads` has **no route** until a rights decision authorises downloads |
 | `/global` · `/global/find-a-centre` | World network and centre finder — Phase 16. The finder's `?country, region, city` are queries canonical to it |
 | `/global/countries` · `/{slug}` · `/{slug}/regions/{regionSlug}` · `/{slug}/cities/{citySlug}` | Geography — intermediate levels may be absent (DOMAIN_MODEL.md §17.1). Delivered in Phase 16; a Region or City address is scoped by its Country, and a former slug at either level answers one 301 |
 | `/global/centres` · `/{slug}` · `/{slug}/{news\|events\|contact}` | Centres — `news` and the display-only `contact` delivered in Phase 16; `events` (Local Events, `?when=past` canonical to it) delivered in Phase 14 |
@@ -1147,6 +1147,43 @@ only `?year` (every year, or one year's months); a former `?type=` is one redire
 family's listing for the same `?year`, `?month` and `?lang` (as `?language`), and any other
 former archive parameter one redirect to the archive's year. Every view stays canonical to its base
 listing and outside the sitemap. No route is added or removed.
+
+**News & Events Part 2 (2026-11-18).** The rest of the section, by the same rules — every view one
+address, neutral values omitted, canonical to its base listing and never a sitemap entry:
+
+- **`/events`** takes `?when=past` (upcoming is the default), `?topic`, `?year` and `?month` (of an
+  occurrence's stated local start, a month only with its year), `?country`, `?city` (only with its
+  Country), `?centre` and `?page` (20 a page). A form's empty controls, another order, a malformed
+  Topic, year, month or page (dropped) and Phase 14's `?offset=` (the page holding the Event it
+  began with) are each **one redirect**. A view or place that cannot mean anything — an unknown
+  `when`, a malformed place slug, a City without its Country, a repeated value — is still
+  **refused where it was asked**, as Phase 14 refused it (the page says so and lists nothing; never
+  redirected into a broader view). The upcoming and past tabs keep the Topic and place and leave a
+  period behind.
+- **`/events/{slug}/calendar`** (new) is a published Event as an iCalendar file — one VEVENT per
+  occurrence in UTC instants, its title and summary in the page's language, its public Centre as
+  the location, its address — `text/calendar; charset=utf-8` as an attachment, `noindex`,
+  `no-store`, set no cookie, read no session; an unknown, unpublished or unsupported-locale request
+  is the same empty `404`; a former slug with the suffix answers one 301 (the proxy's Event rule).
+  It is a GET read of a published record, like the page — no mutation class applies.
+- **`/media/photos`** takes `?year`, `?month`, `?gallery`, `?language`, `?sort=newest|oldest` (by
+  date taken; recently added is the default) and `?page` (24 a page); a former `?offset=` is one
+  redirect to the page holding that photograph. **`/media/galleries`** takes `?sort=oldest|title`
+  and `?page`; a Gallery `?page`. **`/media/archive`** takes only `?year` — every year, or one
+  year's months — and is an **index** whose counts lead into `/media/photos`; a former
+  `?year&month` or `?year&offset` is one redirect to `/media/photos?year=…&month=…&sort=newest`
+  (with the page), any other former spelling one redirect to the archive's year. `/media/downloads`
+  still has no route.
+- **`/collections`** takes `?topic`, `?holds=article|news|work|video`, `?language`,
+  `?sort=oldest` and `?page` (20 a page); Phase 15's `?offset=`, empty controls, another order and
+  malformed or repeated values are each one redirect. On `/collections/{slug}`, `?order=curated` or
+  an unknown order is one redirect to the bare address (`?order=newest|oldest` stay).
+- **`/newsletter`**, `confirm` and `unsubscribe` are unchanged in protocol (above): the page is
+  redesigned around the same Server Actions, and a submission still answers the same whatever the
+  address's state.
+
+*Superseded in part:* the 2026-11-08 direction below that `/collections` names the kinds a
+Collection may hold "under the lede" — since Part 2 those kinds are its counted tabs.
 
 **Rebaseline R2.** *Historical in part, superseded by News & Events Part 1 above:* `/news` and each
 family listing (`/news/press-releases`, `/statements`, `/media-coverage`) took **`?lang=en|ur|ar`**

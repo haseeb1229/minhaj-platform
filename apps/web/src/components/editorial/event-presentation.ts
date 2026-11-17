@@ -3,106 +3,26 @@ import 'server-only';
 
 import type { Locale } from '@minhaj/contracts';
 import {
-  EVENT_MAX_OFFSET,
   eventPathOf,
   zonedIso,
   type EventOccurrence,
   type EventWhen,
   type PublicEvent,
 } from '@minhaj/contracts/editorial';
-import {
-  globalSlugSchema,
-  labelFor,
-  type PublicCentreSummary,
-} from '@minhaj/contracts/global';
+import { labelFor, type PublicCentreSummary } from '@minhaj/contracts/global';
 
 import { translationFor } from '@/components/editorial/presentation';
 import { absoluteUrl } from '@/config/origin';
 import { contentMetadata } from '@/seo/metadata';
 
 /**
- * The PURE presentation rules of the Event pages (Phase 14): how `/events` is
- * queried, how an occurrence is written, what an Event page claims to search
- * engines. No read runtime and no rendering here, so each rule is proved on its
- * own (`tests/editorial/event-presentation.test.ts`).
+ * The PURE presentation rules of the Event pages (Phase 14): how an occurrence
+ * is written, which one a card leads with and under which month it is listed,
+ * and what an Event page claims to search engines. `/events`' address rules
+ * are `./event-view` (News & Events Part 2). No read runtime and no rendering
+ * here, so each rule is proved on its own
+ * (`tests/editorial/event-presentation.test.ts`).
  */
-
-type Query = Record<string, string | string[] | undefined>;
-
-/* ===========================================================================
- * /events?when=&country=&city=&centre=&offset=
- * ========================================================================= */
-
-/**
- * The listing's query AS GIVEN, with `invalid` set when any part cannot mean
- * anything: an unknown `when`, a malformed slug, a City without its Country, a
- * repeated parameter. An invalid query is REFUSED, never broadened — the page
- * says so and lists nothing rather than quietly showing every Event.
- */
-export interface EventQuery {
-  readonly when: EventWhen;
-  readonly country: string | null;
-  readonly city: string | null;
-  readonly centre: string | null;
-  readonly offset: number;
-  readonly invalid: boolean;
-}
-
-export function readEventQuery(query: Query): EventQuery {
-  let invalid = false;
-  const single = (key: string): string | null => {
-    const raw = query[key];
-    if (raw === undefined || raw === '') return null;
-    if (typeof raw !== 'string') {
-      invalid = true;
-      return null;
-    }
-    return raw;
-  };
-  const slug = (key: string): string | null => {
-    const raw = single(key);
-    if (raw === null) return null;
-    if (!globalSlugSchema.safeParse(raw).success) {
-      invalid = true;
-      return null;
-    }
-    return raw;
-  };
-  const whenRaw = single('when');
-  if (whenRaw !== null && whenRaw !== 'upcoming' && whenRaw !== 'past') invalid = true;
-  const when: EventWhen = whenRaw === 'past' ? 'past' : 'upcoming';
-  const country = slug('country');
-  const city = slug('city');
-  const centre = slug('centre');
-  if (city !== null && country === null) invalid = true;
-  const offsetRaw = single('offset');
-  let offset = 0;
-  if (offsetRaw !== null) {
-    if (/^\d{1,8}$/.test(offsetRaw) && Number(offsetRaw) <= EVENT_MAX_OFFSET)
-      offset = Number(offsetRaw);
-    else invalid = true;
-  }
-  return { when, country, city, centre, offset, invalid };
-}
-
-/**
- * The listing's address for a filter and an offset, neutral values omitted —
- * so the default view is the bare `/events` every filter canonicalises to.
- */
-export function eventsPath(
-  locale: string,
-  filter: Pick<EventQuery, 'when' | 'country' | 'city' | 'centre'>,
-  offset = 0,
-): string {
-  const search = new URLSearchParams();
-  if (filter.when === 'past') search.set('when', 'past');
-  if (filter.country !== null) search.set('country', filter.country);
-  if (filter.country !== null && filter.city !== null) search.set('city', filter.city);
-  if (filter.centre !== null) search.set('centre', filter.centre);
-  if (offset > 0) search.set('offset', String(offset));
-  const encoded = search.toString();
-  return localizedPath(locale, `/events${encoded === '' ? '' : `?${encoded}`}`);
-}
 
 /* ===========================================================================
  * Occurrences, as a reader sees them
@@ -163,12 +83,44 @@ export function leadingOccurrence(
   occurrences: readonly EventOccurrence[],
   when: EventWhen,
   now: Date,
+  period: EventPeriod | null = null,
 ): EventOccurrence | undefined {
-  if (when === 'past') return occurrences[occurrences.length - 1];
+  // Within a chosen year or month, the card leads with an occurrence there —
+  // the one the reader asked about — whenever the view has one.
+  const inPeriod =
+    period === null
+      ? occurrences
+      : occurrences.filter((o) => inEventPeriod(o.startsLocal, period));
+  const pool = inPeriod.length === 0 ? occurrences : inPeriod;
+  if (when === 'past') return pool[pool.length - 1];
   return (
-    occurrences.find((o) => (o.endsAt ?? o.startsAt).getTime() >= now.getTime()) ??
-    occurrences[occurrences.length - 1]
+    pool.find((o) => (o.endsAt ?? o.startsAt).getTime() >= now.getTime()) ??
+    pool[pool.length - 1]
   );
+}
+
+/** A chosen year, and month within it, of the intended local start. */
+export interface EventPeriod {
+  readonly year: number;
+  readonly month: number | null;
+}
+
+/** Whether a stated local start (`YYYY-MM-DDTHH:mm`) falls in a period. */
+export function inEventPeriod(local: string, period: EventPeriod): boolean {
+  const { year, month } = monthOfLocal(local);
+  return year === period.year && (period.month === null || month === period.month);
+}
+
+/**
+ * The calendar month a stated local start falls in — the month the listing
+ * groups an Event under, read from the wall clock the editor stated in the
+ * Event's own zone and never shifted by a reader's.
+ */
+export function monthOfLocal(local: string): {
+  readonly year: number;
+  readonly month: number;
+} {
+  return { year: Number(local.slice(0, 4)), month: Number(local.slice(5, 7)) };
 }
 
 /* ===========================================================================
@@ -247,4 +199,27 @@ export function eventStructuredData(
   return events.length === 1
     ? { '@context': 'https://schema.org', ...events[0] }
     : { '@context': 'https://schema.org', '@graph': events };
+}
+
+/**
+ * Where an Event is held, as one line for a calendar file (News & Events Part
+ * 2): the public Centre's name, then — for a physical Centre — its address,
+ * City and Country, in the language the Event's words are shown in, exactly as
+ * the structured data names the place. Nothing without a public Centre.
+ */
+export function calendarLocation(
+  record: PublicEvent,
+  locale: Locale,
+  centre: PublicCentreSummary | null,
+): string | null {
+  if (centre === null) return null;
+  const language = translationFor(record, locale).languageCode;
+  const words = labelFor(centre, language);
+  if (words === null) return null;
+  if (centre.isVirtual) return words.name;
+  const city = centre.city === null ? null : labelFor(centre.city, language);
+  const country = labelFor(centre.country, language);
+  return [words.name, words.address ?? null, city?.name ?? null, country?.name ?? null]
+    .filter((part): part is string => part !== null && part !== '')
+    .join(', ');
 }

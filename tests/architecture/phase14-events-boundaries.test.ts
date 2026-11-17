@@ -440,6 +440,8 @@ describe('Events are not searchable in Phase 14', () => {
 describe('the public Event read path holds no session', () => {
   const ENTRIES = [
     `${APP_SRC}/components/editorial/events.tsx`,
+    // News & Events Part 2: the calendar file reads the same public roots.
+    `${APP_SRC}/app/[locale]/(public)/events/[slug]/calendar/route.ts`,
     `${APP_SRC}/composition/editorial-read.ts`,
     `${APP_SRC}/composition/global-read.ts`,
     `${APP_SRC}/composition/media-read.ts`,

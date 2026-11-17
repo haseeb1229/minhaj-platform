@@ -1,16 +1,14 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
-import {
-  COLLECTION_MAX_OFFSET,
-  type PublicCollection,
-} from '../../packages/contracts/src/editorial/index.ts';
+import type { PublicCollection } from '../../packages/contracts/src/editorial/index.ts';
 
 /**
- * Phase 15 — the Collection pages' pure presentation rules: how `/collections`
- * is paged (an invalid offset is the first page, never a wider read), which of
+ * Phase 15 — the Collection pages' pure presentation rules: which of
  * a member's titles a reader is shown (only a title its owner gave), and what a
  * Collection page claims to search engines (only the languages it genuinely
- * has, and nothing at all on the pre-adoption origin).
+ * has, and nothing at all on the pre-adoption origin). How `/collections` and
+ * a Collection's order are addressed moved to `./collections-view.test.ts`
+ * (News & Events Part 2); the former `?offset=` proof is there, as a redirect.
  *
  * THE INDEXING POSTURE IS SET PER TEST, as the Event and News presentation
  * proofs do, so canonical and alternate URLs are checked for what they say and
@@ -59,34 +57,6 @@ function record(): PublicCollection {
     updatedAt: new Date('2026-10-02T00:00:00Z'),
   };
 }
-
-describe('the /collections offset', () => {
-  it('reads a plain whole number within the listing', async () => {
-    const { readCollectionOffset, collectionsPath } = await withIndexing(false);
-    expect(readCollectionOffset({ offset: '40' })).toBe(40);
-    expect(readCollectionOffset({ offset: String(COLLECTION_MAX_OFFSET) })).toBe(
-      COLLECTION_MAX_OFFSET,
-    );
-    expect(collectionsPath('ur', 40)).toBe('/ur/collections?offset=40');
-    expect(collectionsPath('en')).toBe('/collections');
-  });
-
-  it('answers anything else with the first page, never a wider read', async () => {
-    const { readCollectionOffset } = await withIndexing(false);
-    for (const offset of [
-      undefined,
-      '',
-      '-20',
-      '2.5',
-      '1e3',
-      ' 20',
-      String(COLLECTION_MAX_OFFSET + 1),
-      '123456789',
-      ['20', '40'],
-    ])
-      expect(readCollectionOffset({ offset }), String(offset)).toBe(0);
-  });
-});
 
 describe('the title a member is shown with', () => {
   const target = {
@@ -169,19 +139,6 @@ describe('the order a Collection is read in (R2)', () => {
     at('2019-03-01T00:00:00Z', 'c'),
     at('2011-01-01T00:00:00Z', 'd'),
   ];
-
-  it('is the curated order unless a date order is asked for exactly', async () => {
-    const { readCollectionOrder, collectionOrderPath } = await withIndexing(false);
-    expect(readCollectionOrder({})).toBe('curated');
-    expect(readCollectionOrder({ order: 'newest' })).toBe('newest');
-    expect(readCollectionOrder({ order: 'oldest' })).toBe('oldest');
-    for (const order of ['Newest', 'random', '', ['newest', 'oldest']])
-      expect(readCollectionOrder({ order }), String(order)).toBe('curated');
-    expect(collectionOrderPath('en', 'mawlid', 'curated')).toBe('/collections/mawlid');
-    expect(collectionOrderPath('ur', 'mawlid', 'oldest')).toBe(
-      '/ur/collections/mawlid?order=oldest',
-    );
-  });
 
   it('keeps the curated order as given', async () => {
     const { orderMembers } = await withIndexing(false);

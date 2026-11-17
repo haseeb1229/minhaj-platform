@@ -538,7 +538,7 @@ live('Phase 12 photographs against real SQL Server, Storage and ClamAV', () => {
       expect([...(await storage.servable([String(published.assetId)]))]).toEqual([]);
       expect((await service.photo(curator, published.id))?.state).toBe('published');
       expect(
-        (await reads.photos(0)).items.some((photo) => photo.id === published.id),
+        (await reads.photoListing()).items.some((photo) => photo.id === published.id),
       ).toBe(true);
     });
   });
@@ -603,7 +603,7 @@ live('Phase 12 photographs against real SQL Server, Storage and ClamAV', () => {
         (await reads.galleryPhotos(gallery.id)).items.map((photo) => photo.id),
       ).toEqual([first.id, second.id]);
       expect(
-        (await reads.galleries(0)).items.some((item) => item.id === gallery.id),
+        (await reads.galleryDirectory()).items.some((item) => item.id === gallery.id),
       ).toBe(true);
 
       // Reordering moves the cover with it; there is no second cover to drift.
@@ -629,7 +629,7 @@ live('Phase 12 photographs against real SQL Server, Storage and ClamAV', () => {
         photoId: first.id,
       });
       expect(
-        (await reads.galleries(0)).items.some((item) => item.id === gallery.id),
+        (await reads.galleryDirectory()).items.some((item) => item.id === gallery.id),
       ).toBe(false);
       expect(await reads.gallery(gallery.slug)).toMatchObject({
         photoCount: 0,
@@ -748,21 +748,26 @@ live('Phase 12 photographs against real SQL Server, Storage and ClamAV', () => {
       );
       const undated = await publish(await photoWithImage(PNG));
 
-      const inYear = (await reads.archivePhotos({ year })).items.map((photo) => photo.id);
+      const inYear = (await reads.photoListing({ year, sort: 'newest' })).items.map(
+        (photo) => photo.id,
+      );
       expect(inYear).toContain(known.id);
       expect(inYear).toContain(yearOnly.id);
       expect(inYear.indexOf(known.id)).toBeLessThan(inYear.indexOf(yearOnly.id));
       expect(inYear).not.toContain(undated.id);
       expect(
-        (await reads.archivePhotos({ year, month: 7 })).items.map((p) => p.id),
+        (await reads.photoListing({ year, month: 7 })).items.map((p) => p.id),
       ).toEqual(expect.arrayContaining([known.id]));
       expect(
-        (await reads.archivePhotos({ year, month: 7 })).items.map((p) => p.id),
+        (await reads.photoListing({ year, month: 7 })).items.map((p) => p.id),
       ).not.toContain(yearOnly.id);
-      expect(
-        (await reads.archiveYears()).find((entry) => entry.year === year)?.photos,
-      ).toBe(2);
-      expect(await reads.archiveMonths(year)).toEqual([{ month: 7, photos: 1 }]);
+      const periods = (await reads.photoArchivePeriods()).filter(
+        (entry) => entry.year === year,
+      );
+      expect(periods.reduce((sum, entry) => sum + entry.photos, 0)).toBe(2);
+      expect(periods.filter((entry) => entry.month !== null)).toEqual([
+        { year, month: 7, photos: 1 },
+      ]);
     });
   });
 

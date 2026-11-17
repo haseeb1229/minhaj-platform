@@ -5,4 +5,6 @@ export * from './news-listing.ts';
 export * from './ports.ts';
 export * from './routes.ts';
 export * from './event.ts';
+export * from './event-listing.ts';
 export * from './collection.ts';
+export * from './collection-listing.ts';

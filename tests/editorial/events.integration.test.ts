@@ -423,7 +423,7 @@ live('Phase 14 Events against real SQL Server', () => {
   it('starts with no published Event', async () => {
     expect(await reads.hasPublishedEvents()).toBe(false);
     expect(
-      (await reads.events({ when: 'upcoming', offset: 0, centreIds: null })).items,
+      (await reads.eventListing({ when: 'upcoming', offset: 0, centreIds: null })).items,
     ).toEqual([]);
   });
 
@@ -1100,15 +1100,21 @@ live('Phase 14 Events against real SQL Server', () => {
       );
       const pastOrder = [recent, old].map((row) => row.slug);
 
-      const upcoming = await reads.events({
+      const upcoming = await reads.eventListing({
         when: 'upcoming',
         offset: 0,
         centreIds: [here.id],
       });
       expect(upcoming.items.map((item) => item.slug)).toEqual(upcomingOrder);
-      expect(upcoming.more).toBe(false);
-      const past = await reads.events({ when: 'past', offset: 0, centreIds: [here.id] });
+      expect(upcoming.hasMore).toBe(false);
+      expect(upcoming.total).toBe(upcomingOrder.length);
+      const past = await reads.eventListing({
+        when: 'past',
+        offset: 0,
+        centreIds: [here.id],
+      });
       expect(past.items.map((item) => item.slug)).toEqual(pastOrder);
+      expect(past.total).toBe(pastOrder.length);
 
       // The SQL classification agrees with `eventTiming` on every card.
       const timing = (item: EventSummary) =>
@@ -1140,14 +1146,15 @@ live('Phase 14 Events against real SQL Server', () => {
       // The Centre filter narrows, unions, and an empty list matches nothing.
       expect(
         (
-          await reads.events({ when: 'upcoming', offset: 0, centreIds: [there.id] })
+          await reads.eventListing({ when: 'upcoming', offset: 0, centreIds: [there.id] })
         ).items.map((item) => item.slug),
       ).toEqual([away.slug]);
-      const both = await reads.events({
+      const both = await reads.eventListing({
         when: 'upcoming',
         offset: 0,
         centreIds: [here.id, there.id],
       });
+      expect(both.total).toBe(upcomingOrder.length + 1);
       expect(both.items.map((item) => item.slug)).toEqual([
         boundary.slug,
         ongoing.slug,
@@ -1157,21 +1164,29 @@ live('Phase 14 Events against real SQL Server', () => {
         ...ties.map((row) => row.slug),
         later.slug,
       ]);
-      expect(await reads.events({ when: 'upcoming', offset: 0, centreIds: [] })).toEqual({
-        items: [],
-        more: false,
-      });
       expect(
-        (await reads.events({ when: 'upcoming', offset: 0, centreIds: [randomUUID()] }))
-          .items,
+        await reads.eventListing({ when: 'upcoming', offset: 0, centreIds: [] }),
+      ).toEqual({ items: [], total: 0, hasMore: false });
+      expect(
+        (
+          await reads.eventListing({
+            when: 'upcoming',
+            offset: 0,
+            centreIds: [randomUUID()],
+          })
+        ).items,
       ).toEqual([]);
 
       // Unfiltered, every one of them is somewhere in the upcoming view.
       const everything: string[] = [];
       for (let offset = 0; ; offset += 20) {
-        const page = await reads.events({ when: 'upcoming', offset, centreIds: null });
+        const page = await reads.eventListing({
+          when: 'upcoming',
+          offset,
+          centreIds: null,
+        });
         everything.push(...page.items.map((item) => item.slug));
-        if (!page.more) break;
+        if (!page.hasMore) break;
       }
       for (const slug of [...upcomingOrder, away.slug])
         expect(everything).toContain(slug);
@@ -1184,19 +1199,167 @@ live('Phase 14 Events against real SQL Server', () => {
       const before = readNow;
       try {
         readNow = new Date(readNow.getTime() + 1000 * 3_600_000);
-        const after = await reads.events({
+        const after = await reads.eventListing({
           when: 'past',
           offset: 0,
           centreIds: [here.id],
         });
         expect(after.items.map((item) => item.slug)).toContain(soon.slug);
         expect(
-          (await reads.events({ when: 'upcoming', offset: 0, centreIds: [here.id] }))
-            .items,
+          (
+            await reads.eventListing({
+              when: 'upcoming',
+              offset: 0,
+              centreIds: [here.id],
+            })
+          ).items,
         ).toEqual([]);
       } finally {
         readNow = before;
       }
+    });
+
+    it('narrows by Topic, year and month of the view, totals it, and counts each facet under every other filter (News & Events Part 2)', async () => {
+      const here = await centre();
+      const there = await centre();
+      const [topicA, topicB] = topics as [string, string];
+      // Karachi is UTC+5 all year: a month is the LOCAL start's, never UTC's.
+      const tagged = (
+        centreId: string,
+        topicIds: readonly string[],
+        ...occurrences: Occurrence[]
+      ) =>
+        content({
+          centreId,
+          topicIds,
+          schedule: { timezone: 'Asia/Karachi', occurrences },
+        });
+      const at = (start: string): Occurrence => ({ start, end: null });
+      // The read clock is 2040-06-15T12:00Z.
+      const july = await published(tagged(here.id, [topicA], at('2040-07-10T10:00')));
+      // 02:00 on 1 August in Karachi is still 31 July in UTC: listed in August.
+      const august = await published(tagged(here.id, [topicB], at('2040-08-01T02:00')));
+      // One date held in May and one ahead in September: upcoming, and found
+      // only under September — never under a month it has left behind.
+      const both = await published(
+        tagged(there.id, [topicA], at('2040-05-01T10:00'), at('2040-09-05T10:00')),
+      );
+      const march = await published(tagged(here.id, [topicA], at('2040-03-03T10:00')));
+      const older = await published(tagged(there.id, [], at('2039-12-12T10:00')));
+      const place = [here.id, there.id];
+      const slugs = (page: { readonly items: readonly EventSummary[] }) =>
+        page.items.map((item) => item.slug);
+      const listing = (query: Record<string, unknown>) =>
+        reads.eventListing({ centreIds: place, ...query });
+      const facets = (query: Record<string, unknown>) =>
+        reads.eventListingFacets({ centreIds: place, ...query });
+
+      const upcoming = await listing({ when: 'upcoming' });
+      expect(slugs(upcoming)).toEqual([july.slug, august.slug, both.slug]);
+      expect(upcoming).toMatchObject({ total: 3, hasMore: false });
+      const past = await listing({ when: 'past' });
+      expect(slugs(past)).toEqual([march.slug, older.slug]);
+      expect(past.total).toBe(2);
+
+      expect(slugs(await listing({ when: 'upcoming', topic: topicA }))).toEqual([
+        july.slug,
+        both.slug,
+      ]);
+      expect(slugs(await listing({ when: 'upcoming', year: 2040, month: 7 }))).toEqual([
+        july.slug,
+      ]);
+      expect(slugs(await listing({ when: 'upcoming', year: 2040, month: 8 }))).toEqual([
+        august.slug,
+      ]);
+      expect(slugs(await listing({ when: 'upcoming', year: 2040, month: 9 }))).toEqual([
+        both.slug,
+      ]);
+      expect(await listing({ when: 'upcoming', year: 2040, month: 5 })).toEqual({
+        items: [],
+        total: 0,
+        hasMore: false,
+      });
+      expect((await listing({ when: 'past', year: 2040, month: 5 })).total).toBe(0);
+      expect(slugs(await listing({ when: 'past', year: 2039 }))).toEqual([older.slug]);
+      expect(
+        slugs(await listing({ when: 'upcoming', topic: topicB, year: 2040, month: 7 })),
+      ).toEqual([]);
+
+      // Bounded pages that tile the view, each with the view's total, and an
+      // honest empty page past the end.
+      const first = await listing({ when: 'upcoming', limit: 2 });
+      expect(slugs(first)).toEqual([july.slug, august.slug]);
+      expect(first).toMatchObject({ total: 3, hasMore: true });
+      const second = await listing({ when: 'upcoming', limit: 2, offset: 2 });
+      expect(slugs(second)).toEqual([both.slug]);
+      expect(second).toMatchObject({ total: 3, hasMore: false });
+      expect(await listing({ when: 'upcoming', offset: 40 })).toEqual({
+        items: [],
+        total: 3,
+        hasMore: false,
+      });
+
+      // Every facet under every OTHER filter.
+      const all = await facets({ when: 'upcoming' });
+      expect(all.when).toEqual({ upcoming: 3, past: 2 });
+      expect(all.topics).toEqual({
+        items: [
+          { id: topicA, events: 2 },
+          { id: topicB, events: 1 },
+        ],
+        hasMore: false,
+      });
+      expect(all.years).toEqual([{ year: 2040, events: 3 }]);
+      expect(all.months).toEqual([]);
+      const byYear = await facets({ when: 'upcoming', year: 2040 });
+      expect(byYear.months).toEqual([
+        { month: 7, events: 1 },
+        { month: 8, events: 1 },
+        { month: 9, events: 1 },
+      ]);
+      const inJuly = await facets({ when: 'upcoming', year: 2040, month: 7 });
+      // The tabs keep the Topic and the place, never the period.
+      expect(inJuly.when).toEqual({ upcoming: 3, past: 2 });
+      expect(inJuly.topics.items).toEqual([{ id: topicA, events: 1 }]);
+      // The months stay counted under the year, whichever month is chosen.
+      expect(inJuly.months).toEqual(byYear.months);
+      const onA = await facets({ when: 'upcoming', topic: topicA });
+      expect(onA.when).toEqual({ upcoming: 2, past: 1 });
+      expect(onA.years).toEqual([{ year: 2040, events: 2 }]);
+      // The topic facet still offers B under A's other filters.
+      expect(onA.topics.items.map((entry) => entry.id)).toEqual([topicA, topicB]);
+      const held = await facets({ when: 'past' });
+      expect(held.years).toEqual([
+        { year: 2039, events: 1 },
+        { year: 2040, events: 1 },
+      ]);
+      // The Centre facet counts the view WITHOUT the place it is how the page
+      // counts places by: these two Centres among every Centre holding one.
+      const centreCount = (id: string) =>
+        all.centres.items.find((entry) => entry.id.toLowerCase() === id.toLowerCase())
+          ?.events;
+      expect(centreCount(here.id)).toBe(2);
+      expect(centreCount(there.id)).toBe(1);
+      expect(
+        (await facets({ when: 'past' })).centres.items.find(
+          (entry) => entry.id.toLowerCase() === here.id.toLowerCase(),
+        )?.events,
+      ).toBe(1);
+      // A card is a summary carrying its Galleries by identifier only.
+      expect(upcoming.items.every((item) => Array.isArray(item.galleryIds))).toBe(true);
+      expect(JSON.stringify(upcoming)).not.toContain(BODY_SENTINEL);
+
+      // Withdrawn, it leaves every view and every count.
+      await transition(july, 'archive', publisher);
+      expect(slugs(await listing({ when: 'upcoming' }))).toEqual([
+        august.slug,
+        both.slug,
+      ]);
+      expect((await facets({ when: 'upcoming' })).when.upcoming).toBe(2);
+
+      // The Topics are shared with the topic preview proof below: leave none.
+      for (const row of [august, both, march, older])
+        await transition(row, 'archive', publisher);
     });
 
     it('previews a topic’s upcoming Events, or its past ones when none is ahead', async () => {
@@ -1300,9 +1463,11 @@ live('Phase 14 Events against real SQL Server', () => {
 
     it('validates a public query again whatever the page tolerated', async () => {
       const when = 'whenever' as EventWhen;
-      await expect(reads.events({ when, offset: 0, centreIds: null })).rejects.toThrow();
       await expect(
-        reads.events({ when: 'past', offset: 25_001, centreIds: null }),
+        reads.eventListing({ when, offset: 0, centreIds: null }),
+      ).rejects.toThrow();
+      await expect(
+        reads.eventListing({ when: 'past', offset: 25_001, centreIds: null }),
       ).rejects.toThrow();
       expect(await reads.event('')).toBeNull();
     });

@@ -182,9 +182,16 @@ describe('the render and routing tree stays statically renderable', () => {
     // Phase 14: the Event pages and their pure presentation rules.
     'apps/web/src/components/editorial/events.tsx',
     'apps/web/src/components/editorial/event-presentation.ts',
+    // News & Events Part 2: `/events`' pure address rules, an Event as a
+    // calendar file, and the island adding the reader's own time.
+    'apps/web/src/components/editorial/event-view.ts',
+    'apps/web/src/components/editorial/event-calendar.ts',
+    'apps/web/src/components/editorial/event-reader-time.tsx',
     // Phase 15: the public Collection pages and their pure presentation rules.
     'apps/web/src/components/editorial/collections.tsx',
     'apps/web/src/components/editorial/collection-presentation.ts',
+    // News & Events Part 2: the Collection pages' pure address rules.
+    'apps/web/src/components/editorial/collections-view.ts',
     // Phase 15: the editor's ordered Collection member list island.
     'apps/web/src/components/editorial/collection-members-island.tsx',
     // The page frames News, Events and Collections share.
@@ -470,6 +477,10 @@ describe('the render and routing tree stays statically renderable', () => {
     // Phase 12. The photograph surfaces and their viewer island.
     'apps/web/src/components/media/photo-viewer.tsx',
     'apps/web/src/components/media/photos.tsx',
+    // News & Events Part 2: the photo archive's index and the photograph
+    // surfaces' pure address rules.
+    'apps/web/src/components/media/photo-archive.tsx',
+    'apps/web/src/components/media/photos-view.ts',
     'apps/web/src/components/media/player.tsx',
     'apps/web/src/components/media/presentation.ts',
     'apps/web/src/components/media/watch.tsx',
@@ -523,6 +534,9 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/ui/confirm-action.tsx',
     'apps/web/src/components/ui/image-derivatives.ts',
     'apps/web/src/components/ui/step-up-event.ts',
+    // News & Events Part 2: the reader's zone, shared by Learn's live schedule
+    // and the Event times.
+    'apps/web/src/components/ui/reader-zone.ts',
     'apps/web/src/components/editorial/revision-diff.ts',
     'apps/web/src/components/editorial/revision-diff-view.tsx',
     // R2: the home page's modules, the Library landing and its cards, the

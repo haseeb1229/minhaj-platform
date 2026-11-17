@@ -10,7 +10,6 @@ import {
   formatOfView,
   mediaLabel,
   playlistPathOf,
-  readOffset,
   readWatchSort,
   seriesPathOf,
   videoPathOf,
@@ -59,7 +58,7 @@ describe('addresses', () => {
 });
 
 describe('query state', () => {
-  it('reads the landing sort and a bounded offset', () => {
+  it('reads the landing sort', () => {
     expect(readWatchSort({})).toBe('featured');
     expect(readWatchSort({ sort: 'latest' })).toBe('latest');
     expect(readWatchSort({ sort: 'popular' })).toBe('featured');
@@ -67,8 +66,6 @@ describe('query state', () => {
     expect(watchLanding('featured', 0)).toEqual({ sort: 'latest', tabs: false });
     expect(watchLanding('featured', 3)).toEqual({ sort: 'featured', tabs: true });
     expect(watchLanding('latest', 0)).toEqual({ sort: 'latest', tabs: true });
-    expect(readOffset({ offset: '48' })).toBe(48);
-    expect(readOffset({ offset: '999999999' })).toBe(0);
   });
 
   it('resolves a label in the reader’s locale, then the primary one', () => {

@@ -2,6 +2,8 @@
 
 import { useSyncExternalStore, type ReactNode } from 'react';
 
+import { dayIn, noSubscription, readerZone } from '@/components/ui/reader-zone';
+
 /**
  * THE PUBLIC SCHEDULE, DAY BY DAY, IN THE READER'S OWN TIME ZONE (Learn Part 2).
  *
@@ -53,31 +55,12 @@ interface ReaderClock {
   readonly tomorrow: string;
 }
 
-/** `YYYY-MM-DD` of an instant in a zone, or `null` when the zone cannot be formatted. */
-function dayIn(instant: number, zone: string): string | null {
-  try {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: zone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).formatToParts(instant);
-    const part = (type: string) => parts.find((entry) => entry.type === type)?.value;
-    const [year, month, day] = [part('year'), part('month'), part('day')];
-    return year === undefined || month === undefined || day === undefined
-      ? null
-      : `${year}-${month}-${day}`;
-  } catch {
-    return null;
-  }
-}
-
 /* The browser's clock, as an external store: read once per snapshot, cached so
    React sees the same value until the reader's day changes. */
 let cached: { readonly key: string; readonly value: ReaderClock } | null = null;
 
 function readerClock(): ReaderClock | null {
-  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const zone = readerZone();
   const now = Date.now();
   const today = dayIn(now, zone);
   const tomorrow = dayIn(now + 86_400_000, zone);
@@ -87,7 +70,6 @@ function readerClock(): ReaderClock | null {
   return cached.value;
 }
 
-const noSubscription = () => () => undefined;
 const onServer = () => null;
 
 /** A `YYYY-MM-DD` day as words in the page's locale, the same on server and browser. */

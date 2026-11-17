@@ -3406,11 +3406,11 @@
       "archive": "Photo archive"
     },
     "sectionBody": {
-      "photos": "Every published photograph, most recently added first.",
-      "galleries": "Photographs gathered into galleries, in the order they were arranged.",
-      "archive": "Photographs by the year they were taken, where that is known."
+      "photos": "Every published photograph — by when it was added, or by the date it was taken where that is known.",
+      "galleries": "Photographs gathered by occasion, each in the order it was arranged.",
+      "archive": "Every dated photograph, by the year and month it was taken."
     },
-    "sectionsLabel": "Photographs",
+    "sectionsLabel": "Photograph sections",
     "previous": "Previous page",
     "next": "Next page",
     "credit": "Credit: {name}",
@@ -3425,11 +3425,9 @@
       "position": "Photograph {position} of {total}"
     },
     "photosEmpty": "No photographs have been published here yet.",
-    "pageEmpty": "There is nothing on this page.",
     "galleriesEmpty": "No photo galleries have been published here yet.",
     "coverUnavailable": "Cover image not available right now",
     "count": "{count, plural, one {# photograph} other {# photographs}}",
-    "countShort": "{count, number}",
     "galleryPhotos": "Photographs",
     "galleryEmpty": "None of this gallery’s photographs is available yet.",
     "archiveAll": "Every dated photograph",
@@ -3439,7 +3437,73 @@
     "archiveMonths": "Months",
     "archiveEveryYear": "Every year",
     "archiveEmpty": "The archive has no dated photographs yet.",
-    "archiveFilteredEmpty": "No published photograph is dated to this period."
+    "rights": "These photographs are shown here to be viewed; no download is offered. A photograph’s credit is shown wherever one is recorded, and no date is ever given that is not known.",
+    "galleryEyebrow": "Photo gallery",
+    "galleryIntro": "In the order the gallery was arranged. Open any photograph to see it larger.",
+    "stats": {
+      "photos": "{count, plural, one {photograph} other {photographs}}",
+      "dated": "{count, plural, one {dated photograph} other {dated photographs}}",
+      "span": "{count, plural, one {year taken} other {years taken}}",
+      "galleries": "{count, plural, one {gallery} other {galleries}}",
+      "inGalleries": "{count, plural, one {photograph in galleries} other {photographs in galleries}}",
+      "languages": "{count, plural, one {language described in} other {languages described in}}"
+    },
+    "listing": {
+      "heading": "All photographs",
+      "intro": "Narrow by the year and month taken, a gallery or the language a photograph is described in. Each choice says how many photographs it would show.",
+      "filters": "Filter the photographs",
+      "apply": "Show photographs",
+      "filterYear": "Year taken",
+      "anyYear": "Any year",
+      "filterMonth": "Month taken",
+      "anyMonth": "Any month",
+      "filterGallery": "Gallery",
+      "anyGallery": "Any gallery",
+      "filterLanguage": "Described in",
+      "anyLanguage": "Any language",
+      "unknownGallery": "A gallery",
+      "sort": {
+        "added": "Recently added",
+        "newest": "Date taken, latest first",
+        "oldest": "Date taken, earliest first"
+      },
+      "summary": "Showing {from}–{to} of {total, plural, one {# photograph} other {# photographs}}",
+      "noResultsTitle": "No photograph matches these filters",
+      "noResults": "No published photograph matches every filter chosen. Remove one, or clear them all.",
+      "pastEnd": "There is no page {page, number} of these photographs.",
+      "pages": "Pages of photographs",
+      "openGallery": "Open this gallery in its own order",
+      "emptyTitle": "No photographs yet",
+      "backToNews": "Go to News and Events"
+    },
+    "galleriesPage": {
+      "heading": "Every gallery",
+      "intro": "Each gallery shows its cover, how many photographs it holds and, where they are dated, when they were taken.",
+      "order": "Order the galleries",
+      "apply": "Show galleries",
+      "sort": {
+        "newest": "Recently added",
+        "oldest": "Earliest added",
+        "title": "Title, A–Z"
+      },
+      "summary": "Showing {from}–{to} of {total, plural, one {# gallery} other {# galleries}}",
+      "pastEnd": "There is no page {page, number} of galleries.",
+      "pages": "Pages of galleries",
+      "emptyTitle": "No galleries yet"
+    },
+    "archivePage": {
+      "emptyTitle": "No dated photographs yet",
+      "intro": "Each count leads to the photographs of that year, by the date taken.",
+      "months": "{count, plural, =0 {known only to the year} one {# month} other {# months}}",
+      "yearTotal": "{count, plural, one {# photograph} other {# photographs}} taken in {year}",
+      "yearOnly": "{count, plural, one {# of them is} other {# of them are}} known only to the year, not the month.",
+      "seeYear": "See every photograph from {year}",
+      "monthsHeading": "{year}, month by month",
+      "month": "{month}: {count, plural, one {# photograph} other {# photographs}}",
+      "yearEmptyTitle": "No photographs from this year",
+      "yearEmpty": "No published photograph is known to have been taken in {year}.",
+      "yearNav": "Other years"
+    }
   },
   "news": {
     "title": "News and Events",
@@ -3633,8 +3697,6 @@
     },
     "topics": "Topics",
     "empty": "No collections have been published yet.",
-    "pageEmpty": "There are no more collections on this page.",
-    "firstPage": "Back to the first page",
     "previous": "Previous page",
     "next": "Next page",
     "fallback": "This collection is shown in {language}; it has not been translated into this language.",
@@ -3660,16 +3722,58 @@
       "newest": "Newest first",
       "oldest": "Oldest first"
     },
-    "undated": "Undated"
+    "undated": "Undated",
+    "listing": {
+      "eyebrow": "Curated archives",
+      "stats": {
+        "collections": "{count, plural, one {collection} other {collections}}",
+        "entries": "{count, plural, one {entry curated} other {entries curated}}",
+        "languages": "{count, plural, one {language} other {languages}}"
+      },
+      "emptyTitle": "No collections yet",
+      "heading": "Every collection",
+      "intro": "The most recently published first. Each collection leads to the records it gathers, at their own pages.",
+      "introOldest": "The earliest published first. Each collection leads to the records it gathers, at their own pages.",
+      "holdsLabel": "What collections hold",
+      "anyKind": "Everything",
+      "filters": "Filter collections",
+      "apply": "Show collections",
+      "filterTopic": "Topic",
+      "anyTopic": "Any topic",
+      "unknownTopic": "A topic",
+      "oldest": "Oldest first",
+      "topicHub": "Everything on {topic}",
+      "summary": "Showing {from}–{to} of {total, number}",
+      "pastEnd": "There is no page {page, number} in this listing.",
+      "noResultsTitle": "No collection matches these filters",
+      "noResults": "No published collection matches every filter in use. Remove one, or clear them all.",
+      "pages": "Pages of collections",
+      "about": "A collection never owns what it gathers: each record keeps its own page, and a record its owner withdraws simply leaves the collection. Only published collections are counted.",
+      "topics": "Browse every topic"
+    },
+    "holdsCount": {
+      "article": "{count, plural, one {# article} other {# articles}}",
+      "news": "{count, plural, one {# news record} other {# news records}}",
+      "work": "{count, plural, one {# book} other {# books}}",
+      "video": "{count, plural, one {# video} other {# videos}}"
+    },
+    "detail": {
+      "more": "More collections",
+      "moreOnTopic": "Others on {topic}, the most recently published first.",
+      "allOnTopic": "All collections on this topic ({count, number})"
+    }
   },
   "events": {
     "title": "Events",
     "description": "Gatherings, conferences, lectures and programmes, with when and where each is held.",
+    "findCentre": "Find a centre",
+    "galleries": "Photo galleries",
     "type": "Event",
     "now": "Happening now",
     "moreDates": "{count, plural, one {and # more date} other {and # more dates}}",
     "virtual": "Online centre",
     "topics": "Topics",
+    "cardPhotographs": "Photographs",
     "centresUnavailable": "Where these events are held cannot be shown right now. The events themselves are unaffected.",
     "whenLabel": "Upcoming or past events",
     "when": {
@@ -3677,7 +3781,7 @@
       "past": "Past events"
     },
     "filters": {
-      "label": "Filter events by place",
+      "label": "Filter events",
       "country": "Country",
       "unavailable": "Places cannot be listed right now.",
       "anyCountry": "Any country",
@@ -3686,16 +3790,28 @@
       "cityHelp": "Events held at a centre in this city.",
       "anyCity": "Any city",
       "submit": "Show events",
-      "reset": "Clear place",
-      "atCentre": "Held at",
-      "clearCentre": "Show events at every centre",
       "invalid": "This filter does not name a place or centre in the directory, so no events are listed. Clear it to see every event.",
       "tooBroad": "This place has more centres than one listing can cover. Choose a city to narrow it.",
       "geographyUnavailable": "Places cannot be checked right now, so the filtered events cannot be listed. Try again shortly."
     },
+    "heldAt": "Held at {centre}",
+    "listing": {
+      "stats": {
+        "upcoming": "{count, plural, one {upcoming event} other {upcoming events}}",
+        "past": "{count, plural, one {event held} other {events held}}",
+        "countries": "{count, plural, one {country} other {countries}}"
+      },
+      "emptyTitle": "No events yet",
+      "intro": "Narrow by topic, year, month or place. Each choice says how many events it would show.",
+      "summary": "Showing {from}–{to} of {total, number}",
+      "pastEnd": "There is no page {page, number} of this listing.",
+      "noResults": "No published event matches every filter chosen. Remove one, or clear them all.",
+      "monthCount": "{count, plural, one {# event} other {# events}}",
+      "pages": "Pages of events",
+      "about": "Every date and time is the one the event is held at, in its own time zone; with script on, your own time is shown beside it. Where an event is held is its centre in the Global Network.",
+      "centres": "Browse the centres"
+    },
     "empty": "No events have been published yet.",
-    "pageEmpty": "There are no more events on this page.",
-    "firstPage": "Back to the first page",
     "noMatch": {
       "upcoming": "No upcoming events are held in this place.",
       "past": "No past events were held in this place."
@@ -3718,6 +3834,8 @@
     "whenHeading": "When",
     "held": "held",
     "localTimeNote": "Times are local to where the event is held.",
+    "readerTime": "Your time: {time}",
+    "addToCalendar": "Add to your calendar (.ics)",
     "whereHeading": "Where",
     "centreWithdrawn": "The centre for this event is not listed in the directory at the moment.",
     "centre": "Centre",
@@ -3730,6 +3848,12 @@
     "facts": "About this event",
     "contributors": "Contributors",
     "all": "All events",
+    "detail": {
+      "moreOnTopic": "More events on {topic}",
+      "allOnTopic": "Every event on {topic}",
+      "moreUpcoming": "More upcoming events",
+      "moreEvents": "More events"
+    },
     "galleryTitle": "Event photographs",
     "galleryIntro": "Photo galleries of this event. Each opens on its own gallery page.",
     "backToEvent": "Back to the event"
@@ -6358,25 +6482,32 @@
       "sent": "If this address can receive the newsletter, we've sent a confirmation link to it. Open that email and use the link to confirm. If nothing arrives, check your spam folder or try again later.",
       "invalid": "Enter a valid email address.",
       "rateLimited": "Too many attempts. Wait a while and try again.",
-      "unavailable": "That didn't work. Try again later."
+      "unavailable": "That didn't work. Try again later.",
+      "sentHeading": "Check your inbox",
+      "again": "Use another address"
     },
     "confirm": {
       "title": "Confirm your subscription",
       "description": "Press the button to confirm that you want to receive the newsletter at this address.",
       "submit": "Confirm subscription",
       "pending": "Confirming…",
-      "done": "Your subscription is confirmed. You can unsubscribe at any time from any newsletter email."
+      "done": "Your subscription is confirmed. You can unsubscribe at any time from any newsletter email.",
+      "doneHeading": "Subscription confirmed",
+      "next": "Read the latest news"
     },
     "unsubscribe": {
       "title": "Unsubscribe from the newsletter",
       "description": "Press the button to stop the newsletter at this address. Your account, if you have one, and any account email are not affected.",
       "submit": "Unsubscribe",
       "pending": "Unsubscribing…",
-      "done": "You're unsubscribed. No more newsletter email will be sent to this address."
+      "done": "You're unsubscribed. No more newsletter email will be sent to this address.",
+      "doneHeading": "You're unsubscribed"
     },
     "link": {
       "invalid": "This link is no longer valid. It may have expired or already been used.",
-      "back": "Go to the newsletter page"
+      "back": "Go to the newsletter page",
+      "confirmHelp": "A confirmation link works once, for {hours} hours. To get a new one, enter your address again on the newsletter page.",
+      "unsubscribeHelp": "Unsubscribe links are replaced whenever an address asks for the newsletter again. Use the link in the most recent newsletter email you received."
     },
     "admin": {
       "title": "Newsletter subscribers",
@@ -6443,6 +6574,41 @@
       "reload": "Try again",
       "pending": "Working…",
       "loading": "Loading newsletter subscribers…"
+    },
+    "page": {
+      "eyebrow": "Stay in touch",
+      "covers": "What it covers",
+      "cover": {
+        "news": {
+          "title": "News and statements",
+          "body": "The organisation's news, press releases and statements, as they are published here."
+        },
+        "events": {
+          "title": "Events",
+          "body": "Conferences, gatherings and programmes, with their dates and places."
+        },
+        "material": {
+          "title": "New material",
+          "body": "Books, articles, videos and other material as it arrives on the platform."
+        }
+      },
+      "notYet": "No newsletter issue has been sent yet. Until one is, the only email this form sends you is the confirmation link.",
+      "steps": "How subscribing works",
+      "step": {
+        "enter": {
+          "title": "Enter your email address",
+          "body": "Use the form on this page. No account is needed."
+        },
+        "confirm": {
+          "title": "Confirm from your inbox",
+          "body": "We email you a link. Your subscription starts only when you use it, within {hours} hours."
+        },
+        "leave": {
+          "title": "Leave whenever you like",
+          "body": "Every newsletter email carries an unsubscribe link that works without signing in."
+        }
+      },
+      "privacy": "How we handle personal data: the privacy notice"
     }
   },
   "personal": {

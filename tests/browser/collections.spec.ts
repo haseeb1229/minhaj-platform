@@ -662,10 +662,26 @@ test.describe('an anonymous visitor finds Collections', () => {
     await expect(page.locator('main img')).toHaveCount(0);
     await expect(list.getByText(MEMBER.work.title)).toHaveCount(0);
     // Each card says what it is; the listing names the kinds a Collection
-    // gathers.
+    // gathers. News & Events Part 2 (a design change): they are now its
+    // counted kind tabs — this Collection holds all four, so each counts it.
     await expect(list.getByText('Collection', { exact: true }).first()).toBeVisible();
-    await expect(page.getByRole('main')).toContainText('Articles');
-    await expect(page.getByRole('main')).toContainText('Videos');
+    const kinds = page.getByRole('navigation', { name: 'What collections hold' });
+    await expect(kinds.getByRole('link')).toHaveCount(5);
+    for (const [name, holds] of [
+      ['Articles', 'article'],
+      ['News', 'news'],
+      ['Books', 'work'],
+      ['Videos', 'video'],
+    ] as const) {
+      const tab = kinds.locator(`a[href="/collections?holds=${holds}"]`);
+      await expect(tab, name).toHaveText(new RegExp(`^${name}\\s*[1-9]\\d*$`, 'u'));
+      await expect(tab, name).not.toHaveAttribute('aria-current', 'page');
+    }
+    await expect(
+      kinds.getByRole('link', { name: /^Everything\s*\d+$/u }),
+    ).toHaveAttribute('aria-current', 'page');
+    // The figures and the range name what is published.
+    await expect(page.getByRole('main')).toContainText(/Showing 1–\d+ of \d+/u);
 
     const anonymous = await page.getByRole('main').innerText();
     const signedIn = await author.goto('/collections');
@@ -680,6 +696,65 @@ test.describe('an anonymous visitor finds Collections', () => {
     ).toBeVisible();
   });
 
+  test('narrows by what a Collection holds, keeps one address per view, and says when nothing matches (Part 2)', async ({
+    page,
+    request,
+  }) => {
+    // A kind tab narrows, is marked current, and is undone by its chip.
+    const response = await page.goto('/collections?holds=video');
+    expect(response?.status()).toBe(200);
+    const kinds = page.getByRole('navigation', { name: 'What collections hold' });
+    await expect(kinds.locator('a[href="/collections?holds=video"]')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    const list = page.getByRole('list', { name: 'Collections', exact: true });
+    await expect(list.getByRole('link', { name: TITLE.en })).toBeVisible();
+    const chips = page.getByRole('list', { name: 'Filters in use' });
+    await expect(
+      chips.getByRole('link', { name: 'Remove filter: Videos' }),
+    ).toHaveAttribute('href', '/collections');
+    // The filter form keeps the kind and offers the order; nothing needs script.
+    const form = page.getByRole('form', { name: 'Filter collections' });
+    await expect(form.locator('input[type="hidden"][name="holds"]')).toHaveValue('video');
+    await expect(form.getByLabel('Order', { exact: true })).toBeVisible();
+
+    // Every former or untidy spelling is ONE redirect to the view's address.
+    for (const [from, to] of [
+      ['/collections?offset=20', '/collections?page=2'],
+      ['/collections?offset=0', '/collections'],
+      ['/collections?topic=&language=&sort=newest', '/collections'],
+      ['/collections?sort=oldest&holds=video', '/collections?holds=video&sort=oldest'],
+      ['/ur/collections?holds=podcast', '/ur/collections'],
+      [`/collections/${slug.main}?order=curated`, `/collections/${slug.main}`],
+      [`/collections/${slug.main}?order=sideways`, `/collections/${slug.main}`],
+    ] as const) {
+      const answer = await request.get(from, { maxRedirects: 0 });
+      expect([307, 308], from).toContain(answer.status());
+      const target = new URL(answer.headers()['location'] ?? '', baseUrl());
+      expect(`${target.pathname}${target.search}`, from).toBe(to);
+      expect((await request.get(to, { maxRedirects: 0 })).status(), to).toBe(200);
+    }
+
+    // A Topic no Collection is filed under: nothing matches, said in words,
+    // with the way back; and a page past the end leads to the first.
+    await page.goto(`/collections?topic=${randomUUID()}`);
+    await expect(
+      page.getByRole('main').getByText('No collection matches these filters'),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('list', { name: 'Collections', exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('main').getByRole('link', { name: 'Clear filters' }).first(),
+    ).toHaveAttribute('href', '/collections');
+    await page.goto('/collections?page=999');
+    await expect(page.getByRole('main').getByText('This page is empty')).toBeVisible();
+    await expect(
+      page.getByRole('main').getByRole('link', { name: 'Go to the first page' }),
+    ).toHaveAttribute('href', '/collections');
+  });
+
   test('shows the members in the saved order, typed and linked to their owners', async ({
     page,
   }) => {
@@ -692,9 +767,16 @@ test.describe('an anonymous visitor finds Collections', () => {
     );
     await expectPublicOrder(page, FINAL_ORDER);
     await expect(page.locator('iframe, embed, object')).toHaveCount(0);
+    // Part 2: what it holds, by kind, beside its count — and Share.
+    for (const words of ['4 items', '1 article', '1 news record', '1 book', '1 video'])
+      await expect(page.locator('main header').first(), words).toContainText(words);
+    await expect(
+      page.getByRole('main').getByRole('button', { name: 'Share' }),
+    ).toBeVisible();
 
     // R2 (audit F51): a date order reads the same members, grouped by year;
-    // an order that is not one is the curated order.
+    // an order that is not one is the curated order — since Part 2 by one
+    // redirect to the bare address (proved above), followed here.
     expect((await page.goto(`/collections/${slug.main}?order=oldest`))?.status()).toBe(
       200,
     );
@@ -728,10 +810,17 @@ test.describe('an anonymous visitor finds Collections', () => {
     for (const path of ['/sitemap.xml', '/sitemaps/collections-en.xml'])
       expect((await page.request.get(path)).status(), path).toBe(404);
 
-    // The same knowledge signed in, and no cookie was ever set.
+    // The same knowledge signed in, and no cookie was ever set — compared once
+    // both pages' Share islands have hydrated.
+    await expect(
+      page.getByRole('main').getByRole('button', { name: 'Share' }),
+    ).toBeVisible();
     const text = await page.getByRole('main').innerText();
     const signedIn = await author.goto(`/collections/${slug.main}`);
     expect(signedIn?.headers()['set-cookie']).toBeUndefined();
+    await expect(
+      author.getByRole('main').getByRole('button', { name: 'Share' }),
+    ).toBeVisible();
     expect(await author.getByRole('main').innerText()).toBe(text);
     expect(await page.context().cookies()).toHaveLength(0);
 

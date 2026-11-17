@@ -6,12 +6,16 @@ import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
 import {
-  COLLECTION_PAGE,
+  COLLECTION_HOLDS,
+  COLLECTION_LISTING_PAGE,
   collectionMemberPathOf,
+  holdsOf,
   collectionPathOf,
   isEditorialMemberKind,
   leadImagePath,
   memberToken,
+  type CollectionHolds,
+  type CollectionListingFacets,
   type CollectionMemberKind,
   type CollectionMemberTarget,
   type CollectionSummary,
@@ -27,39 +31,56 @@ import {
   type ContentLanguage,
 } from '@/composition/public-references';
 import {
-  collectionOrderPath,
-  collectionsPath,
   memberTitle,
   memberYear,
   orderMembers,
-  readCollectionOffset,
+} from '@/components/editorial/collection-presentation';
+import {
+  collectionOrderPath,
+  collectionsFiltered,
+  collectionsHref,
+  collectionsListingHref,
+  collectionsReadQuery,
   readCollectionOrder,
   type CollectionOrder,
-} from '@/components/editorial/collection-presentation';
+  type CollectionsView,
+} from '@/components/editorial/collections-view';
 import { translationFor } from '@/components/editorial/presentation';
 import { RecordSection } from '@/components/editorial/frame';
 import { leadCardImage } from '@/components/editorial/lead-image';
+import { ClosingNote, RangeSummary } from '@/components/library/browse-parts';
 import { BreadcrumbData } from '@/components/media/parts';
+import { ShareVideo } from '@/components/media/share';
+import { caseless, pageCount, pageRange } from '@/components/topic-hub/address';
+import {
+  ActiveFilters,
+  CountedSelect,
+  ExploreFilters,
+  ExploreHero,
+} from '@/components/topic-hub/parts';
 import {
   Alert,
   Breadcrumbs,
   Container,
   DetailRow,
   EmptyState,
+  Field,
   FilterLink,
   Icon,
   LanguageBadge,
+  LinkTabs,
   ListRow,
   MediaCard,
   MetaRow,
-  PageHeading,
   Pager,
   ResponsiveImage,
   SectionHeader,
+  Select,
   TextLink,
   TopicChips,
 } from '@/components/ui';
 import { directionOf, isSupportedLocale } from '@/config/locale';
+import { absoluteUrl } from '@/config/origin';
 
 /**
  * The public Collection surfaces — `/collections`, a Collection and the topic
@@ -244,70 +265,303 @@ async function CollectionGrid({
  * /collections
  * ========================================================================= */
 
+/** The listing's figures: how many Collections, the entries they curate, languages. */
+function heroStats(
+  locale: Locale,
+  all: CollectionListingFacets['all'],
+  listId: string,
+  t: CollectionsTranslator,
+) {
+  const number = (value: number) => new Intl.NumberFormat(locale).format(value);
+  return [
+    ...(all.collections === 0
+      ? []
+      : [
+          {
+            value: number(all.collections),
+            label: t('listing.stats.collections', { count: all.collections }),
+            href: `#${listId}`,
+          },
+        ]),
+    ...(all.entries === 0
+      ? []
+      : [
+          {
+            value: number(all.entries),
+            label: t('listing.stats.entries', { count: all.entries }),
+          },
+        ]),
+    ...(all.languages < 2
+      ? []
+      : [
+          {
+            value: number(all.languages),
+            label: t('listing.stats.languages', { count: all.languages }),
+          },
+        ]),
+  ];
+}
+
 /**
- * `/collections` — every published Collection, newest publication first, twenty
- * to a page with `?offset=`. The order is Editorial's, with a deterministic
- * tie-breaker, so a page is the same page on every request. Every offset is
- * canonical to `/collections`.
+ * `/collections` — NEWS & EVENTS PART 2, the shared listing pattern over
+ * Editorial's Collections: the figures, what a Collection holds as counted
+ * tabs (each keeping the view's Topic, language and order), a GET form of
+ * counted filters (Topic and content language, each counted under every other
+ * filter), two orders, chips that each remove one filter, a range, numbered
+ * pages and one address per view (`./collections-view`). The cards are R2's.
+ *
+ * HONEST STATES: nothing published says so; a view no Collection matches
+ * offers to clear its filters; a page past the end leads to the first.
  */
 export async function CollectionsPage({
   locale,
-  query,
+  view,
 }: {
   readonly locale: Locale;
-  readonly query: Query;
+  readonly view: CollectionsView;
 }) {
-  const t = await getTranslations({ locale, namespace: 'collections' });
-  const trail = await collectionsTrail(locale);
-  const offset = readCollectionOffset(query);
-  const page = await editorialReadRuntime().collections(offset);
+  const [t, hub, news, trail] = await Promise.all([
+    getTranslations({ locale, namespace: 'collections' }),
+    getTranslations({ locale, namespace: 'topicHub' }),
+    getTranslations({ locale, namespace: 'news' }),
+    collectionsTrail(locale),
+  ]);
+  const reads = editorialReadRuntime();
+  const read = collectionsReadQuery(view);
+  const [page, facets] = await Promise.all([
+    reads.collectionListing(read),
+    reads.collectionListingFacets(read),
+  ]);
+  let topicNames: ReadonlyMap<string, { slug: string; name: string }> = new Map();
+  try {
+    topicNames = caseless(
+      (
+        await referenceNames(
+          {
+            personIds: [],
+            topicIds: [
+              ...facets.topics.items.map((facet) => facet.id),
+              ...(view.topic === null ? [] : [view.topic]),
+            ],
+          },
+          locale,
+        )
+      ).topics,
+    );
+  } catch {
+    // A Topic's name is Taxonomy's: without it the filter offers no Topic.
+  }
+
   const title = t('title');
+  const listId = 'collections-list';
+  const number = (value: number) => new Intl.NumberFormat(locale).format(value);
+  const href = (change: Partial<CollectionsView>) =>
+    collectionsHref(locale, view, change);
+  const filtered = collectionsFiltered(view);
+  // Clearing the filters keeps the order: it is not a narrowing.
+  const base = collectionsListingHref(locale, { sort: view.sort });
+  const pages = pageCount(page.total, COLLECTION_LISTING_PAGE);
+  const range = pageRange(view.page, page.items.length, COLLECTION_LISTING_PAGE);
+  const option = (name: string, count: number) => hub('common.option', { name, count });
+  const held = new Map(facets.holds.map((entry) => [entry.holds, entry.collections]));
+
+  const topicOptions = facets.topics.items.flatMap((facet) => {
+    const topic = topicNames.get(facet.id.toLowerCase());
+    return topic === undefined
+      ? []
+      : [{ value: facet.id.toLowerCase(), name: topic.name, count: facet.collections }];
+  });
+  const chosenTopic =
+    view.topic === null ? null : (topicNames.get(view.topic.toLowerCase()) ?? null);
+
+  const chip = (key: string, text: string, removeHref: string) => ({
+    key,
+    text,
+    removeHref,
+    removeLabel: hub('common.remove', { name: text }),
+  });
+  const active = [
+    ...(view.topic === null
+      ? []
+      : [
+          chip(
+            'topic',
+            chosenTopic?.name ?? t('listing.unknownTopic'),
+            href({ topic: null }),
+          ),
+        ]),
+    ...(view.holds === null
+      ? []
+      : [chip('holds', t(`kindsPlural.${view.holds}`), href({ holds: null }))]),
+    ...(view.language === null
+      ? []
+      : [chip('language', news(`languages.${view.language}`), href({ language: null }))]),
+  ];
 
   return (
     <Container>
-      <div className="flex flex-col gap-8 pt-6 pb-[var(--space-section)]">
+      <div className="flex min-w-0 flex-col gap-8 pt-6 pb-[var(--space-section)]">
         <Breadcrumbs label={trail.label} trail={[trail.home, { text: title }]} />
-        <div className="flex max-w-3xl flex-col gap-3">
-          <PageHeading>{title}</PageHeading>
-          <p className="text-lede max-w-[var(--measure-prose)] text-foreground-muted">
-            {t('description')}
-          </p>
-          <MetaRow items={KIND_ORDER.map((kind) => t(`kindsPlural.${kind}`))} />
-        </div>
-        {page.items.length === 0 ? (
-          offset > 0 ? (
-            <EmptyState action={{ href: collectionsPath(locale), text: t('firstPage') }}>
-              {t('pageEmpty')}
-            </EmptyState>
-          ) : (
-            <EmptyState icon="grid">{t('empty')}</EmptyState>
-          )
+        <ExploreHero
+          eyebrow={t('listing.eyebrow')}
+          title={title}
+          lede={t('description')}
+          stats={heroStats(locale, facets.all, listId, t)}
+          actions={[]}
+        />
+
+        {facets.all.collections === 0 ? (
+          <EmptyState icon="grid" title={t('listing.emptyTitle')}>
+            {t('empty')}
+          </EmptyState>
         ) : (
-          <CollectionGrid
-            locale={locale}
-            items={page.items}
-            label={title}
-            headingLevel="h2"
-          />
+          <section aria-labelledby={listId} className="flex min-w-0 flex-col gap-5">
+            <SectionHeader
+              id={listId}
+              heading={t('listing.heading')}
+              intro={t(view.sort === 'oldest' ? 'listing.introOldest' : 'listing.intro')}
+            />
+
+            <LinkTabs
+              label={t('listing.holdsLabel')}
+              tabs={[
+                {
+                  href: href({ holds: null }),
+                  text: t('listing.anyKind'),
+                  current: view.holds === null,
+                  count: number(facets.anyKind),
+                },
+                ...COLLECTION_HOLDS.map((kind) => ({
+                  href: href({ holds: kind }),
+                  text: t(`kindsPlural.${kind}`),
+                  current: view.holds === kind,
+                  count: number(held.get(kind) ?? 0),
+                })),
+              ]}
+            />
+
+            <ExploreFilters
+              action={localizedPath(locale, '/collections')}
+              label={t('listing.filters')}
+              hidden={view.holds === null ? [] : [{ name: 'holds', value: view.holds }]}
+              submit={t('listing.apply')}
+              reset={filtered ? { href: base, text: hub('common.reset') } : null}
+            >
+              {topicOptions.length > 0 || view.topic !== null ? (
+                <CountedSelect
+                  id={`${listId}-topic`}
+                  label={t('listing.filterTopic')}
+                  name="topic"
+                  value={view.topic ?? ''}
+                  any={t('listing.anyTopic')}
+                  options={topicOptions}
+                  optionText={option}
+                />
+              ) : null}
+              {facets.languages.length > 1 || view.language !== null ? (
+                <CountedSelect
+                  id={`${listId}-language`}
+                  label={hub('common.filterLanguage')}
+                  name="language"
+                  value={view.language ?? ''}
+                  any={hub('common.anyLanguage')}
+                  options={facets.languages.map((entry) => ({
+                    value: entry.code,
+                    name: news(`languages.${entry.code}`),
+                    count: entry.collections,
+                  }))}
+                  optionText={option}
+                />
+              ) : null}
+              <Field id={`${listId}-sort`} label={hub('common.filterSort')}>
+                {(props) => (
+                  <Select {...props} name="sort" defaultValue={view.sort}>
+                    <option value="newest">{hub('common.sort.newest')}</option>
+                    <option value="oldest">{t('listing.oldest')}</option>
+                  </Select>
+                )}
+              </Field>
+            </ExploreFilters>
+
+            <ActiveFilters label={hub('common.active')} filters={active} />
+
+            {chosenTopic === null ? null : (
+              <p className="text-sm">
+                <a
+                  href={localizedPath(
+                    locale,
+                    `/topics/${encodeURIComponent(chosenTopic.slug)}`,
+                  )}
+                  className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-action underline-offset-4 hover:underline"
+                >
+                  {t('listing.topicHub', { topic: chosenTopic.name })}
+                  <Icon name="arrow-end" size={16} />
+                </a>
+              </p>
+            )}
+
+            {range === null ? null : (
+              <RangeSummary>
+                {t('listing.summary', {
+                  from: number(range.from),
+                  to: number(range.to),
+                  total: page.total,
+                })}
+              </RangeSummary>
+            )}
+
+            {page.items.length === 0 ? (
+              view.page > 1 && page.total > 0 ? (
+                <EmptyState
+                  title={hub('common.pastEndTitle')}
+                  action={{ href: href({ page: 1 }), text: hub('common.firstPage') }}
+                >
+                  {t('listing.pastEnd', { page: view.page })}
+                </EmptyState>
+              ) : (
+                <EmptyState
+                  title={t('listing.noResultsTitle')}
+                  action={{ href: base, text: hub('common.reset') }}
+                >
+                  {t('listing.noResults')}
+                </EmptyState>
+              )
+            ) : (
+              <CollectionGrid
+                locale={locale}
+                items={page.items}
+                label={title}
+                headingLevel="h3"
+              />
+            )}
+
+            {page.items.length === 0 ? null : (
+              <Pager
+                label={t('listing.pages')}
+                previous={view.page > 1 ? href({ page: view.page - 1 }) : null}
+                next={page.hasMore ? href({ page: view.page + 1 }) : null}
+                previousLabel={t('previous')}
+                nextLabel={t('next')}
+                pages={{
+                  current: view.page,
+                  total: pages,
+                  href: (target) => href({ page: target }),
+                  label: (target) => hub('common.pageLabel', { page: target }),
+                  format: number,
+                }}
+              />
+            )}
+          </section>
         )}
-        <Pager
-          label={title}
-          previous={
-            offset > 0
-              ? collectionsPath(locale, Math.max(0, offset - COLLECTION_PAGE))
-              : null
-          }
-          next={page.more ? collectionsPath(locale, offset + COLLECTION_PAGE) : null}
-          previousLabel={t('previous')}
-          nextLabel={t('next')}
+
+        <ClosingNote
+          text={t('listing.about')}
+          links={[{ href: localizedPath(locale, '/topics'), text: t('listing.topics') }]}
         />
       </div>
     </Container>
   );
 }
-
-/** The kinds of record a Collection can gather, in the order the listing names them. */
-const KIND_ORDER = ['article', 'news', 'work', 'video'] as const;
 
 /* ===========================================================================
  * /collections/{slug}
@@ -450,6 +704,58 @@ function MemberRow({
   );
 }
 
+/**
+ * What a Collection's AVAILABLE members are, by the kinds a reader asks for —
+ * only when they are of two kinds or more (one kind is already the count).
+ */
+function holdsBreakdown(members: readonly Member[]) {
+  const counts = new Map<CollectionHolds, number>();
+  for (const member of members) {
+    const kind = holdsOf(member.kind);
+    counts.set(kind, (counts.get(kind) ?? 0) + 1);
+  }
+  return counts.size < 2
+    ? []
+    : COLLECTION_HOLDS.flatMap((holds) => {
+        const count = counts.get(holds) ?? 0;
+        return count === 0 ? [] : [{ holds, count }];
+      });
+}
+
+/** How many other Collections a page offers after its members. */
+const MORE_COLLECTIONS = 3;
+
+/**
+ * More Collections after this one: others on its first Topic, newest first,
+ * with the way to all of them (the listing on that Topic, counted); a Collection
+ * with no Topic — or none other on it — offers the newest others. Never
+ * itself, never a failure: a failed read offers nothing.
+ */
+async function moreCollections(record: PublicCollection): Promise<{
+  readonly items: readonly CollectionSummary[];
+  readonly topic: string | null;
+  readonly total: number;
+}> {
+  const reads = editorialReadRuntime();
+  const others = (items: readonly CollectionSummary[]) =>
+    items.filter((item) => item.slug !== record.slug).slice(0, MORE_COLLECTIONS);
+  try {
+    const [topic] = record.topicIds;
+    if (topic !== undefined) {
+      const onTopic = await reads.collectionListing({
+        topic,
+        limit: MORE_COLLECTIONS + 1,
+      });
+      const items = others(onTopic.items);
+      if (items.length > 0) return { items, topic, total: onTopic.total };
+    }
+    const newest = await reads.collectionListing({ limit: MORE_COLLECTIONS + 1 });
+    return { items: others(newest.items), topic: null, total: 0 };
+  } catch {
+    return { items: [], topic: null, total: 0 };
+  }
+}
+
 /** The members grouped by the UTC year of their date, for a date order. */
 function byYear(members: readonly Member[]) {
   const groups: { year: number | null; members: Member[] }[] = [];
@@ -480,11 +786,12 @@ export async function CollectionDetailPage({
   const t = await getTranslations({ locale, namespace: 'collections' });
   const news = await getTranslations({ locale, namespace: 'news' });
   const editorial = await getTranslations({ locale, namespace: 'editorial' });
+  const watch = await getTranslations({ locale, namespace: 'watch' });
   const trail = await collectionsTrail(locale);
   const translation = translationFor(record, locale);
   const direction = directionOf(translation.languageCode);
   const order = readCollectionOrder(query);
-  const [names, languages, resolved] = await Promise.all([
+  const [names, languages, resolved, more] = await Promise.all([
     referenceNames(
       {
         personIds: record.contributors.map((c) => c.personId),
@@ -497,6 +804,7 @@ export async function CollectionDetailPage({
       : contentLanguages(),
     // Every member, once, batched by owner — public records only.
     resolveCollectionMembers(record.members),
+    moreCollections(record),
   ]);
   // The curated order, kept; a member its owner does not publish now — or
   // whose owner could not be asked — is left out, title and address alike.
@@ -574,9 +882,27 @@ export async function CollectionDetailPage({
               </span>
             </p>
           )}
-          {available.length === 0 ? null : (
-            <MetaRow items={[t('itemCount', { count: available.length })]} />
-          )}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            {available.length === 0 ? null : (
+              <MetaRow
+                items={[
+                  t('itemCount', { count: available.length }),
+                  ...holdsBreakdown(available).map(({ holds, count }) =>
+                    t(`holdsCount.${holds}`, { count }),
+                  ),
+                ]}
+              />
+            )}
+            <ShareVideo
+              url={absoluteUrl(collectionOrderPath(locale, record.slug, 'curated'))}
+              title={translation.title}
+              labels={{
+                share: watch('share.action'),
+                copied: watch('share.copied'),
+                failed: watch('share.failed'),
+              }}
+            />
+          </div>
         </header>
 
         <CoverMosaic images={pictures} />
@@ -702,6 +1028,35 @@ export async function CollectionDetailPage({
               )}
             </RecordSection>
           </div>
+        )}
+
+        {more.items.length === 0 ? null : (
+          <section
+            className="flex flex-col gap-6 border-t border-border pt-[var(--space-page)]"
+            aria-labelledby="collection-more"
+          >
+            <SectionHeader
+              id="collection-more"
+              heading={t('detail.more')}
+              {...(more.topic === null
+                ? {}
+                : {
+                    intro: t('detail.moreOnTopic', {
+                      topic: names.topics.get(more.topic)?.name ?? '',
+                    }),
+                    action: {
+                      href: collectionsListingHref(locale, { topic: more.topic }),
+                      text: t('detail.allOnTopic', { count: more.total }),
+                    },
+                  })}
+            />
+            <CollectionGrid
+              locale={locale}
+              items={more.items}
+              label={t('detail.more')}
+              headingLevel="h3"
+            />
+          </section>
         )}
 
         <p>

@@ -2,7 +2,8 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import type { BrowserContext, Page, Request } from '@playwright/test';
+import { AxeBuilder } from '@axe-core/playwright';
+import type { BrowserContext, Page, Request, TestInfo } from '@playwright/test';
 
 import type { SqlSession } from '../../packages/database/src/lifecycle/sql-connection.ts';
 import {
@@ -37,7 +38,12 @@ import {
  * being shown the moment its Photo is withdrawn; that every surface works
  * signed out, sets no cookie and is identical signed in; that a former Gallery
  * address answers one 301; that Urdu and Arabic render right-to-left; that
- * nothing scrolls sideways at 320px; and that the administration uploads
+ * nothing scrolls sideways at 320px; that (News & Events Part 2) the listing's
+ * counted filters, chips and pages keep one address per view, that each
+ * former address is one redirect, that a gallery states the span of its
+ * photographs' known dates, that the archive is an index whose every count
+ * leads into the listing, and that every surface is axe-clean at 320 and 1440
+ * pixels in English, Urdu and Arabic; and that the administration uploads
  * photographs through its own route, refuses what is not a whole bounded
  * image, refuses a publish with no image and a stale save, and refuses a
  * cross-origin or unauthorised upload.
@@ -310,6 +316,10 @@ test.describe('an anonymous visitor looks at photographs', () => {
       imageRoute(photo.portrait, asset.portrait),
     );
     await expect(card.getByText('3 photographs')).toBeVisible();
+    // Its date is only the span of its photographs' recorded dates: the
+    // portrait (March 1995) and the landscape (12 March 1995) — the undated
+    // one adds nothing.
+    await expect(card.getByText('March 1995', { exact: true })).toBeVisible();
     await expect(page.getByText(HIDDEN_TITLE)).toHaveCount(0);
     await everyImageLoaded(page);
   });
@@ -366,10 +376,8 @@ test.describe('an anonymous visitor looks at photographs', () => {
     const years = page.getByRole('navigation', { name: 'Years' });
     await expect(years.getByRole('link', { name: /1995/ })).toBeVisible();
     await expect(years.getByRole('link', { name: /1989/ })).toBeVisible();
-    // The undated photographs are not in the archive at all.
-    await expect(
-      page.locator(`img[src="${imageRoute(photo.withdrawn, asset.withdrawn)}"]`),
-    ).toHaveCount(0);
+    // An index: no photograph is shown here, so the undated one never is.
+    await expect(page.getByRole('main').locator('img')).toHaveCount(0);
 
     await years.getByRole('link', { name: /1995/ }).click();
     await expect(page).toHaveURL(/\/media\/archive\?year=1995$/);
@@ -377,18 +385,132 @@ test.describe('an anonymous visitor looks at photographs', () => {
       page.getByRole('heading', { name: 'Photographs from 1995' }),
     ).toBeVisible();
     await expect(page.getByText(PANORAMA_CAPTION)).toHaveCount(0);
+    // Each month is counted, and its count leads into the listing for it, by
+    // the date taken — where the period's photographs are read.
     const months = page.getByRole('navigation', { name: 'Months' });
     await months.getByRole('link', { name: /March/ }).click();
+    await expect(page).toHaveURL(/\/media\/photos\?year=1995&month=3&sort=newest$/);
     await expect(
       page.getByRole('heading', { name: 'Photographs from March 1995' }),
     ).toBeVisible();
     await expect(page.getByText(LANDSCAPE_CAPTION)).toBeVisible();
     await expect(page.getByText(DRAFT_CAPTION)).toHaveCount(0);
+    await expect(page.getByText(PANORAMA_CAPTION)).toHaveCount(0);
 
-    // A year known alone stays a year.
+    // A year known alone stays a year: the archive says so, and its listing
+    // holds the photograph dated only to it.
     await page.goto('/media/archive?year=1989');
+    await expect(page.getByRole('navigation', { name: 'Months' })).toHaveCount(0);
+    await expect(
+      page.getByText('1 of them is known only to the year, not the month.'),
+    ).toBeVisible();
+    await page.getByRole('link', { name: 'See every photograph from 1989' }).click();
+    await expect(page).toHaveURL(/\/media\/photos\?year=1989&sort=newest$/);
     await expect(page.getByText(PANORAMA_CAPTION)).toBeVisible();
     await expect(page.getByText('1989', { exact: true }).first()).toBeVisible();
+  });
+
+  test('narrows the listing by counted filters, with chips, a range and one address per view', async ({
+    page,
+  }) => {
+    // One redirect for each former or other spelling, to the view's one address.
+    for (const [from, to] of [
+      ['/media/photos?offset=24', '/media/photos?page=2'],
+      [
+        '/media/photos?year=1995&month=&gallery=&language=&sort=added',
+        '/media/photos?year=1995',
+      ],
+      ['/ur/media/photos?month=3&year=1995', '/ur/media/photos?year=1995&month=3'],
+      ['/media/archive?year=1995&month=3', '/media/photos?year=1995&month=3&sort=newest'],
+      [
+        '/media/archive?year=1995&offset=24',
+        '/media/photos?year=1995&sort=newest&page=2',
+      ],
+      ['/media/archive?month=3', '/media/archive'],
+      ['/media/galleries?offset=24&sort=newest', '/media/galleries?page=2'],
+      [
+        `/media/galleries/${gallerySlug}?offset=24`,
+        `/media/galleries/${gallerySlug}?page=2`,
+      ],
+    ] as const) {
+      const response = await page.request.get(from, { maxRedirects: 0 });
+      expect([307, 308], from).toContain(response.status());
+      const location = new URL(response.headers()['location']!, baseUrl());
+      expect(location.pathname + location.search, from).toBe(to);
+    }
+
+    // A year: its chip removes it alone, the range says how many, and the
+    // years and months are offered counted, each under every other filter.
+    await page.goto('/media/photos?year=1995');
+    const main = page.getByRole('main');
+    const form = main.getByRole('form', { name: 'Filter the photographs' });
+    const year = form.getByLabel('Year taken', { exact: true });
+    await expect(year).toHaveValue('1995');
+    await expect(year.locator('option', { hasText: '1989' })).toHaveText('1989 (1)');
+    // Every photograph of 1995 known to its month is from March: one month is
+    // nothing to choose between, so no month filter is offered yet.
+    await expect(form.getByLabel('Month taken', { exact: true })).toHaveCount(0);
+    await expect(main.getByText('Showing 1–2 of 2 photographs')).toBeVisible();
+    await expect(main.getByText(LANDSCAPE_CAPTION)).toBeVisible();
+    await expect(main.getByText(PANORAMA_CAPTION)).toHaveCount(0);
+    const chips = main.getByRole('list', { name: 'Filters in use' });
+    await expect(
+      chips.getByRole('link', { name: 'Remove filter: 1995' }),
+    ).toHaveAttribute('href', '/media/photos');
+
+    // A chosen month is offered, counted, and its chip removes it alone.
+    await page.goto('/media/photos?year=1995&month=3');
+    const month = form.getByLabel('Month taken', { exact: true });
+    await expect(month).toHaveValue('3');
+    await expect(month.locator('option', { hasText: 'March' })).toHaveText('March (2)');
+    await expect(
+      chips.getByRole('link', { name: 'Remove filter: March' }),
+    ).toHaveAttribute('href', '/media/photos?year=1995');
+    await page.goto('/media/photos?year=1995');
+
+    // The GET form, without script: a language narrows within the year.
+    await form.getByLabel('Described in', { exact: true }).selectOption('ur');
+    await form.getByRole('button', { name: 'Show photographs' }).click();
+    await page.waitForURL(/\/media\/photos\?year=1995&language=ur$/);
+    await expect(page.getByRole('main').getByText(PORTRAIT_CAPTION_UR)).toBeVisible();
+    await expect(page.getByRole('main').getByText(LANDSCAPE_CAPTION)).toHaveCount(0);
+
+    // A gallery: its public photographs, its chip, and its own page offered once.
+    await page.goto(`/media/photos?gallery=${galleryId}`);
+    await expect(
+      page.getByRole('main').getByRole('list', { name: 'Filters in use' }),
+    ).toContainText(GALLERY_TITLE);
+    await expect(page.getByRole('main').getByText(LANDSCAPE_CAPTION)).toBeVisible();
+    await expect(page.getByRole('main').getByText(PANORAMA_CAPTION)).toHaveCount(0);
+    await expect(page.getByRole('main').getByText(DRAFT_CAPTION)).toHaveCount(0);
+    await expect(
+      page
+        .getByRole('main')
+        .getByRole('link', { name: 'Open this gallery in its own order' }),
+    ).toHaveAttribute('href', `/media/galleries/${gallerySlug}`);
+
+    // Nothing matches: said in words, with the way back. Past the end: the
+    // first page offered.
+    await page.goto(`/media/photos?year=1989&gallery=${galleryId}`);
+    await expect(
+      page.getByRole('main').getByText('No photograph matches these filters'),
+    ).toBeVisible();
+    await page.goto('/media/photos?page=40');
+    await expect(page.getByRole('main').getByText('This page is empty')).toBeVisible();
+    await expect(
+      page.getByRole('main').getByRole('link', { name: 'Go to the first page' }),
+    ).toHaveAttribute('href', '/media/photos');
+
+    // The three surfaces as counted tabs, each its own unfiltered address.
+    await page.goto('/media/galleries');
+    const tabs = page.getByRole('navigation', { name: 'Photograph sections' });
+    await expect(tabs.getByRole('link')).toHaveCount(3);
+    await expect(tabs.locator('a[href="/media/galleries"]')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    for (const href of ['/media/photos', '/media/galleries', '/media/archive'])
+      await expect(tabs.locator(`a[href="${href}"]`)).toContainText(/\d/);
   });
 
   test('serves an image only for a published Photo’s own asset, and revalidates it', async ({
@@ -479,6 +601,48 @@ test.describe('an anonymous visitor looks at photographs', () => {
     await page.keyboard.press('Escape');
   });
 
+  test('is axe-clean and reflows from 320 to 1440 px in en, ur and ar, each address its own', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(300_000);
+    for (const [width, height] of [
+      [320, 800],
+      [1440, 900],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      for (const path of [
+        '/media/photos',
+        '/media/photos?year=1995',
+        '/media/galleries',
+        `/media/galleries/${gallerySlug}`,
+        `/media/galleries/${hiddenSlug}`,
+        '/media/archive',
+        '/media/archive?year=1995',
+        '/ur/media/photos',
+        '/ur/media/galleries',
+        `/ur/media/galleries/${gallerySlug}`,
+        '/ur/media/archive?year=1995',
+        '/ar/media/photos?year=1995&month=3&sort=newest',
+        '/ar/media/galleries?sort=title',
+        '/ar/media/archive',
+      ]) {
+        const response = await page.goto(path);
+        expect(response?.status(), path).toBe(200);
+        // Each address is already its view's one address: no redirect was taken.
+        expect(new URL(page.url()).pathname + new URL(page.url()).search, path).toBe(
+          path,
+        );
+        await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+        const overflow = await page.evaluate(
+          () =>
+            document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+        expect(overflow, `${path} at ${String(width)}`).toBeLessThanOrEqual(0);
+        if (width === 1440) await axe(page, path, testInfo);
+      }
+    }
+  });
+
   test('reflows at 320px — and so at 200% zoom — without horizontal scroll', async ({
     page,
   }) => {
@@ -499,6 +663,25 @@ test.describe('an anonymous visitor looks at photographs', () => {
     }
   });
 });
+
+/** No serious or critical axe finding; anything lesser is annotated. */
+async function axe(page: Page, target: string, testInfo: TestInfo): Promise<void> {
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  const blocking = results.violations.filter(
+    (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+  );
+  for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+    testInfo.annotations.push({
+      type: 'axe',
+      description: `${target}: ${finding.id} (${String(finding.impact)})`,
+    });
+  expect(
+    blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+    target,
+  ).toEqual([]);
+}
 
 /* ========================================================================== */
 
@@ -738,6 +921,9 @@ test.describe('photograph administration', () => {
       ).map((row) => row.photoId);
     const [first, second] = await order();
     await members.nth(1).getByRole('button', { name: 'Make it the cover' }).click();
+    // The action re-renders the page; let that finish, so the next test's own
+    // navigation is not aborted by it.
+    await admin.waitForLoadState('networkidle');
     await expect.poll(order).toEqual([second, first]);
 
     const [audit] = await sql.query<{ n: number }>(

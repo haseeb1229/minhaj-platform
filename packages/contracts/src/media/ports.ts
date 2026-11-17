@@ -19,21 +19,25 @@ import type {
   AudioSeriesSummary,
 } from './listen.ts';
 import type {
-  ArchiveMonth,
-  ArchiveYear,
   GalleryDetail,
   GalleryPage,
   GalleryRecord,
   GalleryValue,
   PhotoAdminQuery,
-  PhotoArchiveQuery,
   PhotoAssetRelation,
   PhotoPage,
   PhotoRecord,
   PhotoValue,
   PublicGallery,
-  PublicGalleryPage,
 } from './photo.ts';
+import type {
+  GalleryDirectoryPage,
+  GalleryDirectoryQuery,
+  PhotoArchivePeriod,
+  PhotoListingFacets,
+  PhotoListingPage,
+  PhotoListingQuery,
+} from './photo-listing.ts';
 import type {
   MediaAdminQuery,
   MediaSitemapRow,
@@ -279,23 +283,26 @@ export interface MediaPublicReaderPort {
 
   /* ---- Phase 12 — Photo, Gallery and the historical archive ------------ */
 
-  /** One bounded page of PUBLISHED Photos with an image, most recently added first. */
-  photos(offset: number): Promise<PhotoPage>;
   /**
-   * One bounded page of the historical archive: published Photos whose date
-   * is KNOWN, latest first, narrowed to a year and a month when given.
+   * News & Events Part 2 — one bounded page of PUBLISHED Photos in the view's
+   * order, narrowed by the date taken, a published Gallery and a language,
+   * with the view's total.
    */
-  archivePhotos(query: PhotoArchiveQuery): Promise<PhotoPage>;
-  /** The years the archive holds public Photos in, with counts. Bounded. */
-  archiveYears(): Promise<readonly ArchiveYear[]>;
-  /** The known months of one archive year, with counts. */
-  archiveMonths(year: number): Promise<readonly ArchiveMonth[]>;
+  photoListing(query: PhotoListingQuery): Promise<PhotoListingPage>;
+  /** The listing's figures, and each filter's values counted under every other. */
+  photoListingFacets(query: PhotoListingQuery): Promise<PhotoListingFacets>;
   /**
-   * One bounded page of published Galleries that hold at least one public
-   * Photo, most recently created first, each with its count and cover.
+   * The archive's periods: every year and month taken that public Photos are
+   * dated to, with counts, and each year's Photos known only to it. Bounded.
    */
-  galleries(offset: number): Promise<PublicGalleryPage>;
-  /** One published Gallery by its CURRENT slug, with its count and cover. */
+  photoArchivePeriods(): Promise<readonly PhotoArchivePeriod[]>;
+  /**
+   * One bounded page of the LISTED Galleries — published, holding a public
+   * Photo — in the directory's order, each with its count, cover and span of
+   * dates, with the total.
+   */
+  galleryDirectory(query: GalleryDirectoryQuery): Promise<GalleryDirectoryPage>;
+  /** One published Gallery by its CURRENT slug, with its count, cover and span. */
   gallery(slug: string): Promise<PublicGallery | null>;
   /** The current slug a current or FORMER slug of a published Gallery resolves to. */
   galleryCanonicalSlug(slug: string): Promise<string | null>;

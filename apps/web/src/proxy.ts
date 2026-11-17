@@ -345,9 +345,10 @@ export default async function proxy(request: NextRequest) {
      * mechanism: one hop to the current address, locale preserved, the target
      * built from Editorial's answer and never from the request. A former slug
      * with the gallery view's suffix resolves straight to the current gallery
-     * view — ONE hop, never a chain through the Event page.
+     * view — ONE hop, never a chain through the Event page — and so, since News
+     * & Events Part 2, does one with the calendar file's.
      */
-    const event = /^\/(en|ur|ar)\/events\/([^/]+)(\/gallery)?$/.exec(routed);
+    const event = /^\/(en|ur|ar)\/events\/([^/]+)(\/gallery|\/calendar)?$/.exec(routed);
     if (event?.[1] && event[2]) {
       const slug = decodedSegment(event[2]);
       if (slug !== null) {

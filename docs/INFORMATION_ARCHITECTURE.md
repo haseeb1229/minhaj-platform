@@ -646,6 +646,24 @@ year-and-month index whose every count leads into a family's listing for that pe
 page states its reading time, offers Share, names its family, the languages it is also published
 in and (coverage) its outlet, and leads to its newer and older neighbours and related reading.
 
+**News & Events Part 2 (2026-11-18).** The other three columns, by the same pattern. **Events**
+opens on its figures and the upcoming and past views as counted tabs; counted filters (Topic,
+year, month once a year is chosen, Country and City counted from the Centres that hold the
+view's Events); chips; a page read like a calendar, grouped by month; numbered pages. An Event's
+page states each date in the Event's own time zone (and, with script, the reader's own), offers
+Share and — while a date is still ahead — the calendar file, its Centre and address (no map is
+embedded), its photographs, speakers and topics, and more Events on its first Topic; a card leads
+to an Event's photographs while Media lists them. **Event Galleries** stay reached through their
+Event (`/events/{slug}/gallery`). **Media**: the photographs (counted filters by year, month,
+gallery and language; three orders), the galleries directory (cover, count and the span of the
+dates taken) and each Gallery share one set of counted tabs and a plain statement of what a
+visitor may do with the pictures; there is still no Media Downloads route. **Archive**: the
+photograph archive is a year-and-month index leading into the photographs listing, as the News
+archive leads into News; **Collections** opens on its figures, counted "what it holds" tabs and
+filters; a Collection names how many items of each kind it holds, offers Share and more
+Collections; and the **Newsletter** explains what it covers and how subscribing works, with one
+neutral answer for every address and the privacy notice beside the form.
+
 ### 3.9 Global
 
 | Network | Find | Structure | Local |

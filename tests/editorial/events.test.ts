@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   EVENT_GEOGRAPHY_CENTRES,
   EVENT_LIMITS,
+  EVENT_LISTING_PAGE,
   EVENT_MAX_OFFSET,
   EVENT_PAGE,
   EVENT_PREVIEW,
@@ -15,6 +16,7 @@ import {
   eventScheduleRefusalOf,
   type EditorialPublicReaderPort,
   type EventListQuery,
+  type EventListingRead,
 } from '../../packages/contracts/src/editorial/index.ts';
 import { editorialFailure } from '../../apps/web/src/contexts/editorial/application/editorial-service.ts';
 import { EditorialRefusal } from '../../apps/web/src/contexts/editorial/domain/workflow.ts';
@@ -212,31 +214,54 @@ describe('an Event’s content is strict', () => {
 
 describe('the public read service', () => {
   function stubReader() {
-    const calls: EventListQuery[] = [];
+    const calls: EventListingRead[] = [];
+    const facetCalls: EventListingRead[] = [];
     const reader = {
-      events: vi.fn(async (query: EventListQuery) => {
+      eventListing: vi.fn(async (query: EventListingRead) => {
         calls.push(query);
-        return { items: [], more: false };
+        return { items: [], total: 0, hasMore: false };
+      }),
+      eventListingFacets: vi.fn(async (query: EventListingRead) => {
+        facetCalls.push(query);
+        return {};
       }),
       eventCanonicalSlug: vi.fn(async () => 'current'),
       publicEvent: vi.fn(async () => null),
     } as unknown as EditorialPublicReaderPort;
-    return { reader, calls };
+    return { reader, calls, facetCalls };
   }
   const NOW = new Date('2031-05-05T05:05:05Z');
 
-  it('asks with the SERVER’s clock, a bounded page and no topic', async () => {
-    const { reader, calls } = stubReader();
+  // News & Events Part 2: `/events` reads its page through `eventListing`
+  // (with a total) — Phase 14's `events` listing read is gone from the
+  // service, and each of its proofs is kept against the new read.
+  it('asks with the SERVER’s clock and a bounded page, every neutral value explicit', async () => {
+    const { reader, calls, facetCalls } = stubReader();
     const reads = createEditorialReadService(reader, () => NOW);
-    await reads.events({ when: 'past', offset: 40, centreIds: null });
+    await reads.eventListing({ when: 'past', offset: 40, centreIds: null });
+    await reads.eventListingFacets({ when: 'upcoming', year: 2031, month: 6 });
     expect(calls).toEqual([
       {
         when: 'past',
-        offset: 40,
+        topic: null,
+        year: null,
+        month: null,
         centreIds: null,
+        offset: 40,
+        limit: EVENT_LISTING_PAGE,
         now: NOW,
-        limit: EVENT_PAGE,
-        topicId: null,
+      },
+    ]);
+    expect(facetCalls).toEqual([
+      {
+        when: 'upcoming',
+        topic: null,
+        year: 2031,
+        month: 6,
+        centreIds: null,
+        offset: 0,
+        limit: EVENT_LISTING_PAGE,
+        now: NOW,
       },
     ]);
   });
@@ -244,15 +269,14 @@ describe('the public read service', () => {
   it('matches NOTHING for an empty Centre filter, without asking', async () => {
     const { reader, calls } = stubReader();
     const reads = createEditorialReadService(reader, () => NOW);
-    expect(await reads.events({ when: 'upcoming', offset: 0, centreIds: [] })).toEqual({
-      items: [],
-      more: false,
-    });
+    expect(
+      await reads.eventListing({ when: 'upcoming', offset: 0, centreIds: [] }),
+    ).toEqual({ items: [], total: 0, hasMore: false });
     expect(calls).toEqual([]);
   });
 
   it('refuses an unbounded or malformed query rather than broadening it', async () => {
-    const { reader, calls } = stubReader();
+    const { reader, calls, facetCalls } = stubReader();
     const reads = createEditorialReadService(reader, () => NOW);
     for (const filter of [
       { when: 'later', offset: 0, centreIds: null },
@@ -267,11 +291,20 @@ describe('the public read service', () => {
           randomUUID(),
         ),
       },
+      // An unknown key is refused, never ignored.
       { when: 'upcoming', offset: 0, centreIds: null, topicId: randomUUID() },
-    ])
-      await expect(
-        reads.events(filter as Parameters<typeof reads.events>[0]),
-      ).rejects.toThrow();
+      { when: 'upcoming', topic: 'not-an-id' },
+      { when: 'upcoming', month: 6 },
+      { when: 'upcoming', year: 2031, month: 13 },
+      { when: 'upcoming', year: EVENT_LIMITS.earliestYear - 1 },
+      { when: 'upcoming', year: EVENT_LIMITS.latestYear + 1 },
+      { when: 'upcoming', limit: EVENT_LISTING_PAGE + 1 },
+      { when: 'upcoming', limit: 0 },
+      { when: 'upcoming', now: new Date(0) },
+    ]) {
+      await expect(reads.eventListing(filter)).rejects.toThrow();
+      await expect(reads.eventListingFacets(filter)).rejects.toThrow();
+    }
     await expect(reads.centreEvents('not-an-id', 'upcoming')).rejects.toThrow();
     await expect(reads.centreEvents(randomUUID(), 'upcoming', 0, 0)).rejects.toThrow();
     await expect(
@@ -279,6 +312,7 @@ describe('the public read service', () => {
     ).rejects.toThrow();
     await expect(reads.eventsOnTopic('not-an-id')).rejects.toThrow();
     expect(calls).toEqual([]);
+    expect(facetCalls).toEqual([]);
   });
 
   it('answers a slug that cannot name an Event without asking', async () => {

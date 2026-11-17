@@ -5148,6 +5148,140 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > in en, ur and ar with one `h1`, no redirect, no sideways scroll and no serious or critical axe
 > finding at 1440 px. *CI and staging evidence are recorded when they exist.*
 
+> **News & Events Part 2 — Events, the photograph surfaces, the media archive, Collections and the
+> newsletter (owner direction: every section built from A to Z, one item at a time; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (DOMAIN_MODEL.md §7.2.3, §7.3.1,
+> §11; ROUTE_MAP.md §3.9; INFORMATION_ARCHITECTURE.md §3.8; SECURITY_BASELINE.md §17, §19.1.2).
+> One route is added — `/events/{slug}/calendar` — and none removed; no schema change and no
+> migration; the slug-history 301s, structured data and the newsletter's protocol are unchanged.
+> This completes the News & Events menu.
+>
+> - **The audit (before).** `/events` was Phase 14's grid behind Previous/Next and `?offset=`, with
+>   uncounted upcoming/past links, a place form only (Country, City, Centre), no Topic, year or
+>   month, no total, no figures and no chips; an Event showed its times only in the Event's own
+>   zone, offered no Share, no calendar file and nothing to read next, and a card never led to an
+>   Event's photographs. `/media/photos`, `/media/galleries` and a Gallery were offset pages with
+>   no total, filters or counts and no date on a Gallery; `/media/archive` was a second photo
+>   listing (`?year`, `?month`, `?offset`). `/collections` was 20 a page with `?offset=`, uncounted,
+>   one order, its kinds as plain text under the lede; a Collection page had two addresses for its
+>   curated order, no Share and nothing to read next. `/newsletter` was a heading, the notice and
+>   the shared form, with no account of what it covers or how it works and no link to the privacy
+>   notice; a success message sat above a form still live.
+> - **`/events` (decision).** The quality model of the News listing: figures (upcoming, held,
+>   countries), the upcoming and past views as counted tabs (keeping the Topic and place, leaving a
+>   period behind), a GET form of counted filters — Topic, year, month (once a year is chosen),
+>   Country and City (counted from the Centres that hold the view's Events, Global saying which are
+>   public, physical and where; uncounted rather than counted from a subset when there are more than
+>   one Global read answers) — chips, "Showing n–m of N", the page **grouped by month** like a
+>   calendar (each card leads with its occurrence in a chosen period), numbered pages, and honest
+>   empty, refused, no-results and past-the-end states. Addresses are one pure module
+>   (`event-view.ts`): one address per view, every tidy-up and Phase 14's `?offset=` one redirect —
+>   while a view or place that cannot mean anything is still **refused where it was asked**, never
+>   redirected wider (Phase 14's posture kept, deliberately). No "type" filter: an Event has no
+>   type in the model (§7.2.3), so none is invented.
+> - **An Event's page.** The header adds Share; each occurrence still shows the stated local time
+>   and its zone, and — after hydration, from the browser's own zone, sent nowhere — the reader's
+>   own time where it differs (`event-reader-time.tsx`, sharing Learn Part 2's zone helpers through
+>   `components/ui/reader-zone.ts`); **Add to your calendar (.ics)** while a date is still ahead;
+>   the Centre and its address as before (**no map**: an Event records no place of its own and no
+>   third-party map embed is authorised); photographs, speakers and topics; and **more Events** on
+>   its first Topic (upcoming first, else held), else more upcoming Events, never itself. A card
+>   now links an Event's photographs while Media lists one of its Galleries (one batched Media read
+>   per page).
+> - **The calendar file (decision).** `/events/{slug}/calendar` is a GET read of the same published
+>   Event and public Centre (`event-calendar.ts`, pure): one VEVENT per occurrence as UTC instants,
+>   DTEND only where an end is recorded, the title and summary in the page's language, the Centre as
+>   LOCATION, the address as URL; every written value escaped as RFC 5545 TEXT with control
+>   characters dropped and lines folded at 75 octets. `text/calendar` attachment (the slug
+>   percent-encoded in `filename*`), `noindex`, `no-store`, no cookie; every refusal the same empty
+>   `404`; the proxy's former-slug rule now carries the `/calendar` suffix too.
+> - **Photographs (decision; built by a sibling worker, reviewed here).** `/media/photos` gains
+>   figures, counted filters (year and month taken, Gallery, description language), three orders
+>   (recently added, date taken either way, undated last), chips, a range and numbered pages;
+>   `/media/galleries` cards add the span of their photographs' known dates, with three orders; a
+>   Gallery numbered pages; the three surfaces share counted tabs and a plain rights note (viewing
+>   only, no download offered, credit wherever recorded — `/media/downloads` still has no route).
+>   **The archive is an index**, as News' is: every year with a picture of its months and its
+>   count leading into `/media/photos?year=`; a former listing address is one redirect there. The
+>   viewer is unchanged — a native modal dialog (focus kept inside, Escape closes, arrows follow the
+>   reading direction, focus returns), with caption, date and credit.
+> - **Collections (built by a sibling worker, reviewed here).** `/collections` gains figures, counted
+>   "what it holds" tabs (Everything, Articles, News, Books, Videos), counted Topic and language
+>   filters (each only when there is a real choice), two orders by first publication, chips, a
+>   range and numbered pages; a Collection page names how many items of each kind it holds, offers
+>   Share and "More collections" (others on its first Topic, else the newest), and `?order=curated`
+>   or an unknown order is one redirect to its bare address.
+> - **The newsletter (built by a sibling worker, reviewed here).** The page explains what it covers
+>   (the consent notice's own three kinds of material), how subscribing works in three steps, and
+>   states honestly that no issue has been sent yet (Broadcast is not built — Phase 21); the notice
+>   sits in the form panel with a link to the privacy notice. The Server Actions, origin/CSRF
+>   posture, rate limits, double opt-in, notice version and confirm/unsubscribe split are
+>   **unchanged**; a client island replaces the form with the action's own neutral answer — the
+>   same for every address state, so "already subscribed" is never disclosed — and the
+>   invalid-link help is the same for a used, expired or unknown link.
+> - **Reads (Model A).** Editorial: `eventListing` and `eventListingFacets` (contract
+>   `event-listing.ts`), `collectionListing` and `collectionListingFacets` (`collection-listing.ts`);
+>   Media: `photoListing`, `photoListingFacets`, `photoArchivePeriods`, `galleryDirectory`
+>   (`photo-listing.ts`) — ports, adapters in `packages/database`, each read service parsing every
+>   field before any read; bound parameters only. `EventSummary` carries its Gallery identifiers.
+>   Withdrawn as unused (historical): the Editorial service's `events` listing read (the port's
+>   stays for Local Events and Topic previews) and Media's offset-paged `photos`, `galleries` and
+>   archive reads.
+> - **Messages.** `events.{readerTime, addToCalendar, cardPhotographs, heldAt, findCentre,
+>   galleries, listing.*, detail.*}` in en/ur/ar, `events.filters.label` now "Filter events";
+>   removed as unused: `events.{pageEmpty, firstPage, filters.reset, filters.atCentre,
+>   filters.clearCentre}`; the `photos`, `collections` and `newsletter` additions and removals are
+>   their workers' (each key used).
+>
+> **Data facts — what staging will show.** **Events:** no migration source has an Event kind and
+> the demo data adds none, so staging shows `/events` with its honest "No events yet" state and a
+> way back to News and Events (tabs at 0, no filters). **Photographs and Galleries:** no migration
+> source has a Photo or Gallery kind and `scripts/demo` adds none, so each photograph surface shows
+> its honest empty state with the rights note, tabs at 0, unless an administrator uploads some.
+> **Collections:** the three published Collections of Phase 30-RD (Al-Hidayah 19, Mawlid
+> Conferences 42, Itikaf 51 members, all English News, no Topics) — about 112 curated places,
+> tabs Everything 3 · News 3 · others 0, the order select alone (no Topic or language choice); a
+> Collection page with its count, Share and the other two as "More collections". The 11 further
+> Collections of MIGRATION_STRATEGY.md §19.1 are planned, not run. **Newsletter:** works as before;
+> no issue has been sent. The local persistent database was not inspected.
+>
+> **Proof:** `tests/editorial/event-view.test.ts` (new: reading, writing, the refused views never
+> redirected, every tidy-up and former spelling one redirect to a final address, the read query
+> accepted by Editorial's schema — Phase 14's query proofs moved here from
+> `event-presentation.test.ts`); `tests/editorial/event-calendar.test.ts` (new: the file's exact
+> lines, nothing unrecorded claimed, a hostile title unable to add a line or property, TEXT
+> escaping, UTC instants, folding without cutting a character); `tests/editorial/event-presentation.test.ts`
+> (a card's occurrence within a chosen period, the stated local month, the calendar location);
+> `tests/editorial/events.test.ts` (the service's three listing proofs kept against
+> `eventListing`/`eventListingFacets`: the server's clock and bounded page, an empty Centre filter
+> matching nothing without asking, fifteen malformed views — `now` among them — refused before any
+> read); `tests/editorial/events.integration.test.ts` (real SQL Server: every Phase-14 listing
+> assertion kept through `eventListing`, now with totals; new: Topic, year and month narrowing by
+> the stated local month in the view, totals and pages, every facet under every other filter, the
+> Centre facet without the place, a withdrawn Event leaving every view and count);
+> `tests/editorial/collections-view.test.ts` (new), `collections.integration.test.ts`,
+> `collection-presentation.test.ts`; `tests/media/photos-view.test.ts`, `photos-reading.test.ts`,
+> `media-photos.integration.test.ts` (new), `photo.test.ts`, `presentation.test.ts`,
+> `tests/storage/media-photo.integration.test.ts`, `photo-recovery.integration.test.ts` (moved to the
+> new reads, every assertion kept); `tests/architecture/phase14-events-boundaries.test.ts` (the
+> calendar route joins the session-free walk), `phase12-media-galleries-boundaries.test.ts`,
+> `phase4-shell-boundaries.test.ts` (the calendar route and the newsletter island as content
+> routes); `tests/identity/protocol.test.ts` (the calendar route in the complete handler set, and
+the read-only handlers now thirty-four, each exporting no mutating verb);
+> `tests/config/locale.test.ts` (the new modules). Browser: `tests/browser/events.spec.ts` — a
+> design change stated in the test: cards now sit in one list per month inside the view's region,
+> so the listing assertions read the region (and the June 2027 list) instead of one "Upcoming
+> events" list, the place form is "Filter events", and the signed-in sameness checks wait for the
+> reader-time and Share islands on both pages; every other assertion kept; new: counted tabs, the
+> month heading and range, a year and month with their counted options and chips, no-results and
+> past-the-end, six former spellings each one redirect while a refused place is answered in place,
+> the GET form without script, the calendar file (headers, both UTC instants, title per locale,
+> Centre, 404s, 405 for a POST, no link once held, a former slug's one 301), the reader's own time
+> shown in Karachi and hidden in New York, and nine addresses at 320 and 1440 px in en, ur and ar
+> with one `h1`, no redirect, no sideways scroll and no serious or critical axe finding at 1440 px;
+> `photos.spec.ts`, `collections.spec.ts`, `newsletter.spec.ts` as their workers state them.
+> *CI and staging evidence are recorded when they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

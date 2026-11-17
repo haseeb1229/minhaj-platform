@@ -127,9 +127,9 @@ async function readEvents(): Promise<{
   readonly items: readonly EventSummary[];
 }> {
   const reads = editorialReadRuntime();
-  const upcoming = await reads.events({ when: 'upcoming', offset: 0, centreIds: null });
+  const upcoming = await reads.eventListing({ when: 'upcoming' });
   if (upcoming.items.length > 0) return { when: 'upcoming', items: upcoming.items };
-  const past = await reads.events({ when: 'past', offset: 0, centreIds: null });
+  const past = await reads.eventListing({ when: 'past' });
   return { when: 'past', items: past.items };
 }
 

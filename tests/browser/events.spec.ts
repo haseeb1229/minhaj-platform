@@ -1,8 +1,9 @@
+import { AxeBuilder } from '@axe-core/playwright';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import type { BrowserContext, Page } from '@playwright/test';
+import type { BrowserContext, Page, TestInfo } from '@playwright/test';
 
 import type { SqlSession } from '../../packages/database/src/lifecycle/sql-connection.ts';
 import {
@@ -281,6 +282,27 @@ async function overflowOf(
       }),
     };
   });
+}
+
+/**
+ * News & Events Part 2: `/events` groups a page's Events by month, so the
+ * cards sit in one list per month inside the view's own region, named by its
+ * heading ("Upcoming events", "Past events").
+ */
+function results(
+  page: Page,
+  when: 'Upcoming events' | 'Past events' = 'Upcoming events',
+) {
+  return page.getByRole('region', { name: when, exact: true });
+}
+
+/**
+ * The page's script-only islands — the reader's own time and Share — have run,
+ * so two loads compare like with like.
+ */
+async function settled(page: Page): Promise<void> {
+  await expect(page.locator('[data-reader-time="pending"]')).toHaveCount(0);
+  await expect(page.locator('[data-reader-time="ready"]').first()).toBeAttached();
 }
 
 /* ========================================================================== */
@@ -625,8 +647,12 @@ test.describe('an anonymous visitor finds Events', () => {
     expect(response?.status()).toBe(200);
     expect(response?.headers()['set-cookie']).toBeUndefined();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Events');
-    const upcoming = page.getByRole('list', { name: 'Upcoming events', exact: true });
-    const card = upcoming.getByRole('listitem').filter({ hasText: TITLE.en });
+    // Grouped by month: the card sits in June 2027's list, inside the view.
+    const upcoming = results(page);
+    const card = upcoming
+      .getByRole('list', { name: 'June 2027', exact: true })
+      .getByRole('listitem')
+      .filter({ hasText: TITLE.en });
     await expect(card).toHaveCount(1);
     // The occurrence still ahead leads, as the editor stated it, with its zone.
     await expect(card.locator('time')).toHaveText(summer.text);
@@ -647,10 +673,13 @@ test.describe('an anonymous visitor finds Events', () => {
     // No picture in the content; the shell's brand lockup is not an Event's (30-R).
     await expect(page.getByRole('main').locator('img')).toHaveCount(0);
 
-    // The same knowledge signed in, and no cookie was ever set.
+    // The same knowledge signed in, and no cookie was ever set — compared
+    // once both pages' reader-time islands have run.
+    await settled(page);
     const anonymous = await page.getByRole('main').innerText();
     const signedIn = await author.goto('/events');
     expect(signedIn?.headers()['set-cookie']).toBeUndefined();
+    await settled(author);
     expect(await author.getByRole('main').innerText()).toBe(anonymous);
     expect(await page.context().cookies()).toHaveLength(0);
 
@@ -665,7 +694,7 @@ test.describe('an anonymous visitor finds Events', () => {
     page,
   }) => {
     await page.goto('/events?when=past');
-    const past = page.getByRole('list', { name: 'Past events', exact: true });
+    const past = results(page, 'Past events');
     await expect(past.getByRole('link', { name: TITLE.past })).toBeVisible();
     await expect(past.getByText(TITLE.en)).toHaveCount(0);
     await expect(
@@ -682,9 +711,7 @@ test.describe('an anonymous visitor finds Events', () => {
       const response = await page.goto(`/events?${query}`);
       expect(response?.status(), query).toBe(200);
       await expect(
-        page
-          .getByRole('list', { name: 'Upcoming events', exact: true })
-          .getByRole('link', { name: TITLE.en }),
+        results(page).getByRole('link', { name: TITLE.en }),
         query,
       ).toBeVisible();
     }
@@ -724,10 +751,9 @@ test.describe('an anonymous visitor finds Events', () => {
           ),
         query,
       ).toBeVisible();
-      await expect(
-        page.getByRole('list', { name: 'Upcoming events', exact: true }),
-        query,
-      ).toHaveCount(0);
+      // Nothing is listed: no card in the view's region.
+      // (A refused place still has its chip, to remove it; no card links an Event.)
+      await expect(results(page).locator('a[href^="/events/"]'), query).toHaveCount(0);
       await expect(page.getByText(TITLE.en), query).toHaveCount(0);
     }
   });
@@ -784,8 +810,14 @@ test.describe('an anonymous visitor finds Events', () => {
     await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
     await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(0);
 
+    await settled(page);
+    await expect(page.getByRole('button', { name: 'Share', exact: true })).toBeVisible();
     const text = await main.innerText();
     await author.goto(`/events/${slug.main}`);
+    await settled(author);
+    await expect(
+      author.getByRole('button', { name: 'Share', exact: true }),
+    ).toBeVisible();
     expect(await author.getByRole('main').innerText()).toBe(text);
 
     // The photographs: a view over the Gallery, linking to its own page.
@@ -819,6 +851,245 @@ test.describe('an anonymous visitor finds Events', () => {
     expect((await author.request.get(`/events/${slug.dst}`)).status()).toBe(404);
   });
 });
+
+/* ========================================================================== */
+
+test.describe('News & Events Part 2 — the listing, the calendar file and the reader’s time', () => {
+  /** The location a redirect names, as a path and query. */
+  const target = (location: string | undefined) => {
+    const url = new URL(location ?? '', baseUrl());
+    return url.pathname + url.search;
+  };
+
+  test('counts its tabs, groups a page by month, narrows by period and gives each view one address', async ({
+    page,
+    request,
+    browser,
+  }) => {
+    test.setTimeout(180_000);
+    await page.goto('/events');
+    const tabs = page.getByRole('navigation', { name: 'Upcoming or past events' });
+    const upcomingTab = tabs.getByRole('link', { name: /^Upcoming events \d+$/u });
+    await expect(upcomingTab).toHaveAttribute('aria-current', 'page');
+    await expect(tabs.getByRole('link', { name: /^Past events \d+$/u })).toHaveAttribute(
+      'href',
+      '/events?when=past',
+    );
+    const view = results(page);
+    await expect(view.getByText(/^Showing 1–\d+ of \d+$/u)).toBeVisible();
+    await expect(
+      view.getByRole('heading', { level: 3, name: /^June 2027\b/u }),
+    ).toBeVisible();
+
+    // A year, then a month: counted choices, a chip each, the card still there.
+    const response = await page.goto('/events?year=2027&month=6');
+    expect(response?.status()).toBe(200);
+    expect(new URL(page.url()).search).toBe('?year=2027&month=6');
+    await expect(page.getByLabel('Year', { exact: true })).toHaveValue('2027');
+    await expect(page.getByLabel('Month', { exact: true })).toHaveValue('6');
+    await expect(
+      page.getByLabel('Year', { exact: true }).locator('option[value="2027"]'),
+    ).toHaveText(/^2027 \(\d+\)$/u);
+    await expect(results(page).getByRole('link', { name: TITLE.en })).toBeVisible();
+    const chips = page.getByRole('list', { name: 'Filters in use' });
+    await expect(
+      chips.getByRole('link', { name: 'Remove filter: June' }),
+    ).toHaveAttribute('href', '/events?year=2027');
+    await expect(
+      chips.getByRole('link', { name: 'Remove filter: 2027' }),
+    ).toHaveAttribute('href', '/events');
+    // The tabs keep a place and Topic, never a period.
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Upcoming or past events' })
+        .getByRole('link', { name: /^Past events/u }),
+    ).toHaveAttribute('href', '/events?when=past');
+
+    // A period nothing is held in: said so, with a way back.
+    await page.goto('/events?year=2199');
+    await expect(
+      page.getByRole('main').getByText('Nothing matches these filters'),
+    ).toBeVisible();
+    // No card: the only link into an Event would be a card's.
+    await expect(results(page).locator('a[href^="/events/"]')).toHaveCount(0);
+    // Past the end: said so, with the first page.
+    await page.goto('/events?page=999');
+    await expect(
+      page.getByRole('main').getByText('There is no page 999 of this listing.'),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('main').getByRole('link', { name: 'Go to the first page' }),
+    ).toHaveAttribute('href', '/events');
+
+    // Former and untidy spellings: ONE redirect each, to a final address.
+    for (const [from, to] of [
+      ['/events?offset=20', '/events?page=2'],
+      ['/events?when=past&offset=40', '/events?when=past&page=3'],
+      ['/events?topic=&year=&month=&country=&city=', '/events'],
+      [
+        `/events?country=${place.country}&when=past`,
+        `/events?when=past&country=${place.country}`,
+      ],
+      ['/events?month=6', '/events'],
+      ['/ur/events?when=upcoming', '/ur/events'],
+    ] as const) {
+      const answer = await request.get(from, { maxRedirects: 0 });
+      expect([307, 308], from).toContain(answer.status());
+      expect(target(answer.headers()['location']), from).toBe(to);
+      expect((await request.get(to, { maxRedirects: 0 })).status(), to).toBe(200);
+    }
+    // A refused place is answered where it was asked — never redirected wider.
+    const refused = await request.get('/events?city=x', { maxRedirects: 0 });
+    expect(refused.status()).toBe(200);
+
+    // The GET form works without script: choosing a Country and submitting.
+    const plain = await browser.newContext({
+      baseURL: baseUrl(),
+      javaScriptEnabled: false,
+    });
+    try {
+      const noScript = await plain.newPage();
+      await noScript.goto('/events');
+      await noScript.getByLabel('Country', { exact: true }).selectOption(place.country);
+      await noScript.getByRole('button', { name: 'Show events', exact: true }).click();
+      await noScript.waitForURL((url) => url.search === `?country=${place.country}`);
+      await expect(results(noScript).getByRole('link', { name: TITLE.en })).toBeVisible();
+    } finally {
+      await plain.close();
+    }
+  });
+
+  test('offers an Event still ahead as a calendar file — a plain, public read', async ({
+    page,
+    request,
+  }) => {
+    await page.goto(`/events/${slug.main}`);
+    const add = page.getByRole('link', { name: 'Add to your calendar (.ics)' });
+    await expect(add).toHaveAttribute('href', `/events/${slug.main}/calendar`);
+    // An Event wholly held offers none.
+    await page.goto(`/events/${slug.past}`);
+    await expect(
+      page.getByRole('link', { name: 'Add to your calendar (.ics)' }),
+    ).toHaveCount(0);
+
+    const file = await request.get(`/events/${slug.main}/calendar`);
+    expect(file.status()).toBe(200);
+    const headers = file.headers();
+    expect(headers['content-type']).toBe('text/calendar; charset=utf-8');
+    expect(headers['content-disposition']).toContain('attachment;');
+    expect(headers['cache-control']).toContain('no-store');
+    expect(headers['x-robots-tag']).toBe('noindex');
+    expect(headers['set-cookie']).toBeUndefined();
+    const body = (await file.text()).replaceAll('\r\n ', '');
+    const lines = body.split('\r\n');
+    expect(lines[0]).toBe('BEGIN:VCALENDAR');
+    expect(lines.filter((line) => line === 'BEGIN:VEVENT')).toHaveLength(2);
+    // The summer occurrence: 18:00–21:00 in New York, as UTC instants.
+    expect(lines).toContain('DTSTART:20270615T220000Z');
+    expect(lines).toContain('DTEND:20270616T010000Z');
+    expect(lines).toContain(`SUMMARY:${TITLE.en}`);
+    expect(lines.find((line) => line.startsWith('LOCATION:'))).toContain(NAME.centre);
+    expect(lines).toContain(`URL:${new URL(`/events/${slug.main}`, baseUrl()).href}`);
+    // The Urdu address writes the Urdu title.
+    expect(
+      await (await request.get(`/ur/events/${slug.main}/calendar`)).text(),
+    ).toContain(`SUMMARY:${TITLE.ur}`);
+
+    // Nothing unpublished, no other method, no unsupported locale segment.
+    expect((await request.get(`/events/${slug.dst}/calendar`)).status()).toBe(404);
+    expect((await author.request.get(`/events/${slug.dst}/calendar`)).status()).toBe(404);
+    expect((await request.get(`/events/no-such-event-${run}/calendar`)).status()).toBe(
+      404,
+    );
+    expect((await request.post(`/events/${slug.main}/calendar`)).status()).toBe(405);
+  });
+
+  test('adds the reader’s own time in the browser, and nothing where the zones agree', async ({
+    browser,
+  }) => {
+    for (const [timezoneId, shown] of [
+      ['Asia/Karachi', true],
+      [ZONE, false],
+    ] as const) {
+      const context = await browser.newContext({ baseURL: baseUrl(), timezoneId });
+      try {
+        const reader = await context.newPage();
+        await reader.goto(`/events/${slug.main}`);
+        await settled(reader);
+        const occurrences = reader.locator('section[aria-labelledby="event-when"] li');
+        // Only the occurrence still ahead is given the reader's time.
+        await expect(occurrences.nth(0).locator('[data-reader-time]')).toHaveCount(0);
+        const yours = occurrences.nth(1).locator('[data-reader-time="ready"]');
+        if (shown) {
+          await expect(yours).toBeVisible();
+          await expect(yours).toHaveText(/^Your time: .*(GMT\+5|PKT)/u);
+        } else await expect(yours).toBeHidden();
+        // The stated time itself never moves.
+        await expect(occurrences.nth(1).locator('time')).toHaveAttribute(
+          'datetime',
+          SUMMER.machine,
+        );
+      } finally {
+        await context.close();
+      }
+    }
+  });
+
+  test('is axe-clean at 1440 px and reflows at 320 px in en, ur and ar', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(240_000);
+    for (const [width, height] of [
+      [320, 800],
+      [1440, 900],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      for (const target of [
+        '/events',
+        '/events?when=past',
+        '/events?year=2027&month=6',
+        `/events/${slug.main}`,
+        `/events/${slug.main}/gallery`,
+        '/ur/events',
+        `/ur/events/${slug.main}`,
+        '/ar/events?when=past',
+        `/ar/events/${slug.main}`,
+      ]) {
+        const response = await page.goto(target);
+        expect(response?.status(), target).toBe(200);
+        // Each address is its view's one address: no redirect was taken.
+        expect(new URL(page.url()).pathname + new URL(page.url()).search, target).toBe(
+          target,
+        );
+        await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+        const { overflow, offenders } = await overflowOf(page);
+        expect
+          .soft(overflow, `${String(width)}px ${target}\n${offenders.join('\n')}`)
+          .toBeLessThanOrEqual(0);
+        if (width === 1440) await axe(page, target, testInfo);
+      }
+    }
+  });
+});
+
+/** No serious or critical axe finding; anything lesser is annotated. */
+async function axe(page: Page, target: string, testInfo: TestInfo): Promise<void> {
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  const blocking = results.violations.filter(
+    (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+  );
+  for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+    testInfo.annotations.push({
+      type: 'axe',
+      description: `${target}: ${finding.id} (${String(finding.impact)})`,
+    });
+  expect(
+    blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+    target,
+  ).toEqual([]);
+}
 
 /* ========================================================================== */
 
@@ -876,7 +1147,7 @@ test.describe('reading direction, reflow and the keyboard', () => {
     page,
   }) => {
     await page.goto(`/events?country=${place.country}`);
-    const form = page.getByRole('form', { name: 'Filter events by place' });
+    const form = page.getByRole('form', { name: 'Filter events' });
     await expect(form.locator('label[for="events-country"]')).toBeVisible();
     await expect(form.locator('label[for="events-country"]')).toHaveText('Country');
     await expect(form.locator('label[for="events-city"]')).toBeVisible();
@@ -898,11 +1169,7 @@ test.describe('reading direction, reflow and the keyboard', () => {
     await page.waitForURL(/city=/);
     expect(new URL(page.url()).searchParams.get('city')).toBe(place.city);
     expect(new URL(page.url()).searchParams.get('country')).toBe(place.country);
-    await expect(
-      page
-        .getByRole('list', { name: 'Upcoming events', exact: true })
-        .getByRole('link', { name: TITLE.en }),
-    ).toBeVisible();
+    await expect(results(page).getByRole('link', { name: TITLE.en })).toBeVisible();
 
     // With no Country chosen the City is disabled and skipped.
     await page.goto('/events');
@@ -938,6 +1205,8 @@ test.describe('former addresses', () => {
       [`/ur/events/${old}`, `/ur/events/${slug.main}`],
       [`/events/${old}/gallery`, `/events/${slug.main}/gallery`],
       [`/ar/events/${old}/gallery`, `/ar/events/${slug.main}/gallery`],
+      // News & Events Part 2: the calendar file's address moves with it.
+      [`/events/${old}/calendar`, `/events/${slug.main}/calendar`],
     ] as const) {
       const response = await request.get(from, { maxRedirects: 0 });
       expect(response.status(), from).toBe(301);
@@ -1021,10 +1290,7 @@ test.describe('a withdrawn Centre or Gallery', () => {
     await expect(page.getByText(NAME.centre)).toHaveCount(0);
     // The listing still has it — without a Centre line.
     await page.goto('/events');
-    const card = page
-      .getByRole('list', { name: 'Upcoming events', exact: true })
-      .getByRole('listitem')
-      .filter({ hasText: TITLE.en });
+    const card = results(page).getByRole('listitem').filter({ hasText: TITLE.en });
     await expect(card).toHaveCount(1);
     await expect(card.locator('a[href^="/global/centres/"]')).toHaveCount(0);
   });

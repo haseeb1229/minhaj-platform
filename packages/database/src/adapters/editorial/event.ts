@@ -5,7 +5,10 @@ import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 
 import {
+  EVENT_FACET_CENTRES,
+  EVENT_FACET_PAGE,
   EVENT_LIMITS,
+  EVENT_LISTING_PAGE,
   EVENT_PAGE,
   type ArticleDetail,
   type EditorialEdit,
@@ -17,9 +20,11 @@ import {
   type EditorialState,
   type EditorialTransition,
   type EditorialWrite,
+  type EventListingRead,
   type EventOccurrence,
   type EventSchedule,
   type EventSummary,
+  type EventWhen,
   type PublicEvent,
 } from '@minhaj/contracts/editorial';
 import type { ContributionRole } from '@minhaj/contracts/people';
@@ -106,6 +111,7 @@ const summarySelect = {
       },
       topics: { select: { topicId: true }, orderBy: { topicId: 'asc' as const } },
       occurrences: OCCURRENCES,
+      galleries: GALLERIES,
     },
   },
 } satisfies Prisma.EventSelect;
@@ -300,6 +306,7 @@ interface SummaryRow {
     }[];
     readonly topics: readonly { readonly topicId: string }[];
     readonly occurrences: readonly OccurrenceRow[];
+    readonly galleries: readonly { readonly galleryId: string }[];
   } | null;
 }
 
@@ -316,6 +323,7 @@ function summaryOf(row: SummaryRow): EventSummary {
     schedule: scheduleOf(row.current),
     centreId: row.current.centreId,
     topicIds: row.current.topics.map((t) => t.topicId),
+    galleryIds: row.current.galleries.map((g) => g.galleryId),
   };
 }
 
@@ -736,9 +744,116 @@ async function pageOf(query: {
   return { ids: rows.slice(0, take).map((row) => row.id), more: rows.length > take };
 }
 
+/* ===========================================================================
+ * News & Events Part 2 — the `/events` listing and its counts
+ * ========================================================================= */
+
+/** What the driver answers for a `COUNT_BIG`, `COUNT` or `SUM` column. */
+type SqlCount = bigint | number;
+
+function countOf(value: SqlCount | null | undefined): number {
+  return Number(value ?? 0);
+}
+
+interface ListingFilter {
+  /** `null` counts both views — the tabs' own read. */
+  readonly when: EventWhen | null;
+  readonly topic: string | null;
+  readonly year: number | null;
+  readonly month: number | null;
+  readonly centreIds: readonly string[] | null;
+  readonly now: Date;
+}
+
+const filterOf = (query: EventListingRead): ListingFilter => ({
+  when: query.when,
+  topic: query.topic,
+  year: query.year,
+  month: query.month,
+  centreIds: query.centreIds,
+  now: query.now,
+});
+
+/**
+ * Whether an occurrence `p` belongs to the view: in the upcoming view only one
+ * that has not ended (so an Event is never found under a month it has left
+ * behind); in the past view, or counting both, any.
+ */
+function inView(when: EventWhen | null, now: Date): Prisma.Sql {
+  return when === 'upcoming'
+    ? Prisma.sql`COALESCE(p.[endsAt], p.[startsAt]) >= ${now}`
+    : Prisma.sql`1 = 1`;
+}
+
+/**
+ * The PUBLISHED Events under a filter, one row each: the current revision, its
+ * Centre, the start of its earliest occurrence that has not ended (the
+ * upcoming order) and its latest end (the past order and the view itself) —
+ * `eventTiming`'s rule written over the CURRENT revision's occurrences, as the
+ * Phase-14 page read writes it. Every value is a bound parameter; a Centre
+ * filter travels as ONE JSON value.
+ */
+function listingRows(filter: ListingFilter): Prisma.Sql {
+  const ending = Prisma.sql`COALESCE(s.[endsAt], s.[startsAt])`;
+  const conditions = [
+    Prisma.sql`e.[state] = N'published'`,
+    Prisma.sql`e.[currentRevision] IS NOT NULL`,
+  ];
+  if (filter.topic !== null)
+    conditions.push(
+      Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[EventTopic] t WHERE t.[ownerId] = e.[id] AND t.[revisionNumber] = e.[currentRevision] AND t.[topicId] = ${filter.topic})`,
+    );
+  if (filter.centreIds !== null)
+    conditions.push(
+      Prisma.sql`r.[centreId] IN (SELECT [value] FROM OPENJSON(${JSON.stringify(filter.centreIds)}))`,
+    );
+  if (filter.year !== null)
+    conditions.push(
+      Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[EventSchedule] p WHERE p.[ownerId] = e.[id] AND p.[revisionNumber] = e.[currentRevision] AND YEAR(p.[startsLocal]) = ${filter.year} AND ${
+        filter.month === null
+          ? Prisma.sql`1 = 1`
+          : Prisma.sql`MONTH(p.[startsLocal]) = ${filter.month}`
+      } AND ${inView(filter.when, filter.now)})`,
+    );
+  const having =
+    filter.when === 'upcoming'
+      ? Prisma.sql`HAVING MAX(${ending}) >= ${filter.now}`
+      : filter.when === 'past'
+        ? Prisma.sql`HAVING MAX(${ending}) < ${filter.now}`
+        : Prisma.empty;
+  return Prisma.sql`SELECT e.[id], e.[currentRevision] AS [revision], r.[centreId],
+      MIN(CASE WHEN ${ending} >= ${filter.now} THEN s.[startsAt] END) AS [nextStart],
+      MAX(${ending}) AS [lastEnd]
+    FROM [dbo].[Event] e
+    JOIN [dbo].[EventRevision] r ON r.[ownerId] = e.[id] AND r.[number] = e.[currentRevision]
+    JOIN [dbo].[EventSchedule] s ON s.[ownerId] = e.[id] AND s.[revisionNumber] = e.[currentRevision]
+    WHERE ${Prisma.join(conditions, ' AND ')}
+    GROUP BY e.[id], e.[currentRevision], r.[centreId] ${having}`;
+}
+
+/** The cards of a page of identifiers, in that order; a withdrawn one is absent. */
+async function summariesOf(ids: readonly string[]): Promise<EventSummary[]> {
+  if (ids.length === 0) return [];
+  const rows = await db().event.findMany({
+    where: { id: { in: [...ids].slice(0, ID_BATCH) }, state: 'published' },
+    select: summarySelect,
+  });
+  const byId = new Map(rows.map((row) => [row.id.toLowerCase(), row]));
+  return ids.flatMap((id) => {
+    const row = byId.get(id.toLowerCase());
+    return row === undefined ? [] : [summaryOf(row)];
+  });
+}
+
 export function eventReads(): Pick<
   EditorialPublicReaderPort,
-  'eventCanonicalSlug' | 'publicEvent' | 'events' | 'hasPublishedEvents' | 'eventSitemap'
+  | 'eventCanonicalSlug'
+  | 'publicEvent'
+  | 'events'
+  | 'eventListing'
+  | 'eventListingFacets'
+  | 'hasPublishedEvents'
+  | 'eventSitemap'
 > {
   return {
     async eventCanonicalSlug(slug) {
@@ -782,19 +897,101 @@ export function eventReads(): Pick<
 
     async events(query) {
       const page = await pageOf(query);
-      if (page.ids.length === 0) return { items: [], more: page.more };
-      const rows = await db().event.findMany({
-        where: { id: { in: [...page.ids].slice(0, ID_BATCH) }, state: 'published' },
-        select: summarySelect,
-      });
-      const byId = new Map(rows.map((row) => [row.id, row]));
       // An Event withdrawn between the two reads is simply absent, never shown.
+      return { items: await summariesOf(page.ids), more: page.more };
+    },
+
+    /**
+     * One page of `/events` in the view's order — upcoming by the earliest
+     * occurrence not yet ended (so an ongoing Event comes first), past by the
+     * latest end, newest first; ties on the identifier, so the order is total
+     * — with the view's total. The cards are read by identifier afterwards.
+     */
+    async eventListing(query) {
+      const take = limitOf(query.limit, EVENT_LISTING_PAGE);
+      const rows = listingRows(filterOf(query));
+      const order =
+        query.when === 'upcoming'
+          ? Prisma.sql`[nextStart] ASC, [id] ASC`
+          : Prisma.sql`[lastEnd] DESC, [id] ASC`;
+      const [refs, totals] = await Promise.all([
+        db().$queryRaw<{ id: string }[]>`SELECT [id] FROM (${rows}) AS [listing]
+          ORDER BY ${order}
+          OFFSET ${offsetOf(query.offset)} ROWS FETCH NEXT ${take + 1} ROWS ONLY`,
+        db().$queryRaw<
+          { total: SqlCount | null }[]
+        >`SELECT COUNT_BIG(*) AS [total] FROM (${rows}) AS [listing]`,
+      ]);
       return {
-        items: page.ids.flatMap((id) => {
-          const row = byId.get(id);
-          return row === undefined ? [] : [summaryOf(row)];
-        }),
-        more: page.more,
+        items: await summariesOf(refs.slice(0, take).map((ref) => ref.id)),
+        total: countOf(totals[0]?.total),
+        hasMore: refs.length > take,
+      };
+    },
+
+    async eventListingFacets(query) {
+      const filter = filterOf(query);
+      // Each facet counts under every OTHER filter, its own left out.
+      const rows = (change: Partial<ListingFilter>) =>
+        listingRows({ ...filter, ...change });
+      const period = (alias: Prisma.Sql) =>
+        Prisma.sql`JOIN [dbo].[EventSchedule] p ON p.[ownerId] = ${alias}.[id] AND p.[revisionNumber] = ${alias}.[revision] AND ${inView(filter.when, filter.now)}`;
+      const [when, topics, years, months, centres] = await Promise.all([
+        db().$queryRaw<{ upcoming: SqlCount | null; past: SqlCount | null }[]>`
+          SELECT SUM(CASE WHEN [x].[lastEnd] >= ${filter.now} THEN 1 ELSE 0 END) AS [upcoming],
+                 SUM(CASE WHEN [x].[lastEnd] < ${filter.now} THEN 1 ELSE 0 END) AS [past]
+          FROM (${rows({ when: null, year: null, month: null })}) AS [x]`,
+        db().$queryRaw<{ id: string; events: SqlCount | null }[]>`
+          SELECT TOP (${EVENT_FACET_PAGE + 1}) t.[topicId] AS [id], COUNT_BIG(*) AS [events]
+          FROM (${rows({ topic: null })}) AS [x]
+          JOIN [dbo].[EventTopic] t ON t.[ownerId] = [x].[id] AND t.[revisionNumber] = [x].[revision]
+          GROUP BY t.[topicId]
+          ORDER BY [events] DESC, t.[topicId] ASC`,
+        db().$queryRaw<{ year: number; events: SqlCount | null }[]>`
+          SELECT YEAR(p.[startsLocal]) AS [year], COUNT(DISTINCT [x].[id]) AS [events]
+          FROM (${rows({ year: null, month: null })}) AS [x]
+          ${period(Prisma.sql`[x]`)}
+          GROUP BY YEAR(p.[startsLocal])
+          ORDER BY [year] ASC`,
+        filter.year === null
+          ? Promise.resolve([])
+          : db().$queryRaw<{ month: number; events: SqlCount | null }[]>`
+          SELECT MONTH(p.[startsLocal]) AS [month], COUNT(DISTINCT [x].[id]) AS [events]
+          FROM (${rows({ month: null })}) AS [x]
+          ${period(Prisma.sql`[x]`)}
+          WHERE YEAR(p.[startsLocal]) = ${filter.year}
+          GROUP BY MONTH(p.[startsLocal])
+          ORDER BY [month] ASC`,
+        db().$queryRaw<{ id: string; events: SqlCount | null }[]>`
+          SELECT TOP (${EVENT_FACET_CENTRES + 1}) [x].[centreId] AS [id], COUNT_BIG(*) AS [events]
+          FROM (${rows({ centreIds: null })}) AS [x]
+          WHERE [x].[centreId] IS NOT NULL
+          GROUP BY [x].[centreId]
+          ORDER BY [events] DESC, [x].[centreId] ASC`,
+      ]);
+      const [tabs] = when;
+      return {
+        when: { upcoming: countOf(tabs?.upcoming), past: countOf(tabs?.past) },
+        topics: {
+          items: topics
+            .slice(0, EVENT_FACET_PAGE)
+            .map((row) => ({ id: row.id, events: countOf(row.events) })),
+          hasMore: topics.length > EVENT_FACET_PAGE,
+        },
+        years: years.map((row) => ({
+          year: Number(row.year),
+          events: countOf(row.events),
+        })),
+        months: months.map((row) => ({
+          month: Number(row.month),
+          events: countOf(row.events),
+        })),
+        centres: {
+          items: centres
+            .slice(0, EVENT_FACET_CENTRES)
+            .map((row) => ({ id: row.id, events: countOf(row.events) })),
+          hasMore: centres.length > EVENT_FACET_CENTRES,
+        },
       };
     },
 

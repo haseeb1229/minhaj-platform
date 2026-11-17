@@ -2,12 +2,15 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import type { Locale } from '@minhaj/contracts';
 import {
   MEDIA_PAGE,
+  PHOTO_ARCHIVE_PERIODS,
+  PHOTO_FACET_PAGE,
   type GalleryDetail,
+  type GallerySpan,
   type GalleryPage,
   type GalleryRecord,
   type MediaPersistencePort,
@@ -15,6 +18,7 @@ import {
   type MediaReferencePort,
   type MediaState,
   type PhotoLabel,
+  type PhotoListingQuery,
   type PhotoPage,
   type PhotoRecord,
   type PhotoValue,
@@ -99,26 +103,8 @@ const GALLERY_SELECT = {
   labels: LABELS,
 } satisfies Prisma.GallerySelect;
 
-/** Recently ADDED first — creation order, never presented as a historical date. */
-const RECENTLY_ADDED = [{ createdAt: 'desc' }, { id: 'asc' }] as const;
-
-/**
- * The archive's order: latest known date first. SQL Server sorts NULL lowest,
- * so within a year a Photo known only to the year follows the dated months,
- * and the identifier makes the order total.
- */
-const HISTORICAL = [
-  { takenYear: 'desc' },
-  { takenMonth: 'desc' },
-  { takenDay: 'desc' },
-  { id: 'asc' },
-] as const;
-
 /** A public Photo inside a public Gallery. */
 const PUBLIC_MEMBER = { photo: PUBLISHED } as const;
-
-/** How many years the archive index may list — far beyond photography's span. */
-const ARCHIVE_YEARS = 500;
 
 /** How many Galleries the Photo editor lists a Photo in. */
 const PHOTO_GALLERIES = 50;
@@ -199,20 +185,73 @@ function photoPage(rows: readonly PhotoRow[]): PhotoPage {
   };
 }
 
+/** Stored identifiers keep their case while SQL Server compares without it. */
+const key = (id: string) => id.toLowerCase();
+
 /**
- * Public counts and covers for a set of published Galleries — TWO queries for
- * the whole set: the per-Gallery count and first public place, then the Photos
- * at exactly those places.
+ * A span end from its sortable form `year * 100 + month`, where the month is
+ * 0 (the earliest end) or 13 (the latest) when some public Photo of that year
+ * states none — so the end says only the year.
+ */
+function spanEnd(value: number): {
+  readonly year: number;
+  readonly month: number | null;
+} {
+  const year = Math.floor(value / 100);
+  const month = value % 100;
+  return { year, month: month >= 1 && month <= 12 ? month : null };
+}
+
+/**
+ * Each Gallery's span of KNOWN dates over its public Photos — one grouped
+ * statement for the whole set. The earliest end takes an unknown month as 0
+ * and the latest as 13, so an end's month is stated only when every public
+ * Photo of that end's year states one.
+ */
+async function spansOf(
+  ids: readonly string[],
+): Promise<ReadonlyMap<string, GallerySpan>> {
+  const rows = await getDatabaseClient().$queryRaw<
+    { galleryId: string; first: number | null; last: number | null }[]
+  >`
+    SELECT gi.[galleryId],
+           MIN(p.[takenYear] * 100 + COALESCE(p.[takenMonth], 0)) AS [first],
+           MAX(p.[takenYear] * 100 + COALESCE(p.[takenMonth], 13)) AS [last]
+    FROM [dbo].[GalleryItem] gi
+    JOIN [dbo].[Photo] p ON p.[id] = gi.[photoId] AND p.[state] = N'published'
+    WHERE gi.[galleryId] IN (${Prisma.join([...ids])}) AND p.[takenYear] IS NOT NULL
+    GROUP BY gi.[galleryId];`;
+  return new Map(
+    rows.flatMap((row) =>
+      row.first === null || row.last === null
+        ? []
+        : [
+            [
+              key(row.galleryId),
+              { first: spanEnd(Number(row.first)), last: spanEnd(Number(row.last)) },
+            ],
+          ],
+    ),
+  );
+}
+
+/**
+ * Public counts, covers and spans for a set of published Galleries — THREE
+ * queries for the whole set: the per-Gallery count and first public place, the
+ * Photos at exactly those places, and the spans of their known dates.
  */
 async function withCovers(rows: readonly GalleryRow[]): Promise<PublicGallery[]> {
   if (rows.length === 0) return [];
   const db = getDatabaseClient();
-  const summary = await db.galleryItem.groupBy({
-    by: ['galleryId'],
-    where: { galleryId: { in: rows.map((row) => row.id) }, ...PUBLIC_MEMBER },
-    _count: { _all: true },
-    _min: { position: true },
-  });
+  const [summary, spans] = await Promise.all([
+    db.galleryItem.groupBy({
+      by: ['galleryId'],
+      where: { galleryId: { in: rows.map((row) => row.id) }, ...PUBLIC_MEMBER },
+      _count: { _all: true },
+      _min: { position: true },
+    }),
+    spansOf(rows.map((row) => row.id)),
+  ]);
   const firsts = summary.flatMap((entry) =>
     entry._min.position === null
       ? []
@@ -233,6 +272,7 @@ async function withCovers(rows: readonly GalleryRow[]): Promise<PublicGallery[]>
       const found = covers.find((cover) => cover.galleryId === row.id);
       return found === undefined ? null : toPhoto(found.photo);
     })(),
+    span: spans.get(key(row.id)) ?? null,
   }));
 }
 
@@ -661,11 +701,10 @@ export function photoPersistence(): PhotoPersistence {
 
 type PhotoPublicReader = Pick<
   MediaPublicReaderPort,
-  | 'photos'
-  | 'archivePhotos'
-  | 'archiveYears'
-  | 'archiveMonths'
-  | 'galleries'
+  | 'photoListing'
+  | 'photoListingFacets'
+  | 'photoArchivePeriods'
+  | 'galleryDirectory'
   | 'gallery'
   | 'galleryCanonicalSlug'
   | 'galleryPhotos'
@@ -682,75 +721,288 @@ const LISTED_GALLERY = {
   items: { some: PUBLIC_MEMBER },
 } as const;
 
+/** The same predicate as SQL over `[dbo].[Gallery] g`. */
+const LISTED_GALLERY_SQL = Prisma.sql`g.[state] = N'published' AND EXISTS (
+  SELECT 1 FROM [dbo].[GalleryItem] li
+  JOIN [dbo].[Photo] lp ON lp.[id] = li.[photoId] AND lp.[state] = N'published'
+  WHERE li.[galleryId] = g.[id])`;
+
+/** Which of a view's filters a statement applies. */
+interface Use {
+  readonly year: boolean;
+  readonly month: boolean;
+  readonly gallery: boolean;
+  readonly language: boolean;
+}
+
+const EVERY_FILTER: Use = { year: true, month: true, gallery: true, language: true };
+
+/**
+ * THE LISTING'S SET, as SQL over `[dbo].[Photo] p`: the ONE public predicate
+ * (published, which the database guarantees means it has an image) and
+ * whichever of the view's filters `use` names — a Gallery only while it is
+ * itself published. Every value is a bound parameter.
+ */
+function listingWhere(q: PhotoListingQuery, use: Use): Prisma.Sql {
+  const conditions = [Prisma.sql`p.[state] = N'published'`];
+  if (use.year && q.year !== null) conditions.push(Prisma.sql`p.[takenYear] = ${q.year}`);
+  if (use.month && q.month !== null)
+    conditions.push(Prisma.sql`p.[takenMonth] = ${q.month}`);
+  if (use.gallery && q.gallery !== null)
+    conditions.push(
+      Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[GalleryItem] gi JOIN [dbo].[Gallery] g ON g.[id] = gi.[galleryId] AND g.[state] = N'published' WHERE gi.[photoId] = p.[id] AND gi.[galleryId] = ${q.gallery})`,
+    );
+  if (use.language && q.language !== null)
+    conditions.push(
+      Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[PhotoLabel] l WHERE l.[photoId] = p.[id] AND l.[locale] = ${q.language})`,
+    );
+  return Prisma.join(conditions, ' AND ');
+}
+
+/**
+ * The listing's orders. Recently added is creation order, never a date. By the
+ * date taken, an undated Photo follows every dated one, and within a year a
+ * Photo known only to it — then within a month one known only to it — follows
+ * the more precise ones, in either direction. Ties end on the identifier.
+ */
+function listingOrder(sort: PhotoListingQuery['sort']): Prisma.Sql {
+  if (sort === 'added') return Prisma.sql`p.[createdAt] DESC, p.[id] ASC`;
+  const direction = sort === 'newest' ? Prisma.sql`DESC` : Prisma.sql`ASC`;
+  return Prisma.sql`CASE WHEN p.[takenYear] IS NULL THEN 1 ELSE 0 END,
+    p.[takenYear] ${direction},
+    CASE WHEN p.[takenMonth] IS NULL THEN 1 ELSE 0 END, p.[takenMonth] ${direction},
+    CASE WHEN p.[takenDay] IS NULL THEN 1 ELSE 0 END, p.[takenDay] ${direction},
+    p.[createdAt] ${direction}, p.[id] ASC`;
+}
+
+/** A published Gallery's address and titles, as a facet names it. */
+const GALLERY_REF_SELECT = {
+  id: true,
+  slug: true,
+  primaryLocale: true,
+  labels: LABELS,
+} satisfies Prisma.GallerySelect;
+
+/**
+ * NEWS & EVENTS PART 2 — the public photograph reads (DOMAIN_MODEL.md §11):
+ * the listing and its aggregates, the archive's periods and the Galleries'
+ * directory beside Phase 12's Gallery, membership, sitemap and Phase 14's
+ * Event composition. TWO READS, THE SECOND AUTHORITATIVE: an ordering or
+ * aggregate statement returns identifiers, and the rows a page shows are
+ * loaded again under the public predicate, so an error in the first could only
+ * drop a record, never admit one.
+ */
 export function photoPublicReader(): PhotoPublicReader {
   const db = getDatabaseClient();
+
+  /** How many published Photos a set holds. */
+  async function count(where: Prisma.Sql): Promise<number> {
+    const [row] = await db.$queryRaw<{ photos: number }[]>`
+      SELECT COUNT(*) AS [photos] FROM [dbo].[Photo] p WHERE ${where};`;
+    return Number(row?.photos ?? 0);
+  }
+
   return {
-    async photos(offset) {
+    async photoListing(q) {
+      const where = listingWhere(q, EVERY_FILTER);
+      const page = await db.$queryRaw<{ id: string; total: number }[]>`
+        SELECT p.[id], COUNT(*) OVER () AS [total]
+        FROM [dbo].[Photo] p
+        WHERE ${where}
+        ORDER BY ${listingOrder(q.sort)}
+        OFFSET ${boundedOffset(q.offset)} ROWS FETCH NEXT ${q.limit + 1} ROWS ONLY;`;
+
+      // Past the end there is no row to carry the total; it is counted alone.
+      const total =
+        page[0] === undefined
+          ? q.offset === 0
+            ? 0
+            : await count(where)
+          : Number(page[0].total);
+      const ids = page.slice(0, q.limit).map((row) => row.id);
+      if (ids.length === 0) return { items: [], total, hasMore: false };
+
       const rows = await db.photo.findMany({
-        where: PUBLISHED,
+        where: { ...PUBLISHED, id: { in: ids } },
         select: PHOTO_SELECT,
-        orderBy: [...RECENTLY_ADDED],
-        skip: boundedOffset(offset),
-        take: MEDIA_PAGE + 1,
       });
-      return photoPage(rows);
+      const byId = new Map(rows.map((row) => [key(row.id), row]));
+      // A Photo withdrawn between the two reads is simply absent.
+      const items = ids.flatMap((id) => {
+        const row = byId.get(key(id));
+        return row === undefined ? [] : [toPhoto(row)];
+      });
+      return { items, total, hasMore: page.length > q.limit };
     },
 
-    async archivePhotos(query) {
-      const rows = await db.photo.findMany({
-        where: {
-          // The filters NARROW the public predicate; none can widen it, and an
-          // undated Photo is never in the archive.
-          ...PUBLISHED,
-          takenYear: query.year === null ? { not: null } : query.year,
-          ...(query.month === null ? {} : { takenMonth: query.month }),
-        },
-        select: PHOTO_SELECT,
-        orderBy: [...HISTORICAL],
-        skip: boundedOffset(query.offset),
-        take: MEDIA_PAGE + 1,
-      });
-      return photoPage(rows);
-    },
+    /**
+     * GROUPED READS, each bounded: a facet's own filter is left out of its own
+     * counts (a year's leaves out the month too), so every option says how many
+     * Photos choosing it would show.
+     */
+    async photoListingFacets(q) {
+      const except = (omit: readonly (keyof Use)[]) =>
+        listingWhere(q, {
+          year: !omit.includes('year'),
+          month: !omit.includes('month'),
+          gallery: !omit.includes('gallery'),
+          language: !omit.includes('language'),
+        });
+      const whole = Prisma.sql`p.[state] = N'published'`;
+      const [all, listed, years, months, galleries, languages] = await Promise.all([
+        db.$queryRaw<
+          {
+            photos: number;
+            dated: number;
+            firstYear: number | null;
+            lastYear: number | null;
+          }[]
+        >`
+          SELECT COUNT(*) AS [photos], COUNT(p.[takenYear]) AS [dated],
+                 MIN(p.[takenYear]) AS [firstYear], MAX(p.[takenYear]) AS [lastYear]
+          FROM [dbo].[Photo] p
+          WHERE ${whole};`,
+        db.$queryRaw<{ languages: number; galleries: number; photos: number }[]>`
+          SELECT (SELECT COUNT(DISTINCT l.[locale]) FROM [dbo].[PhotoLabel] l
+                  JOIN [dbo].[Photo] lp ON lp.[id] = l.[photoId] AND lp.[state] = N'published') AS [languages],
+                 (SELECT COUNT(*) FROM [dbo].[Gallery] g WHERE ${LISTED_GALLERY_SQL}) AS [galleries],
+                 (SELECT COUNT(DISTINCT gi.[photoId]) FROM [dbo].[GalleryItem] gi
+                  JOIN [dbo].[Gallery] g ON g.[id] = gi.[galleryId] AND g.[state] = N'published'
+                  JOIN [dbo].[Photo] p ON p.[id] = gi.[photoId] AND p.[state] = N'published') AS [photos];`,
+        db.$queryRaw<{ year: number; count: number }[]>`
+          SELECT p.[takenYear] AS [year], COUNT(*) AS [count]
+          FROM [dbo].[Photo] p
+          WHERE ${except(['year', 'month'])} AND p.[takenYear] IS NOT NULL
+          GROUP BY p.[takenYear]
+          ORDER BY p.[takenYear] DESC;`,
+        q.year === null
+          ? Promise.resolve([] as { month: number; count: number }[])
+          : db.$queryRaw<{ month: number; count: number }[]>`
+              SELECT p.[takenMonth] AS [month], COUNT(*) AS [count]
+              FROM [dbo].[Photo] p
+              WHERE ${except(['month'])} AND p.[takenMonth] IS NOT NULL
+              GROUP BY p.[takenMonth]
+              ORDER BY p.[takenMonth] ASC;`,
+        db.$queryRaw<{ id: string; count: number }[]>`
+          SELECT TOP (${PHOTO_FACET_PAGE + 1}) gi.[galleryId] AS [id], COUNT(DISTINCT gi.[photoId]) AS [count]
+          FROM [dbo].[GalleryItem] gi
+          JOIN [dbo].[Gallery] g ON g.[id] = gi.[galleryId] AND g.[state] = N'published'
+          WHERE gi.[photoId] IN (SELECT p.[id] FROM [dbo].[Photo] p WHERE ${except(['gallery'])})
+          GROUP BY gi.[galleryId]
+          ORDER BY [count] DESC, [id] ASC;`,
+        db.$queryRaw<{ code: string; count: number }[]>`
+          SELECT l.[locale] AS [code], COUNT(DISTINCT l.[photoId]) AS [count]
+          FROM [dbo].[PhotoLabel] l
+          WHERE l.[photoId] IN (SELECT p.[id] FROM [dbo].[Photo] p WHERE ${except(['language'])})
+          GROUP BY l.[locale]
+          ORDER BY [count] DESC, [code] ASC;`,
+      ]);
 
-    async archiveYears() {
-      const rows = await db.photo.groupBy({
-        by: ['takenYear'],
-        where: { ...PUBLISHED, takenYear: { not: null } },
-        _count: { _all: true },
-        orderBy: { takenYear: 'desc' },
-        take: ARCHIVE_YEARS,
-      });
-      return rows.flatMap((row) =>
-        row.takenYear === null ? [] : [{ year: row.takenYear, photos: row._count._all }],
-      );
-    },
-
-    async archiveMonths(year) {
-      const rows = await db.photo.groupBy({
-        by: ['takenMonth'],
-        where: { ...PUBLISHED, takenYear: year, takenMonth: { not: null } },
-        _count: { _all: true },
-        orderBy: { takenMonth: 'asc' },
-      });
-      return rows.flatMap((row) =>
-        row.takenMonth === null
+      const named = galleries.slice(0, PHOTO_FACET_PAGE);
+      // The Galleries' addresses and titles, under the public predicate again.
+      const refs =
+        named.length === 0
           ? []
-          : [{ month: row.takenMonth, photos: row._count._all }],
-      );
+          : await db.gallery.findMany({
+              where: { ...PUBLISHED, id: { in: named.map((row) => row.id) } },
+              select: GALLERY_REF_SELECT,
+            });
+      const refOf = new Map(refs.map((row) => [key(row.id), row]));
+
+      return {
+        all: {
+          photos: Number(all[0]?.photos ?? 0),
+          dated: Number(all[0]?.dated ?? 0),
+          firstYear: all[0]?.firstYear ?? null,
+          lastYear: all[0]?.lastYear ?? null,
+          languages: Number(listed[0]?.languages ?? 0),
+          galleries: Number(listed[0]?.galleries ?? 0),
+          inGalleries: Number(listed[0]?.photos ?? 0),
+        },
+        years: years.map((row) => ({ year: row.year, photos: Number(row.count) })),
+        months: months.map((row) => ({ month: row.month, photos: Number(row.count) })),
+        galleries: {
+          items: named.flatMap((row) => {
+            const found = refOf.get(key(row.id));
+            return found === undefined
+              ? []
+              : [
+                  {
+                    id: found.id,
+                    slug: found.slug,
+                    primaryLocale: found.primaryLocale as Locale,
+                    labels: labelsOf(found.labels),
+                    photos: Number(row.count),
+                  },
+                ];
+          }),
+          hasMore: galleries.length > PHOTO_FACET_PAGE,
+        },
+        languages: languages.flatMap((row) =>
+          row.code === 'en' || row.code === 'ur' || row.code === 'ar'
+            ? [{ code: row.code as Locale, photos: Number(row.count) }]
+            : [],
+        ),
+      };
     },
 
-    async galleries(offset) {
+    async photoArchivePeriods() {
+      const rows = await db.$queryRaw<
+        { year: number; month: number | null; count: number }[]
+      >`
+        SELECT TOP (${PHOTO_ARCHIVE_PERIODS}) p.[takenYear] AS [year], p.[takenMonth] AS [month], COUNT(*) AS [count]
+        FROM [dbo].[Photo] p
+        WHERE p.[state] = N'published' AND p.[takenYear] IS NOT NULL
+        GROUP BY p.[takenYear], p.[takenMonth]
+        ORDER BY p.[takenYear] DESC, p.[takenMonth] ASC;`;
+      return rows.map((row) => ({
+        year: row.year,
+        month: row.month,
+        photos: Number(row.count),
+      }));
+    },
+
+    async galleryDirectory(q) {
+      const order =
+        q.sort === 'title'
+          ? Prisma.sql`t.[title] ASC, g.[id] ASC`
+          : q.sort === 'oldest'
+            ? Prisma.sql`g.[createdAt] ASC, g.[id] ASC`
+            : Prisma.sql`g.[createdAt] DESC, g.[id] ASC`;
+      const page = await db.$queryRaw<{ id: string; total: number }[]>`
+        SELECT g.[id], COUNT(*) OVER () AS [total]
+        FROM [dbo].[Gallery] g
+        OUTER APPLY (
+          SELECT TOP (1) l.[title] FROM [dbo].[GalleryLabel] l
+          WHERE l.[galleryId] = g.[id]
+          ORDER BY CASE WHEN l.[locale] = ${q.titleLocale} THEN 0
+                        WHEN l.[locale] = g.[primaryLocale] THEN 1 ELSE 2 END, l.[locale]
+        ) t
+        WHERE ${LISTED_GALLERY_SQL}
+        ORDER BY ${order}
+        OFFSET ${boundedOffset(q.offset)} ROWS FETCH NEXT ${q.limit + 1} ROWS ONLY;`;
+      const total =
+        page[0] === undefined
+          ? q.offset === 0
+            ? 0
+            : Number(
+                (
+                  await db.$queryRaw<{ galleries: number }[]>`
+                    SELECT COUNT(*) AS [galleries] FROM [dbo].[Gallery] g WHERE ${LISTED_GALLERY_SQL};`
+                )[0]?.galleries ?? 0,
+              )
+          : Number(page[0].total);
+      const ids = page.slice(0, q.limit).map((row) => row.id);
+      if (ids.length === 0) return { items: [], total, hasMore: false };
       const rows = await db.gallery.findMany({
-        where: LISTED_GALLERY,
+        where: { id: { in: ids }, ...LISTED_GALLERY },
         select: GALLERY_SELECT,
-        orderBy: [...RECENTLY_ADDED],
-        skip: boundedOffset(offset),
-        take: MEDIA_PAGE + 1,
       });
+      const byId = new Map(rows.map((row) => [key(row.id), row]));
       return {
-        items: await withCovers(rows.slice(0, MEDIA_PAGE)),
-        hasMore: rows.length > MEDIA_PAGE,
+        items: await withCovers(ids.flatMap((id) => byId.get(key(id)) ?? [])),
+        total,
+        hasMore: page.length > q.limit,
       };
     },
 

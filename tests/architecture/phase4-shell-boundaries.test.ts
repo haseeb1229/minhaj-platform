@@ -192,6 +192,10 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/events/page.tsx',
   'apps/web/src/app/[locale]/(public)/events/[slug]/page.tsx',
   'apps/web/src/app/[locale]/(public)/events/[slug]/gallery/page.tsx',
+  // News & Events Part 2: an Event as a calendar file — a read of the same
+  // published Event and public Centre the page shows, through the same public
+  // roots, never a session.
+  'apps/web/src/app/[locale]/(public)/events/[slug]/calendar/route.ts',
   'apps/web/src/app/[locale]/(public)/global/centres/[slug]/events/page.tsx',
   // Phase 15. Every Collection surface reads records an editor publishes and
   // withdraws, and resolves each member through its OWNER's public reader —
@@ -297,6 +301,9 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/newsletter/page.tsx',
   'apps/web/src/app/[locale]/(public)/newsletter/confirm/page.tsx',
   'apps/web/src/app/[locale]/(public)/newsletter/unsubscribe/page.tsx',
+  // News & Events Part 2 — the three pages' one client form island: it posts
+  // to the UNCHANGED actions below and only presents their answers.
+  'apps/web/src/app/[locale]/(public)/newsletter/newsletter-form.tsx',
   // Phase 22 — Learn. Every surface reads Courses and LearningPaths an operator
   // publishes and withdraws through Learning's PUBLIC root, so none can be
   // prerendered; each is proven below to reach no session, no identity

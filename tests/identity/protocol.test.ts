@@ -472,6 +472,11 @@ describe('the mutation surface', () => {
         // Phase 23: the Learn teacher alias — the same shared, GET-only 301 to
         // `/people/{slug}` the author and speaker aliases are.
         'apps/web/src/app/[locale]/(public)/learn/teachers/[slug]/route.ts',
+        // News & Events Part 2: a published Event as an iCalendar file — a
+        // GET-only read of the same published Event and public Centre its page
+        // shows, through the public roots; it reads no session, sets no cookie
+        // and mutates nothing.
+        'apps/web/src/app/[locale]/(public)/events/[slug]/calendar/route.ts',
         // Phase 11: Media's audio byte routes — public playback, and the
         // administrator's preview, which READS a session to re-check
         // `media.administer` live — and the one audio upload.
@@ -584,11 +589,11 @@ describe('the mutation surface', () => {
       ].sort(),
     );
 
-    // And the thirty-three others (Phase 23 added the Learn teacher alias, Phase 24
+    // And the thirty-four others (Phase 23 added the Learn teacher alias, Phase 24
     // the three attachment byte routes, Phase 30-R the six picture routes,
     // Rebaseline R2 their six derivative routes, Quran Part 5 the recitation
     // plan, Watch Part 1 the Topic view's 301, Watch Part 3 Listen's recitations
-    // 301) genuinely are read-only: a mutating verb on any of them would be a
+    // 301, News & Events Part 2 an Event's calendar file) genuinely are read-only: a mutating verb on any of them would be a
     // state-changing endpoint outside the Class-A controls.
     const { readFile } = await import('node:fs/promises');
 
@@ -599,7 +604,7 @@ describe('the mutation surface', () => {
         !entry.includes('/api/my/') &&
         !entry.includes('/api/messaging/'),
     );
-    expect(readOnly).toHaveLength(33);
+    expect(readOnly).toHaveLength(34);
 
     for (const route of readOnly) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');

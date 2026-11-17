@@ -3,10 +3,10 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
 import { newsletterReadRuntime } from '@/composition/newsletter-read';
-import { Alert, Container, PageHeading, TextLink } from '@/components/ui';
+import { Alert, Container, Icon, PageHeading, TextLink } from '@/components/ui';
 import { requireLocale } from '@/config/route-locale';
-import { ActionForm } from '../../../(identity)/form-state';
 import { unsubscribeNewsletter } from '../actions';
+import { NewsletterForm } from '../newsletter-form';
 
 /**
  * The emailed newsletter unsubscribe link — protocol class D
@@ -60,22 +60,32 @@ export default async function NewsletterUnsubscribePage({
         {status === 'valid' && token !== null ? (
           <>
             <p className="text-foreground-muted">{t('unsubscribe.description')}</p>
-            <ActionForm
+            <NewsletterForm
+              headingLevel="h2"
               action={unsubscribeNewsletter}
-              submitLabel={t('unsubscribe.submit')}
-              pendingLabel={t('unsubscribe.pending')}
-              messages={{
-                success: t('unsubscribe.done'),
-                'invalid-link': t('link.invalid'),
-                'rate-limited': t('result.rateLimited'),
-                unknown: t('result.unavailable'),
+              labels={{
+                submit: t('unsubscribe.submit'),
+                pending: t('unsubscribe.pending'),
+                doneHeading: t('unsubscribe.doneHeading'),
+                done: t('unsubscribe.done'),
+                failures: {
+                  'invalid-link': t('link.invalid'),
+                  'rate-limited': t('result.rateLimited'),
+                  unknown: t('result.unavailable'),
+                },
               }}
             >
               <input type="hidden" name="token" value={token} />
-            </ActionForm>
+            </NewsletterForm>
           </>
         ) : (
-          <Alert tone="warning">{t('link.invalid')}</Alert>
+          <div className="flex flex-col gap-3">
+            <Alert tone="warning">{t('link.invalid')}</Alert>
+            <p className="flex items-start gap-2 text-sm text-foreground-muted">
+              <Icon name="info" size={16} className="mt-[0.2em] shrink-0" />
+              <span>{t('link.unsubscribeHelp')}</span>
+            </p>
+          </div>
         )}
 
         <TextLink href={localizedPath(locale, '/newsletter')}>{t('link.back')}</TextLink>

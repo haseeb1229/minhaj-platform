@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import type { Browser, BrowserContext, Locator, Page } from '@playwright/test';
 
+import { NEWSLETTER_CONFIRMATION_HOURS } from '../../packages/contracts/src/personalisation/index.ts';
 import type { SqlSession } from '../../packages/database/src/lifecycle/sql-connection.ts';
 import {
   accountIdFor,
@@ -63,18 +64,24 @@ const LOCALES: readonly UiLocale[] = ['en', 'ur', 'ar'];
 interface NewsletterCopy {
   readonly title: string;
   readonly form: { readonly email: string; readonly submit: string };
-  readonly result: { readonly sent: string };
+  readonly result: {
+    readonly sent: string;
+    readonly sentHeading: string;
+    readonly again: string;
+  };
+  readonly page: { readonly notYet: string; readonly privacy: string };
   readonly confirm: {
     readonly title: string;
     readonly submit: string;
     readonly done: string;
+    readonly doneHeading: string;
   };
   readonly unsubscribe: {
     readonly title: string;
     readonly submit: string;
     readonly done: string;
   };
-  readonly link: { readonly invalid: string };
+  readonly link: { readonly invalid: string; readonly confirmHelp: string };
   readonly admin: {
     readonly title: string;
     readonly noAddress: string;
@@ -316,6 +323,35 @@ test.describe('the public newsletter', () => {
     expect(Number(confirmed.generation)).toBe(1);
   });
 
+  test('answers in one panel that takes focus, and offers another address (Part 2)', async ({
+    page,
+  }) => {
+    await page.goto('/newsletter');
+    const main = page.getByRole('main');
+    // What the page says before anything is asked: the honest fact that no
+    // issue is sent yet, and where personal data is described.
+    await expect(main).toContainText(EN.page.notYet);
+    await expect(main.getByRole('link', { name: EN.page.privacy })).toHaveAttribute(
+      'href',
+      '/legal/privacy',
+    );
+    // The one answer replaces the form — no button is left to press again —
+    // and its heading takes focus.
+    expect(await subscribe(page, address('o'))).toBe(EN.result.sent);
+    await expect(
+      main.getByRole('heading', { name: EN.result.sentHeading }),
+    ).toBeFocused();
+    await expect(
+      main.getByRole('button', { name: EN.form.submit, exact: true }),
+    ).toHaveCount(0);
+    // Another address: an empty form again, the cursor in it.
+    await main.getByRole('button', { name: EN.result.again }).click();
+    const email = page.getByLabel(EN.form.email);
+    await expect(email).toBeFocused();
+    await expect(email).toHaveValue('');
+    await expect(answerOn(page)).toHaveCount(0);
+  });
+
   test('is the same page signed in and signed out', async ({ request, browser }) => {
     const { page } = await account(browser, 1, 'newsletter-reader-account');
     const anonymous = await request.get('/newsletter');
@@ -372,13 +408,22 @@ test.describe('the emailed links', () => {
 
     await button.click();
     await expect(page.getByRole('main').getByRole('status')).toHaveText(EN.confirm.done);
+    // Part 2: the answer replaces the form, so the spent button is gone.
+    await expect(
+      page.getByRole('main').getByRole('heading', { name: EN.confirm.doneHeading }),
+    ).toBeFocused();
+    await expect(page.getByRole('button', { name: EN.confirm.submit })).toHaveCount(0);
     const confirmed = await subscriberById(subscriberId);
     expect(confirmed.state).toBe('confirmed');
     expect(confirmed.confirmedAt).not.toBeNull();
 
-    // USED: the same link is now simply invalid, with nothing to press.
+    // USED: the same link is now simply invalid, with nothing to press — and
+    // the way to a fresh one, the same words for used, expired or unknown.
     await page.goto(confirm);
     await expect(page.getByRole('main')).toContainText(EN.link.invalid);
+    await expect(page.getByRole('main')).toContainText(
+      EN.link.confirmHelp.replace('{hours}', String(NEWSLETTER_CONFIRMATION_HOURS)),
+    );
     await expect(page.getByRole('button', { name: EN.confirm.submit })).toHaveCount(0);
 
     // A malformed token reads the same.

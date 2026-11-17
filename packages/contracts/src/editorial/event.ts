@@ -276,6 +276,12 @@ export interface EventSummary {
   /** The Centre it is held at, as an IDENTIFIER; Global decides what is shown. */
   readonly centreId: string | null;
   readonly topicIds: readonly string[];
+  /**
+   * The Galleries it associates, in order, as IDENTIFIERS (News & Events Part
+   * 2): Media decides which are listed now, so a card can offer an Event's
+   * photographs only while it has some.
+   */
+  readonly galleryIds: readonly string[];
 }
 
 export interface EventPage {

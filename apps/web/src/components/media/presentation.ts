@@ -1,11 +1,10 @@
 import { localizedPath } from '@minhaj/contracts';
-import { z } from 'zod';
 
 import type { Locale } from '@minhaj/contracts';
 import {
   isoDuration,
-  PHOTO_LIMITS,
   providerEmbedUrl,
+  type GallerySpan,
   type MediaLabel,
   type PartialDate,
   type SeriesKind,
@@ -211,57 +210,6 @@ export function watchLanding(
     : { sort: requested, tabs: true };
 }
 
-/** A plain offset from `?offset=`, bounded, for the grouping pages. */
-export function readOffset(query: Record<string, string | string[] | undefined>): number {
-  const raw = query['offset'];
-  return z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(25_000)
-    .catch(0)
-    .parse(typeof raw === 'string' && raw.length <= 8 ? raw : 0);
-}
-
-/**
- * The archive's `?year=` and `?month=`, TOLERATED: a malformed or impossible
- * value is simply absent, and a month without a year means nothing. The read
- * service validates again.
- */
-export function readArchiveQuery(query: Record<string, string | string[] | undefined>): {
-  readonly year: number | null;
-  readonly month: number | null;
-  readonly offset: number;
-} {
-  const whole = (key: string, pattern: RegExp): number | null => {
-    const raw = query[key];
-    return typeof raw === 'string' && pattern.test(raw) ? Number(raw) : null;
-  };
-  const rawYear = whole('year', /^\d{4}$/);
-  const year = rawYear !== null && rawYear >= PHOTO_LIMITS.earliestYear ? rawYear : null;
-  const rawMonth = whole('month', /^\d{1,2}$/);
-  const month =
-    year !== null && rawMonth !== null && rawMonth >= 1 && rawMonth <= 12
-      ? rawMonth
-      : null;
-  return { year, month, offset: readOffset(query) };
-}
-
-/** The archive's address for a year, a month and an offset, neutral values omitted. */
-export function archivePath(
-  locale: string,
-  filter: { readonly year: number | null; readonly month: number | null },
-  offset = 0,
-): string {
-  const search = new URLSearchParams();
-  if (filter.year !== null) search.set('year', String(filter.year));
-  if (filter.year !== null && filter.month !== null)
-    search.set('month', String(filter.month));
-  if (offset > 0) search.set('offset', String(offset));
-  const encoded = search.toString();
-  return localizedPath(locale, `/media/archive${encoded === '' ? '' : `?${encoded}`}`);
-}
-
 /**
  * A partial date as it was recorded — a year, a month and year, or a full date
  * — in the interface locale, never padded to a precision nobody has, and never
@@ -292,9 +240,17 @@ export function partialDate(
   };
 }
 
-/** A grouping page's address at an offset. The first page is the bare address. */
-export function offsetPath(path: string, offset: number): string {
-  return offset === 0 ? path : `${path}?offset=${String(offset)}`;
+/**
+ * News & Events Part 2 — a Gallery's span of dates, as its photographs record
+ * them: one period when both ends are the same ("March 1995", "1995"), else the
+ * two ends, each only as precise as it is known ("March 1995 – 1997").
+ */
+export function gallerySpanText(span: GallerySpan, locale: string): string {
+  const end = (value: GallerySpan['first']) =>
+    partialDate({ year: value.year, month: value.month, day: null }, locale).text;
+  return span.first.year === span.last.year && span.first.month === span.last.month
+    ? end(span.first)
+    : `${end(span.first)} – ${end(span.last)}`;
 }
 
 /* ===========================================================================

@@ -227,7 +227,9 @@ live('Phase 12 photographs after a real SQL and storage restore', () => {
       credit: 'Synthetic recovery credit',
     });
     expect(
-      (await reads.archivePhotos({ year: 1995 })).items.map((photo) => photo.id),
+      (await reads.photoListing({ year: 1995, sort: 'newest' })).items.map(
+        (photo) => photo.id,
+      ),
     ).toContain(fixture.publishedPhotoId);
   });
 });

@@ -216,29 +216,6 @@ export const photoAdminQuerySchema = z
 
 export type PhotoAdminQuery = z.infer<typeof photoAdminQuerySchema>;
 
-/**
- * The public archive's filters: a year, and within it a month. A month without
- * a year means nothing and is refused; each only NARROWS the public predicate.
- */
-export const photoArchiveQuerySchema = z
-  .object({
-    offset: z.number().int().min(0).max(25_000).default(0),
-    year: z
-      .number()
-      .int()
-      .min(PHOTO_LIMITS.earliestYear)
-      .max(9999)
-      .nullable()
-      .default(null),
-    month: z.number().int().min(1).max(12).nullable().default(null),
-  })
-  .strict()
-  .refine((value) => value.month === null || value.year !== null, {
-    message: 'A month needs its year.',
-  });
-
-export type PhotoArchiveQuery = z.infer<typeof photoArchiveQuerySchema>;
-
 export interface PhotoRecord {
   readonly id: string;
   readonly primaryLocale: Locale;
@@ -262,18 +239,6 @@ export interface PhotoRecord {
 export interface PhotoPage {
   readonly items: readonly PhotoRecord[];
   readonly hasMore: boolean;
-}
-
-/** One year of the public archive and how many public Photos it holds. */
-export interface ArchiveYear {
-  readonly year: number;
-  readonly photos: number;
-}
-
-/** One month of an archive year, where the month is known. */
-export interface ArchiveMonth {
-  readonly month: number;
-  readonly photos: number;
 }
 
 /* ===========================================================================
@@ -350,11 +315,25 @@ export interface GalleryPage {
 export interface PublicGallery extends GalleryRecord {
   readonly photoCount: number;
   readonly cover: PhotoRecord | null;
+  /**
+   * News & Events Part 2 — the span of its public Photos' KNOWN dates, or
+   * `null` when none is dated: the earliest and the latest year, each with its
+   * month only where every public Photo of that end's year states one. Derived
+   * from the Photos' own recorded dates alone, never from when anything was
+   * made, and never stored.
+   */
+  readonly span: GallerySpan | null;
 }
 
-export interface PublicGalleryPage {
-  readonly items: readonly PublicGallery[];
-  readonly hasMore: boolean;
+/** A year, and its month where it is known (`PublicGallery.span`). */
+export interface YearMonth {
+  readonly year: number;
+  readonly month: number | null;
+}
+
+export interface GallerySpan {
+  readonly first: YearMonth;
+  readonly last: YearMonth;
 }
 
 /** A Gallery with its whole ordered membership, any state, for the editor. */

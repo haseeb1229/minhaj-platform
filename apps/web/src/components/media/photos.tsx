@@ -3,9 +3,10 @@ import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
 import {
-  MEDIA_PAGE,
+  GALLERY_DIRECTORY_PAGE,
+  PHOTO_LISTING_PAGE,
   photoWords,
-  type ArchiveMonth,
+  type PhotoListingFacets,
   type PhotoRecord,
   type PublicGallery,
 } from '@minhaj/contracts/media';
@@ -13,43 +14,63 @@ import {
 import { servablePhotos } from '@/composition/media-assets';
 import { mediaReadRuntime } from '@/composition/media-read';
 import { paragraphsOf } from '@/components/library/scholarly-presentation';
+import { RangeSummary } from '@/components/library/browse-parts';
+import { caseless, pageCount, pageRange } from '@/components/topic-hub/address';
 import {
+  ActiveFilters,
+  CountedSelect,
+  ExploreFilters,
+  ExploreHero,
+  languageName,
+} from '@/components/topic-hub/parts';
+import {
+  Breadcrumbs,
   Container,
   EmptyState,
-  FilterLink,
+  Field,
+  Icon,
+  LinkTabs,
   MetaRow,
+  Pager,
   SectionHeader,
-  TextLink,
+  Select,
 } from '@/components/ui';
 import { derivativeSrcSet } from '@/components/ui/image-derivatives';
 import { directionOf } from '@/config/locale';
-import {
-  BreadcrumbData,
-  MEDIA_CARD,
-  MEDIA_CARD_LINK,
-  MediaPageHeader,
-  Pagination,
-} from './parts';
+import { BreadcrumbData, MEDIA_CARD, MEDIA_CARD_LINK, MediaPageHeader } from './parts';
 import { PhotoViewer, type ViewerPhoto } from './photo-viewer';
 import {
-  archivePath,
+  galleriesHref,
+  galleryPageHref,
+  photosFiltered,
+  photosHref,
+  photosListingHref,
+  photosReadQuery,
+  galleriesReadQuery,
+  type GalleriesView,
+  type PhotosView,
+} from './photos-view';
+import {
   galleryPath,
+  gallerySpanText,
   mediaLabel,
   mediaLocales,
-  offsetPath,
   partialDate,
   photoAssetPath,
-  readArchiveQuery,
-  readOffset,
 } from './presentation';
 
 /**
- * The public photograph surfaces (ROUTE_MAP.md §3.9) — Phase 12.
+ * The public photograph surfaces (ROUTE_MAP.md §3.9) — Phase 12; rebuilt in
+ * News & Events Part 2.
  *
- *   `/media/photos`            every published photograph, recently added first
- *   `/media/galleries`         published galleries, each with a genuine cover
+ *   `/media/photos`            every published photograph, with counted
+ *                              filters (year and month taken, gallery,
+ *                              language), three orders and numbered pages
+ *   `/media/galleries`         the listed galleries, each with its genuine
+ *                              cover, count and span of dates
  *   `/media/galleries/{slug}`  one gallery's photographs, in its order
- *   `/media/archive`           the historical archive, by the date taken
+ *   `/media/archive`           the index of years and months taken
+ *                              (`./photo-archive`)
  *
  * SERVER COMPONENTS, SESSION-FREE BY CONSTRUCTION. Every read goes through
  * `@/composition/media-read` and `@/composition/media-assets`, neither of which
@@ -65,61 +86,82 @@ import {
  * shown exactly as recorded, each marked with the language it is in. Where a
  * Photo has no alternative text the image says so plainly — it is not passed
  * off as decorative, and nothing is derived from a filename or the pixels
- * (SECURITY_BASELINE.md §16.3).
+ * (SECURITY_BASELINE.md §16.3). A Gallery's date is only the span of its
+ * photographs' recorded dates. No download is offered: none is authorised.
  *
  * BOUNDED AND LAZY. One page of at most twenty-four photographs, in a stable
  * order; images below the first row load as they approach the screen, and
  * every image carries its real dimensions so nothing shifts as it arrives.
  */
 
-type PhotosTranslator = Awaited<ReturnType<typeof getTranslations<'photos'>>>;
+export type PhotosTranslator = Awaited<ReturnType<typeof getTranslations<'photos'>>>;
 
-/** Home / … — the trail every photograph page starts with. */
-async function photosTrail(locale: Locale) {
-  const shell = await getTranslations({ locale, namespace: 'shell' });
+/** Home / News and Events / … — the trail every photograph page starts with. */
+export async function photosTrail(locale: Locale) {
+  const [shell, news] = await Promise.all([
+    getTranslations({ locale, namespace: 'shell' }),
+    getTranslations({ locale, namespace: 'news' }),
+  ]);
   return {
     label: shell('nav.breadcrumbs'),
     home: { href: localizedPath(locale, ''), text: shell('nav.home') },
+    news: { href: localizedPath(locale, '/news'), text: news('title') },
   };
 }
 
-function pages(t: PhotosTranslator) {
-  return { previousLabel: t('previous'), nextLabel: t('next') };
+export function monthName(month: number, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale, { month: 'long', timeZone: 'UTC' }).format(
+    new Date(Date.UTC(2000, month - 1, 1)),
+  );
+}
+
+export function yearText(year: number, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale, { year: 'numeric', timeZone: 'UTC' }).format(
+    new Date(Date.UTC(year, 0, 1)),
+  );
 }
 
 /**
- * The three photograph surfaces, as a small navigation of their own — they
- * are reached from one another as well as from Watch and the sitemap.
+ * The three photograph surfaces as counted tabs: every photograph, the
+ * listed galleries and the dated photographs the archive indexes. Each tab is
+ * its surface's own unfiltered address.
  */
-function PhotoSections({
+export function MediaTabs({
   locale,
   current,
+  all,
   t,
 }: {
   readonly locale: Locale;
   readonly current: 'photos' | 'galleries' | 'archive';
+  readonly all: PhotoListingFacets['all'];
   readonly t: PhotosTranslator;
 }) {
-  const sections = ['photos', 'galleries', 'archive'] as const;
+  const number = (value: number) => new Intl.NumberFormat(locale).format(value);
+  const counts = { photos: all.photos, galleries: all.galleries, archive: all.dated };
   return (
-    <nav aria-label={t('sectionsLabel')}>
-      <ul className="flex flex-wrap gap-2">
-        {sections.map((section) => (
-          <li key={section}>
-            <FilterLink
-              href={localizedPath(locale, `/media/${section}`)}
-              current={section === current}
-            >
-              {t(`sections.${section}`)}
-            </FilterLink>
-          </li>
-        ))}
-      </ul>
-    </nav>
+    <LinkTabs
+      label={t('sectionsLabel')}
+      tabs={(['photos', 'galleries', 'archive'] as const).map((section) => ({
+        href: localizedPath(locale, `/media/${section}`),
+        text: t(`sections.${section}`),
+        current: section === current,
+        count: number(counts[section]),
+      }))}
+    />
   );
 }
 
-/** The first-party picture mark, decorative, where no picture can be shown. */
+/** What may and may not be done with the photographs — only what is decided. */
+export function RightsNote({ t }: { readonly t: PhotosTranslator }) {
+  return (
+    <p className="flex max-w-[var(--measure-prose)] items-start gap-2 border-t border-border pt-4 text-sm text-foreground-muted">
+      <Icon name="info" size={16} className="mt-[0.2em] shrink-0 text-accent" />
+      <span>{t('rights')}</span>
+    </p>
+  );
+}
+
 /**
  * R2. A tile's WebP derivatives — a grid column of a third to a half of the
  * page — or nothing when the Photo's width is unknown. The lightbox keeps the
@@ -135,6 +177,7 @@ function photoSrcSet(
     : { srcSet, sizes: '(min-width: 64rem) 33vw, (min-width: 40rem) 50vw, 100vw' };
 }
 
+/** The first-party picture mark, decorative, where no picture can be shown. */
 function PictureMark() {
   return (
     <svg
@@ -151,7 +194,7 @@ function PictureMark() {
   );
 }
 
-/** Credit and date, as one line of recorded facts, or `null` when neither is known. */
+/** Date and credit, as one line of recorded facts, or `null` when neither is known. */
 function detailsOf(
   photo: PhotoRecord,
   locale: Locale,
@@ -253,7 +296,7 @@ async function PhotoGrid({
                       height={photo.height ?? undefined}
                       loading={position < 4 ? 'eager' : 'lazy'}
                       decoding="async"
-                      className="size-full object-cover group-data-[unavailable]:hidden"
+                      className="size-full object-cover transition-transform duration-[var(--duration-fast)] group-hover:scale-[1.02] group-data-[unavailable]:hidden motion-reduce:transition-none motion-reduce:group-hover:scale-100"
                     />
                     <span className="hidden size-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-foreground-muted group-data-[unavailable]:flex">
                       <PictureMark />
@@ -292,49 +335,349 @@ async function PhotoGrid({
   );
 }
 
+/** The figures every surface opens with: how many, the years taken, galleries, languages. */
+function heroStats(
+  locale: Locale,
+  all: PhotoListingFacets['all'],
+  t: PhotosTranslator,
+  focus: 'photos' | 'galleries' | 'archive',
+  listId: string,
+) {
+  const number = (value: number) => new Intl.NumberFormat(locale).format(value);
+  const span =
+    all.firstYear === null || all.lastYear === null
+      ? null
+      : {
+          value:
+            all.firstYear === all.lastYear
+              ? yearText(all.firstYear, locale)
+              : `${yearText(all.firstYear, locale)}–${yearText(all.lastYear, locale)}`,
+          label: t('stats.span', { count: all.lastYear - all.firstYear + 1 }),
+        };
+  const photos =
+    all.photos === 0
+      ? []
+      : [
+          {
+            value: number(all.photos),
+            label: t('stats.photos', { count: all.photos }),
+            ...(focus === 'photos' ? { href: `#${listId}` } : {}),
+          },
+        ];
+  const galleries =
+    all.galleries === 0
+      ? []
+      : [
+          {
+            value: number(all.galleries),
+            label: t('stats.galleries', { count: all.galleries }),
+            ...(focus === 'galleries' ? { href: `#${listId}` } : {}),
+          },
+        ];
+  if (focus === 'galleries')
+    return [
+      ...galleries,
+      ...(all.inGalleries === 0
+        ? []
+        : [
+            {
+              value: number(all.inGalleries),
+              label: t('stats.inGalleries', { count: all.inGalleries }),
+            },
+          ]),
+    ];
+  if (focus === 'archive')
+    return [
+      ...(all.dated === 0
+        ? []
+        : [{ value: number(all.dated), label: t('stats.dated', { count: all.dated }) }]),
+      ...(span === null ? [] : [span]),
+    ];
+  return [
+    ...photos,
+    ...(span === null ? [] : [span]),
+    ...galleries,
+    ...(all.languages < 2
+      ? []
+      : [
+          {
+            value: number(all.languages),
+            label: t('stats.languages', { count: all.languages }),
+          },
+        ]),
+  ];
+}
+
 /* ===========================================================================
  * /media/photos
  * ========================================================================= */
 
 export async function PhotosPage({
   locale,
-  query,
+  view,
 }: {
   readonly locale: Locale;
-  readonly query: Record<string, string | string[] | undefined>;
+  readonly view: PhotosView;
 }) {
-  const t = await getTranslations({ locale, namespace: 'photos' });
-  const trail = await photosTrail(locale);
-  const offset = readOffset(query);
-  const base = localizedPath(locale, '/media/photos');
+  const [t, hub, trail] = await Promise.all([
+    getTranslations({ locale, namespace: 'photos' }),
+    getTranslations({ locale, namespace: 'topicHub' }),
+    photosTrail(locale),
+  ]);
+  const reads = mediaReadRuntime();
+  const query = photosReadQuery(view);
+  const [page, facets] = await Promise.all([
+    reads.photoListing(query),
+    reads.photoListingFacets(query),
+  ]);
+  // An address carries an identifier in lower case, while Media returns it as
+  // stored: options and chips compare without case.
+  const galleries = caseless(
+    new Map(facets.galleries.items.map((entry) => [entry.id, entry])),
+  );
+  // A chosen Gallery none of whose photographs the other filters admit is not
+  // among the counted options; it is still named — asked of Media, listed
+  // Galleries only — and offered with the nothing it would show.
+  const [chosenListed] =
+    view.gallery === null || galleries.has(view.gallery.toLowerCase())
+      ? []
+      : await reads.publicGalleries([view.gallery]);
+  const galleryOptions =
+    chosenListed === undefined
+      ? facets.galleries.items
+      : [...facets.galleries.items, { ...chosenListed, photos: 0 }];
+  const chosenGallery =
+    view.gallery === null
+      ? null
+      : (galleries.get(view.gallery.toLowerCase()) ?? chosenListed ?? null);
+
   const title = t('sections.photos');
-  const page = await mediaReadRuntime().photos(offset);
+  const listId = 'photos-list';
+  const number = (value: number) => new Intl.NumberFormat(locale).format(value);
+  const href = (change: Partial<PhotosView>) => photosHref(locale, view, change);
+  const filtered = photosFiltered(view);
+  // Clearing the filters keeps the order: it is not a narrowing.
+  const base = photosListingHref(locale, { sort: view.sort });
+  const pages = pageCount(page.total, PHOTO_LISTING_PAGE);
+  const range = pageRange(view.page, page.items.length, PHOTO_LISTING_PAGE);
+  const option = (name: string, count: number) => hub('common.option', { name, count });
+
+  const chip = (key: string, text: string, removeHref: string, auto = false) => ({
+    key,
+    text: auto ? <span dir="auto">{text}</span> : text,
+    removeHref,
+    removeLabel: hub('common.remove', { name: text }),
+  });
+  const active = [
+    ...(view.year === null
+      ? []
+      : [chip('year', yearText(view.year, locale), href({ year: null, month: null }))]),
+    ...(view.year === null || view.month === null
+      ? []
+      : [chip('month', monthName(view.month, locale), href({ month: null }))]),
+    ...(view.gallery === null
+      ? []
+      : [
+          chip(
+            'gallery',
+            chosenGallery === null
+              ? t('listing.unknownGallery')
+              : mediaLabel(chosenGallery, locale).title,
+            href({ gallery: null }),
+            true,
+          ),
+        ]),
+    ...(view.language === null
+      ? []
+      : [
+          chip('language', languageName(view.language, locale), href({ language: null })),
+        ]),
+  ];
+  const heading =
+    view.year === null
+      ? t('listing.heading')
+      : view.month === null
+        ? t('archiveYear', { year: yearText(view.year, locale) })
+        : t('archiveMonth', {
+            month: monthName(view.month, locale),
+            year: yearText(view.year, locale),
+          });
 
   return (
     <Container>
-      <div className="flex flex-col gap-8 py-[var(--space-page)]">
-        <MediaPageHeader
-          crumbs={{ label: trail.label, trail: [trail.home, { text: title }] }}
+      <div className="flex min-w-0 flex-col gap-8 pt-6 pb-[var(--space-section)]">
+        <Breadcrumbs
+          label={trail.label}
+          trail={[trail.home, trail.news, { text: title }]}
+        />
+        <ExploreHero
+          eyebrow={trail.news.text}
           title={title}
           lede={t('sectionBody.photos')}
-        >
-          <div className="pt-2">
-            <PhotoSections locale={locale} current="photos" t={t} />
-          </div>
-        </MediaPageHeader>
-        {page.items.length === 0 ? (
-          <EmptyState>{offset > 0 ? t('pageEmpty') : t('photosEmpty')}</EmptyState>
-        ) : (
-          <PhotoGrid locale={locale} photos={page.items} label={title} />
-        )}
-        <Pagination
-          label={title}
-          previous={
-            offset > 0 ? offsetPath(base, Math.max(0, offset - MEDIA_PAGE)) : null
-          }
-          next={page.hasMore ? offsetPath(base, offset + MEDIA_PAGE) : null}
-          {...pages(t)}
+          stats={heroStats(locale, facets.all, t, 'photos', listId)}
+          actions={[]}
         />
+        <MediaTabs locale={locale} current="photos" all={facets.all} t={t} />
+
+        {facets.all.photos === 0 ? (
+          <EmptyState
+            icon="grid"
+            title={t('listing.emptyTitle')}
+            action={{ href: trail.news.href, text: t('listing.backToNews') }}
+          >
+            {t('photosEmpty')}
+          </EmptyState>
+        ) : (
+          <section aria-labelledby={listId} className="flex min-w-0 flex-col gap-5">
+            <SectionHeader id={listId} heading={heading} intro={t('listing.intro')} />
+
+            <ExploreFilters
+              action={localizedPath(locale, '/media/photos')}
+              label={t('listing.filters')}
+              hidden={[]}
+              submit={t('listing.apply')}
+              reset={filtered ? { href: base, text: hub('common.reset') } : null}
+            >
+              {facets.years.length > 1 || view.year !== null ? (
+                <CountedSelect
+                  id={`${listId}-year`}
+                  label={t('listing.filterYear')}
+                  name="year"
+                  value={view.year === null ? '' : String(view.year)}
+                  any={t('listing.anyYear')}
+                  options={facets.years.map((entry) => ({
+                    value: String(entry.year),
+                    name: yearText(entry.year, locale),
+                    count: entry.photos,
+                  }))}
+                  optionText={option}
+                />
+              ) : null}
+              {view.year === null ||
+              (facets.months.length < 2 && view.month === null) ? null : (
+                <CountedSelect
+                  id={`${listId}-month`}
+                  label={t('listing.filterMonth')}
+                  name="month"
+                  value={view.month === null ? '' : String(view.month)}
+                  any={t('listing.anyMonth')}
+                  options={facets.months.map((entry) => ({
+                    value: String(entry.month),
+                    name: monthName(entry.month, locale),
+                    count: entry.photos,
+                  }))}
+                  optionText={option}
+                />
+              )}
+              {galleryOptions.length > 0 || view.gallery !== null ? (
+                <CountedSelect
+                  id={`${listId}-gallery`}
+                  label={t('listing.filterGallery')}
+                  name="gallery"
+                  value={view.gallery ?? ''}
+                  any={t('listing.anyGallery')}
+                  options={galleryOptions.map((entry) => {
+                    const words = mediaLabel(entry, locale);
+                    return {
+                      value: entry.id.toLowerCase(),
+                      name: words.title,
+                      count: entry.photos,
+                      lang: words.locale,
+                    };
+                  })}
+                  optionText={option}
+                />
+              ) : null}
+              {facets.languages.length > 1 || view.language !== null ? (
+                <CountedSelect
+                  id={`${listId}-language`}
+                  label={t('listing.filterLanguage')}
+                  name="language"
+                  value={view.language ?? ''}
+                  any={t('listing.anyLanguage')}
+                  options={facets.languages.map((entry) => ({
+                    value: entry.code,
+                    name: languageName(entry.code, locale),
+                    count: entry.photos,
+                  }))}
+                  optionText={option}
+                />
+              ) : null}
+              <Field id={`${listId}-sort`} label={hub('common.filterSort')}>
+                {(props) => (
+                  <Select {...props} name="sort" defaultValue={view.sort}>
+                    <option value="added">{t('listing.sort.added')}</option>
+                    <option value="newest">{t('listing.sort.newest')}</option>
+                    <option value="oldest">{t('listing.sort.oldest')}</option>
+                  </Select>
+                )}
+              </Field>
+            </ExploreFilters>
+
+            <ActiveFilters label={hub('common.active')} filters={active} />
+
+            {chosenGallery === null ? null : (
+              <p className="text-sm">
+                <a
+                  href={galleryPath(locale, chosenGallery.slug)}
+                  className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-action underline-offset-4 hover:underline"
+                >
+                  {t('listing.openGallery')}
+                  <Icon name="arrow-end" size={16} />
+                </a>
+              </p>
+            )}
+
+            {range === null ? null : (
+              <RangeSummary>
+                {t('listing.summary', {
+                  from: number(range.from),
+                  to: number(range.to),
+                  total: page.total,
+                })}
+              </RangeSummary>
+            )}
+
+            {page.items.length === 0 ? (
+              view.page > 1 && page.total > 0 ? (
+                <EmptyState
+                  title={hub('common.pastEndTitle')}
+                  action={{ href: href({ page: 1 }), text: hub('common.firstPage') }}
+                >
+                  {t('listing.pastEnd', { page: view.page })}
+                </EmptyState>
+              ) : (
+                <EmptyState
+                  title={t('listing.noResultsTitle')}
+                  action={{ href: base, text: hub('common.reset') }}
+                >
+                  {t('listing.noResults')}
+                </EmptyState>
+              )
+            ) : (
+              <PhotoGrid locale={locale} photos={page.items} label={heading} />
+            )}
+
+            {page.items.length === 0 ? null : (
+              <Pager
+                label={t('listing.pages')}
+                previous={view.page > 1 ? href({ page: view.page - 1 }) : null}
+                next={page.hasMore ? href({ page: view.page + 1 }) : null}
+                previousLabel={t('previous')}
+                nextLabel={t('next')}
+                pages={{
+                  current: view.page,
+                  total: pages,
+                  href: (target) => href({ page: target }),
+                  label: (target) => hub('common.pageLabel', { page: target }),
+                  format: number,
+                }}
+              />
+            )}
+          </section>
+        )}
+
+        <RightsNote t={t} />
       </div>
     </Container>
   );
@@ -349,16 +692,19 @@ function GalleryCard({
   gallery,
   cover,
   t,
+  headingLevel,
 }: {
   readonly locale: Locale;
   readonly gallery: PublicGallery;
   readonly cover: boolean;
   readonly t: PhotosTranslator;
+  readonly headingLevel: 'h2' | 'h3';
 }) {
   const label = mediaLabel(gallery, locale);
   const direction = directionOf(label.locale);
   const photo = gallery.cover;
   const words = photo === null ? null : photoWords(photo, locale);
+  const Heading = headingLevel;
 
   return (
     <li className={MEDIA_CARD}>
@@ -381,7 +727,7 @@ function GalleryCard({
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-5">
-        <h2
+        <Heading
           className="text-subheading font-semibold wrap-anywhere"
           lang={label.locale}
           dir={direction}
@@ -389,7 +735,7 @@ function GalleryCard({
           <a href={galleryPath(locale, gallery.slug)} className={MEDIA_CARD_LINK}>
             {label.title}
           </a>
-        </h2>
+        </Heading>
         {label.description === '' ? null : (
           <p
             className="line-clamp-3 text-sm wrap-anywhere text-foreground-muted"
@@ -400,7 +746,12 @@ function GalleryCard({
           </p>
         )}
         <div className="mt-auto pt-1">
-          <MetaRow items={[t('count', { count: gallery.photoCount })]} />
+          <MetaRow
+            items={[
+              t('count', { count: gallery.photoCount }),
+              gallery.span === null ? null : gallerySpanText(gallery.span, locale),
+            ]}
+          />
         </div>
       </div>
     </li>
@@ -417,10 +768,12 @@ export async function GalleryCardGrid({
   locale,
   galleries,
   label,
+  headingLevel = 'h2',
 }: {
   readonly locale: Locale;
   readonly galleries: readonly PublicGallery[];
   readonly label: string;
+  readonly headingLevel?: 'h2' | 'h3';
 }) {
   const t = await getTranslations({ locale, namespace: 'photos' });
   const covers = await servablePhotos(
@@ -438,6 +791,7 @@ export async function GalleryCardGrid({
           gallery={gallery}
           cover={gallery.cover !== null && covers.has(gallery.cover.id)}
           t={t}
+          headingLevel={headingLevel}
         />
       ))}
     </ul>
@@ -446,75 +800,165 @@ export async function GalleryCardGrid({
 
 export async function GalleriesPage({
   locale,
-  query,
+  view,
 }: {
   readonly locale: Locale;
-  readonly query: Record<string, string | string[] | undefined>;
+  readonly view: GalleriesView;
 }) {
-  const t = await getTranslations({ locale, namespace: 'photos' });
-  const trail = await photosTrail(locale);
-  const offset = readOffset(query);
-  const base = localizedPath(locale, '/media/galleries');
+  const [t, hub, trail] = await Promise.all([
+    getTranslations({ locale, namespace: 'photos' }),
+    getTranslations({ locale, namespace: 'topicHub' }),
+    photosTrail(locale),
+  ]);
+  const reads = mediaReadRuntime();
+  const [page, facets] = await Promise.all([
+    reads.galleryDirectory(galleriesReadQuery(view, locale)),
+    reads.photoListingFacets({}),
+  ]);
   const title = t('sections.galleries');
-  const page = await mediaReadRuntime().galleries(offset);
+  const listId = 'galleries-list';
+  const number = (value: number) => new Intl.NumberFormat(locale).format(value);
+  const href = (change: Partial<GalleriesView>) => galleriesHref(locale, view, change);
+  const pages = pageCount(page.total, GALLERY_DIRECTORY_PAGE);
+  const range = pageRange(view.page, page.items.length, GALLERY_DIRECTORY_PAGE);
 
   return (
     <Container>
-      <div className="flex flex-col gap-8 py-[var(--space-page)]">
-        <MediaPageHeader
-          crumbs={{ label: trail.label, trail: [trail.home, { text: title }] }}
+      <div className="flex min-w-0 flex-col gap-8 pt-6 pb-[var(--space-section)]">
+        <Breadcrumbs
+          label={trail.label}
+          trail={[trail.home, trail.news, { text: title }]}
+        />
+        <ExploreHero
+          eyebrow={trail.news.text}
           title={title}
           lede={t('sectionBody.galleries')}
-        >
-          <div className="pt-2">
-            <PhotoSections locale={locale} current="galleries" t={t} />
-          </div>
-        </MediaPageHeader>
-        {page.items.length === 0 ? (
-          <EmptyState>{offset > 0 ? t('pageEmpty') : t('galleriesEmpty')}</EmptyState>
-        ) : (
-          <GalleryCardGrid locale={locale} galleries={page.items} label={title} />
-        )}
-        <Pagination
-          label={title}
-          previous={
-            offset > 0 ? offsetPath(base, Math.max(0, offset - MEDIA_PAGE)) : null
-          }
-          next={page.hasMore ? offsetPath(base, offset + MEDIA_PAGE) : null}
-          {...pages(t)}
+          stats={heroStats(locale, facets.all, t, 'galleries', listId)}
+          actions={[]}
         />
+        <MediaTabs locale={locale} current="galleries" all={facets.all} t={t} />
+
+        {page.total === 0 ? (
+          <EmptyState
+            icon="grid"
+            title={t('galleriesPage.emptyTitle')}
+            action={{ href: trail.news.href, text: t('listing.backToNews') }}
+          >
+            {t('galleriesEmpty')}
+          </EmptyState>
+        ) : (
+          <section aria-labelledby={listId} className="flex min-w-0 flex-col gap-5">
+            <SectionHeader
+              id={listId}
+              heading={t('galleriesPage.heading')}
+              intro={t('galleriesPage.intro')}
+            />
+            <ExploreFilters
+              action={localizedPath(locale, '/media/galleries')}
+              label={t('galleriesPage.order')}
+              hidden={[]}
+              submit={t('galleriesPage.apply')}
+              reset={null}
+            >
+              <Field id={`${listId}-sort`} label={hub('common.filterSort')}>
+                {(props) => (
+                  <Select {...props} name="sort" defaultValue={view.sort}>
+                    <option value="newest">{t('galleriesPage.sort.newest')}</option>
+                    <option value="oldest">{t('galleriesPage.sort.oldest')}</option>
+                    <option value="title">{t('galleriesPage.sort.title')}</option>
+                  </Select>
+                )}
+              </Field>
+            </ExploreFilters>
+
+            {range === null ? null : (
+              <RangeSummary>
+                {t('galleriesPage.summary', {
+                  from: number(range.from),
+                  to: number(range.to),
+                  total: page.total,
+                })}
+              </RangeSummary>
+            )}
+
+            {page.items.length === 0 ? (
+              <EmptyState
+                title={hub('common.pastEndTitle')}
+                action={{ href: href({ page: 1 }), text: hub('common.firstPage') }}
+              >
+                {t('galleriesPage.pastEnd', { page: view.page })}
+              </EmptyState>
+            ) : (
+              <GalleryCardGrid
+                locale={locale}
+                galleries={page.items}
+                label={t('galleriesPage.heading')}
+              />
+            )}
+
+            {page.items.length === 0 ? null : (
+              <Pager
+                label={t('galleriesPage.pages')}
+                previous={view.page > 1 ? href({ page: view.page - 1 }) : null}
+                next={page.hasMore ? href({ page: view.page + 1 }) : null}
+                previousLabel={t('previous')}
+                nextLabel={t('next')}
+                pages={{
+                  current: view.page,
+                  total: pages,
+                  href: (target) => href({ page: target }),
+                  label: (target) => hub('common.pageLabel', { page: target }),
+                  format: number,
+                }}
+              />
+            )}
+          </section>
+        )}
+
+        <RightsNote t={t} />
       </div>
     </Container>
   );
 }
 
 /**
- * One Gallery: its title and description, then its public photographs in the
- * Gallery's own order, in bounded pages. A published Gallery none of whose
- * photographs is public says so honestly.
+ * One Gallery: its title, count, span of dates and description, then its
+ * public photographs in the Gallery's own order, in numbered pages. A
+ * published Gallery none of whose photographs is public says so honestly.
  */
 export async function GalleryDetailPage({
   locale,
   gallery,
-  query,
+  page,
 }: {
   readonly locale: Locale;
   readonly gallery: PublicGallery;
-  readonly query: Record<string, string | string[] | undefined>;
+  readonly page: number;
 }) {
-  const t = await getTranslations({ locale, namespace: 'photos' });
-  const parts = await photosTrail(locale);
-  const offset = readOffset(query);
+  const [t, hub, parts] = await Promise.all([
+    getTranslations({ locale, namespace: 'photos' }),
+    getTranslations({ locale, namespace: 'topicHub' }),
+    photosTrail(locale),
+  ]);
+  const photos = await mediaReadRuntime().galleryPhotos(
+    gallery.id,
+    (page - 1) * PHOTO_LISTING_PAGE,
+  );
   const path = galleryPath(locale, gallery.slug);
-  const photos = await mediaReadRuntime().galleryPhotos(gallery.id, offset);
   const label = mediaLabel(gallery, locale);
   const direction = directionOf(label.locale);
+  const galleriesHome = localizedPath(locale, '/media/galleries');
   const trail = [
     { name: parts.home.text, path: parts.home.href },
-    { name: t('sections.galleries'), path: localizedPath(locale, '/media/galleries') },
+    { name: parts.news.text, path: parts.news.href },
+    { name: t('sections.galleries'), path: galleriesHome },
     { name: label.title, path },
   ];
   const description = paragraphsOf(label.description);
+  const number = (value: number) => new Intl.NumberFormat(locale).format(value);
+  const pages = pageCount(gallery.photoCount, PHOTO_LISTING_PAGE);
+  const range = pageRange(page, photos.items.length, PHOTO_LISTING_PAGE);
+  const pageHref = (target: number) => galleryPageHref(locale, gallery.slug, target);
 
   return (
     <Container>
@@ -529,11 +973,18 @@ export async function GalleryDetailPage({
               { text: label.title },
             ],
           }}
-          eyebrow={t('sections.galleries')}
+          eyebrow={t('galleryEyebrow')}
           title={label.title}
           lang={label.locale}
           dir={direction}
-          meta={<MetaRow items={[t('count', { count: gallery.photoCount })]} />}
+          meta={
+            <MetaRow
+              items={[
+                t('count', { count: gallery.photoCount }),
+                gallery.span === null ? null : gallerySpanText(gallery.span, locale),
+              ]}
+            />
+          }
         >
           {description.length === 0 ? null : (
             <div className="flex max-w-[var(--measure-prose)] flex-col gap-3 pt-1">
@@ -547,193 +998,59 @@ export async function GalleryDetailPage({
         </MediaPageHeader>
 
         <section className="flex flex-col gap-5" aria-labelledby="gallery-photos">
-          <SectionHeader id="gallery-photos" heading={t('galleryPhotos')} />
+          <SectionHeader
+            id="gallery-photos"
+            heading={t('galleryPhotos')}
+            intro={gallery.photoCount > 0 ? t('galleryIntro') : undefined}
+          />
+          {range === null || pages < 2 ? null : (
+            <RangeSummary>
+              {t('listing.summary', {
+                from: number(range.from),
+                to: number(range.to),
+                total: gallery.photoCount,
+              })}
+            </RangeSummary>
+          )}
           {photos.items.length === 0 ? (
-            <EmptyState>{offset > 0 ? t('pageEmpty') : t('galleryEmpty')}</EmptyState>
+            page > 1 && gallery.photoCount > 0 ? (
+              <EmptyState
+                title={hub('common.pastEndTitle')}
+                action={{ href: pageHref(1), text: hub('common.firstPage') }}
+              >
+                {t('listing.pastEnd', { page })}
+              </EmptyState>
+            ) : (
+              <EmptyState>{t('galleryEmpty')}</EmptyState>
+            )
           ) : (
             <PhotoGrid locale={locale} photos={photos.items} label={t('galleryPhotos')} />
           )}
-          <Pagination
-            label={t('galleryPhotos')}
-            previous={
-              offset > 0 ? offsetPath(path, Math.max(0, offset - MEDIA_PAGE)) : null
-            }
-            next={photos.hasMore ? offsetPath(path, offset + MEDIA_PAGE) : null}
-            {...pages(t)}
-          />
+          {photos.items.length === 0 ? null : (
+            <Pager
+              label={t('listing.pages')}
+              previous={page > 1 ? pageHref(page - 1) : null}
+              next={photos.hasMore ? pageHref(page + 1) : null}
+              previousLabel={t('previous')}
+              nextLabel={t('next')}
+              pages={{
+                current: page,
+                total: pages,
+                href: pageHref,
+                label: (target) => hub('common.pageLabel', { page: target }),
+                format: number,
+              }}
+            />
+          )}
         </section>
+
+        <RightsNote t={t} />
 
         <BreadcrumbData
           contentLocales={gallery.photoCount > 0 ? mediaLocales(gallery) : []}
           trail={trail}
         />
       </article>
-    </Container>
-  );
-}
-
-/* ===========================================================================
- * /media/archive
- * ========================================================================= */
-
-function monthName(month: number, locale: Locale): string {
-  return new Intl.DateTimeFormat(locale, { month: 'long', timeZone: 'UTC' }).format(
-    new Date(Date.UTC(2000, month - 1, 1)),
-  );
-}
-
-function yearText(year: number, locale: Locale): string {
-  return new Intl.DateTimeFormat(locale, { year: 'numeric', timeZone: 'UTC' }).format(
-    new Date(Date.UTC(year, 0, 1)),
-  );
-}
-
-/**
- * The historical archive: published photographs whose date is KNOWN, latest
- * first, browsed by year and then by month. A photograph with no known date is
- * never placed here — its record's creation time is not its history — and one
- * known only to a year stays a year.
- */
-export async function ArchivePage({
-  locale,
-  query,
-}: {
-  readonly locale: Locale;
-  readonly query: Record<string, string | string[] | undefined>;
-}) {
-  const t = await getTranslations({ locale, namespace: 'photos' });
-  const trail = await photosTrail(locale);
-  const filter = readArchiveQuery(query);
-  const title = t('sections.archive');
-  const reads = mediaReadRuntime();
-
-  const [years, months, page] = await Promise.all([
-    reads.archiveYears(),
-    filter.year === null
-      ? Promise.resolve([] as readonly ArchiveMonth[])
-      : reads.archiveMonths(filter.year),
-    reads.archivePhotos(filter),
-  ]);
-
-  const heading =
-    filter.year === null
-      ? t('archiveAll')
-      : filter.month === null
-        ? t('archiveYear', { year: yearText(filter.year, locale) })
-        : t('archiveMonth', {
-            month: monthName(filter.month, locale),
-            year: yearText(filter.year, locale),
-          });
-
-  return (
-    <Container>
-      <div className="flex flex-col gap-8 py-[var(--space-page)]">
-        <MediaPageHeader
-          crumbs={{ label: trail.label, trail: [trail.home, { text: title }] }}
-          title={title}
-          lede={t('sectionBody.archive')}
-        >
-          <div className="pt-2">
-            <PhotoSections locale={locale} current="archive" t={t} />
-          </div>
-        </MediaPageHeader>
-
-        {years.length === 0 ? (
-          <EmptyState>{t('archiveEmpty')}</EmptyState>
-        ) : (
-          <>
-            <div className="flex flex-col gap-5 rounded-panel border border-border bg-surface-sunken p-5">
-              <nav aria-label={t('archiveYears')} className="flex flex-col gap-3">
-                <h2 className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-foreground-muted uppercase">
-                  {t('archiveYears')}
-                </h2>
-                <ul className="flex flex-wrap gap-2">
-                  <li>
-                    <FilterLink
-                      href={archivePath(locale, { year: null, month: null })}
-                      current={filter.year === null}
-                    >
-                      {t('archiveEveryYear')}
-                    </FilterLink>
-                  </li>
-                  {years.map((entry) => (
-                    <li key={entry.year}>
-                      <FilterLink
-                        href={archivePath(locale, { year: entry.year, month: null })}
-                        current={filter.year === entry.year && filter.month === null}
-                        partial={filter.year === entry.year && filter.month !== null}
-                      >
-                        {yearText(entry.year, locale)}
-                        <span className="text-foreground-muted">
-                          {' '}
-                          ({t('countShort', { count: entry.photos })})
-                        </span>
-                      </FilterLink>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
-
-              {filter.year === null || months.length === 0 ? null : (
-                <nav aria-label={t('archiveMonths')} className="flex flex-col gap-3">
-                  <h2 className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-foreground-muted uppercase">
-                    {t('archiveMonths')}
-                  </h2>
-                  <ul className="flex flex-wrap gap-2">
-                    {months.map((entry) => (
-                      <li key={entry.month}>
-                        <FilterLink
-                          href={archivePath(locale, {
-                            year: filter.year,
-                            month: entry.month,
-                          })}
-                          current={filter.month === entry.month}
-                        >
-                          {monthName(entry.month, locale)}
-                          <span className="text-foreground-muted">
-                            {' '}
-                            ({t('countShort', { count: entry.photos })})
-                          </span>
-                        </FilterLink>
-                      </li>
-                    ))}
-                  </ul>
-                </nav>
-              )}
-            </div>
-
-            <section className="flex flex-col gap-5" aria-labelledby="archive-photos">
-              <SectionHeader id="archive-photos" heading={heading} />
-              {page.items.length === 0 ? (
-                <EmptyState>
-                  <span className="flex flex-col gap-2">
-                    <span>{t('archiveFilteredEmpty')}</span>
-                    <TextLink href={archivePath(locale, { year: null, month: null })}>
-                      {t('archiveEveryYear')}
-                    </TextLink>
-                  </span>
-                </EmptyState>
-              ) : (
-                <PhotoGrid locale={locale} photos={page.items} label={heading} />
-              )}
-              <Pagination
-                label={heading}
-                previous={
-                  filter.offset > 0
-                    ? archivePath(locale, filter, Math.max(0, filter.offset - MEDIA_PAGE))
-                    : null
-                }
-                next={
-                  page.hasMore
-                    ? archivePath(locale, filter, filter.offset + MEDIA_PAGE)
-                    : null
-                }
-                {...pages(t)}
-              />
-            </section>
-          </>
-        )}
-      </div>
     </Container>
   );
 }

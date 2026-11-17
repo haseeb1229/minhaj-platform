@@ -2,14 +2,19 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import {
   COLLECTION_COVER_MEMBERS,
+  COLLECTION_FACET_PAGE,
+  COLLECTION_HOLDS,
+  COLLECTION_LISTING_PAGE,
   COLLECTION_LIMITS,
   COLLECTION_MEMBER_CHOICES,
   COLLECTION_PAGE,
   type ArticleDetail,
+  type CollectionHolds,
+  type CollectionListingQuery,
   type CollectionMember,
   type CollectionMemberKind,
   type CollectionMemberTarget,
@@ -834,11 +839,86 @@ function memberBatchOf(ids: readonly string[]): string[] {
  * Public reads — PUBLISHED ONLY, and the predicate is in every query
  * ========================================================================= */
 
+/* ===========================================================================
+ * News & Events Part 2 — the listing and its facets
+ * ========================================================================= */
+
+/**
+ * The typed member column(s) each kind a reader asks for is held in. Code-owned,
+ * never input: the four News families are "news" together.
+ */
+const HOLDS_SQL: Readonly<Record<CollectionHolds, Prisma.Sql>> = {
+  article: Prisma.sql`i.[articleId] IS NOT NULL`,
+  news: Prisma.sql`(i.[newsArticleId] IS NOT NULL OR i.[pressReleaseId] IS NOT NULL OR i.[statementId] IS NOT NULL OR i.[mediaCoverageId] IS NOT NULL)`,
+  work: Prisma.sql`i.[workId] IS NOT NULL`,
+  video: Prisma.sql`i.[videoId] IS NOT NULL`,
+};
+
+/** Each kind's column alias in the facet's flags: code-owned, never input. */
+const HOLDS_ALIAS: Readonly<Record<CollectionHolds, Prisma.Sql>> = {
+  article: Prisma.sql`[article]`,
+  news: Prisma.sql`[news]`,
+  work: Prisma.sql`[work]`,
+  video: Prisma.sql`[video]`,
+};
+
+/** "This current revision holds a member of this kind." */
+function holdsClause(holds: CollectionHolds, owner: Prisma.Sql, revision: Prisma.Sql) {
+  return Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[CollectionItem] i WHERE i.[ownerId] = ${owner} AND i.[revisionNumber] = ${revision} AND ${HOLDS_SQL[holds]})`;
+}
+
+interface ListingFilter {
+  readonly topic: string | null;
+  readonly holds: CollectionHolds | null;
+  readonly language: string | null;
+}
+
+/**
+ * The PUBLISHED Collections under a filter, as (id, revision, at): the current
+ * revision for the facets' joins, and the FIRST publication instant the
+ * listing is ordered by. Every value is a bound parameter.
+ */
+function listingRows(filter: ListingFilter): Prisma.Sql {
+  const conditions = [
+    Prisma.sql`c.[state] = N'published'`,
+    Prisma.sql`c.[currentRevision] IS NOT NULL`,
+    Prisma.sql`c.[publishedAt] IS NOT NULL`,
+  ];
+  if (filter.topic !== null)
+    conditions.push(
+      Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[CollectionTopic] t WHERE t.[ownerId] = c.[id] AND t.[revisionNumber] = c.[currentRevision] AND t.[topicId] = ${filter.topic})`,
+    );
+  if (filter.language !== null)
+    conditions.push(
+      Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[CollectionRevisionTranslation] l WHERE l.[ownerId] = c.[id] AND l.[revisionNumber] = c.[currentRevision] AND l.[languageCode] = ${filter.language})`,
+    );
+  if (filter.holds !== null)
+    conditions.push(
+      holdsClause(filter.holds, Prisma.sql`c.[id]`, Prisma.sql`c.[currentRevision]`),
+    );
+  return Prisma.sql`SELECT c.[id], c.[currentRevision] AS [revision], c.[publishedAt] AS [at] FROM [dbo].[Collection] c WHERE ${Prisma.join(conditions, ' AND ')}`;
+}
+
+/** What the driver answers for a `COUNT_BIG` or `SUM` column. */
+type SqlCount = bigint | number;
+
+function countOf(value: SqlCount | null | undefined): number {
+  return Number(value ?? 0);
+}
+
+const filterOf = (query: CollectionListingQuery): ListingFilter => ({
+  topic: query.topic,
+  holds: query.holds,
+  language: query.language,
+});
+
 export function collectionReads(): Pick<
   EditorialPublicReaderPort,
   | 'collectionCanonicalSlug'
   | 'publicCollection'
   | 'collections'
+  | 'collectionListing'
+  | 'collectionListingFacets'
   | 'collectionSitemap'
   | 'memberTargets'
   | 'memberChoices'
@@ -896,6 +976,119 @@ export function collectionReads(): Pick<
         take: take + 1,
       });
       return { items: rows.slice(0, take).map(summaryOf), more: rows.length > take };
+    },
+
+    /**
+     * One page of the listing in the view's order — first publication, then
+     * the identifier, so the order is total — with the view's total. The
+     * cards are read by identifier afterwards; a Collection withdrawn between
+     * the two reads is simply absent.
+     */
+    async collectionListing(query) {
+      const take = limitOf(query.limit, COLLECTION_LISTING_PAGE);
+      const rows = listingRows(filterOf(query));
+      const order =
+        query.sort === 'oldest'
+          ? Prisma.sql`[at] ASC, [id] ASC`
+          : Prisma.sql`[at] DESC, [id] ASC`;
+      const [refs, totals] = await Promise.all([
+        db().$queryRaw<{ id: string }[]>`SELECT [id] FROM (${rows}) AS [listing]
+          ORDER BY ${order}
+          OFFSET ${offsetOf(query.offset)} ROWS FETCH NEXT ${take + 1} ROWS ONLY`,
+        db().$queryRaw<
+          { total: SqlCount | null }[]
+        >`SELECT COUNT_BIG(*) AS [total] FROM (${rows}) AS [listing]`,
+      ]);
+      const ids = refs.slice(0, take).map((ref) => ref.id);
+      const found =
+        ids.length === 0
+          ? []
+          : await db().collection.findMany({
+              where: { id: { in: ids }, state: 'published' },
+              select: { id: true, ...summarySelect },
+            });
+      const byId = new Map(found.map((row) => [row.id.toLowerCase(), row]));
+      return {
+        items: ids.flatMap((id) => {
+          const row = byId.get(id.toLowerCase());
+          return row === undefined ? [] : [summaryOf(row)];
+        }),
+        total: countOf(totals[0]?.total),
+        hasMore: refs.length > take,
+      };
+    },
+
+    async collectionListingFacets(query) {
+      const filter = filterOf(query);
+      // Each facet counts under every OTHER filter, its own left out.
+      const rows = (change: Partial<ListingFilter>) =>
+        listingRows({ ...filter, ...change });
+      const whole = listingRows({ topic: null, holds: null, language: null });
+      const holdsRows = rows({ holds: null });
+      const [all, entries, languagesAll, topics, holds, anyKind, languages] =
+        await Promise.all([
+          db().$queryRaw<{ collections: SqlCount | null }[]>`
+          SELECT COUNT_BIG(*) AS [collections] FROM (${whole}) AS [x]`,
+          db().$queryRaw<{ entries: SqlCount | null }[]>`
+          SELECT COUNT_BIG(*) AS [entries] FROM (${whole}) AS [x]
+          JOIN [dbo].[CollectionItem] i ON i.[ownerId] = [x].[id] AND i.[revisionNumber] = [x].[revision]`,
+          db().$queryRaw<{ total: SqlCount | null }[]>`
+          SELECT COUNT(DISTINCT l.[languageCode]) AS [total] FROM (${whole}) AS [x]
+          JOIN [dbo].[CollectionRevisionTranslation] l ON l.[ownerId] = [x].[id] AND l.[revisionNumber] = [x].[revision]`,
+          db().$queryRaw<{ id: string; collections: SqlCount | null }[]>`
+          SELECT TOP (${COLLECTION_FACET_PAGE + 1}) t.[topicId] AS [id], COUNT_BIG(*) AS [collections]
+          FROM (${rows({ topic: null })}) AS [x]
+          JOIN [dbo].[CollectionTopic] t ON t.[ownerId] = [x].[id] AND t.[revisionNumber] = [x].[revision]
+          GROUP BY t.[topicId]
+          ORDER BY [collections] DESC, t.[topicId] ASC`,
+          // SQL Server aggregates no subquery, so each Collection's four flags
+          // are computed first and summed outside.
+          db().$queryRaw<Record<CollectionHolds, SqlCount | null>[]>`
+          SELECT ${Prisma.join(
+            COLLECTION_HOLDS.map(
+              (kind) => Prisma.sql`SUM(${HOLDS_ALIAS[kind]}) AS ${HOLDS_ALIAS[kind]}`,
+            ),
+            ', ',
+          )}
+          FROM (SELECT ${Prisma.join(
+            COLLECTION_HOLDS.map(
+              (kind) =>
+                Prisma.sql`CASE WHEN ${holdsClause(kind, Prisma.sql`[x].[id]`, Prisma.sql`[x].[revision]`)} THEN 1 ELSE 0 END AS ${HOLDS_ALIAS[kind]}`,
+            ),
+            ', ',
+          )} FROM (${holdsRows}) AS [x]) AS [flags]`,
+          db().$queryRaw<{ collections: SqlCount | null }[]>`
+          SELECT COUNT_BIG(*) AS [collections] FROM (${holdsRows}) AS [x]`,
+          db().$queryRaw<{ code: string; collections: SqlCount | null }[]>`
+          SELECT l.[languageCode] AS [code], COUNT_BIG(*) AS [collections]
+          FROM (${rows({ language: null })}) AS [x]
+          JOIN [dbo].[CollectionRevisionTranslation] l ON l.[ownerId] = [x].[id] AND l.[revisionNumber] = [x].[revision]
+          GROUP BY l.[languageCode]
+          ORDER BY [collections] DESC, l.[languageCode] ASC`,
+        ]);
+      const [held] = holds;
+      return {
+        all: {
+          collections: countOf(all[0]?.collections),
+          entries: countOf(entries[0]?.entries),
+          languages: countOf(languagesAll[0]?.total),
+        },
+        topics: {
+          items: topics
+            .slice(0, COLLECTION_FACET_PAGE)
+            .map((row) => ({ id: row.id, collections: countOf(row.collections) })),
+          hasMore: topics.length > COLLECTION_FACET_PAGE,
+        },
+        holds: COLLECTION_HOLDS.map((kind) => ({
+          holds: kind,
+          collections: countOf(held?.[kind]),
+        })),
+        anyKind: countOf(anyKind[0]?.collections),
+        languages: languages.map((row) => ({
+          code: language(row.code),
+          collections: countOf(row.collections),
+        })),
+      };
     },
 
     async collectionSitemap(offset, limit) {

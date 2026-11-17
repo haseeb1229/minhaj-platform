@@ -120,8 +120,13 @@ describe('no forward reference to Event, Centre or Collection exists', () => {
     const files = [
       ...(await walk('apps/web/src/contexts/media')),
       'packages/contracts/src/media/photo.ts',
+      // News & Events Part 2: the listing's contract, address rules and the
+      // archive's index stay as free of them.
+      'packages/contracts/src/media/photo-listing.ts',
       'packages/database/src/adapters/media/photo.ts',
       'apps/web/src/components/media/photos.tsx',
+      'apps/web/src/components/media/photos-view.ts',
+      'apps/web/src/components/media/photo-archive.tsx',
       'apps/web/src/app/[locale]/admin/media/photo-surfaces.tsx',
     ].filter((file) => /\.tsx?$/u.test(file));
     for (const file of files) {

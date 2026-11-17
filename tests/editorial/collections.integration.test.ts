@@ -1470,6 +1470,206 @@ live('Phase 15 Collections against real SQL Server', () => {
       ).not.toContain(newer.slug);
     });
 
+    /* ---- News & Events Part 2 — the listing and its facets ----------------- */
+
+    /** Published Collections' identifiers, as SQL itself orders and narrows them. */
+    const listedIds = async (where = '1=1', order = '[publishedAt] DESC, [id] ASC') =>
+      (
+        await db.admin.query<{ id: string }>(
+          `SELECT c.[id] FROM [Collection] c WHERE c.[state]=N'published' AND (${where}) ORDER BY ${order};`,
+        )
+      ).map((row) => row.id.toLowerCase());
+    const holding = (columns: readonly string[]) =>
+      `EXISTS (SELECT 1 FROM [CollectionItem] i WHERE i.[ownerId]=c.[id] AND i.[revisionNumber]=c.[currentRevision] AND (${columns.map((column) => `i.[${column}] IS NOT NULL`).join(' OR ')}))`;
+    const HOLDING = {
+      article: holding(['articleId']),
+      news: holding([
+        'newsArticleId',
+        'pressReleaseId',
+        'statementId',
+        'mediaCoverageId',
+      ]),
+      work: holding(['workId']),
+      video: holding(['videoId']),
+    } as const;
+    const onTopic = (topic: string) =>
+      `EXISTS (SELECT 1 FROM [CollectionTopic] t WHERE t.[ownerId]=c.[id] AND t.[revisionNumber]=c.[currentRevision] AND t.[topicId]=N'${topic}')`;
+    const inLanguage = (code: string) =>
+      `EXISTS (SELECT 1 FROM [CollectionRevisionTranslation] l WHERE l.[ownerId]=c.[id] AND l.[revisionNumber]=c.[currentRevision] AND l.[languageCode]=N'${code}')`;
+    const idOf = async (slug: string) =>
+      (
+        await db.admin.query<{ id: string }>(
+          `SELECT [id] FROM [Collection] WHERE [slug]=N'${slug}';`,
+        )
+      )[0]?.id.toLowerCase() ?? '';
+    /** Every page of a view, as identifiers, with the total each page reported. */
+    const everyPage = async (query: Record<string, unknown>) => {
+      const ids: string[] = [];
+      const totals = new Set<number>();
+      for (let offset = 0; ; offset += 20) {
+        const page = await reads.collectionListing({ ...query, offset });
+        totals.add(page.total);
+        expect(page.items.length).toBeLessThanOrEqual(20);
+        for (const item of page.items) ids.push(await idOf(item.slug));
+        if (!page.hasMore) break;
+        expect(offset).toBeLessThan(2000);
+      }
+      return { ids, totals: [...totals] };
+    };
+
+    it('lists published Collections in either order with the view’s total, and narrows by Topic, kind and language (Part 2)', async () => {
+      const [topic, otherTopic] = topics as [string, string];
+      // A member is its kind and identifier only.
+      const member = ({ kind, id }: CollectionMember) => ({ kind, id });
+      const book = member(await work());
+      const film = member(await video());
+      const mixed = await published(
+        content([book, anyPublic], { topicIds: [topic], languages: ['en', 'ur'] }),
+      );
+      const films = await published(
+        content([film], { topicIds: [otherTopic], languages: ['ar'] }),
+      );
+      const release = await published(content([await news('press-release')]));
+      const unpublished = await create(content([book], { topicIds: [topic] }));
+
+      // Both orders, every page, exactly as SQL orders the published set.
+      for (const [sort, order] of [
+        ['newest', '[publishedAt] DESC, [id] ASC'],
+        ['oldest', '[publishedAt] ASC, [id] ASC'],
+      ] as const) {
+        const expected = await listedIds('1=1', order);
+        const { ids, totals } = await everyPage({ sort });
+        expect(ids, sort).toEqual(expected);
+        expect(totals, sort).toEqual([expected.length]);
+      }
+      expect(await listedIds()).not.toContain(await idOf(unpublished.slug));
+
+      // Each narrowing, alone and together, is exactly SQL's.
+      const views: [
+        Record<string, unknown>,
+        string,
+        readonly string[],
+        readonly string[],
+      ][] = [
+        [{ holds: 'video' }, HOLDING.video, [films.slug], [mixed.slug, release.slug]],
+        [{ holds: 'news' }, HOLDING.news, [release.slug], [mixed.slug, films.slug]],
+        [{ holds: 'work' }, HOLDING.work, [mixed.slug], [films.slug, unpublished.slug]],
+        [{ language: 'ar' }, inLanguage('ar'), [films.slug], [mixed.slug, release.slug]],
+        [{ topic }, onTopic(topic), [mixed.slug], [films.slug, unpublished.slug]],
+        [
+          { topic: topic.toUpperCase(), holds: 'work', language: 'ur' },
+          `${onTopic(topic)} AND ${HOLDING.work} AND ${inLanguage('ur')}`,
+          [mixed.slug],
+          [films.slug, release.slug, unpublished.slug],
+        ],
+      ];
+      for (const [query, where, present, absent] of views) {
+        const expected = await listedIds(where);
+        const { ids, totals } = await everyPage(query);
+        const label = JSON.stringify(query);
+        expect(ids, label).toEqual(expected);
+        expect(totals, label).toEqual([expected.length]);
+        for (const slug of present)
+          expect(ids, `${label} ${slug}`).toContain(await idOf(slug));
+        for (const slug of absent)
+          expect(ids, `${label} ${slug}`).not.toContain(await idOf(slug));
+      }
+
+      // Past the end: nothing, honestly, with the view's total.
+      const total = (await listedIds()).length;
+      const beyond = await reads.collectionListing({ offset: 25_000 });
+      expect(beyond).toEqual({ items: [], total, hasMore: false });
+
+      // A card is a summary: no body, no member's words.
+      const first = await reads.collectionListing({});
+      expect(JSON.stringify(first)).not.toContain(BODY_SENTINEL);
+      expect(JSON.stringify(first)).not.toContain(TARGET_TITLE);
+
+      // Revised back to draft, a Collection leaves every view at once.
+      await revise(mixed, same(mixed, { excerpt: 'Back to draft' }));
+      for (const query of [{}, { topic }, { holds: 'work' }, { language: 'ur' }]) {
+        const { ids } = await everyPage(query);
+        expect(ids, JSON.stringify(query)).not.toContain(await idOf(mixed.slug));
+      }
+    });
+
+    it('counts each facet under every other filter, exactly as SQL does (Part 2)', async () => {
+      const [topic] = topics as [string, string];
+      await published(
+        content(
+          [await work(), await video()].map(({ kind, id }) => ({ kind, id })),
+          { topicIds: [topic], languages: ['ur'] },
+        ),
+      );
+      const scalar = async (sql: string) =>
+        Number((await db.admin.query<{ n: number }>(sql))[0]?.n ?? Number.NaN);
+      const isPublished = `c.[state]=N'published'`;
+
+      // Under a Topic and a language, each facet leaves its own filter out.
+      const facets = await reads.collectionListingFacets({
+        topic,
+        holds: 'video',
+        language: 'ur',
+      });
+      expect(facets.all).toEqual({
+        collections: await scalar(
+          `SELECT COUNT(*) AS n FROM [Collection] c WHERE ${isPublished};`,
+        ),
+        entries: await scalar(
+          `SELECT COUNT(*) AS n FROM [Collection] c JOIN [CollectionItem] i ON i.[ownerId]=c.[id] AND i.[revisionNumber]=c.[currentRevision] WHERE ${isPublished};`,
+        ),
+        languages: await scalar(
+          `SELECT COUNT(DISTINCT l.[languageCode]) AS n FROM [Collection] c JOIN [CollectionRevisionTranslation] l ON l.[ownerId]=c.[id] AND l.[revisionNumber]=c.[currentRevision] WHERE ${isPublished};`,
+        ),
+      });
+      const base = `${isPublished} AND ${onTopic(topic)} AND ${inLanguage('ur')}`;
+      for (const kind of ['article', 'news', 'work', 'video'] as const)
+        expect(
+          facets.holds.find((entry) => entry.holds === kind)?.collections,
+          kind,
+        ).toBe(
+          await scalar(
+            `SELECT COUNT(*) AS n FROM [Collection] c WHERE ${base} AND ${HOLDING[kind]};`,
+          ),
+        );
+      expect(facets.holds.map((entry) => entry.holds)).toEqual([
+        'article',
+        'news',
+        'work',
+        'video',
+      ]);
+      expect(facets.anyKind).toBe(
+        await scalar(`SELECT COUNT(*) AS n FROM [Collection] c WHERE ${base};`),
+      );
+      expect(facets.anyKind).toBeGreaterThan(0);
+
+      const languages = await db.admin.query<{ code: string; n: number }>(
+        `SELECT l.[languageCode] AS code, COUNT(*) AS n FROM [Collection] c JOIN [CollectionRevisionTranslation] l ON l.[ownerId]=c.[id] AND l.[revisionNumber]=c.[currentRevision] WHERE ${isPublished} AND ${onTopic(topic)} AND ${HOLDING.video} GROUP BY l.[languageCode];`,
+      );
+      expect([...facets.languages].sort((a, b) => a.code.localeCompare(b.code))).toEqual(
+        languages
+          .map((row) => ({ code: row.code, collections: Number(row.n) }))
+          .sort((a, b) => a.code.localeCompare(b.code)),
+      );
+
+      const topicCounts = await db.admin.query<{ id: string; n: number }>(
+        `SELECT t.[topicId] AS id, COUNT(*) AS n FROM [Collection] c JOIN [CollectionTopic] t ON t.[ownerId]=c.[id] AND t.[revisionNumber]=c.[currentRevision] WHERE ${isPublished} AND ${HOLDING.video} AND ${inLanguage('ur')} GROUP BY t.[topicId];`,
+      );
+      expect(facets.topics.hasMore).toBe(false);
+      expect(
+        facets.topics.items
+          .map((entry) => `${entry.id.toLowerCase()}:${String(entry.collections)}`)
+          .sort(),
+      ).toEqual(
+        topicCounts
+          .map((row) => `${row.id.toLowerCase()}:${String(Number(row.n))}`)
+          .sort(),
+      );
+      // Commonest first.
+      const counts = facets.topics.items.map((entry) => entry.collections);
+      expect(counts).toEqual([...counts].sort((a, b) => b - a));
+    });
+
     it('advertises exactly the current published Collection URLs, in their genuine languages', async () => {
       await published(content([anyPublic], { languages: ['ur', 'en'] }));
       await published(content([anyPublic], { languages: ['ar'] }));

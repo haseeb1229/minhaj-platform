@@ -1,12 +1,14 @@
 import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
+
+import { NEWSLETTER_CONFIRMATION_HOURS } from '@minhaj/contracts/personalisation';
 import { getTranslations } from 'next-intl/server';
 
 import { newsletterReadRuntime } from '@/composition/newsletter-read';
-import { Alert, Container, PageHeading, TextLink } from '@/components/ui';
+import { Alert, Container, Icon, PageHeading, TextLink } from '@/components/ui';
 import { requireLocale } from '@/config/route-locale';
-import { ActionForm } from '../../../(identity)/form-state';
 import { confirmNewsletter } from '../actions';
+import { NewsletterForm } from '../newsletter-form';
 
 /**
  * The emailed newsletter confirmation link — protocol class D
@@ -61,22 +63,35 @@ export default async function NewsletterConfirmPage({
         {status === 'valid' && token !== null ? (
           <>
             <p className="text-foreground-muted">{t('confirm.description')}</p>
-            <ActionForm
+            <NewsletterForm
+              headingLevel="h2"
               action={confirmNewsletter}
-              submitLabel={t('confirm.submit')}
-              pendingLabel={t('confirm.pending')}
-              messages={{
-                success: t('confirm.done'),
-                'invalid-link': t('link.invalid'),
-                'rate-limited': t('result.rateLimited'),
-                unknown: t('result.unavailable'),
+              labels={{
+                submit: t('confirm.submit'),
+                pending: t('confirm.pending'),
+                doneHeading: t('confirm.doneHeading'),
+                done: t('confirm.done'),
+                failures: {
+                  'invalid-link': t('link.invalid'),
+                  'rate-limited': t('result.rateLimited'),
+                  unknown: t('result.unavailable'),
+                },
               }}
+              next={{ href: localizedPath(locale, '/news'), text: t('confirm.next') }}
             >
               <input type="hidden" name="token" value={token} />
-            </ActionForm>
+            </NewsletterForm>
           </>
         ) : (
-          <Alert tone="warning">{t('link.invalid')}</Alert>
+          <div className="flex flex-col gap-3">
+            <Alert tone="warning">{t('link.invalid')}</Alert>
+            <p className="flex items-start gap-2 text-sm text-foreground-muted">
+              <Icon name="info" size={16} className="mt-[0.2em] shrink-0" />
+              <span>
+                {t('link.confirmHelp', { hours: NEWSLETTER_CONFIRMATION_HOURS })}
+              </span>
+            </p>
+          </div>
         )}
 
         <TextLink href={localizedPath(locale, '/newsletter')}>{t('link.back')}</TextLink>

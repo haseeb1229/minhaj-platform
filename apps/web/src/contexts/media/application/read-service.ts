@@ -4,14 +4,14 @@ import {
   audioListingQuerySchema,
   audioSeriesNeighboursQuerySchema,
   audioTrackQuerySchema,
+  galleryDirectoryQuerySchema,
   groupEpisodesQuerySchema,
   mediaGroupKindSchema,
   mediaGroupRefSchema,
   mediaIdSchema,
   mediaSlugSchema,
   mediaTopicTotalsInputSchema,
-  PHOTO_LIMITS,
-  photoArchiveQuerySchema,
+  photoListingQuerySchema,
   topicVideosQuerySchema,
   seriesKindSchema,
   seriesNeighboursQuerySchema,
@@ -206,26 +206,28 @@ export function createMediaReadService(reader: MediaPublicReaderPort) {
 
     /* ---- Phase 12 — photographs, galleries and the archive -------------- */
 
-    photos(offset = 0) {
-      return reader.photos(browseOffset.parse(offset));
+    /**
+     * News & Events Part 2 — the photographs listing, its aggregates, the
+     * archive's periods and the Galleries' directory. Every field a visitor's
+     * address could shape is parsed here, before any read: a month without its
+     * year, a year before photography, an unknown order or language, a
+     * malformed Gallery identifier or an offset past the bound reaches no
+     * adapter. The periods take nothing at all.
+     */
+    photoListing(raw: unknown = {}) {
+      return reader.photoListing(photoListingQuerySchema.parse(raw));
     },
 
-    archivePhotos(raw: unknown = {}) {
-      return reader.archivePhotos(photoArchiveQuerySchema.parse(raw));
+    photoListingFacets(raw: unknown = {}) {
+      return reader.photoListingFacets(photoListingQuerySchema.parse(raw));
     },
 
-    archiveYears() {
-      return reader.archiveYears();
+    photoArchivePeriods() {
+      return reader.photoArchivePeriods();
     },
 
-    archiveMonths(year: number) {
-      return reader.archiveMonths(
-        z.number().int().min(PHOTO_LIMITS.earliestYear).max(9999).parse(year),
-      );
-    },
-
-    galleries(offset = 0) {
-      return reader.galleries(browseOffset.parse(offset));
+    galleryDirectory(raw: unknown = {}) {
+      return reader.galleryDirectory(galleryDirectoryQuerySchema.parse(raw));
     },
 
     gallery(slug: string) {

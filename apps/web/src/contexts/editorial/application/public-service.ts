@@ -4,18 +4,21 @@ import {
   COLLECTION_MEMBER_CHOICES,
   COLLECTION_PAGE,
   COLLECTION_PREVIEW,
+  collectionListingQuerySchema,
   collectionMemberKindSchema,
   collectionMemberSchema,
   isEditorialMemberKind,
   memberToken,
+  type CollectionListingFacets,
+  type CollectionListingPage,
   type CollectionMember,
   type CollectionMemberTarget,
   type CollectionPage,
   type EditorialMemberKind,
-  EVENT_GEOGRAPHY_CENTRES,
   EVENT_MAX_OFFSET,
   EVENT_PAGE,
   EVENT_PREVIEW,
+  eventListingQuerySchema,
   eventWhenSchema,
   NEWS_MAX_OFFSET,
   NEWS_PAGE,
@@ -29,6 +32,8 @@ import {
   newsNeighboursQuerySchema,
   validPageBinding,
   type EditorialPublicReaderPort,
+  type EventListingFacets,
+  type EventListingPage,
   type EventPage,
   type EventWhen,
   type NewsKind,
@@ -51,17 +56,6 @@ const collectionOffsetSchema = z.number().int().min(0).max(COLLECTION_MAX_OFFSET
 const membersSchema = z.array(collectionMemberSchema).max(100);
 /** The most Explore Pages one read returns: every Explore route, with room to spare. */
 const EXPLORE_PAGE_CAP = 60;
-
-/**
- * An Event listing's query, validated again here whatever the page tolerated.
- * A Centre filter is a list of identifiers Global resolved — never more than a
- * geography filter may resolve to — and `null` means no Centre filter at all.
- */
-const eventFilterSchema = z.strictObject({
-  when: eventWhenSchema,
-  offset: eventOffsetSchema,
-  centreIds: z.array(editorialIdSchema).max(EVENT_GEOGRAPHY_CENTRES).nullable(),
-});
 
 export function createEditorialReadService(
   reader: EditorialPublicReaderPort,
@@ -233,18 +227,22 @@ export function createEditorialReadService(
       return reader.publicEvent(slug);
     },
     /**
-     * One page of `/events`, upcoming or past. A Centre filter only ever
-     * NARROWS: an empty list matches nothing, it never means everything.
+     * News & Events Part 2 — one page of `/events` with the view's total, and
+     * its counted tabs and filters. Every field is parsed here, before any
+     * read; the instant is the SERVER's. A Centre filter only ever NARROWS: an
+     * empty list matches nothing, it never means everything.
      */
-    async events(filter: {
-      readonly when: EventWhen;
-      readonly offset: number;
-      readonly centreIds: readonly string[] | null;
-    }): Promise<EventPage> {
-      const parsed = eventFilterSchema.parse(filter);
-      if (parsed.centreIds !== null && parsed.centreIds.length === 0)
-        return { items: [], more: false };
-      return reader.events({ ...parsed, now: now(), limit: EVENT_PAGE, topicId: null });
+    async eventListing(raw: unknown): Promise<EventListingPage> {
+      const query = eventListingQuerySchema.parse(raw);
+      if (query.centreIds !== null && query.centreIds.length === 0)
+        return { items: [], total: 0, hasMore: false };
+      return reader.eventListing({ ...query, now: now() });
+    },
+    async eventListingFacets(raw: unknown): Promise<EventListingFacets> {
+      return reader.eventListingFacets({
+        ...eventListingQuerySchema.parse(raw),
+        now: now(),
+      });
     },
     hasPublishedEvents() {
       return reader.hasPublishedEvents();
@@ -301,7 +299,10 @@ export function createEditorialReadService(
       if (!editorialSlugSchema.safeParse(slug).success) return null;
       return reader.publicCollection(slug);
     },
-    /** One page of `/collections`, newest publication first. */
+    /**
+     * A page of Collections, newest publication first — what the home page
+     * previews. `/collections` itself reads `collectionListing` (Part 2).
+     */
     collections(offset = 0): Promise<CollectionPage> {
       return reader.collections({
         offset: collectionOffsetSchema.parse(offset),
@@ -316,6 +317,17 @@ export function createEditorialReadService(
         limit: COLLECTION_PREVIEW,
         topicId: editorialIdSchema.parse(topicId),
       });
+    },
+    /**
+     * NEWS & EVENTS PART 2 — `/collections`: one page with its total, and the
+     * counted facets. Every field is parsed here, before any read, whatever
+     * the page tolerated.
+     */
+    async collectionListing(raw: unknown): Promise<CollectionListingPage> {
+      return reader.collectionListing(collectionListingQuerySchema.parse(raw));
+    },
+    async collectionListingFacets(raw: unknown): Promise<CollectionListingFacets> {
+      return reader.collectionListingFacets(collectionListingQuerySchema.parse(raw));
     },
     collectionSitemap(offset: number, limit: number) {
       return reader.collectionSitemap(offset, limit);

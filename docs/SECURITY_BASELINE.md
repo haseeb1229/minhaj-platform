@@ -1831,6 +1831,15 @@ directives.
 session-derived value in a shared cache entry, and no personalised fragment served to a
 different visitor.
 
+**A different format of a public record is still a public read (News & Events Part 2).**
+`/events/{slug}/calendar` renders a published Event as an iCalendar file: a GET that changes
+nothing, so it belongs to none of §7's mutation classes. It reads only the public composition
+roots (no session, no cookie set), answers every refusal with the same empty `404`, is `noindex`
+and `no-store` (an Event is retimed and withdrawn), and writes every editor- or Centre-written
+value as RFC 5545 TEXT — escaped, control characters dropped, folded — so no value can end its
+line or add a property (`tests/editorial/event-calendar.test.ts`). The reader's own time zone is
+asked of the browser after hydration and sent nowhere.
+
 ---
 
 ## 18. Secrets, database and dependency security
@@ -2007,7 +2016,12 @@ made, and no cookie banner is added — there is no non-essential processing to 
   unsubscribe or suppression never reaches verification, reset or account-security mail, which a
   newsletter state cannot express — and a provider complaint about a newsletter message is recorded
   in the marketing scope only, so a confirmation sent to somebody else's address cannot be turned
-  into a block on their password reset.
+  into a block on their password reset. Since News & Events Part 2 (2026-11-18) the `/newsletter`
+  page is redesigned around the **same** Server Actions (unchanged: origin and CSRF posture, rate
+  limits, double opt-in, the confirm and unsubscribe GET-renders/POST-consumes split, notice
+  version `newsletter-notice-1`): its client island replaces the form with the action's own words,
+  which are one neutral answer for every address state — "already subscribed" is never disclosed —
+  and the invalid-link help is the same for a used, expired or unknown link.
 - **Cache boundary.** Public content pages render the same for everyone; their private island reads
   and writes through `/api/my/*` after hydration, so no personal state enters a shared render or a
   public GET's cookies. Since Rebaseline R1 (2026-11-06) the public header's account entry is such

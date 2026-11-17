@@ -740,6 +740,28 @@ no Gallery.
 promise no projection — the same posture as Phases 12 and 16 — so Events have no Search kind,
 scope, filter or indexing intent; Phase 31 reconciles the final searchable inventory.
 
+**`/events` as its page reads it (News & Events Part 2).** Two more public reads of the same
+published predicate over the **current** revision (`packages/contracts/src/editorial/event-listing.ts`),
+validated again by Editorial's read service (`eventListingQuerySchema`, strict — a caller cannot
+supply `now`, which is the server's) and answered by the Model A adapter with bound parameters
+only, a Centre list travelling as one JSON value: `eventListing` — one bounded page (20) of the
+upcoming or past view in Phase 14's order, narrowed by Topic, by a **year and month of an
+occurrence's stated local start** (a month only with its year; in the upcoming view only an
+occurrence that has not ended counts, so an Event is never found under a month it has left
+behind; the wall-clock month in the Event's own zone, never a reader's or UTC's) and by the
+Centres Global resolved for a place, with the view's **total**; and `eventListingFacets` —
+upcoming and past under the Topic and place (the tabs, which leave a period behind), Topics under
+the view, period and place (50, the commonest first), years and — once a year is chosen — its
+months under the view, Topic and place, and each Centre's count under the view, Topic and period
+(200, the busiest first — one Global read's worth). Global still says, at Layer 4, which of those
+Centres are public, physical and where, so Countries and Cities are counted by the page; with more
+Centres than one read answers, places are offered uncounted rather than counted from a subset.
+`EventSummary` now carries the revision's **Gallery identifiers**, so a card offers an Event's
+photographs only while Media lists one. Phase 14's service-level `events` listing read was
+withdrawn with it (historical); the port's `events` read still serves a Centre's Local Events and
+a Topic's preview. No schema change and no migration. An Event as an **iCalendar file** is a
+rendering of the same published record, not state (ROUTE_MAP.md §3.9).
+
 ### 7.3 Collection — typed membership
 
 A curated, ordered, described set that may contain items of **mixed type**: historical
@@ -826,6 +848,22 @@ may answer with the member's first-party lead image and its reader-facing chrono
 (`leadImage`, `chronologyAt`) — Editorial does for its Article, NewsArticle and PressRelease members.
 Absent means the owner says nothing, and nothing is inferred; a Collection page's chronological
 order is a presentation over those answers, never a change to the curated order.
+
+**`/collections` as its page reads it (News & Events Part 2).** Two more public reads of the same
+published predicate over the **current** revision
+(`packages/contracts/src/editorial/collection-listing.ts`), validated again by Editorial's read
+service and answered by the Model A adapter with bound parameters only (every SQL fragment and alias
+fixed in code; no Library or Media table is read): `collectionListing` — one bounded page (20),
+newest or oldest **first publication** first (then the identifier), narrowed by Topic, by what a
+Collection **holds** (`article`, `news` — the four News families together — `work` or `video`) and
+by content language, with the view's **total**; and `collectionListingFacets` — the whole
+catalogue's figures (Collections, curated places, content languages) and each filter's values
+counted under every **other** filter, plus every Collection under the other filters (the
+"Everything" tab). A Collection **holds** a kind when its current revision names at least one
+member of it — a curated **place**, counted as such: whether that member is public now is still
+its owner's answer at Layer 4, when the page is shown. No title order is offered (titles are in
+three scripts). The page-sized `collections` read stays for the home page and the topic hub. No
+schema change and no migration.
 
 ### 7.4 Derived views are not entities
 
@@ -1991,6 +2029,25 @@ As delivered (Phase 12) — Photo, Gallery and GalleryItem, **with no Event rela
   relation that could disagree with it.
 - **A date taken is never a record's creation time**, and a year stays a year (§19.5).
 - **Nothing is inferred from an image**: no person, place, topic, caption or description.
+
+**The photograph surfaces as their pages read them (News & Events Part 2).** Public reads of the
+same published predicate (a Gallery is **listed** while it is published and holds a public Photo)
+in `packages/contracts/src/media/photo-listing.ts`, each validated again by Media's read service
+and answered by the Model A adapter with bound parameters only: `photoListing` — one bounded page
+(24) recently added first, or by **date taken** latest or earliest first, narrowed by year and
+month taken (a month only with its year), a listed Gallery and the language a Photo is described
+in, with the view's **total** (in a date order an undated Photo comes after every dated one, and
+one known only to its year after that year's dated months); `photoListingFacets` — the catalogue's
+figures (Photos, dated Photos, first and last year, languages, listed Galleries, Photos in them)
+and each filter's values counted under every **other** filter (months only once a year is chosen;
+at most 50 Galleries, fullest first); `photoArchivePeriods` — each year and month taken with its
+count, and the Photos known only to their year; and `galleryDirectory` — a bounded page of listed
+Galleries, newest, oldest or by title (in the reader's language, else the Gallery's own), with the
+total. A Gallery's **span** (`PublicGallery.span`) is derived from its public Photos' recorded
+dates only — never stored, never invented; an end names its month only when every public Photo of
+that year has one. The offset-paged `photos`, `galleries` and archive reads were withdrawn with
+them (historical). Media still holds no Event, Centre or Collection reference; no schema change and
+no migration.
 
 ---
 

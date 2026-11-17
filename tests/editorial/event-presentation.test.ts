@@ -94,88 +94,8 @@ function centre(overrides: Partial<PublicCentreSummary> = {}): PublicCentreSumma
   };
 }
 
-describe('the /events query', () => {
-  it('reads a complete, valid query as given', async () => {
-    const { readEventQuery } = await withIndexing(false);
-    expect(
-      readEventQuery({
-        when: 'past',
-        country: 'xa',
-        city: 'synthetic-town',
-        centre: 'synthetic-centre',
-        offset: '40',
-      }),
-    ).toEqual({
-      when: 'past',
-      country: 'xa',
-      city: 'synthetic-town',
-      centre: 'synthetic-centre',
-      offset: 40,
-      invalid: false,
-    });
-    expect(readEventQuery({})).toEqual({
-      when: 'upcoming',
-      country: null,
-      city: null,
-      centre: null,
-      offset: 0,
-      invalid: false,
-    });
-    // An empty value is an absent one.
-    expect(readEventQuery({ when: '', country: '', offset: '' }).invalid).toBe(false);
-  });
-
-  it.each([
-    [{ when: 'later' }],
-    [{ when: 'UPCOMING' }],
-    [{ when: ['upcoming', 'past'] }],
-    [{ country: 'Not A Slug' }],
-    [{ country: '../xa' }],
-    [{ centre: 'x' }],
-    [{ centre: 'a'.repeat(121) }],
-    [{ city: 'synthetic-town' }],
-    [{ country: ['xa', 'xb'] }],
-    [{ offset: '-1' }],
-    [{ offset: '1.5' }],
-    [{ offset: '1e3' }],
-    [{ offset: ' 20' }],
-    [{ offset: '25001' }],
-    [{ offset: '999999999' }],
-    [{ offset: ['0', '20'] }],
-  ])('refuses %j rather than broadening it', async (query) => {
-    const { readEventQuery } = await withIndexing(false);
-    expect(readEventQuery(query).invalid).toBe(true);
-  });
-
-  it('never widens the view of an invalid query', async () => {
-    const { readEventQuery } = await withIndexing(false);
-    const parsed = readEventQuery({ when: 'past', city: 'synthetic-town' });
-    // The view is kept and the filter refused — never silently dropped.
-    expect(parsed).toMatchObject({ when: 'past', invalid: true });
-    expect(readEventQuery({ offset: '25000' })).toMatchObject({
-      offset: 25000,
-      invalid: false,
-    });
-  });
-
-  it('canonicalises every neutral value away', async () => {
-    const { eventsPath } = await withIndexing(false);
-    const none = { when: 'upcoming', country: null, city: null, centre: null } as const;
-    expect(eventsPath('en', none)).toBe('/events');
-    expect(eventsPath('ur', none, 0)).toBe('/ur/events');
-    expect(eventsPath('ar', { ...none, when: 'past' }, 20)).toBe(
-      '/ar/events?when=past&offset=20',
-    );
-    expect(
-      eventsPath('en', { when: 'upcoming', country: 'xa', city: 'town', centre: null }),
-    ).toBe('/events?country=xa&city=town');
-    // A City is never written without its Country.
-    expect(eventsPath('en', { ...none, city: 'town' })).toBe('/events');
-    expect(eventsPath('en', { ...none, centre: 'synthetic-centre' }, 40)).toBe(
-      '/events?centre=synthetic-centre&offset=40',
-    );
-  });
-});
+// News & Events Part 2: `/events`' query rules moved to `./event-view.test.ts`
+// with the address module they prove (`event-view.ts`).
 
 describe('an occurrence, as a reader sees it', () => {
   const reference = (locale: string, local: string, end: string | null = null) => {
@@ -286,6 +206,67 @@ describe('the occurrence a card leads with', () => {
     const { leadingOccurrence } = await withIndexing(false);
     expect(leadingOccurrence(all, 'past', new Date('2040-01-01T00:00Z'))).toBe(third);
     expect(leadingOccurrence([], 'past', new Date())).toBeUndefined();
+  });
+
+  it('leads, within a chosen year or month, with an occurrence there (News & Events Part 2)', async () => {
+    const { leadingOccurrence } = await withIndexing(false);
+    const before = new Date('2030-12-01T00:00Z');
+    // February is asked for: February leads, though January comes first.
+    expect(leadingOccurrence(all, 'upcoming', before, { year: 2031, month: 2 })).toBe(
+      second,
+    );
+    expect(
+      leadingOccurrence(all, 'past', new Date('2040-01-01T00:00Z'), {
+        year: 2031,
+        month: 1,
+      }),
+    ).toBe(first);
+    // A year alone: the first not yet over within it.
+    expect(
+      leadingOccurrence(all, 'upcoming', new Date('2031-01-01T12:00:01Z'), {
+        year: 2031,
+        month: null,
+      }),
+    ).toBe(second);
+    // A period none falls in changes nothing.
+    expect(leadingOccurrence(all, 'upcoming', before, { year: 2035, month: null })).toBe(
+      first,
+    );
+  });
+
+  it('places an occurrence in the month of its STATED local start', async () => {
+    const { inEventPeriod, monthOfLocal } = await withIndexing(false);
+    expect(monthOfLocal('2040-08-01T02:00')).toEqual({ year: 2040, month: 8 });
+    expect(inEventPeriod('2040-08-01T02:00', { year: 2040, month: 8 })).toBe(true);
+    expect(inEventPeriod('2040-08-01T02:00', { year: 2040, month: 7 })).toBe(false);
+    expect(inEventPeriod('2040-08-01T02:00', { year: 2040, month: null })).toBe(true);
+    expect(inEventPeriod('2040-08-01T02:00', { year: 2039, month: null })).toBe(false);
+  });
+});
+
+describe('where an Event is held, for a calendar file', () => {
+  it('names a physical Centre with its address, City and Country, in the shown language', async () => {
+    const { calendarLocation } = await withIndexing(false);
+    expect(calendarLocation(record(), 'en', centre())).toBe(
+      'Synthetic Centre, 1 Synthetic Street, Synthetic City, Synthetic Country',
+    );
+    // A virtual Centre is its name alone; no Centre, or no label, is nothing.
+    expect(calendarLocation(record(), 'en', centre({ isVirtual: true }))).toBe(
+      'Synthetic Centre',
+    );
+    expect(calendarLocation(record(), 'en', null)).toBeNull();
+    expect(
+      calendarLocation(
+        record(),
+        'en',
+        centre({
+          city: null,
+          labels: [
+            { locale: 'en', name: 'Synthetic Centre', description: null, address: null },
+          ],
+        }),
+      ),
+    ).toBe('Synthetic Centre, Synthetic Country');
   });
 });
 

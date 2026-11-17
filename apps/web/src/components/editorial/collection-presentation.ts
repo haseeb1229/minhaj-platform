@@ -3,65 +3,22 @@ import 'server-only';
 
 import type { Locale } from '@minhaj/contracts';
 import {
-  COLLECTION_MAX_OFFSET,
   collectionPathOf,
   type CollectionMemberTarget,
   type PublicCollection,
 } from '@minhaj/contracts/editorial';
 
+import type { CollectionOrder } from '@/components/editorial/collections-view';
 import { translationFor } from '@/components/editorial/presentation';
 import { contentMetadata } from '@/seo/metadata';
 
 /**
- * The PURE presentation rules of the Collection pages (Phase 15): how
- * `/collections` is paged, which of a member's titles a reader is shown and what
- * a Collection page claims to search engines. No read runtime and no rendering
+ * The PURE presentation rules of the Collection pages (Phase 15): the order a
+ * Collection's members are read in, which of a member's titles a reader is
+ * shown and what a Collection page claims to search engines. The addresses are
+ * `./collections-view` (News & Events Part 2). No read runtime and no rendering
  * here, so each rule can be proved on its own.
  */
-
-type Query = Record<string, string | string[] | undefined>;
-
-/**
- * `?offset=`, bounded: one plain whole number no deeper than the listing goes.
- * Anything else — a repeated parameter, a sign, a fraction, an overlong or
- * out-of-range value — is the first page, never an error and never a wider read.
- */
-export function readCollectionOffset(query: Query): number {
-  const raw = query['offset'];
-  if (typeof raw !== 'string' || !/^\d{1,8}$/u.test(raw)) return 0;
-  const offset = Number(raw);
-  return offset <= COLLECTION_MAX_OFFSET ? offset : 0;
-}
-
-/** The listing's address for an offset; the first page is the bare `/collections`. */
-export function collectionsPath(locale: string, offset = 0): string {
-  return localizedPath(locale, `/collections${offset > 0 ? `?offset=${offset}` : ''}`);
-}
-
-/**
- * R2 — the order a Collection's members are read in (audit F51). `curated` is
- * the editor's saved order and the default; `newest` and `oldest` follow each
- * member's own date, as its owner states it. Anything else is the default.
- */
-export const COLLECTION_ORDERS = ['curated', 'newest', 'oldest'] as const;
-export type CollectionOrder = (typeof COLLECTION_ORDERS)[number];
-
-export function readCollectionOrder(query: Query): CollectionOrder {
-  const raw = query['order'];
-  return raw === 'newest' || raw === 'oldest' ? raw : 'curated';
-}
-
-/** A Collection's address in an order; the curated order is the bare address. */
-export function collectionOrderPath(
-  locale: string,
-  slug: string,
-  order: CollectionOrder,
-): string {
-  return localizedPath(
-    locale,
-    `${collectionPathOf(slug)}${order === 'curated' ? '' : `?order=${order}`}`,
-  );
-}
 
 /**
  * The members in the chosen order. The curated order is kept as given. A date

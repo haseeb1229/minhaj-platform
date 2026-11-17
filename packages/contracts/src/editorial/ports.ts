@@ -38,11 +38,21 @@ import type {
 } from './news-listing.ts';
 import type { EventListQuery, EventPage } from './event.ts';
 import type {
+  EventListingFacets,
+  EventListingPage,
+  EventListingRead,
+} from './event-listing.ts';
+import type {
   CollectionMember,
   CollectionMemberTarget,
   CollectionPage,
   EditorialMemberKind,
 } from './collection.ts';
+import type {
+  CollectionListingFacets,
+  CollectionListingPage,
+  CollectionListingQuery,
+} from './collection-listing.ts';
 
 export interface EditorialActor {
   readonly accountId: string;
@@ -180,6 +190,12 @@ export interface EditorialPublicReaderPort {
   publicEvent(slug: string): Promise<PublicEvent | null>;
   /** One bounded page; see `EventListQuery`. */
   events(query: EventListQuery): Promise<EventPage>;
+  /**
+   * NEWS & EVENTS PART 2 — `/events`: one page of the view with its total,
+   * and its counted tabs and filters (see `event-listing.ts`).
+   */
+  eventListing(query: EventListingRead): Promise<EventListingPage>;
+  eventListingFacets(query: EventListingRead): Promise<EventListingFacets>;
   /** Is any Event published at all? Distinguishes an empty inventory from no match. */
   hasPublishedEvents(): Promise<boolean>;
   eventSitemap(offset: number, limit: number): Promise<readonly EditorialSitemapEntry[]>;
@@ -199,6 +215,14 @@ export interface EditorialPublicReaderPort {
     readonly limit: number;
     readonly topicId: string | null;
   }): Promise<CollectionPage>;
+  /**
+   * NEWS & EVENTS PART 2 — `/collections`: a bounded page with the view's
+   * total, and its counted facets (see `collection-listing.ts`).
+   */
+  collectionListing(query: CollectionListingQuery): Promise<CollectionListingPage>;
+  collectionListingFacets(
+    query: CollectionListingQuery,
+  ): Promise<CollectionListingFacets>;
   collectionSitemap(
     offset: number,
     limit: number,

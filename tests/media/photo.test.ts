@@ -8,8 +8,8 @@ import {
   PHOTO_LIMITS,
   PHOTO_MEDIA_TYPES,
   PHOTO_UPLOAD_MAX_BYTES,
-  photoArchiveQuerySchema,
   photoInputSchema,
+  photoListingQuerySchema,
   photoWords,
   validPartialDate,
   type GalleryDetail,
@@ -30,10 +30,13 @@ import {
   mediaFailure,
 } from '../../apps/web/src/contexts/media/index.ts';
 import {
-  archivePath,
+  gallerySpanText,
   partialDate,
-  readArchiveQuery,
 } from '../../apps/web/src/components/media/presentation.ts';
+import {
+  mediaArchiveCanonicalRedirect,
+  readPhotosView,
+} from '../../apps/web/src/components/media/photos-view.ts';
 
 /**
  * Phase 12 — the photograph rules, over fake ports.
@@ -251,20 +254,35 @@ describe('a Gallery holds Photos by named, bounded changes', () => {
 
 describe('the archive is by the date taken, never by when a record was made', () => {
   it('reads a year and a month tolerantly, and a month never without its year', () => {
-    expect(readArchiveQuery({ year: '1995', month: '3' })).toEqual({
+    expect(readPhotosView({ year: '1995', month: '3' })).toMatchObject({
       year: 1995,
       month: 3,
-      offset: 0,
+      page: 1,
     });
-    expect(readArchiveQuery({ month: '3' })).toMatchObject({ year: null, month: null });
-    expect(readArchiveQuery({ year: '95' })).toMatchObject({ year: null });
-    expect(readArchiveQuery({ year: '1700' })).toMatchObject({ year: null });
-    expect(readArchiveQuery({ year: '1995', month: '13' })).toMatchObject({
+    expect(readPhotosView({ month: '3' })).toMatchObject({ year: null, month: null });
+    expect(readPhotosView({ year: '95' })).toMatchObject({ year: null });
+    expect(readPhotosView({ year: '1700' })).toMatchObject({ year: null });
+    expect(readPhotosView({ year: '1995', month: '13' })).toMatchObject({
       month: null,
     });
-    expect(photoArchiveQuerySchema.safeParse({ month: 3 }).success).toBe(false);
-    expect(archivePath('ur', { year: 1995, month: 3 }, 24)).toBe(
-      '/ur/media/archive?year=1995&month=3&offset=24',
+    expect(photoListingQuerySchema.safeParse({ month: 3 }).success).toBe(false);
+    // The archive's former month page is ONE redirect to the listing for it,
+    // by the date taken, at the page that held the photograph it began with.
+    expect(
+      mediaArchiveCanonicalRedirect('ur', { year: '1995', month: '3', offset: '24' }),
+    ).toBe('/ur/media/photos?year=1995&month=3&sort=newest&page=2');
+  });
+
+  it('gives a Gallery the span of its photographs’ known dates, never more precise', () => {
+    const at = (year: number, month: number | null) => ({ year, month });
+    expect(gallerySpanText({ first: at(1995, 3), last: at(1995, 3) }, 'en')).toBe(
+      'March 1995',
+    );
+    expect(gallerySpanText({ first: at(1995, null), last: at(1995, null) }, 'en')).toBe(
+      '1995',
+    );
+    expect(gallerySpanText({ first: at(1989, null), last: at(1995, 7) }, 'en')).toBe(
+      '1989 – July 1995',
     );
   });
 
