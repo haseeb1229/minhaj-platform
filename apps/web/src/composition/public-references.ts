@@ -145,6 +145,30 @@ export async function contributorNames(
   );
 }
 
+/** The most Topics one owner call names — Taxonomy's own reader bound. */
+const TOPICS_BATCH = 300;
+
+/**
+ * WATCH PART 2 — the names and addresses of every Topic a whole directory
+ * names (each grouping's Topics, for its filter), resolved by Taxonomy in
+ * bounded batches. A Topic Taxonomy does not return as active is absent.
+ */
+export async function topicNames(
+  topicIds: readonly string[],
+  locale: Locale,
+): Promise<ReadonlyMap<string, { slug: string; name: string }>> {
+  const ids = [...new Set(topicIds)];
+  const batches: string[][] = [];
+  for (let start = 0; start < ids.length; start += TOPICS_BATCH)
+    batches.push(ids.slice(start, start + TOPICS_BATCH));
+  const answers = await Promise.all(
+    batches.map((batch) => taxonomyRuntime().taxonomy.topicReferences(batch, locale)),
+  );
+  return new Map(
+    answers.flat().map((entry) => [entry.id, { slug: entry.slug, name: entry.name }]),
+  );
+}
+
 /**
  * LIBRARY PART 2 — one directory page's contributors as People's public cards
  * (the name in the language it was resolved in, and the published portrait),

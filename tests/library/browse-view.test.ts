@@ -12,10 +12,7 @@ import {
   downloadsHref,
   fileFormat,
   fileSize,
-  foldName,
-  initialOf,
   kindHref,
-  nameMatches,
   readAuthorsView,
   readDownloadsView,
   readSalePointsView,
@@ -23,6 +20,12 @@ import {
   salePointsCanonicalRedirect,
   salePointsHref,
 } from '../../apps/web/src/components/library/browse-view.ts';
+// Shared with Watch Part 2's speakers since then: one rule for both directories.
+import {
+  foldName,
+  initialOf,
+  nameMatches,
+} from '../../apps/web/src/components/topic-hub/address.ts';
 
 /**
  * Library Part 2 — the browse and access pages' address rules: the view a

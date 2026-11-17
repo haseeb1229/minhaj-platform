@@ -4,13 +4,8 @@ import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
 import {
-  MEDIA_FACET_PAGE,
-  MEDIA_PAGE,
   formatDuration,
   providerWatchUrl,
-  type PlaylistRecord,
-  type SeriesKind,
-  type SeriesRecord,
   type TopicVideo,
   type VideoListing,
   type VideoPoster,
@@ -33,7 +28,6 @@ import {
   Alert,
   Badge,
   Breadcrumbs,
-  CardGrid,
   Container,
   DetailRow,
   EmptyState,
@@ -45,7 +39,6 @@ import {
   ListRow,
   MediaCard,
   MetaRow,
-  Panel,
   Poster,
   Prose,
   SectionHeader,
@@ -57,22 +50,14 @@ import { Shelf } from '@/components/ui/shelf';
 import { absoluteUrl } from '@/config/origin';
 import { directionOf } from '@/config/locale';
 import { isContentIndexable, serializeStructuredData } from '@/seo/metadata';
-import {
-  Duration,
-  formatDate,
-  MediaPageHeader,
-  Pagination as MediaPagination,
-} from './parts';
+import { Duration, formatDate } from './parts';
 import { VideoPlayer } from './player';
 import {
   formatOfView,
   mediaLabel,
   mediaLocales,
-  offsetPath,
   playlistPath,
-  readOffset,
   seriesPath,
-  seriesSegment,
   videoPath,
   videoPosterPath,
   videoStructuredData,
@@ -82,7 +67,9 @@ import {
 import { ShareVideo } from './share';
 
 /**
- * The public Watch surfaces (ROUTE_MAP.md §3.7) — Video, Series, Playlist.
+ * The public Watch surfaces (ROUTE_MAP.md §3.7) — the landing and a Video's
+ * page. Since Watch Part 2 the Series, programme and Playlist directories and
+ * pages are `./groups`, and the speakers' directory `./speakers`.
  *
  * SERVER COMPONENTS, SESSION-FREE BY CONSTRUCTION. Every read goes through
  * `@/composition/media-read` and `@/composition/public-references`, neither
@@ -351,28 +338,6 @@ async function VideoShelf({
         ))}
       </Shelf>
     </section>
-  );
-}
-
-function Pagination({
-  label,
-  previous,
-  next,
-  t,
-}: {
-  readonly label: string;
-  readonly previous: string | null;
-  readonly next: string | null;
-  readonly t: WatchTranslator;
-}) {
-  return (
-    <MediaPagination
-      label={label}
-      previous={previous}
-      next={next}
-      previousLabel={t('previous')}
-      nextLabel={t('next')}
-    />
   );
 }
 
@@ -1128,447 +1093,6 @@ export async function VideoDetailPage({
 }
 
 /* ===========================================================================
- * Series, programmes and playlists
- * ========================================================================= */
-
-/**
- * A Series, programme or Playlist as a card: its kind, its title in its own
- * language and the start of its description — one link to its ONE address.
- * A grouping has no picture of its own, so its card is text-first (R2): the
- * kind as a badge, never an upper-case label over the title.
- */
-function GroupCard({
-  locale,
-  href,
-  record,
-  kind,
-}: {
-  readonly locale: Locale;
-  readonly href: string;
-  readonly record: SeriesRecord | PlaylistRecord;
-  readonly kind: string;
-}) {
-  const label = mediaLabel(record, locale);
-  return (
-    <MediaCard
-      href={href}
-      type={kind}
-      title={label.title}
-      description={label.description}
-      headingLevel="h2"
-      lang={label.locale}
-      dir={directionOf(label.locale)}
-    />
-  );
-}
-
-/** `/watch/series` and `/watch/programs`. */
-export async function SeriesListingPage({
-  locale,
-  kind,
-  query,
-}: {
-  readonly locale: Locale;
-  readonly kind: SeriesKind;
-  readonly query: Record<string, string | string[] | undefined>;
-}) {
-  const t = await getTranslations({ locale, namespace: 'watch' });
-  const trail = await watchTrail(locale);
-  const offset = readOffset(query);
-  const section = seriesSegment(kind);
-  const base = localizedPath(locale, `/watch/${section}`);
-  const title = t(`sections.${section}` as 'sections.series');
-  const page = await mediaReadRuntime().seriesList(kind, offset);
-
-  return (
-    <Container>
-      <div className="flex flex-col gap-8 py-[var(--space-page)]">
-        <MediaPageHeader
-          crumbs={{
-            label: trail.label,
-            trail: [trail.home, trail.watch, { text: title }],
-          }}
-          title={title}
-          lede={t(`sectionBody.${section}` as 'sectionBody.series')}
-        />
-        {page.items.length === 0 ? (
-          <EmptyState>{t(`groupEmpty.${kind}`)}</EmptyState>
-        ) : (
-          <CardGrid label={title}>
-            {page.items.map((record) => (
-              <GroupCard
-                key={record.id}
-                locale={locale}
-                record={record}
-                kind={t(`kind.${record.kind}`)}
-                href={seriesPath(locale, record.kind, record.slug)}
-              />
-            ))}
-          </CardGrid>
-        )}
-        <Pagination
-          label={title}
-          previous={
-            offset > 0 ? offsetPath(base, Math.max(0, offset - MEDIA_PAGE)) : null
-          }
-          next={page.hasMore ? offsetPath(base, offset + MEDIA_PAGE) : null}
-          t={t}
-        />
-      </div>
-    </Container>
-  );
-}
-
-/** BreadcrumbList JSON-LD for a grouping page, under the same indexing gate. */
-function GroupStructuredData({
-  record,
-  trail,
-}: {
-  readonly record: SeriesRecord | PlaylistRecord;
-  readonly trail: readonly { readonly name: string; readonly path: string }[];
-}) {
-  if (!isContentIndexable({ contentLocales: mediaLocales(record) })) return null;
-  return (
-    <script
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{
-        __html: serializeStructuredData({
-          '@context': 'https://schema.org',
-          '@type': 'BreadcrumbList',
-          itemListElement: trail.map((entry, index) => ({
-            '@type': 'ListItem',
-            position: index + 1,
-            name: entry.name,
-            item: absoluteUrl(entry.path),
-          })),
-        }),
-      }}
-    />
-  );
-}
-
-/**
- * A Series or a Playlist and its public Videos, in ITS order: episode order for
- * a Series, the curated order for a Playlist. Bounded pages; an honest empty
- * state when nothing in it is published yet.
- */
-async function GroupDetail({
-  locale,
-  record,
-  section,
-  kind,
-  path,
-  videos,
-  offset,
-  heading,
-  empty,
-  episode,
-}: {
-  readonly locale: Locale;
-  readonly record: SeriesRecord | PlaylistRecord;
-  readonly section: 'series' | 'programs' | 'playlists';
-  /** The record's kind, in words — the page's eyebrow. */
-  readonly kind: string;
-  readonly path: string;
-  readonly videos: { readonly items: readonly VideoListing[]; readonly hasMore: boolean };
-  readonly offset: number;
-  readonly heading: string;
-  readonly empty: string;
-  readonly episode: boolean;
-}) {
-  const t = await getTranslations({ locale, namespace: 'watch' });
-  const parts = await watchTrail(locale);
-  const label = mediaLabel(record, locale);
-  const direction = directionOf(label.locale);
-  const sectionTitle = t(`sections.${section}`);
-  const trail = [
-    { name: parts.home.text, path: parts.home.href },
-    { name: parts.watch.text, path: parts.watch.href },
-    { name: sectionTitle, path: localizedPath(locale, `/watch/${section}`) },
-    { name: label.title, path },
-  ];
-  const description = paragraphsOf(label.description);
-
-  return (
-    <Container>
-      <article className="flex flex-col gap-10 py-[var(--space-page)]">
-        <MediaPageHeader
-          crumbs={{
-            label: parts.label,
-            trail: [
-              ...trail
-                .slice(0, -1)
-                .map((entry) => ({ href: entry.path, text: entry.name })),
-              { text: label.title },
-            ],
-          }}
-          eyebrow={kind}
-          title={label.title}
-          lang={label.locale}
-          dir={direction}
-        >
-          {description.length === 0 ? null : (
-            <div className="flex max-w-[var(--measure-prose)] flex-col gap-3 pt-1">
-              {description.map((paragraph, index) => (
-                <p key={index} lang={label.locale} dir={direction}>
-                  {paragraph}
-                </p>
-              ))}
-            </div>
-          )}
-        </MediaPageHeader>
-
-        <section className="flex flex-col gap-5" aria-labelledby="group-videos">
-          <SectionHeader id="group-videos" heading={heading} />
-          {videos.items.length === 0 ? (
-            <EmptyState>{empty}</EmptyState>
-          ) : (
-            <VideoGrid
-              locale={locale}
-              videos={videos.items}
-              label={heading}
-              headingLevel="h3"
-              episode={episode}
-              ordered={!episode}
-            />
-          )}
-          <Pagination
-            label={heading}
-            previous={
-              offset > 0 ? offsetPath(path, Math.max(0, offset - MEDIA_PAGE)) : null
-            }
-            next={videos.hasMore ? offsetPath(path, offset + MEDIA_PAGE) : null}
-            t={t}
-          />
-        </section>
-
-        <GroupStructuredData record={record} trail={trail} />
-      </article>
-    </Container>
-  );
-}
-
-export async function SeriesDetailPage({
-  locale,
-  record,
-  query,
-}: {
-  readonly locale: Locale;
-  readonly record: SeriesRecord;
-  readonly query: Record<string, string | string[] | undefined>;
-}) {
-  const t = await getTranslations({ locale, namespace: 'watch' });
-  const offset = readOffset(query);
-  const videos = await mediaReadRuntime().seriesVideos(record.id, offset);
-  return (
-    <GroupDetail
-      locale={locale}
-      record={record}
-      section={seriesSegment(record.kind) as 'series' | 'programs'}
-      kind={t(`kind.${record.kind}`)}
-      path={seriesPath(locale, record.kind, record.slug)}
-      videos={videos}
-      offset={offset}
-      heading={t('episodes')}
-      empty={t('episodesEmpty')}
-      episode
-    />
-  );
-}
-
-export async function PlaylistListingPage({
-  locale,
-  query,
-}: {
-  readonly locale: Locale;
-  readonly query: Record<string, string | string[] | undefined>;
-}) {
-  const t = await getTranslations({ locale, namespace: 'watch' });
-  const trail = await watchTrail(locale);
-  const offset = readOffset(query);
-  const base = localizedPath(locale, '/watch/playlists');
-  const title = t('sections.playlists');
-  const page = await mediaReadRuntime().playlists(offset);
-
-  return (
-    <Container>
-      <div className="flex flex-col gap-8 py-[var(--space-page)]">
-        <MediaPageHeader
-          crumbs={{
-            label: trail.label,
-            trail: [trail.home, trail.watch, { text: title }],
-          }}
-          title={title}
-          lede={t('sectionBody.playlists')}
-        />
-        {page.items.length === 0 ? (
-          <EmptyState>{t('groupEmpty.playlist')}</EmptyState>
-        ) : (
-          <CardGrid label={title}>
-            {page.items.map((record) => (
-              <GroupCard
-                key={record.id}
-                locale={locale}
-                record={record}
-                kind={t('kind.playlist')}
-                href={playlistPath(locale, record.slug)}
-              />
-            ))}
-          </CardGrid>
-        )}
-        <Pagination
-          label={title}
-          previous={
-            offset > 0 ? offsetPath(base, Math.max(0, offset - MEDIA_PAGE)) : null
-          }
-          next={page.hasMore ? offsetPath(base, offset + MEDIA_PAGE) : null}
-          t={t}
-        />
-      </div>
-    </Container>
-  );
-}
-
-export async function PlaylistDetailPage({
-  locale,
-  record,
-  query,
-}: {
-  readonly locale: Locale;
-  readonly record: PlaylistRecord;
-  readonly query: Record<string, string | string[] | undefined>;
-}) {
-  const t = await getTranslations({ locale, namespace: 'watch' });
-  const offset = readOffset(query);
-  const videos = await mediaReadRuntime().playlistVideos(record.id, offset);
-  return (
-    <GroupDetail
-      locale={locale}
-      record={record}
-      section="playlists"
-      kind={t('kind.playlist')}
-      path={playlistPath(locale, record.slug)}
-      videos={videos}
-      offset={offset}
-      heading={t('playlistVideos')}
-      empty={t('playlistEmpty')}
-      episode={false}
-    />
-  );
-}
-
-/* ===========================================================================
- * Speakers
- * ========================================================================= */
-
-/** The first-party person mark, decorative: no portrait is invented. */
-function PersonMark() {
-  return (
-    <span
-      aria-hidden="true"
-      className="flex size-11 shrink-0 items-center justify-center rounded-full bg-accent-surface text-accent"
-    >
-      <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor">
-        <circle cx="12" cy="8.5" r="3.5" strokeWidth="1.6" />
-        <path d="M5 19.5a7 7 0 0 1 14 0" strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
-    </span>
-  );
-}
-
-/**
- * `/watch/speakers` — People named on at least one published Video.
- *
- * A PROJECTION OF PEOPLE, NOT A SECOND SPEAKER RECORD. Media counts its own
- * published Videos by speaker and asks People for the names, for a whole page
- * at once; each row links to the person's ONE canonical profile and to the
- * Videos they speak in. `/watch/speakers/{slug}` is an alias that 301s to
- * `/people/{slug}`.
- */
-export async function SpeakerBrowsePage({
-  locale,
-  query,
-}: {
-  readonly locale: Locale;
-  readonly query: Record<string, string | string[] | undefined>;
-}) {
-  const t = await getTranslations({ locale, namespace: 'watch' });
-  const trail = await watchTrail(locale);
-  const offset = readOffset(query);
-  const title = t('sections.speakers');
-  const base = localizedPath(locale, '/watch/speakers');
-  const page = await mediaReadRuntime().speakerFacets(offset);
-  const names = await referenceNames(
-    { personIds: page.items.map((facet) => facet.id), topicIds: [] },
-    locale,
-  );
-  const rows = page.items.flatMap((facet) => {
-    const person = names.people.get(facet.id);
-    return person === undefined ? [] : [{ id: facet.id, videos: facet.videos, person }];
-  });
-
-  return (
-    <Container>
-      <div className="flex flex-col gap-8 py-[var(--space-page)]">
-        <MediaPageHeader
-          crumbs={{
-            label: trail.label,
-            trail: [trail.home, trail.watch, { text: title }],
-          }}
-          title={title}
-          lede={t('sectionBody.speakers')}
-        />
-        {rows.length === 0 ? (
-          <EmptyState>{t('speakersEmpty')}</EmptyState>
-        ) : (
-          <CardGrid label={title}>
-            {rows.map((row) => (
-              <Panel key={row.id} as="li">
-                <div className="flex min-w-0 items-start gap-4">
-                  <PersonMark />
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <h2
-                      className="text-subheading font-semibold wrap-anywhere"
-                      dir="auto"
-                    >
-                      <TextLink
-                        href={localizedPath(
-                          locale,
-                          `/people/${encodeURIComponent(row.person.slug)}`,
-                        )}
-                      >
-                        {row.person.name}
-                      </TextLink>
-                    </h2>
-                    <p className="text-sm">
-                      <a
-                        href={watchVideosHref(locale, { speaker: row.id })}
-                        className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-action underline-offset-4 hover:underline"
-                      >
-                        {t('speakerVideos', { count: String(row.videos) })}
-                        <Icon name="arrow-end" size={16} />
-                      </a>
-                    </p>
-                  </div>
-                </div>
-              </Panel>
-            ))}
-          </CardGrid>
-        )}
-        <Pagination
-          label={title}
-          previous={
-            offset > 0 ? offsetPath(base, Math.max(0, offset - MEDIA_FACET_PAGE)) : null
-          }
-          next={page.hasMore ? offsetPath(base, offset + MEDIA_FACET_PAGE) : null}
-          t={t}
-        />
-      </div>
-    </Container>
-  );
-}
-
-/* ===========================================================================
  * Previews composed into other owners' pages
  * ========================================================================= */
 
@@ -2072,27 +1596,5 @@ export function videoMetadataInput(
     contentLocales: mediaLocales(record),
     primaryLocale: record.primaryLocale,
     pathFor: (alternate) => videoPath(alternate, record.slug),
-  };
-}
-
-/** The same for a Series, a programme or a Playlist. */
-export function groupMetadataInput(
-  locale: Locale,
-  record: SeriesRecord | PlaylistRecord,
-  pathFor: (alternate: Locale) => string,
-): {
-  readonly title: string;
-  readonly description?: string;
-  readonly contentLocales: Locale[];
-  readonly primaryLocale: Locale;
-  readonly pathFor: (alternate: Locale) => string;
-} {
-  const label = mediaLabel(record, locale);
-  return {
-    title: label.title,
-    ...(label.description === '' ? {} : { description: label.description.slice(0, 160) }),
-    contentLocales: mediaLocales(record),
-    primaryLocale: record.primaryLocale,
-    pathFor,
   };
 }

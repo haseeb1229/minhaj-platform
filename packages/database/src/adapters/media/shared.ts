@@ -3,7 +3,8 @@ import 'server-only';
 import type { Prisma } from '@prisma/client';
 
 import type { Locale } from '@minhaj/contracts';
-import type { MediaLabel } from '@minhaj/contracts/media';
+import type { MediaLabel, VideoPoster } from '@minhaj/contracts/media';
+import type { TimedQuranPassage } from '@minhaj/contracts/passage';
 
 /**
  * What the Media adapter's Video, Audio and Photo halves share — refusal mapping,
@@ -118,4 +119,44 @@ export function textMatch(text: string | null): object {
           { labels: { some: { title: { contains: text } } } },
         ],
       };
+}
+
+/** A Video's speakers, in speaking order. */
+export const SPEAKERS = {
+  select: { personId: true },
+  orderBy: [{ position: 'asc' }, { personId: 'asc' }],
+} satisfies Prisma.Video$speakersArgs;
+
+/** Quran Part 8: a Video's passages, in its editor's order. */
+export const PASSAGES = {
+  select: { surahNumber: true, ayahFrom: true, ayahTo: true, startSeconds: true },
+  orderBy: { position: 'asc' },
+} satisfies Prisma.Video$quranPassagesArgs;
+
+export interface PassageRow {
+  readonly surahNumber: number;
+  readonly ayahFrom: number;
+  readonly ayahTo: number;
+  readonly startSeconds: number | null;
+}
+
+/** A stored passage as the citation value it is (Quran Part 8). */
+export function passageOf(row: PassageRow): TimedQuranPassage {
+  return {
+    surah: row.surahNumber,
+    ayahFrom: row.ayahFrom,
+    ayahTo: row.ayahTo,
+    startSeconds: row.startSeconds,
+  };
+}
+
+/** A Video's poster as a value, or null — the CHECK keeps the three columns together. */
+export function posterOf(row: {
+  readonly posterAssetId: string | null;
+  readonly posterWidth: number | null;
+  readonly posterHeight: number | null;
+}): VideoPoster | null {
+  if (row.posterAssetId === null || row.posterWidth === null || row.posterHeight === null)
+    return null;
+  return { assetId: row.posterAssetId, width: row.posterWidth, height: row.posterHeight };
 }

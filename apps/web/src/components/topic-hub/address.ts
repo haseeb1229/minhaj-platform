@@ -43,6 +43,62 @@ export function language(query: Query): string | null {
   return value !== null && LANGUAGE.test(value) ? value : null;
 }
 
+/* ---- Names: a first-letter index and a name search ----------------------
+ * Library Part 2's contributor directory first; shared with Watch Part 2's
+ * speakers, so the two directories index and search names by ONE rule.
+ */
+
+/** The longest name search a directory reads. */
+const NAME_QUERY_MAX = 60;
+
+/** The initial a name is indexed under: its first letter, upper case, else `#`. */
+export function initialOf(name: string, locale: string): string {
+  const first = [...name.trim().normalize('NFC')][0];
+  if (first === undefined || !/\p{L}/u.test(first)) return '#';
+  return first.toLocaleUpperCase(locale);
+}
+
+/** A `?letter` parameter as one initial: a single letter (upper-cased) or `#`. */
+export function letterOf(query: Query, locale: string): string | null {
+  const value = single(query, 'letter', 4);
+  if (value === null) return null;
+  const characters = [...value.normalize('NFC')];
+  if (characters.length !== 1) return null;
+  if (value === '#') return '#';
+  return /^\p{L}$/u.test(value.normalize('NFC')) ? initialOf(value, locale) : null;
+}
+
+/** A `?q` name search, its whitespace collapsed; empty or over-long is absent. */
+export function nameQuery(query: Query): string | null {
+  const value = single(query, 'q', 200);
+  if (value === null) return null;
+  const collapsed = value.replaceAll(/\s+/gu, ' ').trim();
+  return collapsed === '' || collapsed.length > NAME_QUERY_MAX ? null : collapsed;
+}
+
+/**
+ * A name as a search compares it: decomposed, every combining mark (an accent,
+ * a vowel sign, a harakah) and the tatweel removed, lower case, whitespace
+ * collapsed — so "Tahir" finds "Ṭāhir" and an unvowelled Arabic search finds a
+ * vowelled name.
+ */
+export function foldName(text: string): string {
+  return text
+    .normalize('NFKD')
+    .replaceAll(/[\p{M}ـ]/gu, '')
+    .toLowerCase()
+    .replaceAll(/\s+/gu, ' ')
+    .trim();
+}
+
+/** Whether a name answers a search: every word of it appears in the name. */
+export function nameMatches(name: string, q: string): boolean {
+  const folded = foldName(name);
+  return foldName(q)
+    .split(' ')
+    .every((word) => folded.includes(word));
+}
+
 /** A hub's address: its locale-free path and its parameters, neutral ones omitted. */
 export function hubHref(locale: string, path: string, search: URLSearchParams): string {
   const text = search.toString();

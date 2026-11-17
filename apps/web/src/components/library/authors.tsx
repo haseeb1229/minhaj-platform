@@ -11,16 +11,25 @@ import {
   libraryReadRuntime,
 } from '@/composition/library-read';
 import { directionOf } from '@/config/locale';
-import { portraitPath } from '@/components/people/portrait';
+import { PersonMark } from '@/components/people/portrait';
 import { libraryBooksHref } from '@/components/topic-hub/books-view';
-import { pageCount, pageRange } from '@/components/topic-hub/address';
-import { ActiveFilters, ExploreFilters, ExploreHero } from '@/components/topic-hub/parts';
+import {
+  initialOf,
+  nameMatches,
+  pageCount,
+  pageRange,
+} from '@/components/topic-hub/address';
+import {
+  ActiveFilters,
+  ExploreFilters,
+  ExploreHero,
+  LetterIndex,
+} from '@/components/topic-hub/parts';
 import {
   EmptyState,
   Field,
   Icon,
   Pager,
-  Portrait,
   SectionHeader,
   Select,
   TextInput,
@@ -30,8 +39,6 @@ import {
   AUTHORS_PATH,
   DEFAULT_AUTHORS_VIEW,
   authorsHref,
-  initialOf,
-  nameMatches,
   type AuthorsView,
 } from './browse-view';
 import { BrowseFrame, ClosingNote, RangeSummary } from './browse-parts';
@@ -255,36 +262,24 @@ export async function LibraryAuthorsPage({
           </ExploreFilters>
 
           {letters.length < 2 && view.letter === null ? null : (
-            <nav aria-label={t('browse.authors.letters')}>
-              <ul className="flex list-none flex-wrap gap-1.5 p-0">
-                <li>
-                  <a
-                    href={href({ letter: null })}
-                    {...(view.letter === null ? { 'aria-current': 'page' as const } : {})}
-                    className={letterClass(view.letter === null)}
-                  >
-                    {t('browse.authors.allLetters')}
-                  </a>
-                </li>
-                {letters.map((letter) => (
-                  <li key={letter}>
-                    <a
-                      href={href({ letter })}
-                      aria-label={t('browse.authors.letterLabel', {
-                        letter: letterText(letter),
-                        count: letterCounts.get(letter) ?? 0,
-                      })}
-                      {...(view.letter === letter
-                        ? { 'aria-current': 'page' as const }
-                        : {})}
-                      className={letterClass(view.letter === letter)}
-                    >
-                      {letterText(letter)}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </nav>
+            <LetterIndex
+              label={t('browse.authors.letters')}
+              all={{
+                text: t('browse.authors.allLetters'),
+                href: href({ letter: null }),
+                current: view.letter === null,
+              }}
+              letters={letters.map((letter) => ({
+                key: letter,
+                text: letterText(letter),
+                label: t('browse.authors.letterLabel', {
+                  letter: letterText(letter),
+                  count: letterCounts.get(letter) ?? 0,
+                }),
+                href: href({ letter }),
+                current: view.letter === letter,
+              }))}
+            />
           )}
 
           <ActiveFilters
@@ -381,30 +376,12 @@ export async function LibraryAuthorsPage({
                     className="flex min-w-0 flex-col gap-4 rounded-panel border border-border bg-surface-raised p-5"
                   >
                     <div className="flex min-w-0 items-center gap-4">
-                      <div className="w-16 shrink-0">
-                        {portrait === null ? (
-                          <span
-                            aria-hidden="true"
-                            className="flex size-16 items-center justify-center rounded-full border border-accent-rule bg-accent-surface font-serif text-heading font-semibold text-accent"
-                            {...own}
-                          >
-                            {person.letter === '#' ? (
-                              <Icon name="user" size={24} />
-                            ) : (
-                              person.letter
-                            )}
-                          </span>
-                        ) : (
-                          <Portrait
-                            shape="round"
-                            path={portraitPath(person.personId, portrait.assetId)}
-                            width={portrait.width}
-                            height={portrait.height}
-                            sizes="4rem"
-                            alt=""
-                          />
-                        )}
-                      </div>
+                      <PersonMark
+                        personId={person.personId}
+                        portrait={portrait}
+                        letter={person.letter}
+                        own={own}
+                      />
                       <h3
                         className="min-w-0 text-subheading font-semibold wrap-anywhere"
                         {...own}
@@ -492,13 +469,4 @@ export async function LibraryAuthorsPage({
       />
     </BrowseFrame>
   );
-}
-
-/** A first-letter link: a 44-pixel target, the current one marked by weight and border too. */
-function letterClass(current: boolean): string {
-  return `inline-flex min-h-11 min-w-11 items-center justify-center rounded-control border px-2 text-sm no-underline ${
-    current
-      ? 'border-action bg-accent-surface font-semibold text-foreground'
-      : 'border-border text-action hover:border-action'
-  }`;
 }

@@ -169,8 +169,10 @@ live('Phase 10 Search after a real restore', () => {
     // The Playlist's curated order came back: the archived Video is not shown.
     const playlist = await reads.playlist(fixture.playlistSlug);
     if (playlist === null) throw new Error('restored playlist missing');
-    expect((await reads.playlistVideos(playlist.id)).items.map((v) => v.id)).toEqual([
-      fixture.videoId,
-    ]);
+    expect(
+      (
+        await reads.groupEpisodes({ group: { of: 'playlist', id: playlist.id } })
+      ).items.map((v) => v.id),
+    ).toEqual([fixture.videoId]);
   });
 });

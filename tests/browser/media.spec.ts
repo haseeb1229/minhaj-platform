@@ -42,6 +42,13 @@ import {
  * figures, its ways in by Topic and every menu item. No fixture is added: the
  * programme's two episodes and the education Topic already here prove them.
  *
+ * WATCH PART 2: the Series, programme and Playlist directories (figures,
+ * counted filters, chips, one address per view) and pages (where to begin,
+ * the numbered list, speakers and Topics), and the speakers' directory. One
+ * fixture is added: a SERIES (the programme is the other kind) whose one
+ * episode is the undated unavailable video, titled to sort last ("Zz…") so
+ * it crowds no other spec's first page or shelf.
+ *
  * NO PROVIDER IS CONTACTED. The one provider request the activation test makes
  * is answered by a stub, so the suite proves what the page asks for without
  * depending on — or disclosing anything to — a real third party.
@@ -67,6 +74,7 @@ const interviewId = randomUUID();
 const unavailableId = randomUUID();
 const draftId = randomUUID();
 const programId = randomUUID();
+const seriesId = randomUUID();
 const playlistId = randomUUID();
 
 const lectureOld = `browser-lecture-old-${run}`;
@@ -76,6 +84,7 @@ const unavailableSlug = `browser-unavailable-${run}`;
 const draftSlug = `browser-draft-${run}`;
 const seriesOld = `browser-series-old-${run}`;
 const programSlug = `browser-program-${run}`;
+const seriesSlug = `browser-series-${run}`;
 const playlistOld = `browser-playlist-old-${run}`;
 const playlistSlug = `browser-playlist-${run}`;
 
@@ -89,6 +98,7 @@ const INTERVIEW_TITLE = `Synthetic browser interview ${WITHDRAWN_WORD}`;
 const UNAVAILABLE_TITLE = `Synthetic unavailable video ${run}`;
 const PROGRAM_TITLE = `Synthetic browser programme ${run}`;
 const PLAYLIST_TITLE = `Synthetic browser playlist ${run}`;
+const SERIES_TITLE = `Zz synthetic browser series ${run}`;
 
 async function grant(accountId: string, keys: readonly string[]): Promise<void> {
   await grantRole(sql, accountId, keys, 'Media browser proof');
@@ -140,6 +150,10 @@ test.beforeAll(async () => {
     UPDATE [dbo].[Series] SET [slug]=N'${programSlug}', [kind]=N'program', [version]=2 WHERE [id]=N'${programId}';
     INSERT INTO [dbo].[SeriesLabel] ([seriesId],[locale],[title],[description])
       VALUES (N'${programId}', N'en', N'${PROGRAM_TITLE}', N'A synthetic programme.');
+    INSERT INTO [dbo].[Series] ([id],[slug],[kind],[primaryLocale],[state],[version],[updatedAt])
+    VALUES (N'${seriesId}', N'${seriesSlug}', N'series', N'en', N'published', 1, SYSUTCDATETIME());
+    INSERT INTO [dbo].[SeriesLabel] ([seriesId],[locale],[title],[description])
+      VALUES (N'${seriesId}', N'en', N'${SERIES_TITLE}', N'');
 
     INSERT INTO [dbo].[Video] ([id],[slug],[primaryLocale],[state],[isFeatured],[provider],[providerVideoId],[availability],[format],[languageCode],[durationSeconds],[publishedOn],[captions],[transcript],[seriesId],[seriesPosition],[version],[updatedAt]) VALUES
       (N'${lectureId}', N'${lectureOld}', N'en', N'published', 1, N'youtube', '${LECTURE_ID}', N'available', N'lecture', N'en', 3723, '2031-01-02', 1,
@@ -147,7 +161,7 @@ test.beforeAll(async () => {
       (N'${interviewId}', N'${interviewSlug}', N'en', N'published', 0, N'vimeo', '${INTERVIEW_ID}', N'available', N'interview', N'ur', 600, '2030-05-06', 0,
        NULL, N'${programId}', 2, 1, SYSUTCDATETIME()),
       (N'${unavailableId}', N'${unavailableSlug}', N'en', N'published', 0, N'youtube', '${UNAVAILABLE_ID}', N'unavailable', NULL, N'en', NULL, NULL, 0,
-       NULL, NULL, NULL, 1, SYSUTCDATETIME()),
+       NULL, N'${seriesId}', 1, 1, SYSUTCDATETIME()),
       (N'${draftId}', N'${draftSlug}', N'en', N'draft', 0, N'youtube', '${DRAFT_ID}', N'available', N'lecture', N'en', NULL, NULL, 0,
        NULL, NULL, NULL, 1, SYSUTCDATETIME());
     UPDATE [dbo].[Video] SET [slug]=N'${lectureSlug}', [version]=2 WHERE [id]=N'${lectureId}';
@@ -703,6 +717,202 @@ test.describe('Watch Part 1 — the listing, the video page and the landing', ()
         '/ur/watch/videos',
         `/ur/watch/videos/${interviewSlug}`,
         '/ar/watch/interviews',
+      ]) {
+        await page.goto(path);
+        const overflow = await page.evaluate(
+          () =>
+            document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+        expect(overflow, `${path} at ${String(width)}`).toBeLessThanOrEqual(0);
+        if (width === 1440) await axe(page, path, testInfo);
+      }
+    }
+  });
+});
+
+/* ========================================================================== */
+
+test.describe('Watch Part 2 — series, programmes, playlists and speakers', () => {
+  test('directs to each kind’s groupings with counted filters, chips and one address per view', async ({
+    page,
+    request,
+  }) => {
+    // The series' directory, searched by title: the fixture's Series, never
+    // the programme (the other kind).
+    await page.goto(`/watch/series?q=${encodeURIComponent(SERIES_TITLE)}`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Series' })).toBeVisible();
+    const series = page.getByRole('list', { name: 'Series', exact: true });
+    await expect(series.getByRole('link', { name: SERIES_TITLE })).toHaveAttribute(
+      'href',
+      `/watch/series/${seriesSlug}`,
+    );
+    await expect(series.getByText('1 episode', { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole('list', { name: 'Filters in use' })
+        .getByRole('link', { name: `Remove filter: Title: ${SERIES_TITLE}` }),
+    ).toHaveAttribute('href', '/watch/series');
+    await page.goto(`/watch/series?q=${encodeURIComponent(PROGRAM_TITLE)}`);
+    await expect(
+      page.getByText('No series matches every filter you chose. Remove one to see more.'),
+    ).toBeVisible();
+
+    // The programmes' directory: its figures, and a speaker offered with what
+    // choosing them would show, submitted without script.
+    await page.goto('/watch/programs');
+    await expect(page.getByRole('main')).toContainText(/\d+\s*programmes?/);
+    const speaker = page.locator('#groups-speaker');
+    await expect(speaker.locator(`option[value="${people.linkedPersonId}"]`)).toHaveText(
+      /^Recovery proof contributor \(1\)$/,
+    );
+    await speaker.selectOption(people.linkedPersonId);
+    await page.getByRole('button', { name: 'Show', exact: true }).click();
+    await expect(page).toHaveURL(`/watch/programs?speaker=${people.linkedPersonId}`);
+    const programmes = page.getByRole('list', { name: 'Programmes', exact: true });
+    await expect(programmes.getByRole('link', { name: PROGRAM_TITLE })).toHaveAttribute(
+      'href',
+      `/watch/programs/${programSlug}`,
+    );
+    await expect(programmes.getByText('2 episodes', { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole('list', { name: 'Filters in use' })
+        .getByRole('link', { name: 'Remove filter: Recovery proof contributor' }),
+    ).toHaveAttribute('href', '/watch/programs');
+
+    // The playlists' directory lists the published playlist.
+    await page.goto(`/watch/playlists?q=${encodeURIComponent(PLAYLIST_TITLE)}`);
+    await expect(
+      page
+        .getByRole('list', { name: 'Playlists', exact: true })
+        .getByRole('link', { name: PLAYLIST_TITLE }),
+    ).toHaveAttribute('href', `/watch/playlists/${playlistSlug}`);
+
+    // One address per view: each other spelling is ONE redirect.
+    for (const [from, to] of [
+      ['/watch/series?q=&language=&speaker=&topic=&sort=newest', '/watch/series'],
+      ['/watch/programs?offset=24', '/watch/programs'],
+      ['/ur/watch/playlists?page=1&sort=title', '/ur/watch/playlists?sort=title'],
+      ['/watch/speakers?offset=50', '/watch/speakers'],
+      [`/watch/programs/${programSlug}?offset=0`, `/watch/programs/${programSlug}`],
+      [
+        `/ur/watch/playlists/${playlistSlug}?page=1`,
+        `/ur/watch/playlists/${playlistSlug}`,
+      ],
+    ]) {
+      const response = await request.get(from, { maxRedirects: 0 });
+      expect(response.status(), from).toBe(307);
+      const target = new URL(response.headers()['location'] ?? '', baseUrl());
+      expect(`${target.pathname}${target.search}`, from).toBe(to);
+    }
+  });
+
+  test('opens a programme on where to begin, with its figures, speakers and Topics', async ({
+    page,
+  }) => {
+    await page.goto(`/watch/programs/${programSlug}`);
+    const main = page.getByRole('main');
+    await expect(main).toContainText(/2\s*episodes/);
+    // Its latest dated episode IS its first, so one way in is offered.
+    await expect(
+      main.getByRole('link', { name: 'Start from episode 1' }),
+    ).toHaveAttribute('href', `/watch/videos/${lectureSlug}`);
+    await expect(main.getByRole('link', { name: 'Latest episode' })).toHaveCount(0);
+    await expect(
+      page
+        .getByRole('region', { name: 'Speakers' })
+        .locator(`a[href="/people/${people.linkedSlug}"]`),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole('region', { name: 'Topics' })
+        .getByRole('link', { name: 'Education' }),
+    ).toHaveAttribute('href', '/topics/education');
+
+    // A series begins at episode 1; an unavailable episode says so.
+    await page.goto(`/watch/series/${seriesSlug}`);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(SERIES_TITLE);
+    const episodes = page.getByRole('list', { name: 'Episodes' });
+    await expect(episodes.getByRole('heading')).toHaveText([UNAVAILABLE_TITLE]);
+    await expect(episodes.getByText('Unavailable', { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('main').getByRole('link', { name: 'Start from episode 1' }),
+    ).toHaveAttribute('href', `/watch/videos/${unavailableSlug}`);
+    // Past its last page, an honest empty page leading back to the first.
+    await page.goto(`/watch/series/${seriesSlug}?page=2`);
+    await expect(page.getByText('This page is empty')).toBeVisible();
+    await expect(
+      page.getByRole('main').getByRole('link', { name: 'Go to the first page' }),
+    ).toHaveAttribute('href', `/watch/series/${seriesSlug}`);
+  });
+
+  test('plays a playlist from the start, and has no latest', async ({ page }) => {
+    await page.goto(`/watch/playlists/${playlistSlug}`);
+    const main = page.getByRole('main');
+    await expect(main.getByRole('link', { name: 'Play from the start' })).toHaveAttribute(
+      'href',
+      `/watch/videos/${interviewSlug}`,
+    );
+    await expect(main.getByRole('link', { name: 'Latest episode' })).toHaveCount(0);
+    await expect(main).toContainText(/2\s*videos/);
+    await expect(
+      page.getByText('A playlist is a hand-picked list in a chosen order.', {
+        exact: false,
+      }),
+    ).toBeVisible();
+  });
+
+  test('directs to every speaker by name, linked to their profile and their videos', async ({
+    page,
+  }) => {
+    await page.goto(
+      `/watch/speakers?q=${encodeURIComponent('Recovery proof contributor')}`,
+    );
+    await expect(page.getByRole('heading', { level: 1, name: 'Speakers' })).toBeVisible();
+    const list = page.getByRole('list', { name: 'Speakers', exact: true });
+    await expect(list.locator(`a[href="/people/${people.linkedSlug}"]`)).toHaveText(
+      'Recovery proof contributor',
+    );
+    const videos = list.locator(
+      `a[href="/watch/videos?speaker=${people.linkedPersonId}"]`,
+    );
+    await expect(videos).toHaveAccessibleName(
+      /^1 video with Recovery proof contributor$/,
+    );
+    await videos.click();
+    await expect(page).toHaveURL(`/watch/videos?speaker=${people.linkedPersonId}`);
+    await expect(
+      page
+        .getByRole('list', { name: 'Videos', exact: true })
+        .getByRole('link', { name: LECTURE_TITLE }),
+    ).toBeVisible();
+  });
+
+  test('is right-to-left, axe-clean and never scrolls sideways, from 320 to 1440 px', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(300_000);
+    await page.goto(`/ur/watch/programs/${programSlug}`);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveAttribute('lang', 'en');
+    for (const [width, height] of [
+      [320, 800],
+      [1440, 900],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      for (const path of [
+        '/watch/series',
+        '/watch/programs',
+        '/watch/playlists',
+        '/watch/speakers',
+        `/watch/programs/${programSlug}`,
+        `/watch/series/${seriesSlug}`,
+        `/watch/playlists/${playlistSlug}`,
+        '/ur/watch/series',
+        '/ur/watch/speakers',
+        `/ur/watch/programs/${programSlug}`,
+        '/ar/watch/playlists',
+        `/ar/watch/playlists/${playlistSlug}`,
       ]) {
         await page.goto(path);
         const overflow = await page.evaluate(

@@ -23,7 +23,6 @@ import {
   type VideoFormat,
   type VideoListing,
   type VideoPage,
-  type VideoPoster,
   type VideoProvider,
   type VideoRecord,
   type VideoValue,
@@ -44,6 +43,7 @@ import { auditRow } from '../../audit-row.ts';
 import { getDatabaseClient } from '../../client.ts';
 import { requestSearchIndexing } from '../../search-intent.ts';
 import { audioPersistence, audioPublicReader } from './audio.ts';
+import { groupsPublicReader } from './groups.ts';
 import { photoPersistence, photoPublicReader } from './photo.ts';
 import {
   bounded,
@@ -52,15 +52,20 @@ import {
   LABELS,
   labelsOf,
   MediaDataError,
+  PASSAGES,
+  passageOf,
+  posterOf,
   PUBLISHED,
   RECENTLY_CHANGED,
   refuse,
+  SPEAKERS,
   TARGET_BATCH,
   textMatch,
   UNMATCHABLE_VERSION,
   utcDate,
   type Client,
   type LabelRow,
+  type PassageRow,
 } from './shared.ts';
 
 /**
@@ -89,11 +94,6 @@ import {
  * Query fragments
  * ========================================================================= */
 
-const SPEAKERS = {
-  select: { personId: true },
-  orderBy: [{ position: 'asc' }, { personId: 'asc' }],
-} satisfies Prisma.Video$speakersArgs;
-
 /** What a card needs: never the transcript. */
 const LISTING_SELECT = {
   id: true,
@@ -116,12 +116,6 @@ const LISTING_SELECT = {
   labels: LABELS,
   speakers: SPEAKERS,
 } satisfies Prisma.VideoSelect;
-
-/** Quran Part 8: a Video's passages, in its editor's order. */
-const PASSAGES = {
-  select: { surahNumber: true, ayahFrom: true, ayahTo: true, startSeconds: true },
-  orderBy: { position: 'asc' },
-} satisfies Prisma.Video$quranPassagesArgs;
 
 const DETAIL_INCLUDE = {
   labels: LABELS,
@@ -200,23 +194,6 @@ interface ListingRow {
   readonly speakers: readonly { readonly personId: string }[];
 }
 
-interface PassageRow {
-  readonly surahNumber: number;
-  readonly ayahFrom: number;
-  readonly ayahTo: number;
-  readonly startSeconds: number | null;
-}
-
-/** A stored passage as the citation value it is (Quran Part 8). */
-function passageOf(row: PassageRow): TimedQuranPassage {
-  return {
-    surah: row.surahNumber,
-    ayahFrom: row.ayahFrom,
-    ayahTo: row.ayahTo,
-    startSeconds: row.startSeconds,
-  };
-}
-
 /** The citations an audit entry names — never more than its payload holds. */
 function citations(passages: readonly TimedQuranPassage[]): string {
   return passages
@@ -254,15 +231,6 @@ interface GroupRow {
   readonly version: number;
   readonly updatedAt: Date;
   readonly labels: readonly LabelRow[];
-}
-
-/** The poster as a value, or null — the CHECK keeps the three columns together. */
-function posterOf(
-  row: Pick<ListingRow, 'posterAssetId' | 'posterWidth' | 'posterHeight'>,
-): VideoPoster | null {
-  if (row.posterAssetId === null || row.posterWidth === null || row.posterHeight === null)
-    return null;
-  return { assetId: row.posterAssetId, width: row.posterWidth, height: row.posterHeight };
 }
 
 function toListing(row: ListingRow): VideoListing {
@@ -1415,6 +1383,7 @@ export function createMediaPublicReader(): MediaPublicReaderPort {
     ...audioPublicReader(),
     ...photoPublicReader(),
     ...topicVideosReader(),
+    ...groupsPublicReader(),
 
     async videos(query) {
       const rows = await db.video.findMany({
@@ -1464,17 +1433,6 @@ export function createMediaPublicReader(): MediaPublicReaderPort {
         take: APPEARANCES,
       });
       return rows.map((row) => toPlaylist(row.playlist));
-    },
-
-    async seriesList(kind, offset) {
-      const rows = await db.series.findMany({
-        where: { kind, ...PUBLISHED },
-        select: SERIES_SELECT,
-        orderBy: [{ slug: 'asc' }, { id: 'asc' }],
-        skip: boundedOffset(offset),
-        take: MEDIA_PAGE + 1,
-      });
-      return seriesPage(rows);
     },
 
     async series(slug) {
@@ -1539,17 +1497,6 @@ export function createMediaPublicReader(): MediaPublicReaderPort {
       };
     },
 
-    async playlists(offset) {
-      const rows = await db.playlist.findMany({
-        where: PUBLISHED,
-        select: PLAYLIST_SELECT,
-        orderBy: [{ slug: 'asc' }, { id: 'asc' }],
-        skip: boundedOffset(offset),
-        take: MEDIA_PAGE + 1,
-      });
-      return playlistPage(rows);
-    },
-
     async playlist(slug) {
       const row = await db.playlist.findFirst({
         where: { slug, ...PUBLISHED },
@@ -1564,34 +1511,6 @@ export function createMediaPublicReader(): MediaPublicReaderPort {
         select: { playlist: { select: { slug: true } } },
       });
       return row?.playlist.slug ?? null;
-    },
-
-    async playlistVideos(playlistId, offset) {
-      const rows = await db.playlistVideo.findMany({
-        where: { playlistId, playlist: PUBLISHED, video: PUBLISHED },
-        select: { video: { select: LISTING_SELECT } },
-        orderBy: [{ position: 'asc' }],
-        skip: boundedOffset(offset),
-        take: MEDIA_PAGE + 1,
-      });
-      return videoPage(rows.map((row) => row.video));
-    },
-
-    async speakerFacets(offset) {
-      const rows = await db.videoSpeaker.groupBy({
-        by: ['personId'],
-        where: { video: PUBLISHED },
-        _count: { videoId: true },
-        orderBy: [{ _count: { videoId: 'desc' } }, { personId: 'asc' }],
-        skip: boundedOffset(offset),
-        take: MEDIA_FACET_PAGE + 1,
-      });
-      return {
-        items: rows
-          .slice(0, MEDIA_FACET_PAGE)
-          .map((row) => ({ id: row.personId, videos: row._count.videoId })),
-        hasMore: rows.length > MEDIA_FACET_PAGE,
-      };
     },
 
     async sitemap(kind, offset, limit) {

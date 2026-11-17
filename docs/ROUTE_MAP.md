@@ -989,8 +989,8 @@ and out of the sitemap. Record addresses and their slug-history 301s are unchang
 | `/watch` | Landing — `?sort=featured\|latest`; with nothing featured, the default view opens on Latest and offers no sort tabs |
 | `/watch/videos` · `/watch/videos/{slug}` | Videos — `?topic, language, speaker, series, length, sort, page` (Watch Part 1; `?topic, speaker, series, language` until then, historical); a Video's page takes `?start` (Quran Part 8: whole seconds within the video, where its Play press begins — ignored otherwise, never part of the canonical address) |
 | `/watch/{lectures\|events\|highlights\|interviews\|documentaries}` | Filtered views — the Videos listing standing on one format, each canonical to itself and taking the same parameters |
-| `/watch/series` · `/{slug}` · `/watch/programs` · `/{slug}` · `/watch/playlists` · `/{slug}` | Groupings — a programme is a Series of kind `program`; each Series is canonical under exactly one of the two families, and the other answers one 301 (Phase 10) |
-| `/watch/speakers` | Speaker listing — **details 301 → `/people/{slug}`** |
+| `/watch/series` · `/{slug}` · `/watch/programs` · `/{slug}` · `/watch/playlists` · `/{slug}` | Groupings — a programme is a Series of kind `program`; each Series is canonical under exactly one of the two families, and the other answers one 301 (Phase 10). Each directory takes `?q, language, speaker, topic, sort, page` and each grouping's page `?page` (Watch Part 2; `?offset` until then, historical) |
+| `/watch/speakers` | Speaker directory — `?letter, q, language, sort, page` (Watch Part 2; `?offset` until then, historical); **details 301 → `/people/{slug}`** |
 | `/watch/topics/{slug}` | **301 → `/watch/videos?topic={id}`** (Watch Part 1, §2.2; a filtered view canonical → `/topics/{slug}` until then, historical) |
 | `/listen` · `/listen/lectures` · `/{slug}` · `/listen/series` · `/{slug}` | Audio — a **sibling** of `/watch`, not a child. `/listen/lectures` takes `?topic, speaker, series, language`; each track and audio series is canonical at exactly one address (Phase 11) |
 | `/listen/recitations` | **Catalogue projection of Quran-owned recitations**, canonical → `/quran/recitations`. Delivered in Phase 18 as a Layer-4 page over Quran's public reader, present only while a corpus is active — never filled by an AudioTrack |
@@ -1027,6 +1027,20 @@ by it), and a share button; the signed-in Save island now sits beside the facts.
 Watch's figures, ways in by Topic and by speaker with counts, a shelf for each leading Topic and
 Series, the Quran's and Hadith's Videos hubs, and Listen's two listings in its index — `/listen`
 still linked once. No route is added or removed.
+
+**Watch Part 2.** `/watch/series`, `/watch/programs` and `/watch/playlists` are each kind's
+directory (DOMAIN_MODEL.md §11, `groupDirectory`): figures, a title search, filters with counts —
+content language, speaker, Topic — three orders (latest first, title, most videos), removable chips
+and numbered pages of 24. They take **`?q, language, speaker, topic, sort, page`**; a grouping's
+page takes **`?page`** (24 of its Videos a page, in its order). `/watch/speakers` is the speakers'
+directory over People: **`?letter, q, language, sort, page`** (48 a page), each name to the one
+profile and each count to `/watch/videos?speaker={id}`. One address per view on all of them: a
+form's empty controls, another order, a malformed or repeated value, and a former `?offset=` are one
+redirect — to the first page of a directory or of the speakers (their order is no longer the one
+the offset counted in), to the page holding the Video it began with on a grouping's page (the same
+order, 24 a page). Every filtered, ordered or paged view stays canonical to its bare address and out
+of the sitemap; record addresses, their slug-history 301s and the speaker alias are unchanged. No
+route is added or removed.
 
 ### 3.8 Fatwa
 

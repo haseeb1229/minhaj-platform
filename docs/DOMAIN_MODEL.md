@@ -1870,6 +1870,31 @@ the position — a draft between them simply absent — and the published episod
 unless the Series is itself published; three bounded reads. Media still reads nothing of Taxonomy or
 People: Topic and speaker names are resolved at Layer 4. No schema change.
 
+**The groupings and the speakers (Watch Part 2).** What a Series, a programme and a Playlist are
+decides how each is read and shown: a Series and a programme are ONE aggregate (`Series`, its `kind`
+choosing its one route family) whose episodes a Video belongs to at most once, numbered by their
+editor; a programme is the recurring kind (its page leads with its latest episode, a series' with
+its first). A Playlist is the other aggregate: a curated, ordered list a Video may be in any number
+of, numbered by its place among the list's PUBLISHED Videos (a draft member leaves no gap), with no
+"latest". Four public reads (`packages/contracts/src/media/groups.ts`), each under the ordinary
+public predicate (a grouping only while published, only its published Videos counted, listed or
+pictured; a speaker's Series only while published), parameterised SQL, bounded:
+`groupDirectory(kind)` — every published grouping of one kind (at most
+`MEDIA_GROUP_DIRECTORY_MAX` = 1000, the busiest first; more is stated) with what its published
+Videos say: their count, recorded running time, first and last provider dates, content languages,
+speakers and Topics (each commonest first, at most `MEDIA_GROUP_FACETS_MAX` = 50) and its cover — the
+first-party poster of the first Video in its order that has one; `groupSummary(group)` — one
+published grouping's entry, its first Video and (a Series') latest, the newest provider date (an
+undated one only when none is dated), else `null`; `groupEpisodes(query)` — one page (24) of its
+published Videos in its order with the total, each with its number and its Quran passages with
+their starts; `speakerDirectory()` — every Person named on a published Video (at most
+`MEDIA_SPEAKER_DIRECTORY_MAX` = 1000) with their Videos, running time, latest date, content
+languages and published Series (the ten commonest, `seriesTotal` counting all), and those Series'
+addresses and titles. They replace `seriesList`, `playlists`, `playlistVideos` and `speakerFacets`,
+removed with their last consumers (`seriesVideos` stays: a Video's page and the landing read it).
+Filtering, ordering and paging a directory is Layer 4's, over that bounded answer; names are People's
+and Taxonomy's, resolved in bounded batches. No schema change.
+
 As delivered (Phase 11) — AudioTrack and AudioSeries, **non-Quran audio only**:
 
 | Aggregate | Carries |

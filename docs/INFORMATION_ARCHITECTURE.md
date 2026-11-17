@@ -580,6 +580,13 @@ every surface with Listen and its two listings. A Topic under Watch is the Video
 by it (`/watch/topics/{slug}` is one 301 there, ROUTE_MAP.md §2.2), which names the way to the
 Topic's own hub; the kinds of video are that listing's tabs.
 
+Since Watch Part 2 Series, TV Programs and Playlists are each a directory searched by title and
+narrowed by language, speaker and Topic, and each grouping has a page of its own: a series opens on
+its first episode, a programme on its latest, a playlist "plays from the start"; then its numbered
+Videos (with the moments a lecture takes up a Quran passage), its speakers, Topics and languages,
+and related groupings of its kind. Speakers is an A–Z directory over People, each name leading to
+the person's profile and each count to the Videos listing filtered by them.
+
 ### 3.7 Fatwa
 
 | Find | Browse | Ask | Understand |

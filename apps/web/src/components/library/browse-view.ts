@@ -10,6 +10,8 @@ import {
   hubHref,
   identifier,
   language,
+  letterOf,
+  nameQuery,
   single,
   unlessCanonical,
   whole,
@@ -161,8 +163,6 @@ export function bareRedirect(locale: string, path: string, query: Query): string
 export const AUTHORS_PATH = '/library/authors';
 /** How many contributors one directory page shows. */
 export const AUTHORS_PAGE = 48;
-/** The longest name search the directory reads. */
-const NAME_QUERY_MAX = 60;
 
 export interface AuthorsView {
   /** One initial (upper case), or `#` for a name that starts with no letter. */
@@ -192,37 +192,12 @@ const AUTHORS_KEYS: ReadonlySet<string> = new Set([
 /** The deepest page any directory address may name. */
 const MAX_PAGE = 1000;
 
-/** The initial a name is indexed under: its first letter, upper case, else `#`. */
-export function initialOf(name: string, locale: string): string {
-  const first = [...name.trim().normalize('NFC')][0];
-  if (first === undefined || !/\p{L}/u.test(first)) return '#';
-  return first.toLocaleUpperCase(locale);
-}
-
-/** A letter parameter as one initial: a single letter (upper-cased) or `#`. */
-function readLetter(query: Query, locale: string): string | null {
-  const value = single(query, 'letter', 4);
-  if (value === null) return null;
-  const characters = [...value.normalize('NFC')];
-  if (characters.length !== 1) return null;
-  if (value === '#') return '#';
-  return /^\p{L}$/u.test(value.normalize('NFC')) ? initialOf(value, locale) : null;
-}
-
-/** A name search, its whitespace collapsed; empty or over-long is absent. */
-function readNameQuery(query: Query): string | null {
-  const value = single(query, 'q', 200);
-  if (value === null) return null;
-  const collapsed = value.replaceAll(/\s+/gu, ' ').trim();
-  return collapsed === '' || collapsed.length > NAME_QUERY_MAX ? null : collapsed;
-}
-
 export function readAuthorsView(query: Query, locale: string): AuthorsView {
   const role = single(query, 'role', 16);
   return {
-    letter: readLetter(query, locale),
+    letter: letterOf(query, locale),
     role: CONTRIBUTION_ROLES.find((entry) => entry === role) ?? null,
-    q: readNameQuery(query),
+    q: nameQuery(query),
     page: whole(single(query, 'page', 5), 1, MAX_PAGE) ?? 1,
   };
 }
@@ -250,29 +225,6 @@ export function authorsCanonicalRedirect(locale: string, query: Query): string |
     AUTHORS_KEYS,
     authorsHref(locale, readAuthorsView(query, locale)),
   );
-}
-
-/**
- * A name as a search compares it: decomposed, every combining mark (an accent,
- * a vowel sign, a harakah) and the tatweel removed, lower case, whitespace
- * collapsed — so "Tahir" finds "Ṭāhir" and an unvowelled Arabic search finds a
- * vowelled name.
- */
-export function foldName(text: string): string {
-  return text
-    .normalize('NFKD')
-    .replaceAll(/[\p{M}ـ]/gu, '')
-    .toLowerCase()
-    .replaceAll(/\s+/gu, ' ')
-    .trim();
-}
-
-/** Whether a name answers a search: every word of it appears in the name. */
-export function nameMatches(name: string, q: string): boolean {
-  const folded = foldName(name);
-  return foldName(q)
-    .split(' ')
-    .every((word) => folded.includes(word));
 }
 
 /* ===========================================================================

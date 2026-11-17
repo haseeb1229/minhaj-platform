@@ -4705,6 +4705,110 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > 1440 px on the landing, the listing, a Topic view, a format view and a video page in en, ur and
 > ar. *CI and staging evidence are recorded when they exist.*
 
+> **Watch Part 2 — Series, programmes, playlists and speakers (owner direction: every section built
+> from A to Z, one item at a time; on `feature/rebaseline-r2-full-ecosystem-completion`).**
+> Delivered (DOMAIN_MODEL.md §11; ROUTE_MAP.md §3.7; INFORMATION_ARCHITECTURE.md §3.6). No route is
+> added or removed, no schema change and no migration; the player, its privacy facade, the CSP, the
+> slug-history 301s, the family 301 between `/watch/series` and `/watch/programs` and the speaker
+> alias are untouched. Listen is Watch Part 3 and keeps working as it was.
+>
+> - **The audit (before).** `/watch/series`, `/watch/programs` and `/watch/playlists` were text-only
+>   cards (kind badge, title, description) by slug, 24 a page behind Previous/Next and `?offset=`,
+>   with no picture, no episode or video count, no dates, speakers, languages or Topics, no figures,
+>   no search, filter, order or chip — and a programme and a series looked and read the same. A
+>   grouping's page was a title, a description and a grid of cards behind `?offset=`: no figures,
+>   no way to begin ("Start from episode 1", "Latest episode"), no running times or dates in its
+>   order, no speakers, Topics or languages, no related groupings, and a Playlist's number was not
+>   shown at all. `/watch/speakers` was fifty "Videos: n" panels a page ordered by count behind
+>   `?offset=`, with a drawn icon for everyone (no portrait), names unmarked for language, no A–Z,
+>   search, language filter, Series or languages, and no figures. None had numbered pages, an
+>   explained no-results state or one address per view.
+> - **New reads (Model A).** Media: `groupDirectory`, `groupSummary`, `groupEpisodes`,
+>   `speakerDirectory` (`packages/contracts/src/media/groups.ts`,
+>   `packages/database/src/adapters/media/groups.ts`; every input parsed by the read service before
+>   any read; bound parameters only; a handful of grouped statements whatever the count, the titles
+>   re-read under the public predicate). They replace `seriesList`, `playlists`, `playlistVideos`
+>   and `speakerFacets`, removed with their last consumers; the Video adapter's speaker, passage and
+>   poster mapping moved to the adapter's shared module so the two halves share it. Layer 4:
+>   `topicNames` (Taxonomy, in bounded batches) beside People's `contributorNames` and
+>   `contributorCards`.
+> - **Series, programmes and playlists (decision: what each is decides how it is shown).** A Series
+>   and a programme are one aggregate whose episodes a Video belongs to at most once, numbered by
+>   their editor; a series opens on "Start from episode n" (its first PUBLISHED episode's own
+>   number, so never "episode 1" while that one is unpublished) then "Latest episode", a programme — the
+>   recurring kind — on its latest then its first. A Playlist is a hand-picked ordered list whose
+>   Videos may come from anywhere and be in other lists: it "plays from the start", numbers its
+>   Videos by their place among its PUBLISHED ones (a draft member leaves no gap) and has no
+>   "latest". Each kind's **directory** (one shared implementation, `components/media/groups.tsx`):
+>   figures (groupings; episodes and hours of video for the Series kinds only, since a Video may be
+>   in several playlists; languages and speakers only while no grouping reached the read's facet
+>   bound), a title search (every word; accents and vowel marks ignored), filters with counts
+>   (language, speaker, Topic — each counting groupings under the others), latest-first, title or
+>   most-videos order, chips, 24 a page with numbered pages, past-end and no-results states and an
+>   honest empty state. Each card: the cover (Media's own poster of the first Video in its order
+>   that has one, else a drawn tile) with sheets behind it and its count on the corner, the title
+>   in its own language, the start of its description, its years, running time, languages and
+>   speakers. Each **grouping's page**: its kind and language, title, description, figures
+>   (videos, running time, years published, languages), where to begin, then its Videos in order
+>   (number, poster, running time, kind or "Unavailable", episode number for a Series, date,
+>   language, speakers, and "Watch from" chips for each recorded Quran-passage moment inside the
+>   video — up to four, then how many more its page has), 24 a page; beside them its speakers (portrait
+>   or initial, name in its own language, their count in it), Topics and languages (with counts),
+>   a line saying what the kind is; below, up to three related groupings of its kind (a shared
+>   speaker weighs twice a shared Topic, never itself, never an empty one). BreadcrumbList JSON-LD
+>   under the same indexing gate as before.
+> - **Speakers.** An A–Z directory of everyone named on a published Video (Media's directory, named
+>   by People in bounded batches, ordered by the reader's collation), Library Part 2's author
+>   pattern and parts: portrait or an initial tile (`PersonMark`, now shared with the authors), the
+>   name in the language People resolved it in, the Series they speak in (two named, "and n more")
+>   and the languages they speak in, the count linked to `/watch/videos?speaker={id}` and the name
+>   to the canonical profile. A first-letter index (the shared `LetterIndex`), a language filter
+>   with counts, a name search (the shared `initialOf`/`letterOf`/`nameQuery`/`nameMatches`, moved
+>   from the Library's view module to `topic-hub/address`), name or most-videos order, 48 a page,
+>   chips, figures (speakers, those in a Series, languages). Series names are text, not links, so
+>   no page offers one destination twice under one name.
+> - **Addresses.** One address per view (`components/media/groups-view.ts`): a form's empty
+>   controls, another order, a malformed or repeated value and a former `?offset=` are one
+>   redirect — to the first page of a directory (its order changed), to the page holding the Video
+>   it began with on a grouping's page.
+> - **Messages.** New `watch.groups.*` and `watch.speakerDirectory.*` in en/ur/ar; reused
+>   `watch.{kind.*, groupEmpty.*, episodes, episodesEmpty, playlistVideos, playlistEmpty,
+>   speakersEmpty}`; removed as unused: `watch.speakerVideos`.
+>
+> **Data facts — what staging will show.** The staging Videos are the 63 Minhaj.TV records of
+> MIGRATION_STRATEGY.md §19 — none with a Series, a Playlist membership or a speaker — and the demo
+> data adds none. So staging shows each directory's honest empty state ("No series yet", "No
+> programmes yet", "No playlists yet", each leading to Watch) with no figures and no filters,
+> and the speakers' "No speakers named yet" leading to Watch; no grouping page exists to open (each
+> such address is a `404`). Everything above appears as Series, programmes, playlists and speakers
+> are published. The local persistent database was not inspected.
+>
+> **Proof:** `tests/media/groups.test.ts` (new: every kind, grouping reference and page parsed
+> before any read; malformed, unknown and out-of-range ones refused with no read);
+> `tests/media/groups-view.test.ts` (new: the directories', a grouping's and the speakers' views and
+> addresses, one redirect per other spelling, counted filters under the others, the three orders,
+> related groupings, years, the letter index and name search); `tests/media/media-groups.integration.test.ts`
+> (new, real SQL Server: published groupings of each kind only, a draft Series or Playlist never; an
+> episode-less programme stating nothing; counts, running time, dates, languages, speakers, Topics
+> and the cover from published Videos only; a Series' first and latest dated episode, a Playlist's
+> first and no latest, nothing for a draft or unknown grouping; pages in order with numbers and the
+> total, a Playlist's places closing over a draft; the speakers' published Videos, languages and
+> published Series only); `tests/media/media.integration.test.ts` and
+> `tests/search/media-recovery.integration.test.ts` (a Playlist's order and the speaker count now
+> asked of `groupEpisodes` and `speakerDirectory` — the same expectations);
+> `tests/library/browse-view.test.ts` (the name helpers imported from their new module, unchanged);
+> `tests/config/locale.test.ts` (the new modules). `tests/browser/media.spec.ts` — one fixture
+> added, a SERIES ("Zz…", sorting last) whose one episode is the undated unavailable video; new: the
+> series' directory searched by title (its card, "1 episode", the chip) and never the programme;
+> the programmes' directory's figures and speaker option with its count submitted without script,
+> the card's "2 episodes" and the chip; the playlists' directory; six one-redirect spellings; the
+> programme's page ("Start from episode 1", no "Latest episode" since its latest is its first, its
+> speaker and Topic), the series' page (its unavailable episode, its past-end page); the playlist's
+> "Play from the start", no latest, its figure and its notice; the speakers' directory searched by
+> name (profile, "1 video with …" leading to the filtered listing); and right-to-left Urdu, axe (no
+> serious or critical finding) at 1440 px and no sideways scroll at 320 and 1440 px on every
+> directory and page in en, ur and ar. *CI and staging evidence are recorded when they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

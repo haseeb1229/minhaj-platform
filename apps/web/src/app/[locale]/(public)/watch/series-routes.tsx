@@ -1,16 +1,22 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
 import type { SeriesKind } from '@minhaj/contracts/media';
 
 import { mediaReadRuntime } from '@/composition/media-read';
-import { seriesPath, seriesSegment } from '@/components/media/presentation';
 import {
+  GroupDirectoryPage,
+  GroupPage,
   groupMetadataInput,
-  SeriesDetailPage,
-  SeriesListingPage,
-} from '@/components/media/watch';
+} from '@/components/media/groups';
+import {
+  groupPageCanonicalRedirect,
+  groupsCanonicalRedirect,
+  readGroupPage,
+  readGroupsView,
+} from '@/components/media/groups-view';
+import { seriesPath, seriesSegment } from '@/components/media/presentation';
 import { requireLocale } from '@/config/route-locale';
 import { contentMetadata, shellMetadata } from '@/seo/metadata';
 import { requireRoute } from '@/shell/registry';
@@ -24,6 +30,10 @@ import { requireRoute } from '@/shell/registry';
  * read service returns `null` for the other family, so the page 404s — and the
  * request proxy has already answered the wrong family, or a former slug, with a
  * single 301 to the current address (ROUTE_MAP.md §9.7).
+ *
+ * WATCH PART 2: the listing is the kind's directory (`?q, language, speaker,
+ * topic, sort, page`) and a Series' page lists its episodes 24 a page
+ * (`?page`); one address per view, and anything else is one redirect.
  */
 
 export interface ListingParams {
@@ -51,7 +61,12 @@ export function seriesListingRoute(kind: SeriesKind) {
     },
     async Page({ params, searchParams }: ListingParams) {
       const locale = await requireLocale(params);
-      return <SeriesListingPage locale={locale} kind={kind} query={await searchParams} />;
+      const query = await searchParams;
+      const canonical = groupsCanonicalRedirect(kind, locale, query);
+      if (canonical !== null) redirect(canonical);
+      return (
+        <GroupDirectoryPage locale={locale} kind={kind} view={readGroupsView(query)} />
+      );
     },
   };
 }
@@ -75,9 +90,13 @@ export function seriesDetailRoute(kind: SeriesKind) {
       const { slug } = await params;
       const record = await mediaReadRuntime().series(kind, slug);
       if (record === null) notFound();
-      return (
-        <SeriesDetailPage locale={locale} record={record} query={await searchParams} />
+      const query = await searchParams;
+      const canonical = groupPageCanonicalRedirect(
+        seriesPath(locale, record.kind, record.slug),
+        query,
       );
+      if (canonical !== null) redirect(canonical);
+      return <GroupPage locale={locale} record={record} page={readGroupPage(query)} />;
     },
   };
 }

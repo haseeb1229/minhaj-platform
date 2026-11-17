@@ -153,6 +153,67 @@ export function ExploreFilters({
   );
 }
 
+/**
+ * A first-letter index (Library Part 2's authors; Watch Part 2's speakers):
+ * "All", then each initial a directory holds, each an address of its own and
+ * named with its count; the current one marked by `aria-current`, weight and
+ * border — never by colour alone. Every link is a 44-pixel target.
+ */
+export function LetterIndex({
+  label,
+  all,
+  letters,
+}: {
+  readonly label: string;
+  readonly all: {
+    readonly text: string;
+    readonly href: string;
+    readonly current: boolean;
+  };
+  readonly letters: readonly {
+    readonly key: string;
+    readonly text: string;
+    /** The link's accessible name ("Names starting with T (4)"). */
+    readonly label: string;
+    readonly href: string;
+    readonly current: boolean;
+  }[];
+}) {
+  const link = (current: boolean) =>
+    `inline-flex min-h-11 min-w-11 items-center justify-center rounded-control border px-2 text-sm no-underline ${
+      current
+        ? 'border-action bg-accent-surface font-semibold text-foreground'
+        : 'border-border text-action hover:border-action'
+    }`;
+  return (
+    <nav aria-label={label}>
+      <ul className="flex list-none flex-wrap gap-1.5 p-0">
+        <li>
+          <a
+            href={all.href}
+            {...(all.current ? { 'aria-current': 'page' as const } : {})}
+            className={link(all.current)}
+          >
+            {all.text}
+          </a>
+        </li>
+        {letters.map((letter) => (
+          <li key={letter.key}>
+            <a
+              href={letter.href}
+              aria-label={letter.label}
+              {...(letter.current ? { 'aria-current': 'page' as const } : {})}
+              className={link(letter.current)}
+            >
+              {letter.text}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
 /** The filters narrowing the view now, each with a link that removes it alone. */
 export function ActiveFilters({
   label,

@@ -468,6 +468,11 @@ describe('the render and routing tree stays statically renderable', () => {
     // topic-hub listing) and the share island, which sends nothing anywhere.
     'apps/web/src/components/media/share.tsx',
     'apps/web/src/components/media/videos.tsx',
+    // Watch Part 2: the Series, programme and Playlist directories and pages,
+    // the speakers' directory, and their pure address and directory rules.
+    'apps/web/src/components/media/groups.tsx',
+    'apps/web/src/components/media/groups-view.ts',
+    'apps/web/src/components/media/speakers.tsx',
     // Phase 16. The Global Network directory, a Centre's pages and their pure
     // presentation decisions, on the same anonymous public path.
     'apps/web/src/components/global/centre.tsx',

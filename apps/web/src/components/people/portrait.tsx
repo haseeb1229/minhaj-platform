@@ -1,5 +1,6 @@
 import type { PersonPortrait } from '@minhaj/contracts/people';
 
+import { Icon, Portrait } from '@/components/ui';
 import { derivativeSrcSet } from '@/components/ui/image-derivatives';
 
 /**
@@ -65,5 +66,55 @@ export function PersonPortraitFigure({
         </figcaption>
       )}
     </figure>
+  );
+}
+
+/**
+ * A person's mark in a directory (Library Part 2; shared with Watch Part 2's
+ * speakers): their published portrait, round, or — without one — a tile with
+ * the initial they are indexed under (a person icon when the name starts with
+ * no letter). DECORATIVE: the name beside it says who this is, so the mark is
+ * hidden from assistive technology and its portrait has empty alternative text.
+ */
+export function PersonMark({
+  personId,
+  portrait,
+  letter,
+  size = 'medium',
+  own,
+}: {
+  readonly personId: string;
+  readonly portrait: PersonPortrait | null;
+  /** The initial the name is indexed under, or `#`. */
+  readonly letter: string;
+  readonly size?: 'small' | 'medium';
+  /** The name's own `lang`/`dir`, so an initial is drawn in its script. */
+  readonly own: { readonly lang?: string; readonly dir: 'ltr' | 'rtl' | 'auto' };
+}) {
+  const box = size === 'small' ? 'size-11' : 'size-16';
+  return (
+    <span aria-hidden="true" className={`block shrink-0 ${box}`}>
+      {portrait === null ? (
+        <span
+          className={`flex ${box} items-center justify-center rounded-full border border-accent-rule bg-accent-surface font-serif font-semibold text-accent ${size === 'small' ? 'text-subheading' : 'text-heading'}`}
+          {...own}
+        >
+          {letter === '#' ? (
+            <Icon name="user" size={size === 'small' ? 20 : 24} />
+          ) : (
+            letter
+          )}
+        </span>
+      ) : (
+        <Portrait
+          shape="round"
+          path={portraitPath(personId, portrait.assetId)}
+          width={portrait.width}
+          height={portrait.height}
+          sizes={size === 'small' ? '2.75rem' : '4rem'}
+          alt=""
+        />
+      )}
+    </span>
   );
 }

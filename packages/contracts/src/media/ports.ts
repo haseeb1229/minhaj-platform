@@ -38,7 +38,6 @@ import type {
   SeriesPage,
   SeriesRecord,
   SeriesValue,
-  SpeakerFacetPage,
   VideoPage,
   VideoQuery,
   VideoRecord,
@@ -50,6 +49,15 @@ import type {
   TopicVideosQuery,
   TopicVideoTotal,
 } from './values.ts';
+import type {
+  GroupEpisodePage,
+  GroupEpisodesQuery,
+  MediaGroupDirectory,
+  MediaGroupKind,
+  MediaGroupRef,
+  MediaGroupSummary,
+  SpeakerDirectory,
+} from './groups.ts';
 import type {
   PassageQuery,
   PassageSurahCount,
@@ -116,8 +124,6 @@ export interface MediaPublicReaderPort {
   /** The published Playlists a published Video appears in. Bounded. */
   videoPlaylists(videoId: string): Promise<readonly PlaylistRecord[]>;
 
-  /** One bounded page of published Series of one kind. */
-  seriesList(kind: SeriesKind, offset: number): Promise<SeriesPage>;
   /** One published Series by its CURRENT slug, whatever its kind. */
   series(slug: string): Promise<SeriesRecord | null>;
   /**
@@ -136,17 +142,26 @@ export interface MediaPublicReaderPort {
    */
   seriesNeighbours(query: SeriesNeighboursQuery): Promise<SeriesNeighbours>;
 
-  playlists(offset: number): Promise<PlaylistPage>;
   playlist(slug: string): Promise<PlaylistRecord | null>;
   playlistCanonicalSlug(slug: string): Promise<string | null>;
-  /** One page of a published Playlist's published Videos, in playlist order. */
-  playlistVideos(playlistId: string, offset: number): Promise<VideoPage>;
 
   /**
-   * The People named as speakers on at least one published Video, with counts.
-   * Identifiers only: the names come from People, for a whole page at once.
+   * WATCH PART 2 — the groupings' directory: every published grouping of one
+   * kind (at most `MEDIA_GROUP_DIRECTORY_MAX`, the busiest first) with what
+   * its published Videos say. A handful of grouped reads, whatever the count.
    */
-  speakerFacets(offset: number): Promise<SpeakerFacetPage>;
+  groupDirectory(kind: MediaGroupKind): Promise<MediaGroupDirectory>;
+  /** One published grouping's entry, its first Video and (a Series') latest. */
+  groupSummary(group: MediaGroupRef): Promise<MediaGroupSummary | null>;
+  /** One page of a published grouping's published Videos, in its order, with the total. */
+  groupEpisodes(query: GroupEpisodesQuery): Promise<GroupEpisodePage>;
+  /**
+   * The People named as speakers on at least one published Video (at most
+   * `MEDIA_SPEAKER_DIRECTORY_MAX`, the busiest first), each with their Videos,
+   * running time, languages and published Series. Identifiers only: the names
+   * come from People, in bounded batches.
+   */
+  speakerDirectory(): Promise<SpeakerDirectory>;
 
   sitemap(
     kind: 'video' | 'series' | 'playlist',

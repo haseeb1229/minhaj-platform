@@ -1,15 +1,21 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
-import { SpeakerBrowsePage } from '@/components/media/watch';
+import {
+  readSpeakersView,
+  speakersCanonicalRedirect,
+} from '@/components/media/groups-view';
+import { SpeakerDirectoryPage } from '@/components/media/speakers';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
 import { requireRoute } from '@/shell/registry';
 
 /**
  * `/{locale}/watch/speakers` — People who speak in at least one published Video
- * (ROUTE_MAP.md §3.7). A browse over People, never a second speaker record:
- * details live at `/people/{slug}`, and `/watch/speakers/{slug}` 301s there.
+ * (ROUTE_MAP.md §3.7): a directory over People, never a second speaker record,
+ * `?letter, q, language, sort, page` (Watch Part 2), one address per view.
+ * Details live at `/people/{slug}`, and `/watch/speakers/{slug}` 301s there.
  */
 export const dynamic = 'force-dynamic';
 
@@ -31,5 +37,8 @@ export async function generateMetadata({ params }: BrowseParams): Promise<Metada
 
 export default async function SpeakersPage({ params, searchParams }: BrowseParams) {
   const locale = await requireLocale(params);
-  return <SpeakerBrowsePage locale={locale} query={await searchParams} />;
+  const query = await searchParams;
+  const canonical = speakersCanonicalRedirect(locale, query);
+  if (canonical !== null) redirect(canonical);
+  return <SpeakerDirectoryPage locale={locale} view={readSpeakersView(query, locale)} />;
 }

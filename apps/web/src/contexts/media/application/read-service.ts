@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 import {
   audioTrackQuerySchema,
+  groupEpisodesQuerySchema,
+  mediaGroupKindSchema,
+  mediaGroupRefSchema,
   mediaIdSchema,
   mediaSlugSchema,
   mediaTopicTotalsInputSchema,
@@ -56,10 +59,6 @@ export function createMediaReadService(reader: MediaPublicReaderPort) {
       return reader.videoPlaylists(mediaIdSchema.parse(videoId));
     },
 
-    seriesList(kind: SeriesKind, offset = 0) {
-      return reader.seriesList(seriesKindSchema.parse(kind), browseOffset.parse(offset));
-    },
-
     /**
      * One published Series, ONLY at the route family its kind names. A
      * programme requested as a series is `null` here — the page's 404 — because
@@ -94,10 +93,6 @@ export function createMediaReadService(reader: MediaPublicReaderPort) {
       return reader.seriesNeighbours(seriesNeighboursQuerySchema.parse(raw));
     },
 
-    playlists(offset = 0) {
-      return reader.playlists(browseOffset.parse(offset));
-    },
-
     playlist(slug: string) {
       return validSlug(slug) ? reader.playlist(slug) : Promise.resolve(null);
     },
@@ -106,15 +101,25 @@ export function createMediaReadService(reader: MediaPublicReaderPort) {
       return validSlug(slug) ? reader.playlistCanonicalSlug(slug) : Promise.resolve(null);
     },
 
-    playlistVideos(playlistId: string, offset = 0) {
-      return reader.playlistVideos(
-        mediaIdSchema.parse(playlistId),
-        browseOffset.parse(offset),
-      );
+    /**
+     * Watch Part 2 — the groupings' and the speakers' reads. The kind, the
+     * grouping reference and the page are parsed here, before any read; the
+     * speaker directory takes nothing a visitor could shape.
+     */
+    groupDirectory(kind: unknown) {
+      return reader.groupDirectory(mediaGroupKindSchema.parse(kind));
     },
 
-    speakerFacets(offset = 0) {
-      return reader.speakerFacets(browseOffset.parse(offset));
+    groupSummary(group: unknown) {
+      return reader.groupSummary(mediaGroupRefSchema.parse(group));
+    },
+
+    groupEpisodes(raw: unknown) {
+      return reader.groupEpisodes(groupEpisodesQuerySchema.parse(raw));
+    },
+
+    speakerDirectory() {
+      return reader.speakerDirectory();
     },
 
     /**

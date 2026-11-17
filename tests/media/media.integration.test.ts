@@ -469,9 +469,11 @@ live('Phase 10 Media against real SQL Server', () => {
         ),
       ).toBe(3);
       // The public order is the curated order.
-      expect((await reads.playlistVideos(list.id)).items.map((v) => v.id)).toEqual(
-        moved.videos.map((v) => v.id),
-      );
+      expect(
+        (await reads.groupEpisodes({ group: { of: 'playlist', id: list.id } })).items.map(
+          (v) => v.id,
+        ),
+      ).toEqual(moved.videos.map((v) => v.id));
     });
 
     it('commits the audit entry and the search intent with the change', async () => {
@@ -572,16 +574,20 @@ live('Phase 10 Media against real SQL Server', () => {
       }
       if (list === null) throw new Error('playlist missing');
       expect(await reads.playlist(list.slug)).toBeNull();
-      expect((await reads.playlistVideos(list.id)).items).toEqual([]);
+      expect(
+        (await reads.groupEpisodes({ group: { of: 'playlist', id: list.id } })).items,
+      ).toEqual([]);
       const published = await service.savePlaylist(
         curator,
         list.id,
         list.version,
         editableGroup({ ...list, state: 'published' }),
       );
-      expect((await reads.playlistVideos(published.id)).items.map((v) => v.id)).toEqual([
-        shown.id,
-      ]);
+      expect(
+        (
+          await reads.groupEpisodes({ group: { of: 'playlist', id: published.id } })
+        ).items.map((v) => v.id),
+      ).toEqual([shown.id]);
     });
 
     it('narrows by format, language, speaker, Series and featured, newest first', async () => {
@@ -614,12 +620,14 @@ live('Phase 10 Media against real SQL Server', () => {
     });
 
     it('counts speakers over published Videos only', async () => {
-      const facets = await reads.speakerFacets(0);
-      const facet = facets.items.find((entry) => entry.id === people.linkedPersonId);
+      const directory = await reads.speakerDirectory();
+      const entry = directory.items.find(
+        (item) => item.personId.toLowerCase() === people.linkedPersonId.toLowerCase(),
+      );
       const published = await count(
         `SELECT COUNT(*) AS n FROM [VideoSpeaker] vs JOIN [Video] v ON v.[id]=vs.[videoId] WHERE vs.[personId]=N'${people.linkedPersonId}' AND v.[state]=N'published';`,
       );
-      expect(facet?.videos).toBe(published);
+      expect(entry?.videos).toBe(published);
     });
   });
 });

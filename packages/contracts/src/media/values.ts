@@ -123,7 +123,7 @@ export const MEDIA_LIMITS = Object.freeze({
 /** One public listing page — a grid of four, three or two columns divides it. */
 export const MEDIA_PAGE = 24;
 
-/** One page of the speaker browse, as the Library's facet browses. */
+/** The most values one facet of a Videos listing names. */
 export const MEDIA_FACET_PAGE = 50;
 
 const text = (max: number) => z.string().trim().max(max);
@@ -756,17 +756,6 @@ export interface PlaylistPage {
 /** A Playlist with its whole ordered membership, for the administrative editor. */
 export interface PlaylistDetail extends PlaylistRecord {
   readonly videos: readonly VideoListing[];
-}
-
-/** One speaker facet: a Person identifier and how many public Videos name them. */
-export interface SpeakerFacet {
-  readonly id: string;
-  readonly videos: number;
-}
-
-export interface SpeakerFacetPage {
-  readonly items: readonly SpeakerFacet[];
-  readonly hasMore: boolean;
 }
 
 export interface MediaSitemapRow {
