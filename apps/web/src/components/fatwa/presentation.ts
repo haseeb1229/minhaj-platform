@@ -58,6 +58,20 @@ export function fatwaSectionPath(locale: string, section = ''): string {
     : localizedPath(locale, `/fatwa/${section}`);
 }
 
+/**
+ * The stages a question passes through on its way to a published ruling, in
+ * order (DOMAIN_MODEL.md §12) — the process page states each in full, and the
+ * landing's front door lists them while the service is not open.
+ */
+export const FATWA_PROCESS_STEPS = Object.freeze([
+  'ask',
+  'triage',
+  'drafting',
+  'review',
+  'publication',
+  'corrections',
+] as const);
+
 /** The LOCALE-FREE canonical address of one published ruling. */
 export function rulingPathOf(slug: string): string {
   return fatwaPath({ slug });

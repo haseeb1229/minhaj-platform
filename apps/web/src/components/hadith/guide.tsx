@@ -8,10 +8,9 @@ import type { HadithAvailability } from '@minhaj/contracts/hadith';
 import { SEARCH_QUERY_MAX_LENGTH } from '@minhaj/contracts/search';
 
 import {
-  Breadcrumbs,
+  AwaitingPage,
   Button,
   CardGrid,
-  Container,
   Icon,
   LinkCard,
   PageHeading,
@@ -446,6 +445,10 @@ function searchWords(query: Query | undefined): string {
  * figures. Search does not pretend to search hadith: it offers SITE search,
  * restricted to the `hadith` Topic, which finds books, videos, research and
  * courses on Hadith and says that it does not search hadith text.
+ *
+ * Its shape is the shared `AwaitingPage` (`components/ui`), which Fatwa's
+ * pages that await the service use too (Fatwa Part 1); the markup is
+ * unchanged.
  */
 export async function HadithAwaiting({
   locale,
@@ -467,92 +470,72 @@ export async function HadithAwaiting({
   const words = searchWords(query);
 
   return (
-    <Container>
-      <div className="flex min-w-0 flex-col gap-10 pt-6 pb-[var(--space-section)]">
-        <Breadcrumbs
-          label={parts.label}
-          trail={[parts.home, parts.hadith, { text: title }]}
-        />
-
-        <header className="flex flex-col gap-4">
-          <p className="flex w-fit max-w-full items-center gap-1.5 rounded-full border border-accent-rule bg-accent-surface px-3 py-1 text-caption font-semibold text-accent">
-            <Icon name="info" size={16} className="shrink-0" />
-            <span>{t('awaiting.status')}</span>
-          </p>
-          <PageHeading>{title}</PageHeading>
-          <p className="text-lede max-w-[var(--measure-prose)] text-foreground-muted">
-            {t(`awaiting.what.${section}`)}
-          </p>
-        </header>
-
-        <section
-          aria-labelledby="hadith-awaiting-notice"
-          className="flex max-w-3xl flex-col gap-3 rounded-panel border border-border bg-surface-raised p-5 shadow-panel sm:p-6"
-        >
-          <h2 id="hadith-awaiting-notice" className="text-subheading font-semibold">
-            {t('awaiting.noticeTitle')}
-          </h2>
-          <p className="max-w-[var(--measure-prose)]">{t('awaiting.notice')}</p>
-          <p>
-            <TextLink href={hadithPath(locale, 'introduction')}>
-              {t('awaiting.howItWorks')}
-            </TextLink>
-          </p>
-        </section>
-
-        {section === 'search' ? (
-          <section
-            aria-labelledby="hadith-awaiting-search"
-            className="flex flex-col gap-4"
-          >
-            <SectionHeader
-              id="hadith-awaiting-search"
-              heading={t('awaiting.searchHeading')}
-              intro={t('awaiting.searchIntro')}
-            />
-            <form
-              method="get"
-              action={pathFor(locale, requireRoute('search'))}
-              role="search"
-              aria-label={t('awaiting.searchHeading')}
-              className="flex w-full max-w-2xl flex-col gap-2"
-            >
-              <label htmlFor="hadith-site-search" className="text-sm font-medium">
-                {t('awaiting.searchLabel')}
-              </label>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <div className="min-w-0 flex-1">
-                  <TextInput
-                    id="hadith-site-search"
-                    type="search"
-                    name="q"
-                    defaultValue={words}
-                    maxLength={SEARCH_QUERY_MAX_LENGTH}
-                    autoComplete="off"
-                  />
-                </div>
-                {topic === null ? null : (
-                  <input type="hidden" name="topic" value={topic.slug} />
-                )}
-                <Button tone="secondary">{t('search.submit')}</Button>
-              </div>
-            </form>
-          </section>
-        ) : null}
-
-        <section aria-labelledby="hadith-awaiting-open" className="flex flex-col gap-5">
+    <AwaitingPage
+      crumbs={{ label: parts.label, trail: [parts.home, parts.hadith, { text: title }] }}
+      status={t('awaiting.status')}
+      title={title}
+      lede={t(`awaiting.what.${section}`)}
+      notice={{
+        id: 'hadith-awaiting-notice',
+        title: t('awaiting.noticeTitle'),
+        children: (
+          <>
+            <p className="max-w-[var(--measure-prose)]">{t('awaiting.notice')}</p>
+            <p>
+              <TextLink href={hadithPath(locale, 'introduction')}>
+                {t('awaiting.howItWorks')}
+              </TextLink>
+            </p>
+          </>
+        ),
+      }}
+      back={<TextLink href={hadithPath(locale)}>{t('awaiting.back')}</TextLink>}
+    >
+      {section === 'search' ? (
+        <section aria-labelledby="hadith-awaiting-search" className="flex flex-col gap-4">
           <SectionHeader
-            id="hadith-awaiting-open"
-            heading={t('landing.openHeading')}
-            intro={t('landing.openIntro')}
+            id="hadith-awaiting-search"
+            heading={t('awaiting.searchHeading')}
+            intro={t('awaiting.searchIntro')}
           />
-          <HubCards locale={locale} figures={figures} introduction />
+          <form
+            method="get"
+            action={pathFor(locale, requireRoute('search'))}
+            role="search"
+            aria-label={t('awaiting.searchHeading')}
+            className="flex w-full max-w-2xl flex-col gap-2"
+          >
+            <label htmlFor="hadith-site-search" className="text-sm font-medium">
+              {t('awaiting.searchLabel')}
+            </label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="min-w-0 flex-1">
+                <TextInput
+                  id="hadith-site-search"
+                  type="search"
+                  name="q"
+                  defaultValue={words}
+                  maxLength={SEARCH_QUERY_MAX_LENGTH}
+                  autoComplete="off"
+                />
+              </div>
+              {topic === null ? null : (
+                <input type="hidden" name="topic" value={topic.slug} />
+              )}
+              <Button tone="secondary">{t('search.submit')}</Button>
+            </div>
+          </form>
         </section>
+      ) : null}
 
-        <p>
-          <TextLink href={hadithPath(locale)}>{t('awaiting.back')}</TextLink>
-        </p>
-      </div>
-    </Container>
+      <section aria-labelledby="hadith-awaiting-open" className="flex flex-col gap-5">
+        <SectionHeader
+          id="hadith-awaiting-open"
+          heading={t('landing.openHeading')}
+          intro={t('landing.openIntro')}
+        />
+        <HubCards locale={locale} figures={figures} introduction />
+      </section>
+    </AwaitingPage>
   );
 }

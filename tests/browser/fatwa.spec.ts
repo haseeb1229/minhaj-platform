@@ -3,7 +3,15 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { Browser, BrowserContext, Locator, Page, Response } from '@playwright/test';
+import { AxeBuilder } from '@axe-core/playwright';
+import type {
+  Browser,
+  BrowserContext,
+  Locator,
+  Page,
+  Response,
+  TestInfo,
+} from '@playwright/test';
 
 import type { SqlSession } from '../../packages/database/src/lifecycle/sql-connection.ts';
 import {
@@ -24,8 +32,11 @@ import {
  * Phase 20 — Fatwa in a real browser, against the production build.
  *
  * WHAT ONLY A BROWSER CAN PROVE: that while the service is not activated every
- * public Fatwa page says so honestly and the ask page offers nothing to type
- * into; that asking always goes through sign-in with a validated return path;
+ * public Fatwa page says so honestly — the landing is the section's front door,
+ * the process page stands, search, the categories and asking await the service
+ * with nothing to type into, and named resources stay absent (Fatwa Part 1);
+ * that once it is activated, asking goes through sign-in with a validated
+ * return path;
  * that one question travels the whole workflow THROUGH THE ADMINISTRATION —
  * asked, filed, assigned, drafted with a separately written public question,
  * sent for review and published behind its own step-up — by four different
@@ -99,10 +110,56 @@ const MESSAGES = path.resolve(
 type UiLocale = 'en' | 'ur' | 'ar';
 const LOCALES: readonly UiLocale[] = ['en', 'ur', 'ar'];
 
+type AwaitingSection = 'search' | 'categories' | 'ask';
+type ProcessHeading = 'steps' | 'privacy' | 'expect' | 'never' | 'state';
+
 interface FatwaCopy {
   readonly fixture: string;
-  readonly unavailable: { readonly body: string };
+  readonly title: string;
+  readonly sections: Readonly<Record<AwaitingSection | 'howItWorks', string>>;
+  readonly unavailable: {
+    readonly body: string;
+    readonly howItWorks: string;
+    readonly officialHeading: string;
+    readonly officialLink: string;
+  };
+  readonly door: {
+    readonly stateHeading: string;
+    readonly state: string;
+    readonly mapHeading: string;
+    readonly opens: string;
+  };
+  readonly awaiting: {
+    readonly status: string;
+    readonly what: Readonly<Record<AwaitingSection, string>>;
+    readonly noticeTitle: string;
+    readonly notice: string;
+    readonly noticeAsk: string;
+    readonly back: string;
+  };
+  readonly howItWorks: {
+    readonly title: string;
+    readonly accepting: string;
+    readonly notAccepting: string;
+    readonly onThisPage: string;
+    readonly headings: Readonly<Record<ProcessHeading, string>>;
+  };
 }
+
+/** Minhaj-ul-Quran's own fatwa website — the one outbound link (ROUTE_MAP.md §3.8). */
+const OFFICIAL_FATWA_SITE = 'https://thefatwa.com/urdu/index.html';
+
+/** The pages that await the service while it is not activated (Fatwa Part 1). */
+const AWAITING: readonly AwaitingSection[] = ['search', 'categories', 'ask'];
+
+/** Every public Fatwa page that renders while the service is not activated. */
+const INACTIVE_PAGES = [
+  '/fatwa',
+  '/fatwa/how-it-works',
+  '/fatwa/search',
+  '/fatwa/categories',
+  '/fatwa/ask',
+] as const;
 
 /** The shipped catalogue's Fatwa copy in each interface locale. */
 const COPY = Object.fromEntries(
@@ -213,6 +270,81 @@ async function visitFixture(
   return response as Response;
 }
 
+/** No serious or critical axe finding; the rest are recorded as annotations. */
+async function axe(page: Page, target: string, testInfo: TestInfo): Promise<void> {
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  const blocking = results.violations.filter(
+    (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+  );
+  for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+    testInfo.annotations.push({
+      type: 'axe',
+      description: `${target}: ${finding.id} (${String(finding.impact)})`,
+    });
+  expect(
+    blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+    target,
+  ).toEqual([]);
+}
+
+/** Every link target inside the page's main region, as written. */
+function mainHrefs(page: Page): Promise<string[]> {
+  return page
+    .getByRole('main')
+    .locator('a[href]')
+    .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
+}
+
+/**
+ * While the service is not activated a page links, in its main region, only
+ * what is OPEN: home, the Fatwa landing, the process page, an in-page anchor
+ * and Minhaj-ul-Quran's own fatwa website — never search, the categories,
+ * asking, a question, a category, a topic view or a ruling.
+ */
+async function expectOnlyOpenLinks(
+  page: Page,
+  locale: UiLocale,
+  target: string,
+): Promise<void> {
+  const open = new Set([
+    localizedPath(locale, ''),
+    localizedPath(locale, '/fatwa'),
+    localizedPath(locale, '/fatwa/how-it-works'),
+    OFFICIAL_FATWA_SITE,
+  ]);
+  for (const href of await mainHrefs(page))
+    expect(href.startsWith('#') || open.has(href), `${target} links ${href}`).toBe(true);
+}
+
+/**
+ * The outbound link to Minhaj-ul-Quran's own fatwa website: exactly one in the
+ * main region, named, marked as leaving, and nothing of it embedded.
+ */
+async function expectOfficialSite(page: Page, locale: UiLocale): Promise<void> {
+  const main = page.getByRole('main');
+  const outbound = main.locator(`a[href="${OFFICIAL_FATWA_SITE}"]`);
+  await expect(outbound).toHaveCount(1);
+  await expect(outbound).toHaveAccessibleName(COPY[locale].unavailable.officialLink);
+  const rel = (await outbound.getAttribute('rel')) ?? '';
+  for (const token of ['external', 'noopener', 'noreferrer'])
+    expect(rel.split(' '), rel).toContain(token);
+  await expect(outbound).not.toHaveAttribute('target', /.+/);
+  await expect(main.locator('iframe, embed, object')).toHaveCount(0);
+}
+
+/** A page that may not be indexed: `noindex`, and no canonical or alternate. */
+async function expectWithheld(page: Page, target: string): Promise<void> {
+  await expect(page.locator('meta[name="robots"]'), target).toHaveAttribute(
+    'content',
+    /noindex/,
+  );
+  await expect(page.locator('link[rel="canonical"]'), target).toHaveCount(0);
+  await expect(page.locator('link[rel="alternate"][hreflang]'), target).toHaveCount(0);
+  await expect(page.locator('script[type="application/ld+json"]'), target).toHaveCount(0);
+}
+
 /** The private surface is never cached and never indexed. */
 async function expectPrivateSurface(page: Page, target: string): Promise<void> {
   const response = await page.context().request.get(target, { maxRedirects: 0 });
@@ -294,31 +426,67 @@ test.afterAll(async () => {
  * ========================================================================= */
 
 test.describe('while the Fatwa service is not activated', () => {
-  test('the landing says so honestly in every locale — no banner, no cookie', async ({
+  test('the landing is the section’s front door in every locale — honest, no banner, no cookie', async ({
     page,
   }) => {
     for (const locale of LOCALES) {
-      const response = await page.goto(localizedPath(locale, '/fatwa'));
+      const target = localizedPath(locale, '/fatwa');
+      const copy = COPY[locale];
+      const response = await page.goto(target);
       expect(response?.status(), locale).toBe(200);
       expect(response?.headers()['set-cookie'], locale).toBeUndefined();
       await expect(page.locator('html')).toHaveAttribute(
         'dir',
         locale === 'en' ? 'ltr' : 'rtl',
       );
-      await expect(page.getByText(COPY[locale].unavailable.body)).toBeVisible();
+      await expect(page.getByText(copy.unavailable.body)).toBeVisible();
       await expect(page.getByRole('note')).toHaveCount(0);
-      await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-        'content',
-        /noindex/,
-      );
-      await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
+      await expectWithheld(page, target);
       const main = page.getByRole('main');
       await expect(main).not.toContainText('NON_FATWA_FIXTURE');
       await expect(main.getByRole('search')).toHaveCount(0);
+      await expect(main.locator('form, textarea')).toHaveCount(0);
+      await expect(main.getByRole('heading', { level: 1 })).toHaveText(copy.title);
+
+      // WHERE THINGS STAND, beside the way to an answer now.
+      const state = main.locator('section[aria-labelledby="fatwa-state"]');
+      await expect(state.getByRole('heading', { level: 2 })).toHaveText(
+        copy.door.stateHeading,
+      );
+      await expect(state).toContainText(copy.awaiting.status);
+      await expect(state).toContainText(copy.door.state);
+      await expect(
+        main.locator('section[aria-labelledby="fatwa-official"]').getByRole('heading'),
+      ).toHaveText(copy.unavailable.officialHeading);
+      await expectOfficialSite(page, locale);
+
+      // The process page is OPEN and led to from the hero.
+      await expect(
+        main.getByRole('link', { name: copy.unavailable.howItWorks, exact: true }),
+      ).toHaveAttribute('href', localizedPath(locale, '/fatwa/how-it-works'));
+
+      // HOW THIS SECTION IS ORGANISED: the four parts, the process page linked,
+      // search, the categories and asking NAMED and marked, never linked.
+      const map = main.locator('section[aria-labelledby="fatwa-map"]');
+      await expect(map.getByRole('heading', { level: 2 })).toHaveText(
+        copy.door.mapHeading,
+      );
+      await expect(map.getByRole('heading', { level: 3 })).toHaveCount(4);
+      await expect(map.getByRole('link')).toHaveCount(1);
+      await expect(
+        map.getByRole('link', { name: copy.sections.howItWorks, exact: true }),
+      ).toHaveAttribute('href', localizedPath(locale, '/fatwa/how-it-works'));
+      for (const section of AWAITING)
+        await expect(map.getByText(copy.sections[section], { exact: true })).toHaveCount(
+          1,
+        );
+      await expect(map.getByText(copy.door.opens, { exact: true })).toHaveCount(3);
+
+      await expectOnlyOpenLinks(page, locale, target);
     }
   });
 
-  test('how it works still renders, and says no question is being accepted', async ({
+  test('how it works stands in every locale, says no question is accepted, and leads only where it is open', async ({
     page,
   }) => {
     const response = await page.goto('/fatwa/how-it-works');
@@ -330,6 +498,108 @@ test.describe('while the Fatwa service is not activated', () => {
     await expect(
       page.getByText('The service is not accepting questions at the moment.'),
     ).toBeVisible();
+
+    for (const locale of LOCALES) {
+      const target = localizedPath(locale, '/fatwa/how-it-works');
+      const copy = COPY[locale];
+      expect((await page.goto(target))?.status(), target).toBe(200);
+      await expect(page.getByRole('note')).toHaveCount(0);
+      await expectWithheld(page, target);
+      const main = page.getByRole('main');
+      await expect(main.getByRole('heading', { level: 1 })).toHaveText(
+        copy.howItWorks.title,
+      );
+      await expect(main.getByText(copy.howItWorks.notAccepting)).toBeVisible();
+      await expect(
+        main.getByText(copy.howItWorks.accepting, { exact: true }),
+      ).toHaveCount(0);
+
+      // Every section is listed in "On this page", and each anchor lands on it.
+      const contents = main.getByRole('navigation', { name: copy.howItWorks.onThisPage });
+      const keys: readonly ProcessHeading[] = [
+        'steps',
+        'privacy',
+        'expect',
+        'never',
+        'state',
+      ];
+      await expect(contents.getByRole('link')).toHaveCount(keys.length);
+      for (const key of keys) {
+        const anchor = contents.getByRole('link', {
+          name: copy.howItWorks.headings[key],
+          exact: true,
+        });
+        await expect(anchor).toHaveAttribute('href', `#fatwa-process-${key}`);
+        await expect(main.locator(`h2#fatwa-process-${key}`)).toHaveText(
+          copy.howItWorks.headings[key],
+        );
+      }
+      // The six steps, in order.
+      await expect(
+        main.locator('section[aria-labelledby="fatwa-process-steps"] ol > li'),
+      ).toHaveCount(6);
+
+      // Until the service opens: where things stand, and the way to an answer now.
+      const state = main.locator('section[aria-labelledby="fatwa-process-state"]');
+      await expect(state).toContainText(copy.door.state);
+      await expectOfficialSite(page, locale);
+
+      // Nothing to ask through: the ask entry is offered only when it is open.
+      await expect(main.locator('form, textarea')).toHaveCount(0);
+      await expect(
+        main.getByRole('link', { name: copy.awaiting.back, exact: true }),
+      ).toHaveAttribute('href', localizedPath(locale, '/fatwa'));
+      await expectOnlyOpenLinks(page, locale, target);
+    }
+  });
+
+  test('search, the categories and asking await the service in every locale — no form, nothing listed, no redirect', async ({
+    page,
+  }) => {
+    for (const locale of LOCALES)
+      for (const section of AWAITING) {
+        const target = localizedPath(locale, `/fatwa/${section}`);
+        const copy = COPY[locale];
+        const response = await page.goto(target);
+        expect(response?.status(), target).toBe(200);
+        expect(response?.headers()['set-cookie'], target).toBeUndefined();
+        // ASKING IS NOT SENT THROUGH SIGN-IN only to find nothing to fill in.
+        expect(new URL(page.url()).pathname, target).toBe(target);
+        await expect(page.getByRole('note'), target).toHaveCount(0);
+        await expectWithheld(page, target);
+
+        const main = page.getByRole('main');
+        await expect(main.getByRole('heading', { level: 1 }), target).toHaveText(
+          copy.sections[section],
+        );
+        await expect(
+          main.getByText(copy.awaiting.status, { exact: true }),
+          target,
+        ).toBeVisible();
+        await expect(main.getByText(copy.awaiting.what[section]), target).toBeVisible();
+        const notice = main.locator('section[aria-labelledby="fatwa-awaiting-notice"]');
+        await expect(notice.getByRole('heading', { level: 2 }), target).toHaveText(
+          copy.awaiting.noticeTitle,
+        );
+        await expect(notice, target).toContainText(
+          section === 'ask' ? copy.awaiting.noticeAsk : copy.awaiting.notice,
+        );
+        await expect(
+          notice.getByRole('link', { name: copy.unavailable.howItWorks, exact: true }),
+          target,
+        ).toHaveAttribute('href', localizedPath(locale, '/fatwa/how-it-works'));
+        await expectOfficialSite(page, locale);
+        await expect(
+          main.getByRole('link', { name: copy.awaiting.back, exact: true }),
+          target,
+        ).toHaveAttribute('href', localizedPath(locale, '/fatwa'));
+
+        // NOTHING TO SEARCH, LIST OR TYPE INTO.
+        await expect(main.locator('form, textarea, input'), target).toHaveCount(0);
+        await expect(main.getByRole('search'), target).toHaveCount(0);
+        await expect(main).not.toContainText('NON_FATWA_FIXTURE');
+        await expectOnlyOpenLinks(page, locale, target);
+      }
   });
 
   test('the removed derived-view paths are absent', async ({ request }) => {
@@ -339,15 +609,70 @@ test.describe('while the Fatwa service is not activated', () => {
     }
   });
 
-  test('asking anonymously ends at sign-in with a validated return path', async ({
-    page,
+  test('a named category, topic view or ruling is absent, even one that exists', async ({
+    request,
   }) => {
+    // The category and topic exist and are active in this database; with no
+    // activation they still name nothing public (ROUTE_MAP.md §3.8).
+    for (const locale of LOCALES)
+      for (const missing of [
+        `/fatwa/categories/${slug.category}`,
+        `/fatwa/topics/${slug.topic}`,
+        RULING,
+      ]) {
+        const target = localizedPath(locale, missing);
+        const response = await request.get(target, { maxRedirects: 0 });
+        expect(response.status(), target).toBe(404);
+      }
+  });
+
+  test('every page reflows at 320, 390 and 1440 px, is walked by keyboard, and has no serious axe finding', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(240_000);
+    for (const width of [320, 390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const locale of LOCALES)
+        for (const path of INACTIVE_PAGES) {
+          const target = localizedPath(locale, path);
+          expect((await page.goto(target))?.status(), target).toBe(200);
+          expect(
+            await overflowOf(page),
+            `${String(width)}px ${target}`,
+          ).toBeLessThanOrEqual(0);
+          await expectHeadingsInOrder(page, `${String(width)}px ${target}`);
+          if (width === 1440) await axe(page, target, testInfo);
+        }
+    }
+
+    // The process page from the front door, by keyboard alone.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/fatwa');
+    const process = page
+      .getByRole('main')
+      .getByRole('link', { name: COPY.en.unavailable.howItWorks, exact: true });
+    await tabTo(page, process);
+    await expectVisibleFocus(process);
+    await page.keyboard.press('Enter');
+    await page.waitForURL((url) => url.pathname === '/fatwa/how-it-works');
+
+    // Its contents, by keyboard, to the section named.
+    const privacy = page
+      .getByRole('navigation', { name: COPY.en.howItWorks.onThisPage })
+      .getByRole('link', { name: COPY.en.howItWorks.headings.privacy, exact: true });
+    await tabTo(page, privacy);
+    await expectVisibleFocus(privacy);
+    await page.keyboard.press('Enter');
+    await page.waitForURL((url) => url.hash === '#fatwa-process-privacy');
+    await expect(page.locator('#fatwa-process-privacy')).toBeInViewport();
+
+    // From a page that awaits the service, back to the process page.
     await page.goto('/fatwa/ask');
-    await page.waitForURL(/\/signin\?/);
-    const url = new URL(page.url());
-    expect(`${url.pathname}${url.search}`).toBe(
-      '/signin?returnTo=%2Fmy%2Fquestions%2Fask',
-    );
+    const explained = page
+      .locator('section[aria-labelledby="fatwa-awaiting-notice"]')
+      .getByRole('link', { name: COPY.en.unavailable.howItWorks, exact: true });
+    await tabTo(page, explained);
+    await expectVisibleFocus(explained);
   });
 
   test('a signed-in account is offered nothing to type into', async () => {
@@ -399,6 +724,43 @@ test.describe('a fixture activation', () => {
     // Publication needs a COMPLETE privileged posture: a second factor enrolled
     // and its recovery codes confirmed, through the UI.
     publisherTotp = (await enrolSecondFactorInBrowser(publisher)).totpUri;
+  });
+
+  test('asking anonymously ends at sign-in with a validated return path', async ({
+    page,
+  }) => {
+    // Moved here by Fatwa Part 1: while the service is inactive `/fatwa/ask`
+    // awaits it (proved above); once it is activated, asking goes through
+    // sign-in exactly as it did (Phase 20).
+    await page.goto('/fatwa/ask');
+    await page.waitForURL(/\/signin\?/);
+    const url = new URL(page.url());
+    expect(`${url.pathname}${url.search}`).toBe(
+      '/signin?returnTo=%2Fmy%2Fquestions%2Fask',
+    );
+  });
+
+  test('no page awaits the service once it is activated, and the process page offers asking', async ({
+    page,
+  }) => {
+    for (const target of ['/fatwa', '/fatwa/search', '/fatwa/categories']) {
+      await visitFixture(page, target);
+      await expect(
+        page.getByText(COPY.en.awaiting.status, { exact: true }),
+        target,
+      ).toHaveCount(0);
+      await expect(page.getByText(COPY.en.unavailable.body), target).toHaveCount(0);
+    }
+    await visitFixture(page, '/fatwa/how-it-works');
+    const main = page.getByRole('main');
+    await expect(
+      main.getByText(COPY.en.howItWorks.accepting, { exact: true }),
+    ).toBeVisible();
+    await expect(main.locator('#fatwa-process-state')).toHaveCount(0);
+    await expect(main.locator(`a[href="${OFFICIAL_FATWA_SITE}"]`)).toHaveCount(0);
+    await expect(
+      main.getByRole('link', { name: COPY.en.sections.ask, exact: true }),
+    ).toHaveAttribute('href', '/fatwa/ask');
   });
 
   test('the asker reads the privacy terms first, asks, and lands on an opaque address', async () => {

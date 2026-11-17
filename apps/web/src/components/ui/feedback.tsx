@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { Icon, type IconName } from './icon';
+import { Breadcrumbs, Container, PageHeading } from './layout';
 
 /* ===========================================================================
  * Feedback
@@ -87,6 +88,84 @@ export function EmptyState({
         </a>
       )}
     </div>
+  );
+}
+
+/**
+ * A PAGE THAT AWAITS WHAT IT WILL SHOW — a section page that exists, but whose
+ * content cannot be shown until something outside engineering is in place (an
+ * authorised source, an approved service). Shared by Hadith's pages that await
+ * a collection and Fatwa's that await the service.
+ *
+ * ONE SHAPE, SAID HONESTLY: the trail; a status mark in words (never colour
+ * alone); the page's own name as its one `h1`; one sentence on what WILL appear
+ * here; a notice, under its own `h2`, that nothing is shown in its place; then
+ * whatever the section offers onward that IS open, and the way back to the
+ * section. It lists nothing and links nothing that cannot open — the caller
+ * passes only open destinations.
+ *
+ * LOGICAL PROPERTIES ONLY, so it is right in English, Urdu and Arabic.
+ */
+export function AwaitingPage({
+  crumbs,
+  status,
+  title,
+  lede,
+  notice,
+  children,
+  back,
+}: {
+  readonly crumbs: {
+    readonly label: string;
+    readonly trail: readonly { readonly href?: string; readonly text: string }[];
+  };
+  /** The mark above the heading, e.g. "Awaiting an authorised source". */
+  readonly status: string;
+  readonly title: string;
+  /** What will appear on this page once it opens. */
+  readonly lede: ReactNode;
+  readonly notice: {
+    /** The notice heading's id, which labels its section. */
+    readonly id: string;
+    readonly title: ReactNode;
+    readonly children: ReactNode;
+  };
+  /** The open ways onward. */
+  readonly children?: ReactNode;
+  /** The way back to the section. */
+  readonly back: ReactNode;
+}) {
+  return (
+    <Container>
+      <div className="flex min-w-0 flex-col gap-10 pt-6 pb-[var(--space-section)]">
+        <Breadcrumbs label={crumbs.label} trail={crumbs.trail} />
+
+        <header className="flex flex-col gap-4">
+          <p className="flex w-fit max-w-full items-center gap-1.5 rounded-full border border-accent-rule bg-accent-surface px-3 py-1 text-caption font-semibold text-accent">
+            <Icon name="info" size={16} className="shrink-0" />
+            <span>{status}</span>
+          </p>
+          <PageHeading>{title}</PageHeading>
+          <p className="text-lede max-w-[var(--measure-prose)] text-foreground-muted">
+            {lede}
+          </p>
+        </header>
+
+        <section
+          aria-labelledby={notice.id}
+          className="flex max-w-3xl flex-col gap-3 rounded-panel border border-border bg-surface-raised p-5 shadow-panel sm:p-6"
+        >
+          <h2 id={notice.id} className="text-subheading font-semibold">
+            {notice.title}
+          </h2>
+          {notice.children}
+        </section>
+
+        {children}
+
+        <p>{back}</p>
+      </div>
+    </Container>
   );
 }
 

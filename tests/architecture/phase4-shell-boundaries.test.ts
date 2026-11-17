@@ -276,10 +276,11 @@ const CONTENT_ROUTE_FILES = [
   // Phase 20. Every Fatwa surface reads whether the service is activated, and
   // which rulings are public now, through Fatwa's PUBLIC reader, so none can be
   // prerendered; each is proven below to reach no session, no identity
-  // service, no logger and no authentication library. `/fatwa/ask` reads
-  // nothing at all — it redirects every visitor into the authenticated tree —
-  // and the read beacon is the client island that posts one read count after
-  // render through the action declared below.
+  // service, no logger and no authentication library. `/fatwa/ask` reads only
+  // whether the service is activated — it awaits the service while it is not
+  // (Fatwa Part 1) and otherwise redirects every visitor into the
+  // authenticated tree — and the read beacon is the client island that posts
+  // one read count after render through the action declared below.
   'apps/web/src/app/[locale]/(public)/fatwa/page.tsx',
   'apps/web/src/app/[locale]/(public)/fatwa/search/page.tsx',
   'apps/web/src/app/[locale]/(public)/fatwa/categories/page.tsx',
@@ -876,8 +877,10 @@ describe('the public shell is server-rendered, with narrow client islands', () =
       'https://github.com/cpfair/quran-tajweed',
       'https://creativecommons.org/licenses/by/4.0/',
     ];
-    // R2 — MQI'S OWN FATWA WEBSITE, linked outbound from the Fatwa landing
-    // while this platform's service is not open. Exactly this, only here.
+    // R2 — MQI'S OWN FATWA WEBSITE, linked outbound from the Fatwa pages
+    // (the landing, and since Fatwa Part 1 the process page and the pages that
+    // await the service) while this platform's service is not open. Exactly
+    // this, only here.
     const FATWA_SITE = 'apps/web/src/components/fatwa/official-site.ts';
     const FATWA_SITE_URL = 'https://thefatwa.com/urdu/index.html';
     const { modules } = await contentGraph();

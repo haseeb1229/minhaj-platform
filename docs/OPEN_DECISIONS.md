@@ -386,7 +386,16 @@ exists and no ruling is published; naming a holder remains Minhaj's decision. R2
 **staged, review-only** set of thefatwa.com rulings (MIGRATION_STRATEGY.md §19 — evidence for
 qualified review, never published by migration), and with no activation `/fatwa` is a calm
 "coming" page with a plain outbound link to Minhaj-ul-Quran's own fatwa website, never fetched or
-embedded (ROUTE_MAP.md §3.8). The shell does not promote Fatwa.
+embedded (ROUTE_MAP.md §3.8). The shell did not promote Fatwa then (historical: since the owner
+direction of 2026-11-08 the Fatwa domain is always in the header, linking that page — ROUTE_MAP.md
+§3.8, INFORMATION_ARCHITECTURE.md §2.2).
+
+**Fatwa Part 1 (status unchanged).** While no activation exists the Fatwa landing is the section's
+front door, How it works stands as product guidance, and Search, Categories and Ask each say that
+they await the service (Ask without a sign-in detour, since there is nothing to fill in); nothing is
+published, listed or invented in a ruling's place, no scholar is named, and every gate and mutation
+is as it was (ROUTE_MAP.md §3.8). The decision itself — which named individuals Minhaj approves,
+and its process — remains Minhaj's.
 
 ### 1.5 Religious content review capacity
 **Owner:** Minhaj · **Gates:** Phases 18, 19, 30 · **Priority:** High

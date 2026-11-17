@@ -38,7 +38,7 @@ export {
   SectionHeader,
   TopicChips,
 } from './composition';
-export { Alert, EmptyState, Skeleton, type AlertTone } from './feedback';
+export { Alert, AwaitingPage, EmptyState, Skeleton, type AlertTone } from './feedback';
 export {
   Button,
   Field,

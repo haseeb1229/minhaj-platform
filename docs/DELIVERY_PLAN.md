@@ -4936,6 +4936,115 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > fixture banner, links the catalogue, never the alias, and `/listen/recitations` and
 > `/ar/listen/recitations` are one 301 each. *CI and staging evidence are recorded when they exist.*
 
+> **Fatwa Part 1 — the Fatwa section within its religious gate: the landing, How it works, Ask,
+> Search and Categories (owner direction: every section built from A to Z, one item at a time; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (DOMAIN_MODEL.md §12, §12.1;
+> ROUTE_MAP.md §3.8; INFORMATION_ARCHITECTURE.md §3.7; OPEN_DECISIONS.md §1.4). No schema change, no
+> migration and no new read in any context; staging only, the production gates unchanged.
+> OPEN_DECISIONS.md §1.4 is unchanged: no `fatwa.publish` grant exists, no ruling is published, no
+> scholar is named, no category or activation is created, and the staged review-only thefatwa.com
+> rulings stay unpublished. Every mutation (the ask Server Action, the read beacon) and every gate is
+> exactly as it was.
+>
+> - **The audit (before).** While no activation exists (staging and every local database): `/fatwa`
+>   was the R2 "coming" page — a hero with one line that the service is not available, what it will
+>   offer, how asking will work, the outbound link and the three principles; `/fatwa/search` and
+>   `/fatwa/categories` were the page's name over one sentence and two links (the Phase-20 bare
+>   state); `/fatwa/how-it-works` was six step cards and one line; `/fatwa/ask` sent every visitor
+>   to `/my/questions/ask`, so a signed-out visitor was made to sign in only to read "nothing to fill
+>   in". A named category, topic view or ruling answered 404. Under a fixture activation every page
+>   carried the banner and `noindex` and listed what was published.
+> - **`/fatwa` is the section's front door while the service is not activated (decision).** In the
+>   order a visitor needs it: the hero (what Fatwa here will be, that the service is not open, and
+>   *How the Fatwa service works*); **where things stand** (no ruling published, no question
+>   accepted, the service opens once Minhaj-ul-Quran names the scholars who will answer and approves
+>   it, nothing shown in its place) beside **Minhaj-ul-Quran's fatwa website** — the outbound link
+>   of ROUTE_MAP.md §3.8, from `official-site.ts` only, a plain link marked as leaving the site,
+>   never fetched, embedded or tracked; what the service will offer; **how a question becomes an
+>   answer** (the six steps, who answers, how asking will work and stay anonymous, and the way to the
+>   full process); the three principles; and **how this section is organised** — the Fatwa menu's
+>   four parts, the process page linked, Search, Categories and Ask named and marked "Opens when the
+>   service opens", never linked (as Hadith names the pages that await a collection). It searches,
+>   counts and lists nothing. Product description only: it names no scholar, states no position and
+>   promises no response time. The activated landing is unchanged.
+> - **How it works stands without an activation (decision, kept from Phase 20 and recorded).** It is
+>   product guidance that reads no Fatwa record, only whether the service is activated — the same
+>   basis on which Hadith's introduction stands without a collection (Hadith Part 2). It is now a
+>   page with a contents list ("On this page", beside the text on a laptop, above it on a phone):
+>   **from question to answer** (the six steps, numbered); **your privacy** (who can read a question,
+>   that it is never published as written, the separately written anonymised question — written by a
+>   person, nothing rewrites or summarises text — what to leave out, and erasure at account closure:
+>   DOMAIN_MODEL.md §12.1); **what to expect** (an account to ask and none to read, the length
+>   bounds from `FATWA_LIMITS`, the five statuses an asker sees, a per-account limit, no response
+>   time); **what is never done** (published as written or with the asker's name, written or
+>   published by an automated or AI system — §12, published without review, changed silently, a
+>   question in progress shown anywhere public); and, while inactive only, **until the service
+>   opens** with the outbound link. Under an activation it says the service is accepting questions
+>   and offers *Ask a question* (sign-in required), as before.
+> - **Asking is gated on activation, and then on sign-in (fact) — so `/fatwa/ask` now awaits the
+>   service while it is inactive (decision).** Before, the public route redirected every visitor to
+>   the authenticated `/my/questions/ask`, whose page renders no form without an activation, and
+>   whose action and database refuse a question regardless. Now the public route reads one more fact
+>   through Fatwa's session-free public reader — whether the service is activated — and, while it is
+>   not, renders the awaiting page (no form, nothing to type, no sign-in detour, `noindex`); once it
+>   is, it redirects exactly as before (Phase 20). Nothing about authority changed: the public tree
+>   still reads no session, the Server Action, its session re-resolution, the rate limit and the
+>   database's refusal are untouched, and `/my/questions/ask` (its own guard and its inactive notice)
+>   is unchanged. This is the ask flow saying plainly that the service is not available, as ROUTE_MAP
+>   §3.8 has required since Phase 20.
+> - **Search and Categories await the service.** Each, while inactive, shows one designed state
+>   (`FatwaAwaiting`, replacing the Phase-20 bare one, historical): a "Not open yet" mark, the page's
+>   name, one sentence on what will appear there, a notice that nothing is shown in its place with
+>   the way to the process page, Minhaj-ul-Quran's fatwa website, and the way back to `/fatwa`.
+>   Search offers no form: nothing of Fatwa's is published and no Topic holds Fatwa material, so
+>   unlike Hadith's awaiting search (which offers site search on the `hadith` Topic) there is
+>   nothing honest to search. **Named resources stay absent:** a category, a topic view and a ruling
+>   still answer 404 while inactive, even when the category and Topic exist, and `/fatwa/latest`
+>   and `/fatwa/popular` remain 404s.
+> - **One awaiting shape, shared (presentation refactor).** The layout of Hadith's `HadithAwaiting`
+>   became `AwaitingPage` in `components/ui` (trail, status mark, `h1`, what will appear, the notice
+>   under its own `h2`, the open ways onward, the way back); `HadithAwaiting` renders through it with
+>   the same markup, identifiers and copy, and `FatwaAwaiting` (`components/fatwa/guide.tsx`) is the
+>   second use. The Fatwa guide module also holds the front door, the section map and the outbound
+>   panel (`FatwaOfficialSite`); the six step keys moved to `FATWA_PROCESS_STEPS` in
+>   `presentation.ts`. `FatwaUnavailable` and its offer list are removed from `parts.tsx`; nothing
+>   else used them.
+> - **Messages.** New `fatwa.door.*`, `fatwa.awaiting.*`, `fatwa.unavailable.officialNote` and the
+>   process page's `fatwa.howItWorks.{onThisPage, headings, stepsIntro, privacyIntro, privacy,
+>   expect, never}`, in en/ur/ar; `fatwa.unavailable.home` is removed (nothing uses it now). Every
+>   other Fatwa message is kept.
+>
+> **What staging will show:** no Fatwa activation exists there, so `/fatwa` is the front door, How
+> it works stands with "until the service opens", and Search, Categories and Ask each await the
+> service; a category, topic view or ruling address is a 404; nothing is listed, and the only way
+> out to an answer is the link to Minhaj-ul-Quran's fatwa website. The same holds on the local
+> persistent database, which has no activation.
+>
+> **Proof:** `tests/browser/fatwa.spec.ts` — while the service is not activated: the landing in
+> en/ur/ar (the honest line, no banner, no cookie, `noindex` with no canonical, alternate or
+> structured data, no form or search, the `h1`, where things stand, exactly one outbound link —
+> named, `rel` external/noopener/noreferrer, no new window, nothing embedded — the process page
+> linked from the hero, the section map's four parts with only How it works linked and the three
+> others named and marked, and in `main` no link but home, `/fatwa`, the process page, an anchor or
+> the outbound site); How it works in en/ur/ar (the Phase-20 heading and line kept, the five contents
+> anchors each landing on its heading, the six steps, where things stand with the outbound link, no
+> form, the way back, only open links); Search, Categories and Ask in en/ur/ar awaiting the service
+> (200 with no cookie and no redirect, the name, mark, what will appear, the notice — Ask's own —
+> with the process page, the outbound link and the way back, no form, input or search, only open
+> links, `noindex`); the derived-view paths absent (kept); a category, topic view and ruling 404 in
+> every locale although the category and Topic exist; every page at 320, 390 and 1440 px with no
+> sideways scroll and headings in order, axe with no serious or critical finding at 1440 px in
+> every locale, and by keyboard the process page from the front door, a contents entry to its
+> section and the process page from Ask's notice, each with a visible focus. **Replaced:** the
+> inactive "asking anonymously ends at sign-in" test (the route now awaits the service while
+> inactive — asserted above, more strictly) moved, unchanged, into the fixture describe, where it
+> proves the activated redirect; new under the fixture activation: no page awaits the service, and
+> How it works says it is accepting, offers *Ask a question* and shows neither the state section nor
+> the outbound link. Every other Fatwa assertion is kept. `tests/browser/hadith.spec.ts` runs
+> unchanged against the shared `AwaitingPage`. `tests/config/locale.test.ts` (the new module);
+> `tests/architecture/phase4-shell-boundaries.test.ts` (wording only — `/fatwa/ask` stays on the
+> session-free public list). *CI and staging evidence are recorded when they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

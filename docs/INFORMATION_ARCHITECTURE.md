@@ -619,6 +619,13 @@ counted anonymously; Topics are reached from a ruling, a category or the topic h
 separate menu list. Ask a Question leads to sign-in and then to the Fatwa-owned My Questions; while
 the service is not activated the section says so plainly and accepts no question.
 
+Since Fatwa Part 1, while the service is not activated, the landing is the section's front door
+(where things stand, Minhaj-ul-Quran's own fatwa website, how a question becomes an answer and how
+the four parts of this menu open), How It Works stands as product guidance, and Search Fatwa,
+Categories and Ask a Question each say that they await the service — Ask a Question without the
+sign-in detour it took until then (historical), since there is nothing to fill in. Only How It
+Works is linked from the section map; the rest are named and marked (ROUTE_MAP.md §3.8).
+
 ### 3.8 News & Events
 
 | News | Events | Media | Archive |

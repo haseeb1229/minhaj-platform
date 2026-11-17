@@ -1075,7 +1075,7 @@ from a page to a handler.
 | `/fatwa/topics/{slug}` | Filtered view, canonical → `/topics/{slug}` |
 | `/fatwa/{slug}` | **Canonical published Fatwa URL** |
 | `/fatwa/how-it-works` | Process explanation |
-| `/fatwa/ask` | **Authenticated** — redirects to sign-in with a validated return path |
+| `/fatwa/ask` | **Authenticated** — redirects to sign-in with a validated return path; while the service is not activated, a page that awaits it (Fatwa Part 1) |
 
 `/fatwa/latest` and `/fatwa/popular` are **removed** as paths (§2.3).
 
@@ -1104,6 +1104,21 @@ a plain link, never fetched, embedded or tracked). From R1 until 2026-11-08 the 
 promote `/fatwa` until the service was active and a ruling published (historical); since the owner
 direction of 2026-11-08 the Fatwa domain is always in the header and links this page, which says
 honestly what it holds (INFORMATION_ARCHITECTURE.md §2.2).
+
+**Fatwa Part 1 (OPEN_DECISIONS.md §1.4 unchanged).** No route changes, no ruling is published and
+every mutation is as it was. With no activation: `/fatwa` is the section's **front door** — what
+the service will be, where things stand, the outbound link to Minhaj-ul-Quran's fatwa website
+(above, unchanged), how a question becomes an answer and how the section is organised, linking
+only `/fatwa/how-it-works` and naming the rest; `/fatwa/how-it-works` **stands** (product guidance
+reading only whether the service is activated — its process, privacy, what to expect and what is
+never done); `/fatwa/search` and `/fatwa/categories` each show one designed **awaiting** state (no
+form, nothing listed — the Phase-20 bare sentence until then, historical); and **`/fatwa/ask`
+awaits the service too**, rendering no form, instead of redirecting every visitor through sign-in
+to a page with nothing to fill in (from Phase 20 until Fatwa Part 1 it redirected whatever the
+service's state, historical). Once the service is activated `/fatwa/ask` redirects to
+`/my/questions/ask` exactly as above. The public route still reads no session — only the
+activation, through Fatwa's session-free reader — and every page above stays `noindex` without an
+approved activation. A named category, topic view or ruling still answers 404 while inactive.
 
 ### 3.9 News, Events, Media, Global
 

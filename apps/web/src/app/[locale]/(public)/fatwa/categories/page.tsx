@@ -2,13 +2,14 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
 import { FatwaCategoriesPage } from '@/components/fatwa/categories';
-import { FatwaUnavailable } from '@/components/fatwa/parts';
+import { FatwaAwaiting } from '@/components/fatwa/guide';
 import { fatwaAvailability, fatwaMetadata } from '@/components/fatwa/read';
 import { requireLocale } from '@/config/route-locale';
 
 /**
  * `/{locale}/fatwa/categories` — every active Fatwa category (ROUTE_MAP.md
- * §3.8). Signed out and dynamic; honest while the service is inactive.
+ * §3.8). Signed out and dynamic. While the service is inactive it awaits the
+ * service (`FatwaAwaiting`, Fatwa Part 1) and lists nothing.
  */
 export const dynamic = 'force-dynamic';
 
@@ -31,9 +32,6 @@ export async function generateMetadata({ params }: CategoriesParams): Promise<Me
 export default async function FatwaCategoriesRoute({ params }: CategoriesParams) {
   const locale = await requireLocale(params);
   const availability = await fatwaAvailability();
-  if (!availability.active) {
-    const t = await getTranslations({ locale, namespace: 'fatwa' });
-    return <FatwaUnavailable locale={locale} section={t('sections.categories')} />;
-  }
+  if (!availability.active) return <FatwaAwaiting locale={locale} section="categories" />;
   return <FatwaCategoriesPage locale={locale} availability={availability} />;
 }

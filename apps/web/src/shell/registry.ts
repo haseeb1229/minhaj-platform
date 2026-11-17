@@ -718,8 +718,9 @@ const LIVE_LEARNING: readonly ShellRoute[] = Object.freeze(
  * Search, the categories, the process explanation and the ask entry. NO
  * PLACEMENT — they are reached from `/fatwa`, the single entry point in the
  * primary navigation. Every one is `excluded` for the reason the `fatwa` entry
- * gives; search is excluded for good, and `/fatwa/ask` is only a redirect into
- * the authenticated `/my/questions/ask`.
+ * gives; search is excluded for good, and `/fatwa/ask` is a redirect into the
+ * authenticated `/my/questions/ask` (while the service is not activated, a
+ * page that awaits it — Fatwa Part 1).
  *
  * WHAT IS ABSENT IS ABSENT. `latest` and `popular` are QUERY views of `/fatwa`
  * (`?sort=`), never paths (ROUTE_MAP.md §2.3); a ruling, a category and a

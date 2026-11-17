@@ -336,6 +336,10 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/fatwa/topics.tsx',
     'apps/web/src/components/search/fatwa-hit.ts',
     'apps/web/src/components/search/fatwa-hit-text.ts',
+    // Fatwa Part 1: the section's guide while the service is not open — the
+    // landing's front door, the pages that await the service and the outbound
+    // panel to Minhaj-ul-Quran's own fatwa website.
+    'apps/web/src/components/fatwa/guide.tsx',
     // Phase 22. The public Learn surfaces, their pure presentation decisions
     // and request-cached reads. The ROUTES that use them are dynamic for data,
     // never these modules.

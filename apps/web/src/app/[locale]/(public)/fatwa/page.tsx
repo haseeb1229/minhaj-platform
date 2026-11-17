@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
 import { FatwaLandingPage } from '@/components/fatwa/landing';
-import { FatwaUnavailable } from '@/components/fatwa/parts';
+import { FatwaFrontDoor } from '@/components/fatwa/guide';
 import { fatwaAvailability, fatwaMetadata } from '@/components/fatwa/read';
 import { requireLocale } from '@/config/route-locale';
 
@@ -15,9 +15,10 @@ import { requireLocale } from '@/config/route-locale';
  * (ROUTE_MAP.md §2.3, §9.4).
  *
  * SIGNED OUT, AND `force-dynamic` because whether the service is activated,
- * and what is published, is mutable data. Inactive: an honest unavailable
- * state, `noindex`. Fixture: the fixture banner, `noindex`. Only an approved
- * activation on an indexable deployment is indexable.
+ * and what is published, is mutable data. Inactive: the section's front door
+ * (`FatwaFrontDoor`, Fatwa Part 1), `noindex`. Fixture: the fixture banner,
+ * `noindex`. Only an approved activation on an indexable deployment is
+ * indexable.
  */
 export const dynamic = 'force-dynamic';
 
@@ -41,7 +42,7 @@ export async function generateMetadata({ params }: LandingParams): Promise<Metad
 export default async function FatwaPage({ params, searchParams }: LandingParams) {
   const locale = await requireLocale(params);
   const availability = await fatwaAvailability();
-  if (!availability.active) return <FatwaUnavailable locale={locale} />;
+  if (!availability.active) return <FatwaFrontDoor locale={locale} />;
   return (
     <FatwaLandingPage
       locale={locale}

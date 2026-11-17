@@ -5183,7 +5183,6 @@
     "fixture": "Test fixture — not a genuine Fatwa.",
     "unavailable": {
       "body": "The Fatwa service is not available on this site yet.",
-      "home": "Return to the home page",
       "howItWorks": "How the Fatwa service works",
       "offerHeading": "What this service will offer",
       "offer": {
@@ -5204,7 +5203,33 @@
       "askBody": "When the service opens you will ask from My Minhaj: sign in, write your question, and follow it there. Your question stays private — a ruling is published only beside a separately written, anonymised question.",
       "officialHeading": "Minhaj-ul-Quran’s fatwa website",
       "officialBody": "Minhaj-ul-Quran International’s established fatwa website publishes rulings in Urdu and accepts questions.",
-      "officialLink": "Visit thefatwa.com"
+      "officialLink": "Visit thefatwa.com",
+      "officialNote": "A separate website: this link leaves this site."
+    },
+    "door": {
+      "lede": "Reviewed answers to questions of Islamic law and practice, each beside an anonymised statement of its question — and a private way to ask your own.",
+      "stateHeading": "Where things stand",
+      "state": "No ruling is published here yet and no question is being accepted. The service opens once Minhaj-ul-Quran names the scholars who will answer and approves its opening. Until then nothing is shown in its place — no sample ruling and no example question.",
+      "processHeading": "How a question becomes an answer",
+      "processIntro": "Every answered question will pass through the same six steps, in this order.",
+      "processAll": "The full process, step by step",
+      "whoHeading": "Who answers",
+      "who": "Only people Minhaj-ul-Quran authorises will answer questions and publish rulings. A ruling is published only after a review, and nobody publishes a ruling they drafted themselves.",
+      "mapHeading": "How this section is organised",
+      "mapIntro": "The Fatwa menu has four parts. How it works is open now; the others open with the service.",
+      "opens": "Opens when the service opens"
+    },
+    "awaiting": {
+      "status": "Not open yet",
+      "what": {
+        "search": "Search will find published rulings by the words of their titles, their published questions and their answers.",
+        "categories": "Published rulings will be grouped here by category, each category with its own page of rulings.",
+        "ask": "Once the service opens, you will sign in, write your question privately and follow it in My Minhaj until it is answered."
+      },
+      "noticeTitle": "Why there is nothing here yet",
+      "notice": "The Fatwa service is not open on this site yet: no ruling is published and no question is being accepted. Nothing is shown in its place — no sample ruling and no example question.",
+      "noticeAsk": "The Fatwa service is not accepting questions yet, so there is no form here and nothing you write could be sent. Asking opens once Minhaj-ul-Quran names the scholars who will answer.",
+      "back": "Back to Fatwa"
     },
     "previous": "Previous page",
     "next": "Next page",
@@ -5329,6 +5354,34 @@
           "title": "Corrections are visible",
           "body": "If a published ruling is corrected, its page says when and why, and every earlier published version stays readable beneath it."
         }
+      },
+      "onThisPage": "On this page",
+      "headings": {
+        "steps": "From question to answer",
+        "privacy": "Your privacy",
+        "expect": "What to expect",
+        "never": "What is never done",
+        "state": "Until the service opens"
+      },
+      "stepsIntro": "Every answered question passes through these six steps, in this order.",
+      "privacyIntro": "A question is private personal information, and it is handled that way at every step.",
+      "privacy": {
+        "person": "The published question is written by a person. Nothing rewrites, shortens or summarises your words automatically.",
+        "identify": "Please leave out your name, contact details and anything else that could identify you or anyone else.",
+        "closure": "If you close your account, the text of your questions is erased. Published rulings never contained it, and they stay as they are."
+      },
+      "expect": {
+        "account": "You need an account to ask. Reading published rulings never needs one.",
+        "length": "A question is between {min} and {max} characters long.",
+        "status": "In My questions you can follow each question as it moves: received, in progress, and then answered, declined or closed.",
+        "limit": "To keep the service fair to everyone, the number of questions one account can send is limited."
+      },
+      "never": {
+        "words": "Your question is never published as you wrote it, and your name is never published with a ruling.",
+        "ai": "No ruling is written, drafted or published by an automated or AI system.",
+        "unreviewed": "No ruling is published without a review by a person authorised to publish.",
+        "silent": "A published ruling is never changed silently: a correction says when and why, and earlier versions stay readable.",
+        "private": "A question that is still being answered never appears in search, in a listing or on any public page."
       }
     },
     "search": {
