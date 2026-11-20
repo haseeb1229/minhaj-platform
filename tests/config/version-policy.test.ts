@@ -56,7 +56,7 @@ function baseRootManifest(): Manifest {
   return {
     name: 'minhaj-platform',
     engines: { node: lockedNode },
-    overrides: { 'deepmerge-ts': '8.0.0', mysql2: '3.23.1' },
+    overrides: { 'deepmerge-ts': '8.0.0', mysql2: '3.23.1', effect: '3.22.4' },
     devDependencies: {
       '@axe-core/playwright': '4.14.0',
       '@playwright/test': '1.55.1',
@@ -146,6 +146,7 @@ function baseLock(): { packages: Record<string, { version?: string }> } {
       'node_modules/prettier': { version: '3.9.6' },
       'node_modules/deepmerge-ts': { version: '8.0.0' },
       'node_modules/mysql2': { version: '3.23.1' },
+      'node_modules/effect': { version: '3.22.4' },
     },
   };
 }

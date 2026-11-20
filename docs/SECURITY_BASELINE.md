@@ -1928,6 +1928,20 @@ security maintenance, October 2026):
   forces the review: it fails when the advisory stops being reported and when the chain
   moves.
 
+#### 18.3.2 Transitive security overrides
+
+Where a High finding sits in a transitive package whose patched release is inside the same
+major line, and the parent pins it exactly, the fix is a root `overrides` pin rather than an
+exception. `scripts/shared/version-policy.mjs` (`requiredSecurityOverrides`) requires each
+pin in the root manifest and proves that the lockfile resolves every copy to it; an override
+that overrides nothing fails as stale. The pins are `deepmerge-ts` 8.0.0, `mysql2` 3.23.1 and,
+since November 2026, `effect` 3.22.4 (GHSA-7589-6fvf-x4pw, High, `effect` <= 3.22.0: a ReDoS
+in `Schema.TemplateLiteral`). `effect` arrives only through the Prisma CLI's configuration
+loader (`prisma` 7.10.0 → `@prisma/config` 7.10.0, which pins `effect` 3.20.0); no runtime
+code imports it. 3.22.4 is the newest patched 3.x release that had been public for some weeks.
+`prisma validate` runs unchanged on it. Remove the pin when `@prisma/config` itself declares
+a patched `effect`.
+
 ---
 
 ## 19. Privacy and safeguarding

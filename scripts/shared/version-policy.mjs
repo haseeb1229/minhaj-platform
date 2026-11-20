@@ -252,6 +252,7 @@ export const lockedFamilies = Object.freeze([
 export const requiredSecurityOverrides = Object.freeze([
   { name: 'deepmerge-ts', expected: '8.0.0' },
   { name: 'mysql2', expected: '3.23.1' },
+  { name: 'effect', expected: '3.22.4' },
 ]);
 
 /** The locked runtime (TECH_STACK.md §3). */

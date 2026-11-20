@@ -5419,6 +5419,19 @@ the read-only handlers now thirty-four, each exporting no mutating verb);
 > and 1440 px in en, ur and ar with one `h1`, no redirect, no sideways scroll and no serious or
 > critical axe finding at 1440 px. *CI and staging evidence are recorded when they exist.*
 
+> **CI maintenance, November 2026 (on `feature/rebaseline-r2-full-ecosystem-completion`).** Two
+> changes outside any section, both forced by the clean runner rather than by product code:
+> - GitHub's `ubuntu-latest` label moved to Ubuntu 26.04, on which the locked Playwright 1.55.1
+>   refuses to install Chromium, so **Browser flows** failed before running a test. Every CI job
+>   is now pinned to `ubuntu-24.04`, the image the suite was proved on; the staging deploy
+>   workflow is unchanged.
+> - GHSA-7589-6fvf-x4pw (High) in `effect`, reached only through the Prisma CLI, failed
+>   **Dependency audit**. It is patched by a root override to `effect` 3.22.4, enforced by the
+>   version policy (SECURITY_BASELINE.md §18.3.2), not by an audit exception.
+>
+> An earlier audit failure on this branch, GHSA-fc5q-39xc-vjpf in `picomatch`, needed no change:
+> GitHub withdrew that advisory on 2026-11-18, and the re-run passed.
+
 ---
 
 ### Phase 31 — Search Completeness Validation
