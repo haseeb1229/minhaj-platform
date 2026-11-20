@@ -1,6 +1,6 @@
 import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
-import { cache } from 'react';
+import { cache, type ReactNode } from 'react';
 import { getTranslations } from 'next-intl/server';
 import type { Locale } from '@minhaj/contracts';
 import {
@@ -24,6 +24,7 @@ import {
   TopicChips,
 } from '@/components/ui';
 import { directionOf } from '@/config/locale';
+import { ShareVideo } from '@/components/media/share';
 import { ArticleCard } from './article-card';
 import { RecordSection } from './frame';
 import { translationFor } from './presentation';
@@ -74,21 +75,36 @@ const RELATED_ARTICLES = 3;
  * standfirst alone — the lead picture, then the body at a reading measure
  * with its contents beside it when it has sections, then its other credits
  * and topics, and, for an Article, more Articles.
+ *
+ * Explore (R2): a Page that sits inside a section passes the section's trail
+ * (`trail`, between Home and the title — in the breadcrumbs and in their
+ * structured data), asks for Share (`share`), and closes with what comes next
+ * in its section (`children`, after the body).
  */
 export async function PublicContent({
   record,
   locale,
   path,
   kind,
+  trail = [],
+  share = false,
+  children,
 }: {
   record: PublicEditorial;
   locale: Locale;
   path: string;
   kind: 'Article' | 'WebPage';
+  /** Locale-relative crumbs between Home and the title. */
+  trail?: readonly { readonly path: string; readonly text: string }[];
+  /** Offer Share beside the title: the device's share sheet or the address copied. */
+  share?: boolean;
+  /** What follows the body: the next things to read. */
+  children?: ReactNode;
 }) {
   const t = await getTranslations({ locale, namespace: 'editorial' });
   const news = await getTranslations({ locale, namespace: 'news' });
   const shell = await getTranslations({ locale, namespace: 'shell' });
+  const watch = await getTranslations({ locale, namespace: 'watch' });
   const translation = translationFor(record, locale);
   const article = kind === 'Article';
   const [references, latest] = await Promise.all([
@@ -148,6 +164,10 @@ export async function PublicContent({
                   },
                 ]
               : []),
+            ...trail.map((crumb) => ({
+              href: localizedPath(locale, crumb.path),
+              text: crumb.text,
+            })),
             { text: translation.title },
           ]}
         />
@@ -186,6 +206,19 @@ export async function PublicContent({
               <Icon name="globe" size={16} className="mt-1 shrink-0" />
               <span>{t('fallback', { language: translation.languageCode })}</span>
             </p>
+          ) : null}
+          {share ? (
+            <div>
+              <ShareVideo
+                url={absoluteUrl(localizedPath(locale, path))}
+                title={translation.title}
+                labels={{
+                  share: watch('share.action'),
+                  copied: watch('share.copied'),
+                  failed: watch('share.failed'),
+                }}
+              />
+            </div>
           ) : null}
           {authors.length === 0 && dates.length === 0 ? null : (
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-border pt-4">
@@ -269,6 +302,8 @@ export async function PublicContent({
           </div>
         </div>
 
+        {children}
+
         {related.length === 0 ? null : (
           <section
             className="flex flex-col gap-6 border-t border-border pt-[var(--space-page)]"
@@ -311,9 +346,17 @@ export async function PublicContent({
                         name: shell('nav.home'),
                         item: absoluteUrl(localizedPath(translation.languageCode, '')),
                       },
+                      ...trail.map((crumb, index) => ({
+                        '@type': 'ListItem',
+                        position: index + 2,
+                        name: crumb.text,
+                        item: absoluteUrl(
+                          localizedPath(translation.languageCode, crumb.path),
+                        ),
+                      })),
                       {
                         '@type': 'ListItem',
-                        position: 2,
+                        position: trail.length + 2,
                         name: translation.title,
                         item: absoluteUrl(localizedPath(translation.languageCode, path)),
                       },

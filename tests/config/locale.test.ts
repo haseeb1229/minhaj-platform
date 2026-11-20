@@ -513,6 +513,10 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/global/world-region.ts',
     // R2: the Explore family's cards (published Pages and leaders).
     'apps/web/src/components/explore/cards.tsx',
+    // Explore (R2): the section index, a section's pages, the ways onward,
+    // what comes next in a section, and the pure page model they share.
+    'apps/web/src/components/explore/explore-view.ts',
+    'apps/web/src/components/explore/parts.tsx',
     // R2: the content-language badge and interface-language-first ordering.
     'apps/web/src/components/content-language.ts',
     'apps/web/src/components/locale-switcher.tsx',
@@ -621,14 +625,14 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/workspace/nav-match.ts',
     'apps/web/src/components/workspace/parts.tsx',
     'apps/web/src/components/workspace/workspace-nav.tsx',
-    // The header, footer and Explore index render per request because they
-    // read public data (featured records, `@/composition/presence`), but none
-    // of them declares a segment config or calls a request API itself.
+    // The header and footer render per request because they read public data
+    // (featured records, `@/composition/presence`), but neither declares a
+    // segment config or calls a request API itself. (The Explore index moved
+    // to `components/explore/parts.tsx` in Explore, R2.)
     'apps/web/src/components/shell/site-header.tsx',
     // The organisation's official mark, once, in the footer.
     'apps/web/src/components/shell/brand-lockup.tsx',
     'apps/web/src/components/shell/site-footer.tsx',
-    'apps/web/src/components/shell/explore-panel.tsx',
     // R1: the One Minhaj wordmark, the private areas' product bar, the
     // header's current-section link and its signed-in island.
     'apps/web/src/components/shell/brand-wordmark.tsx',

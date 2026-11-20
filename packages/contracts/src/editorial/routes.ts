@@ -57,10 +57,11 @@ export const EXPLORE_PAGES = Object.freeze({
    *
    * ROUTE_MAP.md §3.2 lists `books`, `articles`, `lectures` and `collections`
    * beside the biography pages, and describes them as listings canonical to
-   * their domain collections. Library, Media and Editorial have not shipped, so
-   * there is nothing to list and nothing to canonicalise to — they are reserved
-   * shells like the rest, and they emit no canonical link at a URL that does
-   * not exist yet (§9.1).
+   * their domain collections. Until Library, Media and Editorial shipped there
+   * was nothing to list (historical). Since Explore (R2, 2026-11-20) they are
+   * pages that await a published Person record credited on the works — the
+   * filter their canonical `301` would need — and no Page can be bound to them
+   * (`PAGE_BINDINGS` below).
    */
   'shaykh-ul-islam': Object.freeze([
     'biography',

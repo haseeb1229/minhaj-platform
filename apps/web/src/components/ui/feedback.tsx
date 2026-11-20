@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { isValidElement, type ReactElement, type ReactNode } from 'react';
 
 import { Icon, type IconName } from './icon';
 import { Breadcrumbs, Container, PageHeading } from './layout';
@@ -95,7 +95,8 @@ export function EmptyState({
  * A PAGE THAT AWAITS WHAT IT WILL SHOW — a section page that exists, but whose
  * content cannot be shown until something outside engineering is in place (an
  * authorised source, an approved service). Shared by Hadith's pages that await
- * a collection and Fatwa's that await the service.
+ * a collection, Fatwa's that await the service and Explore's that await the
+ * organisation's published Page (Explore, R2).
  *
  * ONE SHAPE, SAID HONESTLY: the trail; a status mark in words (never colour
  * alone); the page's own name as its one `h1`; one sentence on what WILL appear
@@ -124,12 +125,18 @@ export function AwaitingPage({
   readonly title: string;
   /** What will appear on this page once it opens. */
   readonly lede: ReactNode;
-  readonly notice: {
-    /** The notice heading's id, which labels its section. */
-    readonly id: string;
-    readonly title: ReactNode;
-    readonly children: ReactNode;
-  };
+  /**
+   * Why nothing is shown here — or, when the caller has its own notice that
+   * says so (Explore's publication-status notice), that element itself.
+   */
+  readonly notice:
+    | {
+        /** The notice heading's id, which labels its section. */
+        readonly id: string;
+        readonly title: ReactNode;
+        readonly children: ReactNode;
+      }
+    | ReactElement;
   /** The open ways onward. */
   readonly children?: ReactNode;
   /** The way back to the section. */
@@ -151,15 +158,19 @@ export function AwaitingPage({
           </p>
         </header>
 
-        <section
-          aria-labelledby={notice.id}
-          className="flex max-w-3xl flex-col gap-3 rounded-panel border border-border bg-surface-raised p-5 shadow-panel sm:p-6"
-        >
-          <h2 id={notice.id} className="text-subheading font-semibold">
-            {notice.title}
-          </h2>
-          {notice.children}
-        </section>
+        {isValidElement(notice) ? (
+          notice
+        ) : (
+          <section
+            aria-labelledby={notice.id}
+            className="flex max-w-3xl flex-col gap-3 rounded-panel border border-border bg-surface-raised p-5 shadow-panel sm:p-6"
+          >
+            <h2 id={notice.id} className="text-subheading font-semibold">
+              {notice.title}
+            </h2>
+            {notice.children}
+          </section>
+        )}
 
         {children}
 

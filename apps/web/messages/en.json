@@ -227,7 +227,7 @@
       },
       "leadership": {
         "title": "Leadership",
-        "summary": "The leadership of the organisation."
+        "summary": "The people who lead the organisation, and its founder."
       },
       "shaykh-ul-islam": {
         "title": "Shaykh-ul-Islam",
@@ -278,7 +278,7 @@
       },
       "community": {
         "title": "Community",
-        "summary": "The community section of the platform."
+        "summary": "Taking part: local centres, gatherings and ways to get involved."
       },
       "digital-resources": {
         "title": "Digital Resources",
@@ -6280,12 +6280,128 @@
     "accountInactive": "This account is not active.",
     "confirmRequired": "Tick the confirmation first."
   },
-  "exploreLanding": {
+  "explore": {
+    "eyebrow": "Minhaj-ul-Quran International",
     "lede": "Who Minhaj-ul-Quran is, the scholar who founded it, the people who lead it and the work it does around the world.",
     "featured": "About Minhaj-ul-Quran",
-    "allLeadership": "All of the leadership",
     "sections": "Every section",
-    "otherSections": "Explore other sections"
+    "sectionsIntro": "The whole of Explore, section by section. Each page says whether it is published yet.",
+    "allSections": "All Explore sections",
+    "others": "Other sections",
+    "pageCount": "{count, plural, one {# page} other {# pages}}",
+    "actions": {
+      "lead": "Start here",
+      "about": "About Minhaj-ul-Quran",
+      "work": "Our work",
+      "begin": "Read the first published page"
+    },
+    "figures": {
+      "sections": "{count, plural, one {section} other {sections}}",
+      "published": "of {total} pages published",
+      "profiles": "{count, plural, one {published profile} other {published profiles}}"
+    },
+    "status": {
+      "published": "Published",
+      "awaiting": "Awaiting publication",
+      "notOpen": "Not open yet",
+      "elsewhere": "On its own page"
+    },
+    "sectionTally": "{published} of {total} published",
+    "section": {
+      "published": "Published",
+      "awaiting": "Still to be published",
+      "awaitingIntro": "Each of these pages already has its address. It opens with the organisation's own words once they are approved and published.",
+      "everyPage": "Every page in this section"
+    },
+    "what": {
+      "about": {
+        "introduction": "Minhaj-ul-Quran International introduced in its own words: who it is and what it does.",
+        "vision": "The organisation's vision, in its own words.",
+        "mission": "The organisation's mission, in its own words.",
+        "values": "The values the organisation holds itself to, in its own words.",
+        "objectives": "The aims and objectives the organisation has set itself.",
+        "history": "The organisation's history, from its founding to the present day.",
+        "timeline": "The key dates in the organisation's history, in order.",
+        "global-impact": "Where the organisation works around the world, and what its work there involves."
+      },
+      "shaykh-ul-islam": {
+        "biography": "The life and work of the Shaykh-ul-Islam, the founder of Minhaj-ul-Quran International.",
+        "early-life": "The Shaykh-ul-Islam's early life and upbringing.",
+        "education": "The Shaykh-ul-Islam's studies, his teachers and his qualifications.",
+        "academic-work": "His teaching, research and scholarly work.",
+        "achievements": "His achievements and the recognition his work has received.",
+        "works": "An overview of his written works and the fields they cover.",
+        "isnad": "His chains of authority (isnad): the teachers through whom he received the knowledge he transmits.",
+        "views-of-dignitaries": "What scholars and public figures have said about him.",
+        "books": "His books, as the Library publishes them.",
+        "articles": "His articles, as the platform publishes them.",
+        "lectures": "His lectures on video and audio, as Watch and Listen publish them.",
+        "collections": "Curated collections of his work, as the platform publishes them."
+      },
+      "organization": {
+        "governance": "How the organisation is governed: its leadership bodies and how its decisions are made.",
+        "departments": "The organisation's departments and what each one does.",
+        "forums": "The organisation's forums and whom each one brings together.",
+        "wings": "The organisation's wings and the people each one serves.",
+        "institutions": "The institutions the organisation has established and what each one does.",
+        "annual-reports": "The organisation's annual reports, year by year.",
+        "un-recognition": "The organisation's standing with the United Nations and what it involves.",
+        "awards": "Awards and honours the organisation and its work have received."
+      },
+      "our-work": {
+        "education": "The organisation's work in education.",
+        "research": "The organisation's research and its publications.",
+        "welfare": "The organisation's welfare and relief work.",
+        "women": "The organisation's work with and for women.",
+        "youth": "The organisation's work with young people.",
+        "students": "The organisation's work with students.",
+        "interfaith": "The organisation's work for dialogue and good relations between faiths.",
+        "human-rights": "The organisation's work for human rights.",
+        "peace": "The organisation's work for peace and against extremism."
+      },
+      "digital-resources": {
+        "mobile-apps": "The organisation's mobile apps and where to get them.",
+        "newsletter": "The newsletter, by email: subscribe, or manage your subscription.",
+        "rss": "The feeds this site publishes, each with its address, to follow new content in a feed reader.",
+        "social-media": "The organisation's official social-media accounts."
+      },
+      "leadership": "The organisation's own account of the people who lead it, each linked to a published profile.",
+      "community": "How to take part in the organisation's community: local centres, gatherings and ways to get involved."
+    },
+    "onward": {
+      "heading": "Where to find this now",
+      "intro": "These parts of the platform are open today."
+    },
+    "channels": {
+      "heading": "Official channels",
+      "intro": "Minhaj-ul-Quran International's own accounts and app-store pages.",
+      "note": "These links leave this site. Nothing from them is loaded here."
+    },
+    "more": {
+      "heading": "More in {section}",
+      "label": "Previous and next in {section}",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "back": "Back to {section}",
+    "leadership": {
+      "founder": "The founder"
+    },
+    "profiles": {
+      "heading": "Published profiles",
+      "intro": "Every contributor profile published on the platform, each at its own address. The organisation's own page on its leadership will open here once it is published.",
+      "more": "More contributors in the Library",
+      "all": "All published profiles"
+    },
+    "listing": {
+      "noticeTitle": "Why this list is not open yet",
+      "notice": "This list will show only the Shaykh-ul-Islam's own works, drawn from where each is published on the platform. That needs each work credited to his published contributor profile, and no such credit is recorded yet, so nothing is listed here in its place.",
+      "noticeCollections": "This list will show the platform's collections of the Shaykh-ul-Islam's work. The platform's records cannot yet link a collection to a person, so nothing is listed here in its place."
+    },
+    "feed": {
+      "noticeTitle": "Why there is no feed yet",
+      "notice": "This site does not publish an RSS feed yet, so there is no feed address to list. Until it does, News lists every story as it is published, and the newsletter brings updates by email."
+    }
   },
   "global": {
     "title": "Global Network",

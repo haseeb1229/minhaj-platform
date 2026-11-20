@@ -1,4 +1,5 @@
 import { localizedPath } from '@minhaj/contracts';
+import type { PublicPageSummary } from '@minhaj/contracts/editorial';
 import {
   readPage,
   publishedPageMetadata,
@@ -8,8 +9,8 @@ import type { Metadata } from 'next';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { ListingIntro } from '@/components/editorial/frame';
-import { Container } from '@/components/ui';
+import { editorialReadRuntime } from '@/composition/editorial-read';
+import { AwaitingPage, TextLink } from '@/components/ui';
 import { PublicationStatus } from '@/components/shell/publication-status';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
@@ -20,9 +21,23 @@ import {
   type SectionWithPages,
 } from '@/shell/explore';
 import { requireRoute } from '@/shell/registry';
+import {
+  exploreItemKind,
+  explorePath,
+  type PublishedAddresses,
+} from '@/components/explore/explore-view';
+import {
+  exploreTrail,
+  MoreInSection,
+  OfficialChannels,
+  OnwardLinks,
+  pageTitle,
+  pageWhat,
+  sectionTitle,
+} from '@/components/explore/parts';
 
 /**
- * A reserved Explore PAGE (ROUTE_MAP.md §3.2).
+ * An Explore PAGE (ROUTE_MAP.md §3.2).
  *
  * THE ONE ROUTE MOST AT RISK OF BECOMING A CATCH-ALL, and the allowlist is what
  * stops it. Only the pairs `generateStaticParams` emits exist; `dynamicParams`
@@ -34,8 +49,15 @@ import { requireRoute } from '@/shell/registry';
  * static parameter, matches nothing, and is a 404 — which is the behaviour the
  * route map asks for, achieved by the data rather than by a guard.
  *
- * It renders a title and a publication-status state. Nothing else: this is a
- * reserved route, and reserving a route authorises no publication on it.
+ * WHAT IT RENDERS (Explore, R2). A published Page bound to the address, in the
+ * section's trail with Share, followed by the rest of its section — every page
+ * with its status, and the previous and next page. Otherwise the page that
+ * awaits it: what will appear here, the publication-status notice (or, for a
+ * Shaykh-ul-Islam listing or the feeds page, which no Page can fill, why they
+ * are not open), the open parts of the platform that serve its reader now,
+ * the official channels where the page is about them, and the rest of the
+ * section. Reserving a route authorises no publication on it: nothing here
+ * states an organisational fact.
  */
 
 export const dynamic = 'force-dynamic';
@@ -72,6 +94,15 @@ function requirePage(section: string, page: string): SectionWithPages {
   return owner;
 }
 
+/** The published Explore Pages, or `null` when they cannot be read (no claim either way). */
+async function readExplorePages(): Promise<readonly PublicPageSummary[] | null> {
+  try {
+    return await editorialReadRuntime().explorePages();
+  } catch {
+    return null;
+  }
+}
+
 export async function generateMetadata({ params }: PageParams): Promise<Metadata> {
   const locale = await requireLocale(params);
   const { section, page } = await params;
@@ -80,14 +111,19 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
   if (ownerPathOf(owner, page) !== null)
     return { robots: { index: false, follow: false } };
   const t = await getTranslations({ locale, namespace: 'shell' });
+  const explore = await getTranslations({ locale, namespace: 'explore' });
 
-  const published = await publishedPageMetadata(locale, `/explore/${owner}/${page}`);
-  if (published) return published;
+  // Only a Page address can carry a published Page.
+  if (exploreItemKind(owner, page) === 'page') {
+    const published = await publishedPageMetadata(locale, explorePath(owner, page));
+    if (published) return published;
+  }
 
   return shellMetadata({
     locale,
     route: requireRoute(`explore.${owner}.${page}`),
     title: t(`explore.${owner}.pages.${page}` as 'explore.about.pages.vision'),
+    description: explore(`what.${owner}.${page}` as 'what.about.vision'),
   });
 }
 
@@ -100,39 +136,91 @@ export default async function ExplorePagePage({ params }: PageParams) {
   if (delivered !== null) permanentRedirect(localizedPath(locale, `${delivered}`));
   setRequestLocale(locale);
 
-  const t = await getTranslations({ locale, namespace: 'shell' });
+  const kind = exploreItemKind(owner, page);
+  const [shell, t, record, pages, trail] = await Promise.all([
+    getTranslations({ locale, namespace: 'shell' }),
+    getTranslations({ locale, namespace: 'explore' }),
+    kind === 'page' ? readPage(explorePath(owner, page)) : Promise.resolve(null),
+    readExplorePages(),
+    exploreTrail(locale),
+  ]);
+  const published: PublishedAddresses =
+    pages === null ? null : new Set(pages.map((entry) => entry.routeBinding));
+  const name = sectionTitle(shell, owner);
+  const title = pageTitle(shell, owner, page);
+  const more = (back: boolean) => (
+    <MoreInSection
+      locale={locale}
+      section={owner}
+      slug={page}
+      published={published}
+      back={back}
+    />
+  );
 
-  const sectionTitle = t(`explore.${owner}.title` as 'explore.about.title');
-  const title = t(`explore.${owner}.pages.${page}` as 'explore.about.pages.vision');
-
-  const published = await readPage(`/explore/${owner}/${page}`);
-  if (published)
+  if (record)
     return (
       <PublicContent
-        record={published}
+        record={record}
         locale={locale}
-        path={`/explore/${owner}/${page}`}
+        path={explorePath(owner, page)}
         kind="WebPage"
-      />
+        trail={[
+          { path: '/explore', text: trail.explore.text },
+          { path: explorePath(owner), text: name },
+        ]}
+        share
+      >
+        {more(true)}
+      </PublicContent>
     );
 
   return (
-    <>
-      <ListingIntro
-        trailLabel={t('nav.breadcrumbs')}
-        trail={[
-          { href: localizedPath(locale, ''), text: t('nav.home') },
-          { href: localizedPath(locale, '/explore'), text: t('explore.title') },
-          { href: localizedPath(locale, `/explore/${owner}`), text: sectionTitle },
+    <AwaitingPage
+      crumbs={{
+        label: trail.label,
+        trail: [
+          trail.home,
+          trail.explore,
+          { href: localizedPath(locale, explorePath(owner)), text: name },
           { text: title },
-        ]}
-        title={title}
-      />
-      <Container>
-        <div className="py-[var(--space-page)]">
+        ],
+      }}
+      status={kind === 'page' ? t('status.awaiting') : t('status.notOpen')}
+      title={title}
+      lede={pageWhat(t, owner, page)}
+      notice={
+        kind === 'page' ? (
           <PublicationStatus locale={locale} />
-        </div>
-      </Container>
-    </>
+        ) : kind === 'listing' ? (
+          {
+            id: 'explore-listing-notice',
+            title: t('listing.noticeTitle'),
+            children: (
+              <p className="max-w-[var(--measure-prose)]">
+                {page === 'collections'
+                  ? t('listing.noticeCollections')
+                  : t('listing.notice')}
+              </p>
+            ),
+          }
+        ) : (
+          {
+            id: 'explore-feed-notice',
+            title: t('feed.noticeTitle'),
+            children: <p className="max-w-[var(--measure-prose)]">{t('feed.notice')}</p>,
+          }
+        )
+      }
+      back={
+        <TextLink href={localizedPath(locale, explorePath(owner))}>
+          {t('back', { section: name })}
+        </TextLink>
+      }
+    >
+      <OnwardLinks locale={locale} section={owner} slug={page} />
+      <OfficialChannels locale={locale} section={owner} slug={page} />
+      {more(false)}
+    </AwaitingPage>
   );
 }

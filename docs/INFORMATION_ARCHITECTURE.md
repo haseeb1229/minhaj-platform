@@ -401,6 +401,23 @@ entry points; it is not an exhaustive index of the section.
 Resources** group; they are surfaced under Connect in the menu and grouped under a
 Digital Resources heading on the Explore landing page.*
 
+**Explore (2026-11-20).** The menu above is unchanged. The Explore landing is the organisation's
+front door: its figures (seven sections; how many of the pages they reserve are published), the
+page a visitor needs first beside the opening words, its published Pages, the published profiles
+and the index of every section, each page marked Published, Awaiting publication, Not open yet or
+On its own page. Each section landing counts its published pages, shows them picture-led, lists
+every page still to be published with what it will hold, and leads to the open parts of the
+platform that already serve its reader — Our Work › Education to Learn, Our Work › Research to the
+Library's research, Organization › Institutions to the Global Network, the Shaykh-ul-Islam's books
+and lectures to the Library and Watch — and to the other sections; Digital Resources also names
+the official channels the footer lists. Every Explore page awaiting its Page says what it will
+hold, what is open now, and steps through its section (every page with its status, previous and
+next); a published Page stands in the trail Home › Explore › Section with Share and the same
+"more in" its section. Leadership and Community await their own Page; Leadership shows the
+founder's published biography and the published profiles, named as profiles rather than as the
+leadership. The Shaykh-ul-Islam's Books, Articles, Lectures and Collections stay pages that await
+a credited Person record (ROUTE_MAP.md §3.2).
+
 ### 3.2 Quran
 
 | Read | Study | Explore | Learn |

@@ -25,17 +25,21 @@ export function ExploreCard({
   page,
   headingLevel = 'h3',
   priority = false,
+  as = 'li',
 }: {
   readonly locale: Locale;
   readonly page: PublicPageSummary;
   readonly headingLevel?: 'h2' | 'h3';
   readonly priority?: boolean;
+  /** `div` when the card stands alone rather than in a `CardGrid`. */
+  readonly as?: 'li' | 'div';
 }) {
   const translation = translationFor(page, locale);
   const language = contentLanguageBadge(translation.languageCode, locale);
   const image = page.leadImage ?? null;
   return (
     <MediaCard
+      as={as}
       href={localizedPath(locale, page.routeBinding)}
       title={translation.title}
       description={translation.excerpt}

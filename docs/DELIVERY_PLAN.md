@@ -5438,6 +5438,133 @@ the read-only handlers now thirty-four, each exporting no mutating verb);
 > own Playwright project after every ordinary spec, as Learning, Messaging and Realtime already do
 > (`playwright.config.ts`); no assertion changed.
 
+> **Explore — the front door, every section landing and every page of the organisation's own
+> section (owner direction: every section built from A to Z, one item at a time; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (ROUTE_MAP.md §3.2;
+> INFORMATION_ARCHITECTURE.md §3.1; DOMAIN_MODEL.md §7.2.1; SECURITY_BASELINE.md §17). No route is
+> added or removed, no schema change, no migration, no new read and no new dependency; the
+> allowlist (`EXPLORE_SECTIONS`/`EXPLORE_PAGES`, `dynamicParams = false`, both segments validated
+> together) and the newsletter's one redirect are unchanged.
+>
+> - **The audit (before).** `/explore` was a plain hero, up to three published Pages, people and an
+>   index of links with no status at all. A section landing listed its published Pages, then every
+>   other page as a card marked only "Not yet published", with no word on what the page would hold,
+>   no count, nowhere else to go, and no way across to the other sections; Leadership and Community
+>   were the same shell. A page that awaited its Page was a title and the publication-status notice
+>   — no breadcrumbs beyond the section, no indication of what it would hold, no onward link, no
+>   previous or next. A **published** Page lost its place: its breadcrumbs read Home › title, it had
+>   no Share and nothing after its body, and a section's own published Page replaced the section's
+>   whole index. The Shaykh-ul-Islam's Books, Articles, Lectures and Collections were bare reserved
+>   shells although Library, Media and Editorial now exist, and the feeds page offered nothing.
+>   **Leadership presented every published People profile as the leadership** — People records no
+>   leadership kind, and the R2 corpus adds Minhaj Books author profiles and the staging demo's
+>   fictional teacher to the same read — and counted itself complete once it showed anybody.
+> - **The page model (decision).** `components/explore/explore-view.ts` (pure): each allowlisted
+>   address is a `page` (an Editorial Page may be bound to it — exactly `PAGE_BINDINGS`), a
+>   `listing` (the four Shaykh-ul-Islam listings), a `feed` (`digital-resources/rss`) or
+>   `elsewhere` (the newsletter); its state is published (only a published Page), awaiting, on its
+>   own page, or **unknown when the published Pages could not be read — then no status and no count
+>   is claimed**; a section's tally counts its own items; previous and next follow the allowlist,
+>   stepping over the newsletter; each section and page names the open parts of the platform that
+>   already serve its reader (delivered public registry route keys only, never back into Explore);
+>   and Digital resources, mobile-apps and social-media name official channels only from the
+>   footer's evidenced list.
+> - **`/explore`.** An opening band — the organisation's name, the lede, the way in (the first
+>   published Page, else About) and to Our Work, and the figures: seven sections, how many of the
+>   pages they reserve are published, and the published profiles — with the page a visitor needs
+>   first (the introduction, else the founder's biography) beside the words when it has a picture
+>   (else first among the cards); its published Pages; the published profiles; and every section as
+>   a panel with its summary, its tally and each page marked Published, Awaiting publication, Not
+>   open yet or On its own page — Leadership and Community with what their own Page will hold and
+>   whether it is published.
+> - **A section landing** (About, Shaykh-ul-Islam, Organisation, Our Work, Digital resources). The
+>   trail, the summary, the published count and the way to its first published page; the published
+>   Pages picture-led (the newsletter beside them); every page still to be published as a card
+>   saying so and **what it will hold** (one sentence per page, describing the page, never stating
+>   an organisational fact); the publication-status notice while anything is unpublished; **where
+>   to find this now** (About → News & Events, Events, the Global Network, Collections; Our Work →
+>   Learn, the Library's research, Events, Collections; Organisation → the Global Network, Find a
+>   Centre, Membership, Contact; Shaykh-ul-Islam → books, video and audio lectures, Articles; Digital
+>   resources → the newsletter, News, Watch, Listen); the official channels (Digital resources); and
+>   the other six sections. A section's own published Page now opens it **followed by** its pages,
+>   the channels and the other sections, in the trail Home › Explore with Share.
+> - **Leadership and Community** await their own Page (`AwaitingPage`): what the Page will hold,
+>   the publication-status notice, and what is open — Leadership the founder's published biography
+>   and every published profile, **called published profiles, never the leadership** (a design
+>   change; the landing's people module likewise), with the Library's contributors when more exist
+>   than one read shows; Community the Centre finder, Events, Membership, the newsletter and
+>   Contact; both the other sections.
+> - **A page awaiting its Page** (`AwaitingPage`, now also taking a caller's own notice element):
+>   the trail Home › Explore › Section › page; "Awaiting publication"; what will appear here; the
+>   publication-status notice; where to find this now (per page — Our Work › Education → Learn,
+>   Courses, the Library; Organisation › Institutions → the Global Network, Find a Centre, Learn;
+>   About › Global impact → the Global Network, Countries, News; and so on); the official channels
+>   (mobile-apps: the two app-store publisher pages; social-media: YouTube, Facebook, X); **more in
+>   the section** — every page with its status, the current one marked — and **previous and next**;
+>   the way back to the section.
+> - **A published Page** stands in the trail Home › Explore › Section (and its `BreadcrumbList`)
+>   with **Share** (the shared island), followed by more in its section and previous/next.
+>   `PublicContent` gains optional `trail`, `share` and `children`; every other caller (help,
+>   contact, legal, Articles) renders exactly as before.
+> - **The Shaykh-ul-Islam's four listings (decision).** Kept **pages that await** ("Not open yet",
+>   why, nothing listed in their place, the owner's whole listing linked) — not a filtered listing
+>   and not a `301`: their canonical form is one `301` to the owner's listing filtered by one
+>   Person (`/library/books?contributor=`, `/watch/videos?speaker=`, `/listen/lectures?speaker=`),
+>   and **no reliable Person record exists** — the founder's profile is the biography Page, not a
+>   People record (MIGRATION_STRATEGY.md §15, §19), no migrated Work, Video or Article carries a
+>   contributor credit (§19), no Person–Collection relation exists, and no identifier is hard-coded.
+>   A `301` to the unfiltered listing would present every book as his (ROUTE_MAP.md §3.2).
+> - **Feeds, apps, social media.** No `/rss` route is delivered, so the feeds page says no feed is
+>   published and leads to News and the newsletter; no feed address is invented. The app and social
+>   pages name only the footer's evidenced channels, outbound and said to leave the site.
+> - **Messages.** New namespace `explore` (`eyebrow`, `sectionsIntro`, `allSections`, `others`,
+>   `pageCount`, `actions.*`, `figures.*`, `status.*`, `sectionTally`, `section.*`,
+>   `what.{section}.{page}`, `what.leadership`, `what.community`, `onward.*`, `channels.*`,
+>   `more.*`, `back`, `leadership.founder`, `profiles.*`, `listing.*`, `feed.*`) in en/ur/ar;
+>   `exploreLanding`'s `lede`, `featured` and `sections` moved into it; removed as unused:
+>   `exploreLanding.allLeadership` and `exploreLanding.otherSections` (and the namespace).
+>   `shell.explore.leadership.summary` and `shell.explore.community.summary` now say what the
+>   sections hold. `components/shell/explore-panel.tsx` is withdrawn (the index is
+>   `components/explore/parts.tsx`).
+>
+> **Data facts — what staging will show.** Read from the repository, not from staging: the
+> migration catalogue (`scripts/migration/sources/catalogue.ts`) binds nine Explore addresses
+> (about/introduction, about/global-impact, shaykh-ul-islam/biography, organization/forums, organization/un-recognition,
+> organization/annual-reports, our-work/peace, digital-resources/mobile-apps,
+> digital-resources/social-media — and `/contact`, outside Explore); MIGRATION_STRATEGY.md §17 records
+> the first eight published on staging, and annual-reports only if its R2 run (§19.1, planned) was
+> run and published. So staging should show the front door with 8 or 9 of its 40 pages published,
+> the introduction beside the opening words and the others as cards; About (2 of 8),
+> Shaykh-ul-Islam (1 of 12, its four listings not open), Organisation (2–3 of 8), Our Work
+> (1 of 9) and Digital resources (2 of 3 plus the newsletter) as front doors; those Pages in their
+> trail with Share, more in their section and previous/next; every other page awaiting with what
+> it will hold and where to look now; Leadership with the founder's biography and every published
+> profile (the three leadership profiles, any published Minhaj Books authors and the demo's
+> fictional teacher if the demo data is loaded — now called profiles), still awaiting its own Page;
+> Community awaiting. The local persistent database was not inspected.
+>
+> **Proof:** `tests/shell/explore-view.test.ts` (new: a `page` exactly where a Page may be bound;
+> the listings, feeds page and newsletter named; published only of a published Page, nothing
+> claimed when the read failed; tallies over a section's own items; previous/next in allowlist
+> order, stepping over the newsletter and validating against the section; every onward key a
+> delivered public route outside Explore, a page without its own falling back to its section's;
+> channels only from the footer list; a "what it will hold" sentence for every page in en, ur and
+> ar). `tests/architecture/phase4-shell-boundaries.test.ts` — the official-channels rule now admits
+> Explore's page model beside the footer and requires both renderers to link outbound with
+> `rel="external noopener noreferrer"` (a design change; its intent kept).
+> `tests/config/locale.test.ts` (the new modules; the withdrawn panel). Browser:
+> `tests/browser/explore.spec.ts` (new: one Page published through the three-person Editorial
+> workflow at `organization/awards`, no other spec's address; the front door's statuses, figures
+> and every link answering; a section landing's count, published and awaiting cards, notice,
+> onward links and other sections; Digital resources' channels and newsletter; Leadership and
+> Community awaiting; an awaiting page's trail, what it will hold, more in its section and
+> previous/next; the four listings and the feeds page never filled; the published Page's trail,
+> Share, more in its section and previous only; the same document signed in and out; six refused
+> addresses and the newsletter's one redirect; fifteen addresses at 320 and 1440 px in en, ur and
+> ar with one `h1`, the right direction, no sideways scroll and no serious or critical axe finding
+> at 1440 px); `tests/browser/shell.spec.ts` unchanged. *CI and staging evidence are recorded when
+> they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

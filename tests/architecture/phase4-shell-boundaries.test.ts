@@ -1071,10 +1071,16 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     expect(guard).toContain("if (!src.startsWith('/assets/')) return null;");
   });
 
-  it('links the official channels outbound only, from the footer alone', async () => {
+  it('links the official channels outbound only, from the footer and Explore alone', async () => {
     // R2. The addresses are minhaj.org's own footer links. They are plain
-    // outbound anchors: nothing embeds, fetches or tracks them, and only the
-    // footer names the module.
+    // outbound anchors: nothing embeds, fetches or tracks them. Only the
+    // footer and — since Explore (R2, 2026-11-20), for Digital Resources —
+    // Explore's pure page model name the module; each renderer links them
+    // outbound exactly as the footer does.
+    const named = new Set([
+      'apps/web/src/components/shell/site-footer.tsx',
+      'apps/web/src/components/explore/explore-view.ts',
+    ]);
     const footer = code(
       await readFile(
         path.join(repoRoot, 'apps/web/src/components/shell/site-footer.tsx'),
@@ -1082,12 +1088,21 @@ describe('the public shell is server-rendered, with narrow client islands', () =
       ),
     );
     expect(footer).toContain("from '@/shell/official-channels'");
-    expect(footer).toContain('href={channel.href}');
-    expect(footer).toContain('rel="external noopener noreferrer"');
+    for (const renderer of [
+      footer,
+      code(
+        await readFile(
+          path.join(repoRoot, 'apps/web/src/components/explore/parts.tsx'),
+          'utf8',
+        ),
+      ),
+    ]) {
+      expect(renderer).toContain('href={channel.href}');
+      expect(renderer).toContain('rel="external noopener noreferrer"');
+    }
     const { modules } = await contentGraph();
     for (const [file, source] of modules) {
-      if (!file.startsWith(APP_SRC) || relative(file).endsWith('site-footer.tsx'))
-        continue;
+      if (!file.startsWith(APP_SRC) || named.has(relative(file))) continue;
       expect(code(source), relative(file)).not.toContain('official-channels');
     }
   });

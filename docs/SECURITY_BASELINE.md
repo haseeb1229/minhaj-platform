@@ -1852,6 +1852,17 @@ A Centre's contact page remains display-only — the details it published and no
 Share is the shared island: the device's share sheet or the address copied, sending nothing
 anywhere.
 
+**Explore stays an allowlisted, session-free public read (2026-11-20).** The rebuilt Explore pages
+add no route, no mutation and no client data path. The allowlist is unchanged — `dynamicParams =
+false` on both dynamic segments, the section and page validated together in the component, every
+other address a `404` — so no catch-all exists. Every page reads only Editorial's and People's
+public composition roots, sets no cookie and renders the same document signed in or out (proved in
+`tests/browser/explore.spec.ts`). Every onward link is a delivered public registry route, an
+allowlisted Explore address or the owner's delivered page; the only outbound links are the official
+channels already evidenced for the footer, marked `rel="external noopener noreferrer"` and said to
+leave the site — nothing is fetched or embedded. A Page read that fails claims no publication
+status. Share is the same island as elsewhere.
+
 ---
 
 ## 18. Secrets, database and dependency security

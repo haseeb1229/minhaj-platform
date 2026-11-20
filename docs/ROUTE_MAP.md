@@ -255,7 +255,7 @@ Centre is listed, else the countries directory.
 | `/explore/about` · `/explore/about/{page}` | introduction · vision · mission · values · objectives · history · timeline · global-impact |
 | `/explore/leadership` | Leadership |
 | `/explore/shaykh-ul-islam` · `/{page}` | biography · early-life · education · academic-work · achievements · works · isnad · views-of-dignitaries |
-| `/explore/shaykh-ul-islam/{books\|articles\|lectures\|collections}` | Filtered listings, canonical to their domain collections. `collections` stays a reserved shell after Phase 15: no accepted contract identifies a Person–Collection relation deterministically, and none is hard-coded |
+| `/explore/shaykh-ul-islam/{books\|articles\|lectures\|collections}` | Filtered listings, canonical to their domain collections — **pages that await** until a published Person record is credited on the works (Explore, 2026-11-20, below). `collections` stays a reserved shell after Phase 15: no accepted contract identifies a Person–Collection relation deterministically, and none is hard-coded |
 | `/explore/organization` · `/{page}` | governance · departments · forums · wings · institutions · annual-reports · un-recognition · awards |
 | `/explore/our-work` · `/{area}` | education · research · welfare · women · youth · students · interfaith · human-rights · peace |
 | `/explore/community` | Community |
@@ -291,6 +291,50 @@ cards and then every other page it reserves — a page not yet published marked 
 and answering with its honest reserved state, a page an owner delivers elsewhere linking there
 (Digital resources → `/newsletter`) — and carries the publication-status notice while anything
 it reserves is unpublished. No route changes.
+
+**Explore (2026-11-20).** Every Explore page built to the standard of the rebuilt sections. No
+route is added or removed and the allowlist is unchanged: `dynamicParams = false`, both segments
+validated together, everything else a `404`. **`/explore`** opens on the organisation's figures —
+its seven sections and how many of the pages they reserve are published (the published Pages' own
+count over every Page address; nothing is claimed when the Pages cannot be read) — with the page a
+visitor needs first (the introduction, else the founder's biography) beside the opening words when
+it has a picture; then its published Pages, the published profiles, and the index of every section with each page
+marked **Published**, **Awaiting publication**, **Not open yet** (a Shaykh-ul-Islam listing, the
+feeds page) or **On its own page** (the newsletter). **A section that reserves pages** opens with its
+trail, its count and the way to its first published page; its published Pages picture-led (the
+newsletter beside them); every page still to be published with one sentence on what it will hold;
+the publication-status notice while anything is unpublished; the open parts of the platform that
+already serve its reader (delivered public registry routes only — Our Work › Education → Learn,
+Organization › Institutions → Global Network, and so on); the official channels on Digital
+resources; and the other sections. A section's own published Page opens it at the same address,
+followed by the same pages. **An Explore page awaiting its Page** says what it will hold, carries
+the notice, the open parts that serve it now and the rest of its section — every page with its
+status, the current one marked, and the previous and next page in the allowlist's order (the
+newsletter stepped over). **A published Page** stands in the trail Home › Explore › Section (its
+`BreadcrumbList` names the same trail) with **Share** and the same rest of its section; it carries
+no reserved notice. **Leadership** and **Community** await their own Page: Leadership offers the
+founder's published biography and every published contributor profile — called *published
+profiles*, never the leadership, because People records no leadership kind (until 2026-11-20 a
+profile listed there was presented as leadership, and Leadership counted as complete once it showed
+anybody — historical) — and Community the Centre finder, Events, Membership, the newsletter and
+Contact.
+
+**The Shaykh-ul-Islam's four listings (decision, 2026-11-20).** They stay **pages that await** —
+neither a filtered listing nor a canonical `301`. By §2.1 and §2.3 each is a query filter of its
+owner's listing by one Person (`/library/books?contributor={personId}`, the Articles listing,
+`/watch/videos?speaker=` and `/listen/lectures?speaker=`, and a Person–Collection relation that
+does not exist), so the canonical form is one `301` to that filtered listing — and there is no
+reliable Person record to filter on: the founder's own profile is the biography Page, not a People
+record ("one person, one record", MIGRATION_STRATEGY.md §15, §19), no migrated Work, Video or Article
+carries a contributor credit (§19: no Work ↔ author link), and no identifier is hard-coded. A `301`
+to the unfiltered listing would present every book as his. Each page therefore says "Not open yet",
+why, lists nothing in its place, and leads to the owner's whole listing; once a published Person is
+credited on the works, each becomes that one `301`, by the identifier the data holds. **Feeds.** No
+`/rss` route is delivered (§3.10 reserves it), so `digital-resources/rss` says no feed is published
+and leads to News and the newsletter; no feed address is invented. `mobile-apps` and `social-media`
+name the official channels from the footer's evidenced list (`apps/web/src/shell/official-channels.ts`
+— outbound, said to leave the site) while they await their Page; the Digital resources landing
+always names them.
 
 ### 3.3 Quran
 

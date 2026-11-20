@@ -603,6 +603,17 @@ published, under the same predicate as `publishedArticles` — so the one public
 (`/library/articles`, composed at Layer 4 in the Library's frame) states its total and numbered
 pages; Library holds no copy of an Article.
 
+**Explore as its pages read it (Explore, R2, 2026-11-20).** No new read and no new edge. The Explore
+landing, section and page routes compose, at Layer 4, Editorial's existing public reads —
+`explorePages()` (every published Explore Page as a card, bounded by the closed allowlist) and
+`page(binding)` (one published Page, its binding validated against `PAGE_BINDINGS`, now asked only
+for an address a Page can be bound to) — and People's existing `publicPeople`. Which addresses are
+published is the set of those cards' bindings; a read that fails claims no status. People records
+no "leadership" kind, so Leadership presents published contributor profiles as profiles. The
+Shaykh-ul-Islam's four listings stay unfilled: their filter would be one Person, and no Person
+record identifies him (his profile is a Page), no Work, Video or Article carries a contributor
+credit from migration, and no Person–Collection relation exists (ROUTE_MAP.md §3.2).
+
 Article slugs and help-article Page slugs may change; all prior slugs remain reserved and
 resolve directly to the current published canonical URL with HTTP 301. Fixed organisational,
 legal and utility Page destinations are an allowlist, immutable after creation, with the

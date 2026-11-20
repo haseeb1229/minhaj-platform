@@ -5,27 +5,40 @@ import { localizedPath } from '@minhaj/contracts';
 
 import { editorialReadRuntime } from '@/composition/editorial-read';
 import { peopleReadRuntime } from '@/composition/people-read';
-import { CardGrid, Container, Hero, SectionHeader } from '@/components/ui';
-import { ExplorePanel } from '@/components/shell/explore-panel';
+import {
+  ActionLink,
+  CardGrid,
+  Container,
+  PageHero,
+  SectionHeader,
+  Stat,
+} from '@/components/ui';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
 import { requireRoute } from '@/shell/registry';
+import { EXPLORE_SECTIONS } from '@/shell/explore';
 import { ExploreCard, LeaderCard } from '@/components/explore/cards';
+import { exploreTally } from '@/components/explore/explore-view';
+import { numberIn, SectionIndex } from '@/components/explore/parts';
 
 /**
- * The Explore landing (ROUTE_MAP.md §3.2).
+ * The Explore landing (ROUTE_MAP.md §3.2) — the organisation's front door.
  *
  * A genuine navigational hub — the index of the section — which is why it is
  * `delivered` and indexing-eligible while everything beneath it is a reserved
  * shell until published.
  *
- * R2: A NARRATIVE BEFORE THE INDEX. The organisation's own published Pages
- * open the page, picture-led (the founder's biography first when published),
- * then its published leadership by portrait, then the index of every section
- * and every page it reserves (restored after R2, owner direction 2026-11-08):
- * the featured cards are published Pages only, while the index lists the
- * organisation's whole structure and each reserved page answers with its
- * honest publication-status state.
+ * IN THE ORDER A VISITOR NEEDS IT (Explore, R2): who Minhaj-ul-Quran is and
+ * how much of its own account is published so far (the figures are the
+ * published Pages' own count, over every page the sections reserve); its
+ * published Pages, picture-led — the one a visitor needs first (the
+ * introduction, else the founder's biography) beside the opening words when it
+ * has a picture, and the first way in either way; the
+ * published profiles by portrait (People records no "leadership" kind, so they
+ * are called what they are); then the index of every section and every
+ * page it reserves, each page marked published or awaiting publication (the
+ * whole index since the owner's direction of 2026-11-08). Organisational
+ * words come only from published Pages; nothing here states one.
  */
 
 /**
@@ -35,20 +48,20 @@ import { ExploreCard, LeaderCard } from '@/components/explore/cards';
  */
 export const dynamic = 'force-dynamic';
 
-/** How many Pages and people the landing opens with; the index lists the rest. */
+/** How many Pages the cards show, and how many people. */
 const FEATURED = 3;
 const LEADERS = 4;
 
 /**
  * One content read, failing closed: a runtime that cannot be composed (it
  * throws before any promise exists) and a read that rejects both answer
- * `empty`, so only that section is withheld.
+ * `fallback`, so only what depends on it is withheld.
  */
-async function orEmpty<T>(read: () => Promise<T>, empty: T): Promise<T> {
+async function orElse<T>(read: () => Promise<T>, fallback: T): Promise<T> {
   try {
     return await read();
   } catch {
-    return empty;
+    return fallback;
   }
 }
 
@@ -81,67 +94,123 @@ export default async function ExplorePage({
 
   // FAIL CLOSED, SECTION BY SECTION: Explore is the organisation's front door
   // and its index of sections renders from code alone, so a content read that
-  // fails hides only its own section (as the shell's presence snapshot does),
-  // never the whole landing.
+  // fails hides only what depends on it (as the shell's presence snapshot
+  // does) — a failed Pages read claims no status and no count, never a
+  // section "awaiting" that may be published.
   const [t, local, profile, pages, people] = await Promise.all([
     getTranslations({ locale, namespace: 'shell' }),
-    getTranslations({ locale, namespace: 'exploreLanding' }),
+    getTranslations({ locale, namespace: 'explore' }),
     getTranslations({ locale, namespace: 'people' }),
-    orEmpty(() => editorialReadRuntime().explorePages(), []),
-    orEmpty(() => peopleReadRuntime().people.publicPeople({ locale }), {
+    orElse(() => editorialReadRuntime().explorePages(), null),
+    orElse(() => peopleReadRuntime().people.publicPeople({ locale }), {
       items: [],
       more: false,
     }),
   ]);
+  const published =
+    pages === null ? null : new Set(pages.map((page) => page.routeBinding));
+  const tally = exploreTally(published);
+  const number = numberIn(locale);
 
   // The organisation's own Pages, the ones a visitor needs first leading, and
-  // pictured Pages before text-only ones; never a reserved address.
+  // pictured Pages before text-only ones; never a reserved address. A section
+  // landing's own Page opens its section rather than standing here.
   const rank = (binding: string) => {
     const index = FIRST.indexOf(binding);
     return index === -1 ? FIRST.length : index;
   };
-  const featured = [...pages]
+  const ordered = [...(pages ?? [])]
     .filter((page) => page.routeBinding.split('/').length > 3)
     .sort(
       (a, b) =>
         rank(a.routeBinding) - rank(b.routeBinding) ||
         Number(b.leadImage != null) - Number(a.leadImage != null),
-    )
-    .slice(0, FEATURED);
+    );
+  // The page a visitor needs first leads the way in; it stands beside the
+  // opening words only with its own picture, otherwise among the cards.
+  const lead = ordered[0];
+  const aside = lead?.leadImage == null ? undefined : lead;
+  const featured = ordered.filter((page) => page !== aside).slice(0, FEATURED);
   const leaders = people.items.slice(0, LEADERS);
 
   return (
     <>
-      <Hero title={t('explore.title')} lede={local('lede')} />
+      <PageHero
+        eyebrow={local('eyebrow')}
+        title={t('explore.title')}
+        lede={local('lede')}
+        actions={
+          <>
+            <ActionLink
+              href={localizedPath(
+                locale,
+                lead === undefined ? '/explore/about' : lead.routeBinding,
+              )}
+            >
+              {lead === undefined ? local('actions.about') : local('actions.lead')}
+            </ActionLink>
+            <ActionLink
+              href={localizedPath(locale, '/explore/our-work')}
+              tone="secondary"
+            >
+              {local('actions.work')}
+            </ActionLink>
+          </>
+        }
+        {...(aside === undefined
+          ? {}
+          : {
+              aside: <ExploreCard locale={locale} page={aside} priority as="div" />,
+            })}
+      >
+        <div className="flex flex-wrap gap-x-10 gap-y-4 pt-2">
+          <Stat
+            value={number(EXPLORE_SECTIONS.length)}
+            label={local('figures.sections', { count: EXPLORE_SECTIONS.length })}
+          />
+          {tally === null ? null : (
+            <Stat
+              value={number(tally.published)}
+              label={local('figures.published', { total: number(tally.total) })}
+            />
+          )}
+          {people.items.length === 0 ? null : (
+            <Stat
+              value={
+                people.more
+                  ? `${number(people.items.length)}+`
+                  : number(people.items.length)
+              }
+              label={local('figures.profiles', { count: people.items.length })}
+              href={localizedPath(locale, '/explore/leadership')}
+            />
+          )}
+        </div>
+      </PageHero>
       <Container>
         <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
           {featured.length === 0 ? null : (
             <section aria-labelledby="explore-featured" className="flex flex-col gap-5">
               <SectionHeader id="explore-featured" heading={local('featured')} />
               <CardGrid label={local('featured')}>
-                {featured.map((page, index) => (
-                  <ExploreCard
-                    key={page.routeBinding}
-                    locale={locale}
-                    page={page}
-                    priority={index === 0}
-                  />
+                {featured.map((page) => (
+                  <ExploreCard key={page.routeBinding} locale={locale} page={page} />
                 ))}
               </CardGrid>
             </section>
           )}
 
           {leaders.length === 0 ? null : (
-            <section aria-labelledby="explore-leadership" className="flex flex-col gap-5">
+            <section aria-labelledby="explore-profiles" className="flex flex-col gap-5">
               <SectionHeader
-                id="explore-leadership"
-                heading={t('explore.leadership.title')}
+                id="explore-profiles"
+                heading={local('profiles.heading')}
                 action={{
                   href: localizedPath(locale, '/explore/leadership'),
-                  text: local('allLeadership'),
+                  text: local('profiles.all'),
                 }}
               />
-              <CardGrid label={t('explore.leadership.title')} columns={4}>
+              <CardGrid label={local('profiles.heading')} columns={4}>
                 {leaders.map((person) => (
                   <LeaderCard
                     key={person.id}
@@ -155,8 +224,12 @@ export default async function ExplorePage({
           )}
 
           <section aria-labelledby="explore-sections" className="flex flex-col gap-5">
-            <SectionHeader id="explore-sections" heading={local('sections')} />
-            <ExplorePanel locale={locale} />
+            <SectionHeader
+              id="explore-sections"
+              heading={local('sections')}
+              intro={local('sectionsIntro')}
+            />
+            <SectionIndex locale={locale} published={published} />
           </section>
         </div>
       </Container>
