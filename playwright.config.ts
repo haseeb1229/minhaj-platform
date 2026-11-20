@@ -79,7 +79,7 @@ export default defineConfig({
   },
 
   /**
-   * ONE ENGINE, THREE PROJECTS — and the split is an ORDER, not a matrix.
+   * ONE ENGINE, FOUR PROJECTS — and the split is an ORDER, not a matrix.
    *
    * `LiveLearningActivation` is a database-wide, immutable singleton, and
    * `learning.spec.ts` proves Learning's switched-off and empty-catalogue
@@ -103,7 +103,12 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testIgnore: ['**/learning.spec.ts', '**/messaging.spec.ts', '**/realtime.spec.ts'],
+      testIgnore: [
+        '**/learning.spec.ts',
+        '**/messaging.spec.ts',
+        '**/realtime.spec.ts',
+        '**/quran.spec.ts',
+      ],
     },
     {
       name: 'learning',
@@ -121,6 +126,18 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
       testMatch: '**/realtime.spec.ts',
       dependencies: ['messaging'],
+    },
+    {
+      // AFTER every ordinary spec (see above): the Quran journey switches the
+      // database-wide corpus on part-way and publishes and withdraws its works
+      // in order, so beside it a spec that reads a menu and then fetches its
+      // links races that order — a Transliteration link rendered a moment
+      // before the work was withdrawn answers 404. Specs that read the corpus
+      // already hold either state to its contract; this proves both in order.
+      name: 'quran',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: '**/quran.spec.ts',
+      dependencies: ['chromium'],
     },
   ],
 

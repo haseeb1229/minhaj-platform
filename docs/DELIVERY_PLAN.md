@@ -5431,6 +5431,12 @@ the read-only handlers now thirty-four, each exporting no mutating verb);
 >
 > An earlier audit failure on this branch, GHSA-fc5q-39xc-vjpf in `picomatch`, needed no change:
 > GitHub withdrew that advisory on 2026-11-18, and the re-run passed.
+>
+> A re-run of the same commit then failed **Browser flows** on a race, not a defect: the header test
+> opened the Quran menu, and before it fetched each link `quran.spec.ts` withdrew the
+> Transliteration work it had published, so the link answered 404. `quran.spec.ts` now runs as its
+> own Playwright project after every ordinary spec, as Learning, Messaging and Realtime already do
+> (`playwright.config.ts`); no assertion changed.
 
 ---
 
