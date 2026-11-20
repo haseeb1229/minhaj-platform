@@ -4,7 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { Fragment, type ReactNode } from 'react';
 
 import type { PersonalTarget } from '@minhaj/contracts/personalisation';
-import { isInternalDestination } from '@minhaj/contracts/personalisation';
+import { isInternalDestination, targetKey } from '@minhaj/contracts/personalisation';
 
 import {
   CampaignTitle,
@@ -33,7 +33,7 @@ import {
 import { TargetCard, type TargetWords } from '@/components/my/targets';
 import { relativeDay, shortDate, zonedDate, zonedTime } from '@/components/my/time';
 import { INTEREST_SECTIONS } from '@/components/personal/presentation';
-import { Alert, Badge, DetailRow, Icon, PageHeading } from '@/components/ui';
+import { Alert, Badge, DetailRow, Icon, PageHeading, Stat } from '@/components/ui';
 import { Shelf } from '@/components/ui/shelf';
 import { requireLocale } from '@/config/route-locale';
 import { requireActiveSession } from './guard';
@@ -66,6 +66,14 @@ import { SignOutForm } from './sign-out-form';
  *
  * THE JOIN LINK is shown only when Learning's disclosure read returned an
  * address for the next class; otherwise there is no link and no hint of one.
+ *
+ * AT A GLANCE (My Minhaj Part 1): once the account holds anything, the page
+ * opens on figures that are TRUE — bookmarks, notes and collections counted,
+ * history entries kept (only while history is on), unread notifications and
+ * messages, and the courses taken (only when the first page of enrolments is
+ * the whole list) — each a link to where they are listed. A figure whose
+ * owner could not be asked is left out, never shown as nothing. History
+ * shows the last few things read, not only the last.
  */
 /**
  * The dashboard is the area's own page, so it keeps the layout's absolute
@@ -183,6 +191,86 @@ export default async function MyPage({
         return givingModule();
     }
   };
+
+  /* ---- At a glance ---------------------------------------------------- */
+
+  function figures() {
+    if (personal === null || isNewAccount(signals)) return null;
+    const number = new Intl.NumberFormat(locale);
+    const items: readonly {
+      readonly key: string;
+      readonly value: number;
+      readonly label: string;
+      readonly href: string;
+    }[] = [
+      {
+        key: 'bookmarks',
+        value: personal.counts.bookmarks,
+        label: p('saved.bookmarks'),
+        href: my('/saved/bookmarks'),
+      },
+      {
+        key: 'notes',
+        value: personal.counts.notes,
+        label: p('saved.notes'),
+        href: my('/saved/notes'),
+      },
+      {
+        key: 'collections',
+        value: personal.counts.collections,
+        label: p('saved.collections'),
+        href: my('/saved/collections'),
+      },
+      ...(personal.historyTotal === null
+        ? []
+        : [
+            {
+              key: 'history',
+              value: personal.historyTotal,
+              label: t('home.figures.history'),
+              href: my('/history/reading'),
+            },
+          ]),
+      {
+        key: 'notifications',
+        value: personal.unread,
+        label: t('home.figures.notifications'),
+        href: my('/notifications'),
+      },
+      ...(home.messages === null
+        ? []
+        : [
+            {
+              key: 'messages',
+              value: home.messages.unread,
+              label: t('home.figures.messages'),
+              href: my('/messages'),
+            },
+          ]),
+      ...(home.enrolled === null || home.enrolled.hasMore
+        ? []
+        : [
+            {
+              key: 'courses',
+              value: home.enrolled.count,
+              label: t('home.figures.courses'),
+              href: my('/learning'),
+            },
+          ]),
+    ];
+    return (
+      <ul
+        aria-label={t('home.figures.label')}
+        className="grid grid-cols-2 gap-x-5 gap-y-6 rounded-panel border border-border bg-surface-raised p-5 shadow-panel sm:grid-cols-4 xl:grid-cols-7"
+      >
+        {items.map((item) => (
+          <li key={item.key} className="min-w-0">
+            <Stat value={number.format(item.value)} label={item.label} href={item.href} />
+          </li>
+        ))}
+      </ul>
+    );
+  }
 
   /* ---- Begin ---------------------------------------------------------- */
 
@@ -562,6 +650,7 @@ export default async function MyPage({
   function historyModule() {
     const enabled = personal?.settings.historyEnabled ?? true;
     const lastRead = personal?.lastRead ?? null;
+    const recentReads = personal?.recentReads ?? [];
     const lastWatched = personal?.lastWatched ?? null;
     return (
       <MySection
@@ -583,14 +672,16 @@ export default async function MyPage({
           quiet(p('home.historyEmpty'))
         ) : (
           <ul className="flex flex-col gap-3 text-sm">
-            {lastRead === null
-              ? null
-              : targetLine(
-                  lastRead.target,
+            {recentReads.map((entry) => (
+              <Fragment key={targetKey(entry.target)}>
+                {targetLine(
+                  entry.target,
                   t('home.continue.read', {
-                    date: shortDate(new Date(lastRead.lastReadAt), locale, timeZone),
+                    date: shortDate(new Date(entry.lastReadAt), locale, timeZone),
                   }),
                 )}
+              </Fragment>
+            ))}
             {home.watched === null || lastWatched === null
               ? null
               : targetLine(
@@ -878,6 +969,8 @@ export default async function MyPage({
             : t('home.intro.returning')}
         </p>
       </header>
+
+      {figures()}
 
       {failed.length === 0 ? null : (
         <Alert tone="warning">

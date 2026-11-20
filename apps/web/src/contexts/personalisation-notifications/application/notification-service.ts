@@ -90,9 +90,17 @@ export function createNotificationService(deps: {
       return run(deps.notifications.produce(value.data, ids(), now()));
     },
 
-    async notifications(actor: PersonalActor, offset: number): Promise<NotificationPage> {
+    /** One page of notifications; `unreadOnly`, when given, must be a boolean. */
+    async notifications(
+      actor: PersonalActor,
+      offset: number,
+      unreadOnly: unknown = false,
+    ): Promise<NotificationPage> {
       requireActor(actor);
-      return run(deps.notifications.notifications(actor.accountId, safeOffset(offset)));
+      if (typeof unreadOnly !== 'boolean') throw new PersonalRefusal('invalid');
+      return run(
+        deps.notifications.notifications(actor.accountId, safeOffset(offset), unreadOnly),
+      );
     },
 
     async unread(actor: PersonalActor): Promise<number> {

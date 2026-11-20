@@ -109,6 +109,25 @@ export function myPath(locale: Locale, path = ''): string {
 }
 
 /**
+ * Where a page sits (My Minhaj Part 1): "My Minhaj", then each crumb — a
+ * `path` under `/my` for one that links, none for the page itself.
+ */
+export function myTrail(
+  locale: Locale,
+  home: string,
+  crumbs: readonly { readonly path?: string; readonly text: string }[],
+): readonly { readonly href?: string; readonly text: string }[] {
+  return [
+    { href: myPath(locale), text: home },
+    ...crumbs.map((crumb) =>
+      crumb.path === undefined
+        ? { text: crumb.text }
+        : { href: myPath(locale, crumb.path), text: crumb.text },
+    ),
+  ];
+}
+
+/**
  * The area's navigation: every section, in its group, in a fixed order, then
  * — only for a person Identity says holds the authority — the staff areas.
  * Library and Learning are labelled groups; every other section is a plain
@@ -155,6 +174,8 @@ export type MyTabSet = 'saved' | 'history' | 'learning' | 'settings';
 export type MyTabKey =
   | 'saved'
   | 'bookmarks'
+  | 'notes'
+  | 'collections'
   | 'reading'
   | 'watch'
   | 'courses'
@@ -169,9 +190,12 @@ export type MyTabKey =
 const TABS: Readonly<
   Record<MyTabSet, readonly { readonly key: MyTabKey; readonly path: string }[]>
 > = {
+  // My Minhaj Part 1: the four views of what the person keeps, side by side.
   saved: [
     { key: 'saved', path: '/saved' },
     { key: 'bookmarks', path: '/saved/bookmarks' },
+    { key: 'notes', path: '/saved/notes' },
+    { key: 'collections', path: '/saved/collections' },
   ],
   history: [
     { key: 'reading', path: '/history/reading' },

@@ -4,8 +4,10 @@ import {
   personalIdSchema,
   quranProgressClearSchema,
   quranProgressWriteSchema,
+  readableTargetKindSchema,
   readableTargetSchema,
   type PersonalHistoryPort,
+  type ReadableKindCounts,
   type ReadingPage,
   type WatchPage,
   type QuranProgress,
@@ -15,6 +17,7 @@ import type { RateLimitRule, RateLimiterPort } from '@minhaj/contracts/platform'
 import { PersonalRefusal, asRefusal } from '../domain/refusal.ts';
 import {
   WRITE_RULE,
+  optionalFilter,
   requireActor,
   safeOffset,
   spend,
@@ -74,9 +77,20 @@ export function createHistoryService(deps: {
       await run(deps.history.recordWatch(actor.accountId, id.data, now()));
     },
 
-    async reading(actor: PersonalActor, offset: number): Promise<ReadingPage> {
+    /** One page of reading history; `kind`, when given, must be a readable kind. */
+    async reading(
+      actor: PersonalActor,
+      offset: number,
+      kind: unknown = null,
+    ): Promise<ReadingPage> {
       requireActor(actor);
-      return run(deps.history.reading(actor.accountId, safeOffset(offset)));
+      const only = optionalFilter(readableTargetKindSchema, kind);
+      return run(deps.history.reading(actor.accountId, safeOffset(offset), only));
+    },
+
+    async readingKinds(actor: PersonalActor): Promise<ReadableKindCounts> {
+      requireActor(actor);
+      return run(deps.history.readingKinds(actor.accountId));
     },
 
     async watching(actor: PersonalActor, offset: number): Promise<WatchPage> {

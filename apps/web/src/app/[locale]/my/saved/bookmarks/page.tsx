@@ -1,23 +1,37 @@
 import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
+import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
-import { PERSONAL_LIMITS, targetKey } from '@minhaj/contracts/personalisation';
+import {
+  PERSONAL_TARGET_KINDS,
+  targetKey,
+  type PersonalTargetKind,
+} from '@minhaj/contracts/personalisation';
 
-import { pageLinks } from '@/components/hadith/presentation';
 import { MyPage } from '@/components/my/frame';
+import {
+  MyListBeyond,
+  MyListFilters,
+  MyListPager,
+  MyListRefused,
+  MyListStatus,
+} from '@/components/my/list-parts';
+import {
+  myListHref,
+  myListOffset,
+  myListRange,
+  readMyList,
+  type MyListSpec,
+} from '@/components/my/list-view';
 import { myPageMetadata } from '@/components/my/metadata';
-import { myTabs } from '@/components/my/sections';
+import { myTabs, myTrail } from '@/components/my/sections';
 import { TargetItem } from '@/components/my/targets';
 import { shortDate } from '@/components/my/time';
 import { refusalMessages } from '@/components/personal/parts';
-import {
-  encodeTarget,
-  personalOffsetHref,
-  readPersonalOffset,
-} from '@/components/personal/presentation';
+import { encodeTarget } from '@/components/personal/presentation';
 import { personalRead } from '@/components/personal/read';
-import { Alert, EmptyState, Pager } from '@/components/ui';
+import { Alert, EmptyState } from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
 import { resolvePersonalTargets } from '@/composition/personal-targets';
 import { savedLinks } from '@/components/personal/nav';
@@ -33,6 +47,12 @@ import { unbookmarkAction } from '../actions';
  * Each row is a typed reference resolved by its owner now: a title linking to
  * the public page, or the honest "no longer available" when the owner no
  * longer shows it to anybody — and a removal that works either way.
+ *
+ * MY MINHAJ PART 1: counted kinds as tabs (`?kind=`), "Showing n–m of N" and
+ * numbered pages (`?page=`), one address per view (`list-view.ts`) — a filter
+ * the list does not have is refused here, never widened — and a removal said
+ * aloud once the row has gone (`announce`). The counts and the page are the
+ * signed-in account's own, read by the session; no parameter names an owner.
  */
 export async function generateMetadata({
   params,
@@ -56,41 +76,106 @@ export default async function BookmarksPage({
   const path = localizedPath(locale, '/my/saved/bookmarks');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'personal' });
-  const related = { label: t('nav.label'), links: savedLinks(locale, t) };
   const my = await getTranslations({ locale, namespace: 'my' });
-  const offset = readPersonalOffset(await searchParams);
-  const read = await personalRead('personal-bookmarks', () =>
-    personalisationRuntime().saved.bookmarks({ accountId: session.account.id }, offset),
-  );
-  const tabs = {
-    label: my('tabs.label.saved'),
-    items: myTabs(locale, 'saved', 'bookmarks', (key) => my(`tabs.${key}`)),
+  const related = { label: t('nav.label'), links: savedLinks(locale, t) };
+  const spec: MyListSpec<PersonalTargetKind> = {
+    path,
+    param: 'kind',
+    filters: PERSONAL_TARGET_KINDS,
   };
+  const asked = readMyList(spec, await searchParams);
+  if (asked.outcome === 'redirect') redirect(asked.to);
+
+  const frame = {
+    related,
+    title: t('bookmarks.title'),
+    description: <p>{t('bookmarks.description')}</p>,
+    tabs: {
+      label: my('tabs.label.saved'),
+      items: myTabs(locale, 'saved', 'bookmarks', (key) => my(`tabs.${key}`)),
+    },
+    trail: {
+      label: my('trail.label'),
+      crumbs: myTrail(locale, my('trail.home'), [
+        { path: '/saved', text: my('trail.saved') },
+        { text: t('bookmarks.title') },
+      ]),
+    },
+  };
+
+  if (asked.outcome === 'refused')
+    return (
+      <MyPage {...frame}>
+        <MyListRefused
+          title={my('list.refusedTitle')}
+          text={my('list.refused')}
+          all={path}
+          allText={my('list.all')}
+        />
+      </MyPage>
+    );
+
+  const view = asked.view;
+  const actor = { accountId: session.account.id };
+  const { saved } = personalisationRuntime();
+  const read = await personalRead('personal-bookmarks', () =>
+    Promise.all([
+      saved.bookmarks(actor, myListOffset(view.page), view.filter),
+      saved.bookmarkKinds(actor),
+    ]),
+  );
 
   if (!read.ok)
     return (
-      <MyPage related={related} title={t('bookmarks.title')} tabs={tabs}>
+      <MyPage {...frame}>
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
 
-  const page = read.value;
+  const [page, kinds] = read.value;
+  const everything = PERSONAL_TARGET_KINDS.reduce((sum, kind) => sum + kinds[kind], 0);
   const titles = await resolvePersonalTargets(
     page.items.map((entry) => entry.target),
     locale,
   );
-  const links = pageLinks(page.offset, PERSONAL_LIMITS.page, page.total);
   const timeZone = session.account.timezone;
+  const number = new Intl.NumberFormat(locale);
+  const range = myListRange(view.page, page.items.length);
 
   return (
     <MyPage
-      related={related}
-      title={t('bookmarks.title')}
-      description={<p>{t('bookmarks.description')}</p>}
-      tabs={tabs}
+      {...frame}
+      announce={{
+        value: `${view.filter ?? 'all'}:${String(page.total)}`,
+        message: my('live.list', { count: page.total }),
+      }}
     >
+      {everything === 0 ? null : (
+        <div className="flex flex-col gap-3">
+          <MyListFilters
+            label={my('list.kinds')}
+            spec={spec}
+            current={view.filter}
+            format={(count) => number.format(count)}
+            items={[
+              { value: null, text: my('list.allKinds'), count: everything },
+              ...PERSONAL_TARGET_KINDS.map((kind) => ({
+                value: kind,
+                text: my(`kinds.${kind}`),
+                count: kinds[kind],
+              })),
+            ]}
+          />
+          {range === null ? null : (
+            <MyListStatus>
+              {my('count.bookmarks', { ...range, total: page.total })}
+            </MyListStatus>
+          )}
+        </div>
+      )}
+
       {page.items.length === 0 ? (
-        page.total === 0 ? (
+        everything === 0 ? (
           <EmptyState
             icon="bookmark"
             title={my('saved.emptyTitle')}
@@ -101,8 +186,22 @@ export default async function BookmarksPage({
           >
             {t('bookmarks.empty')}
           </EmptyState>
+        ) : page.total === 0 ? (
+          <EmptyState
+            icon="bookmark"
+            title={my('list.noneOfKind')}
+            action={{ href: path, text: my('list.all') }}
+          >
+            {my('bookmarks.noneOfKind', {
+              kind: view.filter === null ? '' : my(`kinds.${view.filter}`),
+            })}
+          </EmptyState>
         ) : (
-          <EmptyState>{t('list.beyond')}</EmptyState>
+          <MyListBeyond
+            text={my('list.beyond')}
+            first={myListHref(spec, { page: 1, filter: view.filter })}
+            firstText={my('list.first')}
+          />
         )
       ) : (
         <ol
@@ -141,14 +240,17 @@ export default async function BookmarksPage({
         </ol>
       )}
 
-      <Pager
+      <MyListPager
         label={t('bookmarks.list')}
-        previous={
-          links.previous === null ? null : personalOffsetHref(path, links.previous)
-        }
-        next={links.next === null ? null : personalOffsetHref(path, links.next)}
-        previousLabel={t('list.previous')}
-        nextLabel={t('list.next')}
+        spec={spec}
+        view={view}
+        total={page.total}
+        locale={locale}
+        words={{
+          previous: t('list.previous'),
+          next: t('list.next'),
+          page: (number) => my('list.page', { page: number }),
+        }}
       />
     </MyPage>
   );

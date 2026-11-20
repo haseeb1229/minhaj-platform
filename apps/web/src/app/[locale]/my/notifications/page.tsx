@@ -1,22 +1,31 @@
 import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
+import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
-import {
-  PERSONAL_LIMITS,
-  isInternalDestination,
-} from '@minhaj/contracts/personalisation';
+import { isInternalDestination } from '@minhaj/contracts/personalisation';
 
-import { pageLinks } from '@/components/hadith/presentation';
 import { MyPage, OnwardLink } from '@/components/my/frame';
-import { myPageMetadata } from '@/components/my/metadata';
-import { PersonalTime, refusalMessages } from '@/components/personal/parts';
 import {
-  personalOffsetHref,
-  readPersonalOffset,
-} from '@/components/personal/presentation';
+  MyListBeyond,
+  MyListFilters,
+  MyListPager,
+  MyListRefused,
+  MyListStatus,
+} from '@/components/my/list-parts';
+import {
+  myListHref,
+  myListOffset,
+  myListRange,
+  readMyList,
+  type MyListSpec,
+} from '@/components/my/list-view';
+import { myPageMetadata } from '@/components/my/metadata';
+import { myTrail } from '@/components/my/sections';
+import { dayDistance } from '@/components/my/time';
+import { PersonalTime, refusalMessages } from '@/components/personal/parts';
 import { personalRead } from '@/components/personal/read';
-import { Alert, Badge, EmptyState, Icon, Pager } from '@/components/ui';
+import { Alert, Badge, EmptyState, Icon } from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
@@ -40,6 +49,11 @@ import {
  * `href`, so even a row that somehow held anything else renders no link at all.
  *
  * UNREAD IS SAID IN WORDS (a badge) and by weight — never by a dot alone.
+ *
+ * MY MINHAJ PART 1: All and Unread as counted tabs (`?show=unread`), "Showing
+ * n–m of N", numbered pages (`?page=`), one address per view (`list-view.ts`),
+ * today and yesterday said as such, a confirmation before read notifications
+ * are cleared for good, and every change said aloud once the page has it.
  */
 export async function generateMetadata({
   params,
@@ -64,35 +78,68 @@ export default async function NotificationsPage({
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'personal' });
   const my = await getTranslations({ locale, namespace: 'my' });
-  const actor = { accountId: session.account.id };
-  const offset = readPersonalOffset(await searchParams);
-  const { notifications } = personalisationRuntime();
-  const read = await personalRead('personal-notifications', () =>
-    Promise.all([
-      notifications.notifications(actor, offset),
-      notifications.unread(actor),
-    ]),
-  );
+  const spec: MyListSpec<'unread'> = { path, param: 'show', filters: ['unread'] };
+  const asked = readMyList(spec, await searchParams);
+  if (asked.outcome === 'redirect') redirect(asked.to);
+
   const settings = (
     <OnwardLink href={localizedPath(locale, '/my/settings/notifications')}>
       {t('nav.notificationSettings')}
     </OnwardLink>
   );
+  const frame = {
+    title: t('notifications.title'),
+    action: settings,
+    measure: 'reading' as const,
+    trail: {
+      label: my('trail.label'),
+      crumbs: myTrail(locale, my('trail.home'), [{ text: t('notifications.title') }]),
+    },
+  };
+
+  if (asked.outcome === 'refused')
+    return (
+      <MyPage {...frame}>
+        <MyListRefused
+          title={my('list.refusedTitle')}
+          text={my('list.refused')}
+          all={path}
+          allText={my('list.all')}
+        />
+      </MyPage>
+    );
+
+  const view = asked.view;
+  const unreadOnly = view.filter === 'unread';
+  const actor = { accountId: session.account.id };
+  const { notifications } = personalisationRuntime();
+  const read = await personalRead('personal-notifications', () =>
+    Promise.all([
+      notifications.notifications(actor, myListOffset(view.page), unreadOnly),
+      notifications.unread(actor),
+      // The whole list's total, for its tab, when the page shows the unread.
+      unreadOnly ? notifications.notifications(actor, 0) : null,
+    ]),
+  );
 
   if (!read.ok)
     return (
-      <MyPage title={t('notifications.title')} action={settings}>
+      <MyPage {...frame}>
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
 
-  const [page, unread] = read.value;
-  const links = pageLinks(page.offset, PERSONAL_LIMITS.page, page.total);
+  const [page, unread, everything] = read.value;
+  const total = everything === null ? page.total : everything.total;
   const messages = refusalMessages(t);
+  const number = new Intl.NumberFormat(locale);
+  const range = myListRange(view.page, page.items.length);
+  const now = new Date();
+  const timeZone = session.account.timezone;
 
   return (
     <MyPage
-      title={t('notifications.title')}
+      {...frame}
       description={
         <>
           <p>{t('notifications.description')}</p>
@@ -101,43 +148,84 @@ export default async function NotificationsPage({
           </p>
         </>
       }
-      action={settings}
-      measure="reading"
+      announce={{
+        value: `${view.filter ?? 'all'}:${String(total)}:${String(unread)}`,
+        message: my('live.notifications', { total, unread }),
+      }}
     >
-      {page.total === 0 ? null : (
-        <div className="flex flex-wrap items-start gap-2">
-          {unread === 0 ? null : (
-            <ActionForm
-              action={markAllNotificationsReadAction}
-              submitLabel={t('notifications.markAllRead')}
-              pendingLabel={t('common.working')}
-              tone="secondary"
-              messages={messages}
-            >
-              <input type="hidden" name="locale" value={locale} />
-            </ActionForm>
-          )}
-          {page.total === unread ? null : (
-            <ActionForm
-              action={clearReadNotificationsAction}
-              submitLabel={t('notifications.clearRead')}
-              pendingLabel={t('common.working')}
-              tone="secondary"
-              messages={messages}
-            >
-              <input type="hidden" name="locale" value={locale} />
-            </ActionForm>
+      {total === 0 ? null : (
+        <div className="flex flex-col gap-4">
+          <MyListFilters
+            label={my('list.notificationViews')}
+            spec={spec}
+            current={view.filter}
+            minimum={2}
+            format={(count) => number.format(count)}
+            items={[
+              { value: null, text: my('list.allNotifications'), count: total },
+              { value: 'unread', text: t('notifications.unread'), count: unread },
+            ]}
+          />
+          <div className="flex flex-wrap items-start gap-2">
+            {unread === 0 ? null : (
+              <ActionForm
+                action={markAllNotificationsReadAction}
+                submitLabel={t('notifications.markAllRead')}
+                pendingLabel={t('common.working')}
+                tone="secondary"
+                messages={messages}
+              >
+                <input type="hidden" name="locale" value={locale} />
+              </ActionForm>
+            )}
+            {total === unread ? null : (
+              <ActionForm
+                action={clearReadNotificationsAction}
+                submitLabel={t('notifications.clearRead')}
+                pendingLabel={t('common.working')}
+                tone="secondary"
+                messages={messages}
+                confirm={{
+                  title: my('confirm.clearRead.title'),
+                  body: my('confirm.clearRead.body', { count: total - unread }),
+                  confirmLabel: my('confirm.clearRead.confirm'),
+                  cancelLabel: my('confirm.cancel'),
+                }}
+              >
+                <input type="hidden" name="locale" value={locale} />
+              </ActionForm>
+            )}
+          </div>
+          {range === null ? null : (
+            <MyListStatus>
+              {my(unreadOnly ? 'count.unread' : 'count.notifications', {
+                ...range,
+                total: page.total,
+              })}
+            </MyListStatus>
           )}
         </div>
       )}
 
       {page.items.length === 0 ? (
-        page.total === 0 ? (
+        total === 0 ? (
           <EmptyState icon="bell" title={my('notifications.emptyTitle')}>
             {t('notifications.empty')}
           </EmptyState>
+        ) : page.total === 0 ? (
+          <EmptyState
+            icon="check"
+            title={my('notifications.noUnreadTitle')}
+            action={{ href: path, text: my('notifications.seeAll') }}
+          >
+            {my('notifications.noUnread')}
+          </EmptyState>
         ) : (
-          <EmptyState>{t('list.beyond')}</EmptyState>
+          <MyListBeyond
+            text={my('list.beyond')}
+            first={myListHref(spec, { page: 1, filter: view.filter })}
+            firstText={my('list.first')}
+          />
         )
       ) : (
         <ol
@@ -150,6 +238,8 @@ export default async function NotificationsPage({
                 ? localizedPath(locale, `${entry.destination}`)
                 : null;
             const unreadEntry = entry.readAt === null;
+            const distance = dayDistance(new Date(entry.createdAt), now, timeZone);
+            const day = distance === 0 ? 'today' : distance === -1 ? 'yesterday' : null;
             return (
               <li
                 key={entry.id}
@@ -177,10 +267,15 @@ export default async function NotificationsPage({
                       ) : (
                         <Badge kind="status">{t('notifications.read')}</Badge>
                       )}
+                      {day === null ? null : (
+                        <span className="font-semibold">
+                          {my(`notifications.${day}`)}
+                        </span>
+                      )}
                       <PersonalTime
                         value={entry.createdAt}
                         locale={locale}
-                        timeZone={session.account.timezone}
+                        timeZone={timeZone}
                       />
                     </span>
                     <p
@@ -229,14 +324,17 @@ export default async function NotificationsPage({
         </ol>
       )}
 
-      <Pager
+      <MyListPager
         label={t('notifications.list')}
-        previous={
-          links.previous === null ? null : personalOffsetHref(path, links.previous)
-        }
-        next={links.next === null ? null : personalOffsetHref(path, links.next)}
-        previousLabel={t('list.previous')}
-        nextLabel={t('list.next')}
+        spec={spec}
+        view={view}
+        total={page.total}
+        locale={locale}
+        words={{
+          previous: t('list.previous'),
+          next: t('list.next'),
+          page: (number) => my('list.page', { page: number }),
+        }}
       />
     </MyPage>
   );

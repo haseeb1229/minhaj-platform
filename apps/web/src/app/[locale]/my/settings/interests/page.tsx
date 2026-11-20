@@ -2,13 +2,25 @@ import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
-import { PERSONAL_GOALS, PERSONAL_INTERESTS } from '@minhaj/contracts/personalisation';
+import {
+  PERSONAL_GOALS,
+  PERSONAL_INTERESTS,
+  type PersonalInterest,
+} from '@minhaj/contracts/personalisation';
 
 import { refusalMessages } from '@/components/personal/parts';
 import { personalRead } from '@/components/personal/read';
-import { Alert, Panel, SectionHeading, StatusBadge, TextLink } from '@/components/ui';
+import {
+  Alert,
+  Icon,
+  Panel,
+  SectionHeading,
+  StatusBadge,
+  TextLink,
+  type IconName,
+} from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
-import { myTabs } from '@/components/my/sections';
+import { myTabs, myTrail } from '@/components/my/sections';
 import { MyPage } from '@/components/my/frame';
 import { myPageMetadata } from '@/components/my/metadata';
 import { requireLocale } from '@/config/route-locale';
@@ -28,7 +40,28 @@ import { saveInterestsAction, skipInterestsAction } from './actions';
  * inferred from what they read or watch (SECURITY_BASELINE.md §19.1). The
  * answers shape only the person's own My Minhaj pages. Account language and
  * time zone are Identity's, on their own page.
+ *
+ * MY MINHAJ PART 1: the trail, and each choice as a tile — the section's
+ * picture, its name as the checkbox's whole label, and the tile marked when
+ * chosen by its border and surface as well as the tick, never colour alone.
+ * The form, its fields and its versioned save are unchanged.
  */
+
+/** The picture beside each interest's name — decoration; the name is the label. */
+const INTEREST_ICONS: Readonly<Record<PersonalInterest, IconName>> = {
+  quran: 'book',
+  hadith: 'list',
+  library: 'book',
+  watch: 'video',
+  listen: 'audio',
+  fatwa: 'mail',
+  'news-events': 'news',
+  'global-network': 'globe',
+};
+
+/** A checkbox as a tile; the whole tile is its label's target. */
+const TILE =
+  'relative flex min-h-14 items-center gap-3 rounded-panel border border-border bg-surface-raised px-4 py-3 text-sm transition-colors duration-[var(--duration-fast)] hover:border-border-strong has-[:checked]:border-action has-[:checked]:bg-accent-surface';
 export async function generateMetadata({
   params,
 }: {
@@ -56,6 +89,13 @@ export default async function InterestsPage({
     label: my('tabs.label.settings'),
     items: myTabs(locale, 'settings', 'interests', (tab) => my(`tabs.${tab}`)),
   };
+  const trail = {
+    label: my('trail.label'),
+    crumbs: myTrail(locale, my('trail.home'), [
+      { path: '/settings/profile', text: my('trail.settings') },
+      { text: t('interests.title') },
+    ]),
+  };
   const read = await personalRead('personal-onboarding', () =>
     personalisationRuntime().settings.settings({ accountId: session.account.id }),
   );
@@ -82,6 +122,7 @@ export default async function InterestsPage({
         measure="reading"
         title={t('interests.title')}
         description={description}
+        trail={trail}
       >
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
@@ -96,6 +137,7 @@ export default async function InterestsPage({
       measure="reading"
       title={t('interests.title')}
       description={description}
+      trail={trail}
     >
       <p>
         <StatusBadge tone={current.onboarding === 'completed' ? 'positive' : 'neutral'}>
@@ -113,40 +155,62 @@ export default async function InterestsPage({
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="version" value={current.version} />
 
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-2 font-medium">{t('interests.interestsLegend')}</legend>
-            {PERSONAL_INTERESTS.map((interest) => (
-              <div key={interest} className="flex items-start gap-2 text-sm">
-                <input
-                  id={`interest-${interest}`}
-                  type="checkbox"
-                  name="interest"
-                  value={interest}
-                  defaultChecked={current.interests.includes(interest)}
-                  className="mt-1"
-                />
-                <label htmlFor={`interest-${interest}`}>
-                  {t(`interests.interest.${interest}`)}
-                </label>
-              </div>
-            ))}
+          <fieldset className="flex min-w-0 flex-col gap-3">
+            <legend className="mb-1 font-semibold">
+              {t('interests.interestsLegend')}
+            </legend>
+            <p className="text-sm text-foreground-muted">
+              {my('settings.interests.pick')}
+            </p>
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
+              {PERSONAL_INTERESTS.map((interest) => (
+                <div key={interest} className={TILE}>
+                  <input
+                    id={`interest-${interest}`}
+                    type="checkbox"
+                    name="interest"
+                    value={interest}
+                    defaultChecked={current.interests.includes(interest)}
+                    className="relative z-10 size-5 shrink-0"
+                  />
+                  <Icon
+                    name={INTEREST_ICONS[interest]}
+                    size={20}
+                    className="shrink-0 text-accent"
+                  />
+                  <label
+                    htmlFor={`interest-${interest}`}
+                    className="min-w-0 font-medium after:absolute after:inset-0 after:content-['']"
+                  >
+                    {t(`interests.interest.${interest}`)}
+                  </label>
+                </div>
+              ))}
+            </div>
           </fieldset>
 
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-2 font-medium">{t('interests.goalsLegend')}</legend>
-            {PERSONAL_GOALS.map((goal) => (
-              <div key={goal} className="flex items-start gap-2 text-sm">
-                <input
-                  id={`goal-${goal}`}
-                  type="checkbox"
-                  name="goal"
-                  value={goal}
-                  defaultChecked={current.goals.includes(goal)}
-                  className="mt-1"
-                />
-                <label htmlFor={`goal-${goal}`}>{t(`interests.goal.${goal}`)}</label>
-              </div>
-            ))}
+          <fieldset className="flex min-w-0 flex-col gap-3">
+            <legend className="mb-1 font-semibold">{t('interests.goalsLegend')}</legend>
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
+              {PERSONAL_GOALS.map((goal) => (
+                <div key={goal} className={TILE}>
+                  <input
+                    id={`goal-${goal}`}
+                    type="checkbox"
+                    name="goal"
+                    value={goal}
+                    defaultChecked={current.goals.includes(goal)}
+                    className="relative z-10 size-5 shrink-0"
+                  />
+                  <label
+                    htmlFor={`goal-${goal}`}
+                    className="min-w-0 font-medium after:absolute after:inset-0 after:content-['']"
+                  >
+                    {t(`interests.goal.${goal}`)}
+                  </label>
+                </div>
+              ))}
+            </div>
           </fieldset>
         </ActionForm>
       </Panel>

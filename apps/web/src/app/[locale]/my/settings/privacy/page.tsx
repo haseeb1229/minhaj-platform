@@ -4,9 +4,16 @@ import { getTranslations } from 'next-intl/server';
 
 import { refusalMessages } from '@/components/personal/parts';
 import { personalRead } from '@/components/personal/read';
-import { Alert, Panel, SectionHeading, StatusBadge, TextLink } from '@/components/ui';
+import {
+  Alert,
+  Icon,
+  Panel,
+  SectionHeading,
+  StatusBadge,
+  TextLink,
+} from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
-import { myTabs } from '@/components/my/sections';
+import { myTabs, myTrail } from '@/components/my/sections';
 import { MyPage } from '@/components/my/frame';
 import { myPageMetadata } from '@/components/my/metadata';
 import { requireLocale } from '@/config/route-locale';
@@ -33,7 +40,62 @@ import { setHistoryAction } from './actions';
  *
  * NO LEGAL CLAIM. The page describes what the platform does; it does not say
  * which jurisdiction's rules that satisfies.
+ *
+ * MY MINHAJ PART 1: the trail, an index of the page's parts, and the five
+ * downloads gathered under one "Download your data" heading as one card each
+ * — what the file holds, what closing the account does to it, and the link to
+ * that owner's OWN export handler, unchanged. The history switch, clearing,
+ * the closure hand-off and the newsletter note keep their guarantees exactly.
  */
+
+/** Each export: its owner's handler and its words (`personal.privacy.*`). */
+const EXPORTS = [
+  {
+    key: 'personal',
+    href: '/api/my/export',
+    heading: 'exportHeading',
+    body: 'exportBody',
+    contents: ['exportSaved', 'exportHistory', 'exportSettings', 'exportNotifications'],
+    note: 'exportScope',
+    link: 'exportLink',
+  },
+  {
+    key: 'learning',
+    href: '/api/my/export/learning',
+    heading: 'learningExportHeading',
+    body: 'learningExportBody',
+    contents: ['learningExportContents'],
+    note: null,
+    link: 'learningExportLink',
+  },
+  {
+    key: 'messaging',
+    href: '/api/my/export/messaging',
+    heading: 'messagingExportHeading',
+    body: 'messagingExportBody',
+    contents: ['messagingExportContents'],
+    note: 'messagingExportClosure',
+    link: 'messagingExportLink',
+  },
+  {
+    key: 'membership',
+    href: '/api/my/export/membership',
+    heading: 'membershipExportHeading',
+    body: 'membershipExportBody',
+    contents: ['membershipExportContents'],
+    note: 'membershipExportClosure',
+    link: 'membershipExportLink',
+  },
+  {
+    key: 'donations',
+    href: '/api/my/export/donations',
+    heading: 'donationsExportHeading',
+    body: 'donationsExportBody',
+    contents: ['donationsExportContents'],
+    note: 'donationsExportClosure',
+    link: 'donationsExportLink',
+  },
+] as const;
 export async function generateMetadata({
   params,
 }: {
@@ -76,7 +138,36 @@ export default async function PrivacyPage({
           <p className="text-sm">{t('privacy.noLegalClaim')}</p>
         </>
       }
+      trail={{
+        label: my('trail.label'),
+        crumbs: myTrail(locale, my('trail.home'), [
+          { path: '/settings/profile', text: my('trail.settings') },
+          { text: t('privacy.title') },
+        ]),
+      }}
     >
+      <nav aria-label={my('settings.privacy.index')}>
+        <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+          {(
+            [
+              ['privacy-history', t('privacy.historyHeading')],
+              ['privacy-downloads', my('settings.privacy.downloads')],
+              ['privacy-closure', t('privacy.closureHeading')],
+              ['privacy-newsletter', t('privacy.newsletterHeading')],
+            ] as const
+          ).map(([id, text]) => (
+            <li key={id}>
+              <a
+                href={`#${id}`}
+                className="inline-flex min-h-11 items-center font-semibold text-action underline-offset-4 hover:underline"
+              >
+                {text}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
       {/* ---- History ----------------------------------------------------- */}
 
       <section className="flex flex-col gap-3" aria-labelledby="privacy-history">
@@ -129,117 +220,54 @@ export default async function PrivacyPage({
 
       <ClearHistory locale={locale} t={t} />
 
-      {/* ---- Export ------------------------------------------------------ */}
+      {/* ---- Downloads --------------------------------------------------- */}
 
-      <section className="flex flex-col gap-3" aria-labelledby="privacy-export">
-        <span id="privacy-export">
-          <SectionHeading>{t('privacy.exportHeading')}</SectionHeading>
+      <section className="flex flex-col gap-4" aria-labelledby="privacy-downloads">
+        <span id="privacy-downloads">
+          <SectionHeading>{my('settings.privacy.downloads')}</SectionHeading>
         </span>
-        <p className="text-sm">{t('privacy.exportBody')}</p>
-        <ul className="flex list-disc flex-col gap-1 ps-5 text-sm">
-          <li>{t('privacy.exportSaved')}</li>
-          <li>{t('privacy.exportHistory')}</li>
-          <li>{t('privacy.exportSettings')}</li>
-          <li>{t('privacy.exportNotifications')}</li>
+        <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
+          {my('settings.privacy.downloadsIntro')}
+        </p>
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-4">
+          {EXPORTS.map((entry) => (
+            <li key={entry.key} className="min-w-0">
+              <section
+                aria-labelledby={`privacy-${entry.key}-export`}
+                className="flex min-w-0 flex-col gap-3 rounded-panel border border-border bg-surface-raised p-5"
+              >
+                <h3
+                  id={`privacy-${entry.key}-export`}
+                  className="flex items-center gap-2 text-subheading font-semibold"
+                >
+                  <Icon name="download" size={20} className="shrink-0 text-accent" />
+                  {t(`privacy.${entry.heading}`)}
+                </h3>
+                <p className="text-sm">{t(`privacy.${entry.body}`)}</p>
+                <ul className="flex list-disc flex-col gap-1 ps-5 text-sm">
+                  {entry.contents.map((key) => (
+                    <li key={key}>{t(`privacy.${key}`)}</li>
+                  ))}
+                </ul>
+                {entry.note === null ? null : (
+                  <p className="text-sm text-foreground-muted">
+                    {t(`privacy.${entry.note}`)}
+                  </p>
+                )}
+                <p>
+                  <a
+                    href={entry.href}
+                    download
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-border-strong bg-surface px-4 py-2 text-sm font-medium hover:bg-surface-sunken"
+                  >
+                    <Icon name="download" size={16} />
+                    {t(`privacy.${entry.link}`)}
+                  </a>
+                </p>
+              </section>
+            </li>
+          ))}
         </ul>
-        <p className="text-sm text-foreground-muted">{t('privacy.exportScope')}</p>
-        <p>
-          <a
-            href="/api/my/export"
-            download
-            className="inline-flex min-h-11 items-center justify-center rounded-control border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-sunken"
-          >
-            {t('privacy.exportLink')}
-          </a>
-        </p>
-      </section>
-
-      <section className="flex flex-col gap-3" aria-labelledby="privacy-learning-export">
-        <span id="privacy-learning-export">
-          <SectionHeading>{t('privacy.learningExportHeading')}</SectionHeading>
-        </span>
-        <p className="text-sm">{t('privacy.learningExportBody')}</p>
-        <ul className="flex list-disc flex-col gap-1 ps-5 text-sm">
-          <li>{t('privacy.learningExportContents')}</li>
-        </ul>
-        <p>
-          <a
-            href="/api/my/export/learning"
-            download
-            className="inline-flex min-h-11 items-center justify-center rounded-control border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-sunken"
-          >
-            {t('privacy.learningExportLink')}
-          </a>
-        </p>
-      </section>
-
-      <section className="flex flex-col gap-3" aria-labelledby="privacy-messaging-export">
-        <span id="privacy-messaging-export">
-          <SectionHeading>{t('privacy.messagingExportHeading')}</SectionHeading>
-        </span>
-        <p className="text-sm">{t('privacy.messagingExportBody')}</p>
-        <ul className="flex list-disc flex-col gap-1 ps-5 text-sm">
-          <li>{t('privacy.messagingExportContents')}</li>
-        </ul>
-        <p className="text-sm text-foreground-muted">
-          {t('privacy.messagingExportClosure')}
-        </p>
-        <p>
-          <a
-            href="/api/my/export/messaging"
-            download
-            className="inline-flex min-h-11 items-center justify-center rounded-control border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-sunken"
-          >
-            {t('privacy.messagingExportLink')}
-          </a>
-        </p>
-      </section>
-
-      <section
-        className="flex flex-col gap-3"
-        aria-labelledby="privacy-membership-export"
-      >
-        <span id="privacy-membership-export">
-          <SectionHeading>{t('privacy.membershipExportHeading')}</SectionHeading>
-        </span>
-        <p className="text-sm">{t('privacy.membershipExportBody')}</p>
-        <ul className="flex list-disc flex-col gap-1 ps-5 text-sm">
-          <li>{t('privacy.membershipExportContents')}</li>
-        </ul>
-        <p className="text-sm text-foreground-muted">
-          {t('privacy.membershipExportClosure')}
-        </p>
-        <p>
-          <a
-            href="/api/my/export/membership"
-            download
-            className="inline-flex min-h-11 items-center justify-center rounded-control border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-sunken"
-          >
-            {t('privacy.membershipExportLink')}
-          </a>
-        </p>
-      </section>
-
-      <section className="flex flex-col gap-3" aria-labelledby="privacy-donations-export">
-        <span id="privacy-donations-export">
-          <SectionHeading>{t('privacy.donationsExportHeading')}</SectionHeading>
-        </span>
-        <p className="text-sm">{t('privacy.donationsExportBody')}</p>
-        <ul className="flex list-disc flex-col gap-1 ps-5 text-sm">
-          <li>{t('privacy.donationsExportContents')}</li>
-        </ul>
-        <p className="text-sm text-foreground-muted">
-          {t('privacy.donationsExportClosure')}
-        </p>
-        <p>
-          <a
-            href="/api/my/export/donations"
-            download
-            className="inline-flex min-h-11 items-center justify-center rounded-control border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-sunken"
-          >
-            {t('privacy.donationsExportLink')}
-          </a>
-        </p>
       </section>
 
       {/* ---- Account closure --------------------------------------------- */}

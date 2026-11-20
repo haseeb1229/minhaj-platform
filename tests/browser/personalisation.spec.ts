@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { Browser, BrowserContext, Locator, Page } from '@playwright/test';
+import { AxeBuilder } from '@axe-core/playwright';
+import type { Browser, BrowserContext, Locator, Page, TestInfo } from '@playwright/test';
 
 import type { SqlSession } from '../../packages/database/src/lifecycle/sql-connection.ts';
 import {
@@ -959,3 +960,383 @@ test.describe('every Phase-21 My Minhaj page', () => {
     await owner.emulateMedia({ reducedMotion: 'no-preference' });
   });
 });
+
+/* ===========================================================================
+ * 5. My Minhaj Part 1 — counted, paged, confirmed and announced
+ * ========================================================================= */
+
+/**
+ * ITS OWN ACCOUNT. The Part-1 proofs use a third, fresh account, so nothing
+ * they save, note, clear or delete reaches the first person's journey or its
+ * export proof above. Its notifications are rows of its own, inserted through
+ * the owner session as a producer would leave them; nothing names another
+ * account.
+ */
+test.describe('My Minhaj Part 1', () => {
+  let reader: Page;
+  let readerId: string;
+  const NOTIFICATIONS = 25;
+  const READ = 5;
+
+  /** The live region the frame keeps for changes (never a `status`). */
+  const live = (page: Page) => page.getByRole('main').locator('[aria-live="polite"]');
+
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(180_000);
+    ({ page: reader, id: readerId } = await account(browser, 3, 'personal-part1'));
+    const request = reader.context().request;
+    for (const target of [
+      { kind: 'work', id: ids.work },
+      { kind: 'video', id: ids.video },
+    ]) {
+      const saved = await request.post('/api/my/bookmarks', {
+        headers: intentHeaders(),
+        data: { action: 'add', target },
+      });
+      expect(saved.status()).toBe(200);
+    }
+    const note = await request.post('/api/my/notes', {
+      headers: intentHeaders(),
+      data: {
+        action: 'write',
+        target: { kind: 'work', id: ids.work },
+        body: `quillpart${run} a note to delete`,
+        expectedVersion: 0,
+      },
+    });
+    expect(note.status()).toBe(200);
+    // Newest first: row 0 is the newest; the oldest READ of them are read.
+    const rows = Array.from({ length: NOTIFICATIONS }, (_, index) => {
+      const at = `DATEADD(MINUTE, -${String(index)}, SYSUTCDATETIME())`;
+      const read = index >= NOTIFICATIONS - READ ? at : 'NULL';
+      return `(N'${randomUUID()}', N'${readerId}', N'question-answered', N'questions', NULL, N'proof:part1:${run}:${String(index)}', ${at}, ${read})`;
+    });
+    await sql.query(
+      `INSERT INTO [dbo].[Notification] ([id],[userId],[kind],[category],[destination],[idempotencyKey],[createdAt],[readAt]) VALUES ${rows.join(', ')};`,
+    );
+  });
+
+  test('the home page opens on true figures, each a way to its list', async () => {
+    await reader.goto('/my');
+    const figures = reader
+      .getByRole('main')
+      .getByRole('list', { name: myCopy('home.figures.label') });
+    await expect(figures).toBeVisible();
+    const bookmarks = figures
+      .getByRole('link')
+      .filter({ hasText: copy('saved', 'bookmarks') });
+    await expect(bookmarks).toHaveAttribute('href', '/my/saved/bookmarks');
+    await expect(bookmarks).toContainText('2');
+    const unread = figures
+      .getByRole('link')
+      .filter({ hasText: myCopy('home.figures.notifications') });
+    await expect(unread).toHaveAttribute('href', '/my/notifications');
+    await expect(unread).toContainText(String(NOTIFICATIONS - READ));
+    // History is off for this account, so no history figure is claimed.
+    await expect(
+      figures.getByRole('link').filter({ hasText: myCopy('home.figures.history') }),
+    ).toHaveCount(0);
+  });
+
+  test('bookmarks are counted by kind, one address per view, and a wrong view is refused', async () => {
+    const response = await reader.goto('/my/saved/bookmarks');
+    expect(response?.status()).toBe(200);
+    const main = reader.getByRole('main');
+    const trail = main.getByRole('navigation', { name: myCopy('trail.label') });
+    await expect(trail.getByRole('link').first()).toHaveAttribute('href', '/my');
+    const kinds = main.getByRole('navigation', { name: myCopy('list.kinds') });
+    await expect(kinds.getByRole('link')).toHaveText([
+      `${myCopy('list.allKinds')}2`,
+      `${myCopy('kinds.work')}1`,
+      `${myCopy('kinds.video')}1`,
+    ]);
+    await expect(
+      kinds.getByRole('link', { name: myCopy('list.allKinds') }),
+    ).toHaveAttribute('aria-current', 'page');
+    await expect(main).toContainText('Showing 1–2 of 2 bookmarks');
+
+    await kinds.getByRole('link', { name: myCopy('kinds.work') }).click();
+    await reader.waitForURL('**/my/saved/bookmarks?kind=work');
+    const list = main.getByRole('list', { name: copy('bookmarks', 'list') });
+    await expect(list.getByRole('listitem')).toHaveCount(1);
+    await expect(list.getByRole('link', { name: TITLE.work })).toBeVisible();
+    await expect(main).toContainText('Showing 1–1 of 1 bookmark');
+
+    // Tidied ONCE: the first page named, another order, Phase 21's offset.
+    for (const [asked, final] of [
+      ['/my/saved/bookmarks?page=1', '/my/saved/bookmarks'],
+      ['/my/saved/bookmarks?page=2&kind=video', '/my/saved/bookmarks?kind=video&page=2'],
+      ['/my/saved/bookmarks?offset=20', '/my/saved/bookmarks?page=2'],
+      ['/ur/my/notifications?offset=0&show=', '/ur/my/notifications'],
+    ] as const) {
+      const answer = await reader.context().request.get(asked, { maxRedirects: 0 });
+      expect([307, 308], asked).toContain(answer.status());
+      const location = new URL(answer.headers()['location'] ?? '', baseUrl());
+      expect(location.pathname + location.search, asked).toBe(final);
+      expect(
+        (await reader.context().request.get(final, { maxRedirects: 0 })).status(),
+        final,
+      ).toBe(200);
+    }
+    // Past the end: said, with the way back, and no list.
+    await reader.goto('/my/saved/bookmarks?page=2');
+    await expect(main).toContainText(myCopy('list.beyond'));
+    await expect(main.getByRole('link', { name: myCopy('list.first') })).toHaveAttribute(
+      'href',
+      '/my/saved/bookmarks',
+    );
+    // A kind the list does not have is refused where it was asked.
+    for (const refused of [
+      '/my/saved/bookmarks?kind=book',
+      '/my/saved/bookmarks?kind=work&kind=video',
+    ]) {
+      const answer = await reader.goto(refused);
+      expect(answer?.status(), refused).toBe(200);
+      await expect(main, refused).toContainText(myCopy('list.refusedTitle'));
+      await expect(
+        main.getByRole('list', { name: copy('bookmarks', 'list') }),
+      ).toHaveCount(0);
+    }
+  });
+
+  test('removing a bookmark is said aloud, and focus stays on the page', async () => {
+    await reader.goto('/my/saved/bookmarks?kind=video');
+    const main = reader.getByRole('main');
+    const list = main.getByRole('list', { name: copy('bookmarks', 'list') });
+    await list.getByRole('button', { name: copy('bookmarks', 'remove') }).click();
+    await expect(list).toHaveCount(0);
+    await expect(live(reader)).toHaveText('Done. Nothing is left in this list.');
+    await expect(main).toContainText(myCopy('list.noneOfKind'));
+    const focused = await reader.evaluate(() => document.activeElement?.tagName ?? '');
+    expect(['H1', 'P']).toContain(focused);
+    // The other kind is untouched.
+    await reader.goto('/my/saved');
+    const byKind = reader
+      .getByRole('main')
+      .getByRole('navigation', { name: myCopy('saved.byKind') });
+    await expect(byKind.getByRole('link')).toHaveCount(1);
+    await expect(byKind.getByRole('link')).toHaveAttribute(
+      'href',
+      '/my/saved/bookmarks?kind=work',
+    );
+  });
+
+  test('notifications are counted, paged by number, and filtered to the unread', async () => {
+    await reader.goto('/my/notifications');
+    const main = reader.getByRole('main');
+    const views = main.getByRole('navigation', {
+      name: myCopy('list.notificationViews'),
+    });
+    await expect(views.getByRole('link')).toHaveText([
+      `${myCopy('list.allNotifications')}${String(NOTIFICATIONS)}`,
+      `${copy('notifications', 'unread')}${String(NOTIFICATIONS - READ)}`,
+    ]);
+    await expect(main).toContainText(
+      `Showing 1–20 of ${String(NOTIFICATIONS)} notifications`,
+    );
+    const pages = main.getByRole('navigation', { name: copy('notifications', 'list') });
+    await expect(pages.getByRole('link', { name: 'Page 2' })).toHaveAttribute(
+      'href',
+      '/my/notifications?page=2',
+    );
+    await expect(pages.locator('[aria-current="page"]')).toHaveAttribute(
+      'aria-label',
+      'Page 1',
+    );
+
+    await reader.goto('/my/notifications?page=2');
+    const list = main.getByRole('list', { name: copy('notifications', 'list') });
+    await expect(list.getByRole('listitem')).toHaveCount(NOTIFICATIONS - 20);
+    await expect(main).toContainText(
+      `Showing 21–${String(NOTIFICATIONS)} of ${String(NOTIFICATIONS)} notifications`,
+    );
+
+    await reader.goto('/my/notifications?show=unread');
+    await expect(list.getByRole('listitem')).toHaveCount(NOTIFICATIONS - READ);
+    await expect(main).toContainText(
+      `Showing 1–${String(NOTIFICATIONS - READ)} of ${String(NOTIFICATIONS - READ)} unread notifications`,
+    );
+    await expect(list).not.toContainText(copy('notifications', 'read'));
+    expect((await reader.goto('/my/notifications?show=read'))?.status()).toBe(200);
+    await expect(main).toContainText(myCopy('list.refusedTitle'));
+  });
+
+  test('clearing read notifications asks first, and Cancel changes nothing', async () => {
+    const readCount = () =>
+      scalar(
+        `SELECT COUNT_BIG(*) AS [value] FROM [dbo].[Notification] WHERE [userId]=N'${readerId}' AND [readAt] IS NOT NULL;`,
+      );
+    await reader.goto('/my/notifications');
+    const main = reader.getByRole('main');
+    const clear = main.getByRole('button', { name: copy('notifications', 'clearRead') });
+    const dialog = reader.getByRole('dialog', {
+      name: myCopy('confirm.clearRead.title'),
+    });
+
+    await clear.click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText(
+      `The ${String(READ)} notifications you have already read`,
+    );
+    await dialog
+      .getByRole('button', { name: myCopy('confirm.cancel') })
+      .first()
+      .click();
+    await expect(dialog).toBeHidden();
+    expect(await readCount()).toBe(READ);
+
+    await clear.click();
+    await dialog
+      .getByRole('button', { name: myCopy('confirm.clearRead.confirm') })
+      .click();
+    await expect(live(reader)).toHaveText(
+      `Done. ${String(NOTIFICATIONS - READ)} notifications, ${String(NOTIFICATIONS - READ)} unread.`,
+    );
+    await expect.poll(readCount).toBe(0);
+    await expect(clear).toHaveCount(0);
+  });
+
+  test('a note is deleted only after a confirmation', async () => {
+    const notes = () =>
+      scalar(
+        `SELECT COUNT_BIG(*) AS [value] FROM [dbo].[Note] n JOIN [dbo].[SavedItem] s ON s.[id]=n.[savedItemId] WHERE s.[userId]=N'${readerId}';`,
+      );
+    await reader.goto('/my/saved/notes');
+    const main = reader.getByRole('main');
+    await expect(
+      main
+        .getByRole('navigation', { name: myCopy('tabs.label.saved') })
+        .getByRole('link'),
+    ).toHaveCount(4);
+    await expect(main).toContainText('Showing 1–1 of 1 note');
+    const remove = main.getByRole('button', {
+      name: copy('notes', 'delete'),
+      exact: true,
+    });
+    const dialog = reader.getByRole('dialog', { name: myCopy('confirm.note.title') });
+    await remove.click();
+    await expect(dialog).toBeVisible();
+    await reader.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    expect(await notes()).toBe(1);
+
+    await remove.click();
+    await dialog.getByRole('button', { name: myCopy('confirm.note.confirm') }).click();
+    await expect(main).toContainText(copy('notes', 'empty'));
+    await expect(live(reader)).toHaveText('Done. Nothing is left in this list.');
+    expect(await notes()).toBe(0);
+  });
+
+  test('the settings pages say where the account stands and lead to each part', async () => {
+    await reader.goto('/my/settings/security');
+    const main = reader.getByRole('main');
+    const index = main.getByRole('navigation', {
+      name: myCopy('settings.security.index'),
+    });
+    for (const link of await index.getByRole('link').all()) {
+      const href = (await link.getAttribute('href')) ?? '';
+      expect(href).toMatch(/^#[a-z-]+$/);
+      await expect(main.locator(href), href).toHaveCount(1);
+    }
+    await expect(main).toContainText(myCopy('settings.security.twoStepOff'));
+
+    await reader.goto('/my/settings/privacy');
+    const downloads = main.getByRole('region', {
+      name: myCopy('settings.privacy.downloads'),
+    });
+    await expect(downloads.locator('a[download]')).toHaveCount(5);
+    expect(
+      await downloads
+        .locator('a[download]')
+        .evaluateAll((links) => links.map((link) => link.getAttribute('href'))),
+    ).toEqual([
+      '/api/my/export',
+      '/api/my/export/learning',
+      '/api/my/export/messaging',
+      '/api/my/export/membership',
+      '/api/my/export/donations',
+    ]);
+
+    await reader.goto('/my/settings/profile');
+    await expect(
+      main.getByRole('link', { name: myCopy('settings.profile.emailLink') }),
+    ).toHaveAttribute('href', '/my/settings/security#email-heading');
+
+    await reader.goto('/my/progress/quran');
+    await expect(
+      main.getByRole('heading', { name: myCopy('quran.howHeading') }),
+    ).toBeVisible();
+    await expect(
+      main.getByRole('link', { name: myCopy('quran.bookmarks') }),
+    ).toHaveAttribute('href', '/my/saved/bookmarks?kind=ayah');
+  });
+
+  test('every Part-1 page reflows at 320 px and is axe-clean at 1440 px in every locale', async () => {
+    test.setTimeout(600_000);
+    const testInfo = test.info();
+    const routes = [
+      '/my',
+      '/my/saved',
+      '/my/saved/bookmarks',
+      '/my/saved/notes',
+      '/my/saved/collections',
+      '/my/history/reading',
+      '/my/history/watch',
+      '/my/progress/quran',
+      '/my/progress/courses',
+      '/my/notifications',
+      '/my/settings/profile',
+      '/my/settings/security',
+      '/my/settings/language',
+      '/my/settings/interests',
+      '/my/settings/notifications',
+      '/my/settings/privacy',
+    ];
+    for (const width of [320, 1440]) {
+      await reader.setViewportSize({ width, height: 900 });
+      for (const locale of LOCALES)
+        for (const route of routes) {
+          // Every route in English; in Urdu and Arabic at 320 px, and a sample at 1440.
+          if (
+            locale !== 'en' &&
+            width === 1440 &&
+            ![
+              '/my',
+              '/my/saved/bookmarks',
+              '/my/notifications',
+              '/my/settings/privacy',
+            ].includes(route)
+          )
+            continue;
+          const target = localizedPath(locale, route);
+          expect((await reader.goto(target))?.status(), target).toBe(200);
+          await expect(reader.locator('main h1'), target).toHaveCount(1);
+          expect(
+            await overflowOf(reader),
+            `${String(width)}px ${target}`,
+          ).toBeLessThanOrEqual(0);
+          if (width === 1440) await axeClean(reader, target, testInfo);
+        }
+    }
+    await reader.setViewportSize({ width: 1280, height: 800 });
+  });
+});
+
+/** No serious or critical axe finding; anything lesser is annotated. */
+async function axeClean(page: Page, target: string, testInfo: TestInfo): Promise<void> {
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  const blocking = results.violations.filter(
+    (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+  );
+  for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+    testInfo.annotations.push({
+      type: 'axe',
+      description: `${target}: ${finding.id} (${String(finding.impact)})`,
+    });
+  expect(
+    blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+    target,
+  ).toEqual([]);
+}

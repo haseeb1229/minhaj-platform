@@ -2037,6 +2037,17 @@ made, and no cookie banner is added — there is no non-essential processing to 
   **No staff permission reads them** — there is no `personalisation.*` key — and the newsletter keys
   reach only subscription state. Future verified data-subject support must be an owner-specific
   workflow, never universal browsing.
+- **My Minhaj Part 1 (R2, November 2026).** The lists' new filters and counts (DOMAIN_MODEL.md
+  §14.6) are reads of the signed-in account's own rows only: a `?kind=` or `?show=` value is parsed
+  against the list's own allowlist on the page, re-validated by the service, and turned into SQL from
+  a fixed column table with bound parameters — an unknown value is refused, never widened, and no
+  parameter can name another account. Tidying redirects are issued only after the session is
+  resolved, to a same-site path the page builds itself. **No Server Action was added or changed**:
+  the page-side confirmations before deleting a note, clearing read notifications and clearing the
+  Quran position are presentation over the existing actions, which keep their own checks (the
+  collection and history deletions keep their server-required confirmation box). The change
+  announcer is presentation only: it reads nothing, holds no permission and is `aria-live` rather
+  than a second `status`.
 - **Minimised by default.** History is off until the person turns it on and is one row per target
   (newest 500 kept); onboarding stores explicit choices of public areas only; nothing is inferred
   from behaviour and no third-party analytics, pixel or fingerprinting exists.

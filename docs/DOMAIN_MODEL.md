@@ -2660,6 +2660,19 @@ reference (Learning's, delivered in Phase 22 — §13.4); audio listening histor
 or any marketing automation; saved Fatwa rulings; and any staff access to a person's saved items,
 notes, history or notifications — no permission grants it.
 
+**Narrowed and counted reads (My Minhaj Part 1, R2 — November 2026).** Three of the owner lists
+take an optional filter, and two count by kind, for the lists' counted tabs; no table, column,
+index or migration is added. `PersonalSavedPort.bookmarks(account, offset, kind?)` and
+`PersonalHistoryPort.reading(account, offset, kind?)` narrow to one target kind — the kind is the
+typed foreign key that holds a value, exactly as a row's kind is read, never a stored type — and
+`PersonalNotificationPort.notifications(account, offset, unreadOnly?)` to the unread; each page's
+total is the narrowed list's. `bookmarkKinds(account)` and `readingKinds(account)` return a count for
+every kind (`TargetKindCounts`, `ReadableKindCounts`; a kind held none of is `0`), so the figures add
+up to the list's total. The account stays the first argument and is in every predicate; the services
+validate the filter against the contract's enums (`personalTargetKindSchema`,
+`readableTargetKindSchema`; a boolean for unread) and refuse anything else as `invalid` before a port
+is reached; the adapter builds each predicate from a fixed column table, with bound parameters only.
+
 ---
 
 ## 15. Messaging

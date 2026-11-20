@@ -1,22 +1,32 @@
 import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
+import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
 import { PERSONAL_LIMITS, targetKey } from '@minhaj/contracts/personalisation';
 
-import { pageLinks } from '@/components/hadith/presentation';
 import { MyPage } from '@/components/my/frame';
+import {
+  MyListBeyond,
+  MyListPager,
+  MyListRefused,
+  MyListStatus,
+} from '@/components/my/list-parts';
+import {
+  myListHref,
+  myListOffset,
+  myListRange,
+  readMyList,
+  type MyListSpec,
+} from '@/components/my/list-view';
 import { myPageMetadata } from '@/components/my/metadata';
+import { myTabs, myTrail } from '@/components/my/sections';
 import { TargetItem } from '@/components/my/targets';
 import { shortDate } from '@/components/my/time';
 import { refusalMessages } from '@/components/personal/parts';
-import {
-  encodeTarget,
-  personalOffsetHref,
-  readPersonalOffset,
-} from '@/components/personal/presentation';
+import { encodeTarget } from '@/components/personal/presentation';
 import { personalRead } from '@/components/personal/read';
-import { Alert, EmptyState, Field, Pager, TextArea } from '@/components/ui';
+import { Alert, EmptyState, Field, TextArea } from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
 import { resolvePersonalTargets } from '@/composition/personal-targets';
 import { savedLinks } from '@/components/personal/nav';
@@ -36,6 +46,10 @@ import { removeNoteAction, writeNoteAction } from '../actions';
  * EDITS ARE VERSIONED. Each form carries the version this page read; a note
  * changed since, in another tab or on another device, is a conflict the person
  * is told about, never a silent overwrite.
+ *
+ * MY MINHAJ PART 1: the Saved views as tabs, "Showing n–m of N", numbered
+ * pages (`?page=`, one address per view), a confirmation before a note is
+ * deleted for good, and the deletion said aloud once its row has gone.
  */
 export async function generateMetadata({
   params,
@@ -61,14 +75,50 @@ export default async function NotesPage({
   const t = await getTranslations({ locale, namespace: 'personal' });
   const related = { label: t('nav.label'), links: savedLinks(locale, t) };
   const my = await getTranslations({ locale, namespace: 'my' });
-  const offset = readPersonalOffset(await searchParams);
+  const spec: MyListSpec<never> = { path };
+  const asked = readMyList(spec, await searchParams);
+  if (asked.outcome === 'redirect') redirect(asked.to);
+  const frame = {
+    related,
+    title: t('notes.title'),
+    description: <p>{t('notes.description')}</p>,
+    measure: 'reading' as const,
+    tabs: {
+      label: my('tabs.label.saved'),
+      items: myTabs(locale, 'saved', 'notes', (key) => my(`tabs.${key}`)),
+    },
+    trail: {
+      label: my('trail.label'),
+      crumbs: myTrail(locale, my('trail.home'), [
+        { path: '/saved', text: my('trail.saved') },
+        { text: t('notes.title') },
+      ]),
+    },
+  };
+
+  if (asked.outcome === 'refused')
+    return (
+      <MyPage {...frame}>
+        <MyListRefused
+          title={my('list.refusedTitle')}
+          text={my('list.refused')}
+          all={path}
+          allText={my('list.all')}
+        />
+      </MyPage>
+    );
+
+  const view = asked.view;
   const read = await personalRead('personal-notes', () =>
-    personalisationRuntime().saved.notes({ accountId: session.account.id }, offset),
+    personalisationRuntime().saved.notes(
+      { accountId: session.account.id },
+      myListOffset(view.page),
+    ),
   );
 
   if (!read.ok)
     return (
-      <MyPage related={related} title={t('notes.title')}>
+      <MyPage {...frame}>
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -78,7 +128,7 @@ export default async function NotesPage({
     page.items.map((entry) => entry.target),
     locale,
   );
-  const links = pageLinks(page.offset, PERSONAL_LIMITS.page, page.total);
+  const range = myListRange(view.page, page.items.length);
   const limits = { max: PERSONAL_LIMITS.noteMax };
   const messages = refusalMessages(t, {
     conflict: t('notes.conflict'),
@@ -88,18 +138,27 @@ export default async function NotesPage({
 
   return (
     <MyPage
-      related={related}
-      title={t('notes.title')}
-      description={<p>{t('notes.description')}</p>}
-      measure="reading"
+      {...frame}
+      announce={{
+        value: String(page.total),
+        message: my('live.list', { count: page.total }),
+      }}
     >
+      {range === null ? null : (
+        <MyListStatus>{my('count.notes', { ...range, total: page.total })}</MyListStatus>
+      )}
+
       {page.items.length === 0 ? (
         page.total === 0 ? (
           <EmptyState icon="list" title={my('notes.emptyTitle')}>
             {t('notes.empty')}
           </EmptyState>
         ) : (
-          <EmptyState>{t('list.beyond')}</EmptyState>
+          <MyListBeyond
+            text={my('list.beyond')}
+            first={myListHref(spec, { page: 1, filter: null })}
+            firstText={my('list.first')}
+          />
         )
       ) : (
         <ol aria-label={t('notes.list')} className="flex flex-col border-t border-border">
@@ -127,6 +186,12 @@ export default async function NotesPage({
                     pendingLabel={t('common.working')}
                     tone="destructive"
                     messages={messages}
+                    confirm={{
+                      title: my('confirm.note.title'),
+                      body: my('confirm.note.body'),
+                      confirmLabel: my('confirm.note.confirm'),
+                      cancelLabel: my('confirm.cancel'),
+                    }}
                   >
                     <input type="hidden" name="locale" value={locale} />
                     <input
@@ -189,14 +254,17 @@ export default async function NotesPage({
         </ol>
       )}
 
-      <Pager
+      <MyListPager
         label={t('notes.list')}
-        previous={
-          links.previous === null ? null : personalOffsetHref(path, links.previous)
-        }
-        next={links.next === null ? null : personalOffsetHref(path, links.next)}
-        previousLabel={t('list.previous')}
-        nextLabel={t('list.next')}
+        spec={spec}
+        view={view}
+        total={page.total}
+        locale={locale}
+        words={{
+          previous: t('list.previous'),
+          next: t('list.next'),
+          page: (number) => my('list.page', { page: number }),
+        }}
       />
     </MyPage>
   );

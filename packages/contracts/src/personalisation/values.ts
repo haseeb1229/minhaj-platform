@@ -102,6 +102,22 @@ export const READABLE_TARGET_KINDS = Object.freeze([
   'work',
 ] as const) satisfies readonly ReadableTargetKind[];
 
+/**
+ * How many of one list's entries name each kind of target — the counted
+ * filters of a My Minhaj list (My Minhaj Part 1). Every kind is present, a
+ * kind the list holds none of as `0`, so the figures add up to the list's
+ * total.
+ */
+export type TargetKindCounts = Readonly<Record<PersonalTargetKind, number>>;
+export type ReadableKindCounts = Readonly<Record<ReadableTargetKind, number>>;
+
+export const personalTargetKindSchema = z.enum(
+  PERSONAL_TARGET_KINDS as unknown as [PersonalTargetKind, ...PersonalTargetKind[]],
+);
+export const readableTargetKindSchema = z.enum(
+  READABLE_TARGET_KINDS as unknown as [ReadableTargetKind, ...ReadableTargetKind[]],
+);
+
 export const SURAH_COUNT = 114;
 /** The longest Surah's length; the Ayah foreign key is what proves existence. */
 export const AYAH_NUMBER_MAX = 286;

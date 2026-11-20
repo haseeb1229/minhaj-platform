@@ -5,7 +5,9 @@ import type { Locale } from '@minhaj/contracts';
 import { ProductBar } from '@/components/shell/product-bar';
 import { Icon } from '@/components/ui/icon';
 import { LinkTabs } from '@/components/ui/link-tabs';
-import { PageHeading } from '@/components/ui/layout';
+import { Breadcrumbs, PageHeading } from '@/components/ui/layout';
+import { ChangeAnnouncer } from './change-announcer';
+import { MY_LIST_STATUS } from './list-parts';
 
 /**
  * MY MINHAJ'S FRAME (R2) — the product bar, the area's navigation and the
@@ -81,6 +83,12 @@ export interface MyLink {
  *
  * `reading` bounds a page of prose and forms to a comfortable measure; lists
  * and the home page use the column's full width.
+ *
+ * My Minhaj Part 1 adds two things every page below the home page may carry:
+ * `trail`, where the page sits ("My Minhaj / Saved / Bookmarks", the last
+ * crumb the page itself), and `announce`, the list's state as the server
+ * rendered it — a FIXED slot in the frame, so the announcer outlives the rows
+ * and forms a change removes (`change-announcer.tsx`).
  */
 export function MyPage({
   title,
@@ -89,6 +97,8 @@ export function MyPage({
   tabs,
   related,
   measure = 'full',
+  trail,
+  announce,
   children,
 }: {
   readonly title: ReactNode;
@@ -104,6 +114,11 @@ export function MyPage({
   };
   readonly related?: { readonly label: string; readonly links: readonly MyLink[] };
   readonly measure?: 'full' | 'reading';
+  readonly trail?: {
+    readonly label: string;
+    readonly crumbs: readonly { readonly href?: string; readonly text: string }[];
+  };
+  readonly announce?: { readonly value: string; readonly message: string };
   readonly children: ReactNode;
 }) {
   const tabbed = new Set(tabs?.items.map((tab) => tab.href) ?? []);
@@ -113,6 +128,9 @@ export function MyPage({
       className={`flex w-full min-w-0 flex-col gap-8 ${measure === 'reading' ? 'max-w-3xl' : ''}`}
     >
       <div className="flex flex-col gap-5">
+        {trail === undefined ? null : (
+          <Breadcrumbs label={trail.label} trail={trail.crumbs} />
+        )}
         <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
           <div className="flex max-w-[var(--measure-prose)] min-w-0 flex-col gap-2">
             <PageHeading>{title}</PageHeading>
@@ -128,6 +146,13 @@ export function MyPage({
         </header>
         {tabs === undefined ? null : <LinkTabs label={tabs.label} tabs={tabs.items} />}
       </div>
+      {announce === undefined ? null : (
+        <ChangeAnnouncer
+          value={announce.value}
+          message={announce.message}
+          focusId={MY_LIST_STATUS}
+        />
+      )}
       {children}
       {related === undefined || neighbours.length === 0 ? null : (
         <nav aria-label={related.label} className="border-t border-border pt-4">

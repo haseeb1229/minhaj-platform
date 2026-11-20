@@ -6,11 +6,12 @@ import { identityRuntime } from '@/composition/identity';
 import { requestContext } from '@/composition/request';
 import { MyPage } from '@/components/my/frame';
 import { myPageMetadata } from '@/components/my/metadata';
-import { myTabs } from '@/components/my/sections';
+import { myTabs, myTrail } from '@/components/my/sections';
 import { requireLocale } from '@/config/route-locale';
 import { MIN_PASSWORD_LENGTH } from '@minhaj/contracts/identity';
 import {
   Alert,
+  DetailRow,
   Field,
   Panel,
   SectionHeading,
@@ -44,6 +45,12 @@ import { SecondFactorSection } from './second-factor';
  * privileged capabilities are waiting on. Gating it on the posture it exists to
  * establish would make the bootstrap and the audited recovery circular
  * (SECURITY_BASELINE.md §8.3).
+ *
+ * MY MINHAJ PART 1: the trail, the account's standing at the top — two-step
+ * verification on or off and how many devices are signed in, from the same
+ * reads the sections below make — and an index of the page's sections. Every
+ * form below keeps its own protections exactly (password re-entry, the
+ * anti-enumeration answer, the step-up hold); nothing here submits anything.
  *
  * WHAT IS STILL DELIBERATELY ABSENT. No role or permission display and no
  * privileged administration: those are the `/admin` surfaces, behind the
@@ -99,7 +106,54 @@ export default async function SecurityPage({
       description={<p>{t('security.description')}</p>}
       tabs={tabs}
       measure="reading"
+      trail={{
+        label: my('trail.label'),
+        crumbs: myTrail(locale, my('trail.home'), [
+          { path: '/settings/profile', text: my('trail.settings') },
+          { text: t('security.title') },
+        ]),
+      }}
     >
+      <div className="flex flex-col gap-4 rounded-panel border border-border bg-surface-raised p-5 shadow-panel">
+        <dl className="grid grid-cols-[minmax(0,1fr)] sm:grid-cols-2">
+          <DetailRow term={my('settings.security.twoStep')}>
+            {my(
+              posture.secondFactorEnrolled && posture.recoveryCodesConfirmed
+                ? 'settings.security.twoStepOn'
+                : posture.secondFactorEnrolled || posture.reenrolmentRequired
+                  ? 'settings.security.twoStepAttention'
+                  : 'settings.security.twoStepOff',
+            )}
+          </DetailRow>
+          <DetailRow term={my('settings.security.devices')}>
+            {my('settings.security.devicesCount', { count: sessions.length })}
+          </DetailRow>
+        </dl>
+        <nav aria-label={my('settings.security.index')}>
+          <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+            {(
+              [
+                ['password-heading', t('security.changePassword')],
+                ['email-heading', t('security.changeEmail')],
+                ['second-factor-heading', t('security.twoFactor')],
+                ['sessions-heading', my('settings.security.sessionsLink')],
+                ['methods-heading', t('security.methods')],
+                ['close-heading', t('security.close')],
+              ] as const
+            ).map(([id, text]) => (
+              <li key={id}>
+                <a
+                  href={`#${id}`}
+                  className="inline-flex min-h-11 items-center font-semibold text-action underline-offset-4 hover:underline"
+                >
+                  {text}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </div>
+
       {/* ---- Password ---------------------------------------------------- */}
 
       <section className="flex flex-col gap-3" aria-labelledby="password-heading">

@@ -30,8 +30,12 @@ import type {
   PersonalTarget,
   QuranProgress,
   QuranProgressWriteValue,
+  ReadableKindCounts,
   ReadableTarget,
+  ReadableTargetKind,
   SavedEntry,
+  TargetKindCounts,
+  PersonalTargetKind,
 } from './values.ts';
 import type { Locale } from '../env/shared.ts';
 
@@ -67,7 +71,18 @@ export interface PersonalSavedPort {
   bookmark(accountId: string, target: PersonalTarget, savedItemId: string): Promise<void>;
   /** Idempotent: removing what is not there changes nothing. */
   unbookmark(accountId: string, target: PersonalTarget): Promise<void>;
-  bookmarks(accountId: string, offset: number): Promise<BookmarkPage>;
+  /**
+   * One page of the account's bookmarks, newest first — every kind, or only
+   * `kind` when one is named (My Minhaj Part 1). The total is the filtered
+   * list's.
+   */
+  bookmarks(
+    accountId: string,
+    offset: number,
+    kind?: PersonalTargetKind,
+  ): Promise<BookmarkPage>;
+  /** How many of the account's bookmarks name each kind of target. */
+  bookmarkKinds(accountId: string): Promise<TargetKindCounts>;
 
   writeNote(
     accountId: string,
@@ -121,7 +136,14 @@ export interface PersonalHistoryPort {
    */
   recordRead(accountId: string, target: ReadableTarget, at: Date): Promise<void>;
   recordWatch(accountId: string, videoId: string, at: Date): Promise<void>;
-  reading(accountId: string, offset: number): Promise<ReadingPage>;
+  /** One page of reading history, every kind or only `kind` (My Minhaj Part 1). */
+  reading(
+    accountId: string,
+    offset: number,
+    kind?: ReadableTargetKind,
+  ): Promise<ReadingPage>;
+  /** How many reading-history entries name each kind of target. */
+  readingKinds(accountId: string): Promise<ReadableKindCounts>;
   watching(accountId: string, offset: number): Promise<WatchPage>;
   removeRead(accountId: string, target: ReadableTarget): Promise<void>;
   removeWatch(accountId: string, videoId: string): Promise<void>;
@@ -163,7 +185,15 @@ export interface PersonalNotificationPort {
     notificationId: string,
     at: Date,
   ): Promise<'created' | 'duplicate' | 'muted'>;
-  notifications(accountId: string, offset: number): Promise<NotificationPage>;
+  /**
+   * One page of notifications, newest first — all of them, or only the unread
+   * when `unreadOnly` (My Minhaj Part 1). The total is the filtered list's.
+   */
+  notifications(
+    accountId: string,
+    offset: number,
+    unreadOnly?: boolean,
+  ): Promise<NotificationPage>;
   unread(accountId: string): Promise<number>;
   markRead(accountId: string, notificationId: string, at: Date): Promise<void>;
   markAllRead(accountId: string, at: Date): Promise<number>;

@@ -5,7 +5,9 @@ import { Prisma } from '@prisma/client';
 import {
   PERSONAL_LIMITS,
   type PersonalTarget,
+  type ReadableKindCounts,
   type ReadableTarget,
+  type TargetKindCounts,
 } from '@minhaj/contracts/personalisation';
 
 /**
@@ -197,6 +199,84 @@ export function targetPredicate(target: PersonalTarget, alias: string): Prisma.S
     case 'ayah':
       return Prisma.sql`${column('surahNumber')} = ${target.surah} AND ${column('ayahNumber')} = ${target.ayah}`;
   }
+}
+
+/**
+ * A SQL predicate matching every row of one KIND on a table carrying the typed
+ * columns — `TRUE` when no kind is named. The kind is the typed foreign key
+ * that holds a value, exactly as `targetOf` reads it; the column comes from
+ * this fixed table, never from anything a caller wrote.
+ */
+export function kindPredicate(
+  kind: PersonalTarget['kind'] | undefined,
+  alias: string,
+): Prisma.Sql {
+  if (kind === undefined) return Prisma.sql`1 = 1`;
+  return Prisma.raw(`${alias}.[${kindColumn(kind)}] IS NOT NULL`);
+}
+
+/** The column whose value makes a row a target of each kind. */
+const KIND_COLUMNS: Readonly<Record<PersonalTarget['kind'], string>> = Object.freeze({
+  article: 'articleId',
+  work: 'workId',
+  video: 'videoId',
+  hadith: 'hadithCitationId',
+  ayah: 'surahNumber',
+});
+
+/** A kind's column — and a refusal, never a guess, for anything else. */
+function kindColumn(kind: string): string {
+  if (!Object.hasOwn(KIND_COLUMNS, kind)) throw new PersonalDataError('invalid');
+  return KIND_COLUMNS[kind as PersonalTarget['kind']];
+}
+
+/**
+ * Per-kind counts of the rows `alias` names, as one SELECT list — one
+ * `SUM(CASE …)` per kind, named by the kind. A kind with no such column on the
+ * table (reading history has no `videoId`) is left out by the caller.
+ */
+export function kindCountSelect(
+  kinds: readonly PersonalTarget['kind'][],
+  alias: string,
+): Prisma.Sql {
+  return Prisma.raw(
+    kinds
+      .map(
+        (kind) =>
+          `SUM(CASE WHEN ${alias}.[${kindColumn(kind)}] IS NOT NULL THEN 1 ELSE 0 END) AS [${kind}]`,
+      )
+      .join(', '),
+  );
+}
+
+/** One `kindCountSelect` row as the database returned it. */
+export type KindCountRow =
+  Partial<Record<PersonalTarget['kind'], number | null>> | undefined;
+
+/**
+ * A `kindCountSelect` row as whole numbers, every kind present: SQL Server's
+ * `SUM` over no rows is NULL, which is a count of nothing.
+ */
+export function targetKindCounts(row: KindCountRow): TargetKindCounts {
+  const count = (kind: PersonalTarget['kind']) => Number(row?.[kind] ?? 0);
+  return Object.freeze({
+    ayah: count('ayah'),
+    hadith: count('hadith'),
+    article: count('article'),
+    work: count('work'),
+    video: count('video'),
+  });
+}
+
+/** The same, for reading history, which holds no video. */
+export function readableKindCounts(row: KindCountRow): ReadableKindCounts {
+  const count = (kind: PersonalTarget['kind']) => Number(row?.[kind] ?? 0);
+  return Object.freeze({
+    ayah: count('ayah'),
+    hadith: count('hadith'),
+    article: count('article'),
+    work: count('work'),
+  });
 }
 
 /** The six typed target columns, selected from `alias`. */

@@ -5,7 +5,9 @@ import { getTranslations } from 'next-intl/server';
 import { PERSONAL_LIMITS } from '@minhaj/contracts/personalisation';
 
 import { MyPage, MySection } from '@/components/my/frame';
+import { MyListStatus } from '@/components/my/list-parts';
 import { myPageMetadata } from '@/components/my/metadata';
+import { myTabs, myTrail } from '@/components/my/sections';
 import { shortDate } from '@/components/my/time';
 import { refusalMessages } from '@/components/personal/parts';
 import { personalRead } from '@/components/personal/read';
@@ -34,7 +36,9 @@ import { createCollectionAction } from '../actions';
  * words on the page.
  *
  * BOUNDED: an account holds at most `PERSONAL_LIMITS.collections` lists, so
- * the whole set is one page.
+ * the whole set is one page — said in figures ("3 of your 50 collections"),
+ * most recently changed first (My Minhaj Part 1, with the Saved views as tabs
+ * and the trail).
  */
 export async function generateMetadata({
   params,
@@ -79,9 +83,28 @@ export default async function MyCollectionsPage({
           <p className="text-sm">{t('collections.distinct')}</p>
         </>
       }
+      tabs={{
+        label: my('tabs.label.saved'),
+        items: myTabs(locale, 'saved', 'collections', (key) => my(`tabs.${key}`)),
+      }}
+      trail={{
+        label: my('trail.label'),
+        crumbs: myTrail(locale, my('trail.home'), [
+          { path: '/saved', text: my('trail.saved') },
+          { text: t('collections.title') },
+        ]),
+      }}
     >
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-10 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="min-w-0">
+        <div className="flex min-w-0 flex-col gap-4">
+          {read.ok && read.value.length > 0 ? (
+            <MyListStatus>
+              {my('count.collections', {
+                count: read.value.length,
+                max: limits.collections,
+              })}
+            </MyListStatus>
+          ) : null}
           {!read.ok ? (
             <Alert tone="error">{t('failure.load')}</Alert>
           ) : read.value.length === 0 ? (
@@ -121,7 +144,7 @@ export default async function MyCollectionsPage({
                   <div className="mt-auto pt-1">
                     <MetaRow
                       items={[
-                        t('collections.items', { count: collection.itemCount }),
+                        my('collections.items', { count: collection.itemCount }),
                         my('collections.changed', {
                           date: shortDate(
                             new Date(collection.updatedAt),

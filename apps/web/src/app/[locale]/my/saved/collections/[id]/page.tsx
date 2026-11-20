@@ -10,7 +10,10 @@ import {
 } from '@minhaj/contracts/personalisation';
 
 import { MyPage } from '@/components/my/frame';
+import { MyListStatus } from '@/components/my/list-parts';
 import { myPageMetadata } from '@/components/my/metadata';
+import { myTrail } from '@/components/my/sections';
+import { shortDate } from '@/components/my/time';
 import { TargetItem } from '@/components/my/targets';
 import { ConfirmField, refusalMessages } from '@/components/personal/parts';
 import { encodeTarget } from '@/components/personal/presentation';
@@ -51,6 +54,11 @@ import {
  *
  * Members are added from the public pages themselves; this page renames,
  * re-describes, reorders, removes members and deletes the list.
+ *
+ * MY MINHAJ PART 1: the trail back to the person's collections, how many
+ * items it holds and when it last changed, each item's place ("2 of 5"), and
+ * every reorder or removal said aloud once the page has the new order — the
+ * pressed button may have moved or gone.
  */
 export async function generateMetadata({
   params,
@@ -87,14 +95,27 @@ export default async function MyCollectionPage({
   );
   if (valid === null) notFound();
   const t = await getTranslations({ locale, namespace: 'personal' });
+  const my = await getTranslations({ locale, namespace: 'my' });
   const related = { label: t('nav.label'), links: savedLinks(locale, t) };
   const read = await personalRead('personal-collection', () =>
     personalisationRuntime().saved.collection({ accountId: session.account.id }, valid),
   );
+  const trail = (title: string) => ({
+    label: my('trail.label'),
+    crumbs: myTrail(locale, my('trail.home'), [
+      { path: '/saved', text: my('trail.saved') },
+      { path: '/saved/collections', text: t('collections.title') },
+      { text: title },
+    ]),
+  });
 
   if (!read.ok)
     return (
-      <MyPage related={related} title={t('collection.title')}>
+      <MyPage
+        related={related}
+        title={t('collection.title')}
+        trail={trail(t('collection.title'))}
+      >
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -126,6 +147,11 @@ export default async function MyCollectionPage({
   return (
     <MyPage
       related={related}
+      trail={trail(collection.title)}
+      announce={{
+        value: order.join(','),
+        message: my('live.collection', { count: members.length }),
+      }}
       title={
         <span dir="auto" className="wrap-anywhere">
           {collection.title}
@@ -146,6 +172,16 @@ export default async function MyCollectionPage({
         <span id="collection-members">
           <SectionHeading>{t('collection.members')}</SectionHeading>
         </span>
+        <MyListStatus>
+          {my('collection.summary', {
+            count: members.length,
+            date: shortDate(
+              new Date(collection.updatedAt),
+              locale,
+              session.account.timezone,
+            ),
+          })}
+        </MyListStatus>
         {members.length === 0 ? (
           <EmptyState>{t('collection.empty')}</EmptyState>
         ) : (
@@ -163,7 +199,12 @@ export default async function MyCollectionPage({
                   unavailable: t('target.unavailable'),
                   unknown: t('target.unknown'),
                 }}
-                meta={[t('collection.position', { position: index + 1 })]}
+                meta={[
+                  my('collection.position', {
+                    position: index + 1,
+                    count: members.length,
+                  }),
+                ]}
                 actions={
                   <>
                     {index === 0 ? null : (

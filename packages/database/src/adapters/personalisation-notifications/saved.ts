@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 
 import {
   PERSONAL_LIMITS,
+  PERSONAL_TARGET_KINDS,
   type BookmarkEntry,
   type CollectionMember,
   type CollectionSummary,
@@ -22,11 +23,15 @@ import {
   columnsOf,
   iso,
   isUniqueViolation,
+  kindCountSelect,
+  kindPredicate,
   refuse,
+  targetKindCounts,
   targetOf,
   targetPredicate,
   targetSelect,
   type Client,
+  type KindCountRow,
   type TargetRow,
 } from './shared.ts';
 
@@ -238,19 +243,20 @@ export function createPersonalSaved(): PersonalSavedPort {
       }
     },
 
-    async bookmarks(accountId, offset) {
+    async bookmarks(accountId, offset, kind) {
       try {
         const skip = boundedOffset(offset);
+        const only = kindPredicate(kind, 's');
         const [counted, rows] = await Promise.all([
           db.$queryRaw<{ total: number }[]>`
             SELECT COUNT(*) AS [total] FROM [dbo].[Bookmark] b
             JOIN [dbo].[SavedItem] s ON s.[id] = b.[savedItemId]
-            WHERE s.[userId] = ${accountId}`,
+            WHERE s.[userId] = ${accountId} AND ${only}`,
           db.$queryRaw<(SavedRow & { bookmarkedAt: Date })[]>`
             SELECT s.[id], s.[createdAt], b.[createdAt] AS [bookmarkedAt], ${targetSelect('s')}
             FROM [dbo].[Bookmark] b
             JOIN [dbo].[SavedItem] s ON s.[id] = b.[savedItemId]
-            WHERE s.[userId] = ${accountId}
+            WHERE s.[userId] = ${accountId} AND ${only}
             ORDER BY b.[createdAt] DESC, s.[id]
             OFFSET ${skip} ROWS FETCH NEXT ${PAGE} ROWS ONLY`,
         ]);
@@ -262,6 +268,19 @@ export function createPersonalSaved(): PersonalSavedPort {
           total: Number(counted[0]?.total ?? 0),
           offset: skip,
         };
+      } catch (error) {
+        refuse(error);
+      }
+    },
+
+    async bookmarkKinds(accountId) {
+      try {
+        const [row] = await db.$queryRaw<NonNullable<KindCountRow>[]>`
+          SELECT ${kindCountSelect(PERSONAL_TARGET_KINDS, 's')}
+          FROM [dbo].[Bookmark] b
+          JOIN [dbo].[SavedItem] s ON s.[id] = b.[savedItemId]
+          WHERE s.[userId] = ${accountId}`;
+        return targetKindCounts(row);
       } catch (error) {
         refuse(error);
       }

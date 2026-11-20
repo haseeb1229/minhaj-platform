@@ -6,7 +6,7 @@ import { refusalMessages } from '@/components/personal/parts';
 import { personalRead } from '@/components/personal/read';
 import { Alert, Panel, StatusBadge, TextLink } from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
-import { myTabs } from '@/components/my/sections';
+import { myTabs, myTrail } from '@/components/my/sections';
 import { MyPage } from '@/components/my/frame';
 import { myPageMetadata } from '@/components/my/metadata';
 import { requireLocale } from '@/config/route-locale';
@@ -77,6 +77,13 @@ export default async function NotificationSettingsPage({
       measure="reading"
       title={t('notificationSettings.title')}
       description={description}
+      trail={{
+        label: my('trail.label'),
+        crumbs: myTrail(locale, my('trail.home'), [
+          { path: '/settings/profile', text: my('trail.settings') },
+          { text: t('notificationSettings.title') },
+        ]),
+      }}
     >
       {!read.ok ? (
         <Alert tone="error">{t('failure.load')}</Alert>
@@ -125,6 +132,11 @@ export default async function NotificationSettingsPage({
           ))}
         </ul>
       )}
+      <p className="text-sm">
+        <TextLink href={localizedPath(locale, '/my/notifications')}>
+          {my('settings.notifications.list')}
+        </TextLink>
+      </p>
     </MyPage>
   );
 }

@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { Prisma } from '@prisma/client';
+
 import {
   NOTIFICATION_KIND_CATEGORY,
   PERSONAL_LIMITS,
@@ -71,12 +73,15 @@ export function createPersonalNotifications(): PersonalNotificationPort {
       }
     },
 
-    async notifications(accountId, offset) {
+    async notifications(accountId, offset, unreadOnly) {
       try {
         const skip = boundedOffset(offset);
+        const only =
+          unreadOnly === true ? Prisma.sql`[readAt] IS NULL` : Prisma.sql`1 = 1`;
         const [counted, rows] = await Promise.all([
           db.$queryRaw<{ total: number }[]>`
-            SELECT COUNT(*) AS [total] FROM [dbo].[Notification] WHERE [userId] = ${accountId}`,
+            SELECT COUNT(*) AS [total] FROM [dbo].[Notification]
+            WHERE [userId] = ${accountId} AND ${only}`,
           db.$queryRaw<
             {
               id: string;
@@ -89,7 +94,7 @@ export function createPersonalNotifications(): PersonalNotificationPort {
           >`
             SELECT [id], [kind], [category], [destination], [createdAt], [readAt]
             FROM [dbo].[Notification]
-            WHERE [userId] = ${accountId}
+            WHERE [userId] = ${accountId} AND ${only}
             ORDER BY [createdAt] DESC, [id]
             OFFSET ${skip} ROWS FETCH NEXT ${PAGE} ROWS ONLY`,
         ]);

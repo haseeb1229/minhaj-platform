@@ -1266,3 +1266,115 @@ describe('a target key is one stable string per target', () => {
     );
   });
 });
+
+/* ===========================================================================
+ * My Minhaj Part 1 — the lists' filters and their counts
+ * ========================================================================= */
+
+describe('a list filter is the actor’s own list, narrowed only by a valid value', () => {
+  it('refuses a bad actor before any port, for the filtered reads and the counts', async () => {
+    const h = services();
+    const actor = { accountId: '' };
+    for (const attempt of [
+      h.savedService.bookmarks(actor, 0, 'work'),
+      h.savedService.bookmarkKinds(actor),
+      h.historyService.reading(actor, 0, 'ayah'),
+      h.historyService.readingKinds(actor),
+      h.notificationService.notifications(actor, 0, true),
+    ])
+      expect(await reasonOf(attempt)).toBe('denied');
+    expect(h.saved.calls).toEqual([]);
+    expect(h.history.calls).toEqual([]);
+    expect(h.notifications.calls).toEqual([]);
+  });
+
+  it.each([
+    ['an unknown kind', 'book'],
+    ['an empty kind', ''],
+    ['a kind in another case', 'Work'],
+    ['a number', 4],
+    ['an object', { kind: 'work' }],
+    ['a list', ['work']],
+  ])('refuses %s as invalid, never widening to the whole list', async (_label, kind) => {
+    const h = services();
+    expect(await reasonOf(settle(() => h.savedService.bookmarks(ACTOR, 0, kind)))).toBe(
+      'invalid',
+    );
+    expect(await reasonOf(settle(() => h.historyService.reading(ACTOR, 0, kind)))).toBe(
+      'invalid',
+    );
+    expect(h.saved.calls).toEqual([]);
+    expect(h.history.calls).toEqual([]);
+  });
+
+  it('refuses a video filter on reading history, which never holds one', async () => {
+    const h = services();
+    expect(
+      await reasonOf(settle(() => h.historyService.reading(ACTOR, 0, 'video'))),
+    ).toBe('invalid');
+    expect(h.history.calls).toEqual([]);
+  });
+
+  it('hands the port exactly the named kind, and no kind for none', async () => {
+    const h = services();
+    await h.savedService.bookmarks(ACTOR, 20, 'hadith');
+    await h.savedService.bookmarks(ACTOR, 0);
+    await h.savedService.bookmarks(ACTOR, 0, null);
+    await h.historyService.reading(ACTOR, 40, 'work');
+    await h.historyService.reading(ACTOR, 0);
+    expect(h.saved.calls.map((call) => call.args)).toEqual([
+      [ACTOR.accountId, 20, 'hadith'],
+      [ACTOR.accountId, 0, undefined],
+      [ACTOR.accountId, 0, undefined],
+    ]);
+    expect(h.history.calls.map((call) => call.args)).toEqual([
+      [ACTOR.accountId, 40, 'work'],
+      [ACTOR.accountId, 0, undefined],
+    ]);
+  });
+
+  it('asks the counts of the actor’s own account and nothing else', async () => {
+    const h = services();
+    await h.savedService.bookmarkKinds(ACTOR);
+    await h.historyService.readingKinds(ACTOR);
+    expect(h.saved.calls).toEqual([{ method: 'bookmarkKinds', args: [ACTOR.accountId] }]);
+    expect(h.history.calls).toEqual([
+      { method: 'readingKinds', args: [ACTOR.accountId] },
+    ]);
+    expect(h.budget.consumed).toEqual([]);
+  });
+
+  it.each([
+    ['a string', 'true'],
+    ['a number', 1],
+    ['null', null],
+  ])('refuses %s as the unread filter', async (_label, unreadOnly) => {
+    const h = services();
+    expect(
+      await reasonOf(
+        settle(() => h.notificationService.notifications(ACTOR, 0, unreadOnly)),
+      ),
+    ).toBe('invalid');
+    expect(h.notifications.calls).toEqual([]);
+  });
+
+  it('passes the unread filter through, and reads everything by default', async () => {
+    const h = services();
+    await h.notificationService.notifications(ACTOR, 0, true);
+    await h.notificationService.notifications(ACTOR, 20);
+    expect(h.notifications.calls.map((call) => call.args)).toEqual([
+      [ACTOR.accountId, 0, true],
+      [ACTOR.accountId, 20, false],
+    ]);
+  });
+
+  it('clamps a malformed offset to the first page, filtered or not', async () => {
+    const h = services();
+    await h.savedService.bookmarks(ACTOR, -5, 'work');
+    await h.historyService.reading(ACTOR, Number.NaN, 'ayah');
+    await h.notificationService.notifications(ACTOR, 10_001, true);
+    expect(h.saved.calls[0]?.args).toEqual([ACTOR.accountId, 0, 'work']);
+    expect(h.history.calls[0]?.args).toEqual([ACTOR.accountId, 0, 'ayah']);
+    expect(h.notifications.calls[0]?.args).toEqual([ACTOR.accountId, 0, true]);
+  });
+});

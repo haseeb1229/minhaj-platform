@@ -1,22 +1,31 @@
 import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
+import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
-import { PERSONAL_LIMITS, targetKey } from '@minhaj/contracts/personalisation';
+import { targetKey } from '@minhaj/contracts/personalisation';
 
-import { pageLinks } from '@/components/hadith/presentation';
 import { MyPage } from '@/components/my/frame';
+import {
+  MyListBeyond,
+  MyListPager,
+  MyListRefused,
+  MyListStatus,
+} from '@/components/my/list-parts';
+import {
+  myListHref,
+  myListOffset,
+  myListRange,
+  readMyList,
+  type MyListSpec,
+} from '@/components/my/list-view';
 import { myPageMetadata } from '@/components/my/metadata';
-import { myTabs } from '@/components/my/sections';
+import { myTabs, myTrail } from '@/components/my/sections';
 import { TargetItem } from '@/components/my/targets';
 import { shortDate } from '@/components/my/time';
 import { refusalMessages } from '@/components/personal/parts';
-import {
-  personalOffsetHref,
-  readPersonalOffset,
-} from '@/components/personal/presentation';
 import { personalRead } from '@/components/personal/read';
-import { Alert, EmptyState, Pager } from '@/components/ui';
+import { Alert, EmptyState } from '@/components/ui';
 import { personalisationRuntime } from '@/composition/personalisation';
 import { resolvePersonalTargets } from '@/composition/personal-targets';
 import { historyLinks } from '@/components/personal/nav';
@@ -31,6 +40,10 @@ import { ClearHistory, HistoryOffNotice } from '../shared';
  * recorded ONLY while they have history turned on (ROUTE_MAP.md §5.1;
  * Phase 21). One entry per video, the last time it was watched, and every
  * entry removable here.
+ *
+ * MY MINHAJ PART 1: "Showing n–m of N", numbered pages (`?page=`, one address
+ * per view), and a removal said aloud once its row has gone. Every entry is a
+ * video, so there is nothing to filter by.
  */
 export async function generateMetadata({
   params,
@@ -54,22 +67,51 @@ export default async function WatchHistoryPage({
   const path = localizedPath(locale, '/my/history/watch');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'personal' });
-  const related = { label: t('nav.label'), links: historyLinks(locale, t) };
   const my = await getTranslations({ locale, namespace: 'my' });
+  const related = { label: t('nav.label'), links: historyLinks(locale, t) };
+  const spec: MyListSpec<never> = { path };
+  const asked = readMyList(spec, await searchParams);
+  if (asked.outcome === 'redirect') redirect(asked.to);
+
+  const frame = {
+    related,
+    title: t('history.watchTitle'),
+    description: <p>{t('history.watchDescription')}</p>,
+    tabs: {
+      label: my('tabs.label.history'),
+      items: myTabs(locale, 'history', 'watch', (key) => my(`tabs.${key}`)),
+    },
+    trail: {
+      label: my('trail.label'),
+      crumbs: myTrail(locale, my('trail.home'), [{ text: t('history.watchTitle') }]),
+    },
+  };
+
+  if (asked.outcome === 'refused')
+    return (
+      <MyPage {...frame}>
+        <MyListRefused
+          title={my('list.refusedTitle')}
+          text={my('list.refused')}
+          all={path}
+          allText={my('list.all')}
+        />
+      </MyPage>
+    );
+
+  const view = asked.view;
   const actor = { accountId: session.account.id };
-  const offset = readPersonalOffset(await searchParams);
   const { history, settings } = personalisationRuntime();
   const read = await personalRead('personal-watch-history', () =>
-    Promise.all([settings.settings(actor), history.watching(actor, offset)]),
+    Promise.all([
+      settings.settings(actor),
+      history.watching(actor, myListOffset(view.page)),
+    ]),
   );
-  const tabs = {
-    label: my('tabs.label.history'),
-    items: myTabs(locale, 'history', 'watch', (key) => my(`tabs.${key}`)),
-  };
 
   if (!read.ok)
     return (
-      <MyPage related={related} title={t('history.watchTitle')} tabs={tabs}>
+      <MyPage {...frame}>
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -80,17 +122,22 @@ export default async function WatchHistoryPage({
     page.items.map((entry) => video(entry.videoId)),
     locale,
   );
-  const links = pageLinks(page.offset, PERSONAL_LIMITS.page, page.total);
   const timeZone = session.account.timezone;
+  const range = myListRange(view.page, page.items.length);
 
   return (
     <MyPage
-      related={related}
-      title={t('history.watchTitle')}
-      description={<p>{t('history.watchDescription')}</p>}
-      tabs={tabs}
+      {...frame}
+      announce={{
+        value: String(page.total),
+        message: my('live.list', { count: page.total }),
+      }}
     >
       {current.historyEnabled ? null : <HistoryOffNotice locale={locale} t={t} />}
+
+      {range === null ? null : (
+        <MyListStatus>{my('count.watch', { ...range, total: page.total })}</MyListStatus>
+      )}
 
       {page.items.length === 0 ? (
         page.total === 0 ? (
@@ -105,7 +152,11 @@ export default async function WatchHistoryPage({
             {t('history.watchEmpty')}
           </EmptyState>
         ) : (
-          <EmptyState>{t('list.beyond')}</EmptyState>
+          <MyListBeyond
+            text={my('list.beyond')}
+            first={myListHref(spec, { page: 1, filter: null })}
+            firstText={my('list.first')}
+          />
         )
       ) : (
         <ol
@@ -144,14 +195,17 @@ export default async function WatchHistoryPage({
         </ol>
       )}
 
-      <Pager
+      <MyListPager
         label={t('history.watchList')}
-        previous={
-          links.previous === null ? null : personalOffsetHref(path, links.previous)
-        }
-        next={links.next === null ? null : personalOffsetHref(path, links.next)}
-        previousLabel={t('list.previous')}
-        nextLabel={t('list.next')}
+        spec={spec}
+        view={view}
+        total={page.total}
+        locale={locale}
+        words={{
+          previous: t('list.previous'),
+          next: t('list.next'),
+          page: (number) => my('list.page', { page: number }),
+        }}
       />
 
       {page.total === 0 ? null : <ClearHistory locale={locale} t={t} />}

@@ -5,6 +5,7 @@ import {
   personalAccountIdSchema,
   type PersonalTarget,
 } from '@minhaj/contracts/personalisation';
+import type { z } from 'zod';
 import type { RateLimitRule, RateLimiterPort } from '@minhaj/contracts/platform';
 
 import { PersonalRefusal } from '../domain/refusal.ts';
@@ -41,6 +42,18 @@ export function actorOk(actor: PersonalActor): boolean {
 
 export function requireActor(actor: PersonalActor): void {
   if (!actorOk(actor)) throw new PersonalRefusal('denied');
+}
+
+/**
+ * A list's optional filter (My Minhaj Part 1): absent or `null` is no filter;
+ * anything else must be exactly a value of `schema`, or the read is refused
+ * as invalid — never widened to the whole list, never repaired.
+ */
+export function optionalFilter<T>(schema: z.ZodType<T>, value: unknown): T | undefined {
+  if (value === undefined || value === null) return undefined;
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) throw new PersonalRefusal('invalid');
+  return parsed.data;
 }
 
 export function safeOffset(value: number): number {

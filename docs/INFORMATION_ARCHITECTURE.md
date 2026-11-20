@@ -877,6 +877,24 @@ direction:* under R2 a section was offered only while the deployment had switche
 on, from each owner's session-free read (the former `my/capabilities.ts`), and the Home overview's
 modules rendered only when there was something to show.
 
+**My Minhaj Part 1 (R2, November 2026)** brings Home, Saved, History, Quran reading progress,
+Course progress, Notifications and Settings to the public sections' standard. Every page below the
+home page carries a trail from "My Minhaj" ("My Minhaj / Saved / Notes"); the four Saved views —
+Saved, Bookmarks, Notes, Collections — are tabs of one another. The home page opens, once an account
+holds anything, on figures that are true and each lead to their list (bookmarks, notes, collections,
+history entries while history is on, unread notifications and messages, and the courses taken when
+the whole list is known), and History shows the last few things read. Bookmarks and Reading history
+are counted by kind (All, Ayat, Hadith, Articles, Books, Videos) and Notifications by All and Unread,
+each a tab with its own address; every list says "Showing n–m of N" and pages by number. Deleting a
+note, clearing read notifications and clearing the Quran position each ask first; removing a row,
+marking read and reordering are said aloud once the page has the change, and focus never falls off
+the page. The Quran position says where it stands in the Mushaf (Surah n of 114, ayah n of the
+Surah, ayah n of 6,236) and how it is set. Security opens on the account's standing (two-step
+verification, signed-in devices) and an index of its parts; Privacy gathers its five downloads under
+one "Download your data"; Profile shows the sign-in address with the way to change it; Interests
+are tiles. Part 2 (Learning, Classes, Teachers, Messages, Questions, Membership, Donations) follows
+separately.
+
 The tree below is unchanged as a statement of what exists; Certificates and Learning Streaks stay
 absent (ROUTE_MAP.md §5).
 

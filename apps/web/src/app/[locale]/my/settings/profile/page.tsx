@@ -4,9 +4,16 @@ import { getTranslations } from 'next-intl/server';
 
 import { MyPage } from '@/components/my/frame';
 import { myPageMetadata } from '@/components/my/metadata';
-import { myTabs } from '@/components/my/sections';
+import { myTabs, myTrail } from '@/components/my/sections';
 import { requireLocale } from '@/config/route-locale';
-import { Field, Panel, TextInput } from '@/components/ui';
+import {
+  DetailRow,
+  Field,
+  Panel,
+  SectionHeading,
+  TextLink,
+  TextInput,
+} from '@/components/ui';
 import { ActionForm } from '../../../(identity)/form-state';
 import { updateProfileAction } from '../../../(identity)/actions';
 import { requireActiveSession } from '../../guard';
@@ -17,6 +24,10 @@ import { requireActiveSession } from '../../guard';
  * A user account is application identity. It is NOT automatically a public
  * Person profile, and nothing here creates or implies one — contributor
  * profiles belong to People & Contributors in Phase 5 (§5.2).
+ *
+ * MY MINHAJ PART 1: the trail, and the account's sign-in address shown — read
+ * only, from the session — with the way to change it, which is Security's
+ * (behind the password). Nothing here changes it.
  */
 export async function generateMetadata({
   params,
@@ -55,6 +66,13 @@ export default async function ProfilePage({
       description={<p>{t('profile.description')}</p>}
       tabs={tabs}
       measure="reading"
+      trail={{
+        label: my('trail.label'),
+        crumbs: myTrail(locale, my('trail.home'), [
+          { path: '/settings/profile', text: my('trail.settings') },
+          { text: t('profile.title') },
+        ]),
+      }}
     >
       <Panel>
         <ActionForm
@@ -81,6 +99,25 @@ export default async function ProfilePage({
           </Field>
         </ActionForm>
       </Panel>
+
+      <section className="flex flex-col gap-3" aria-labelledby="profile-email">
+        <span id="profile-email">
+          <SectionHeading>{my('settings.profile.emailHeading')}</SectionHeading>
+        </span>
+        <Panel>
+          <dl>
+            <DetailRow term={t('common.email')}>
+              <bdi className="wrap-anywhere">{session.account.email}</bdi>
+            </DetailRow>
+          </dl>
+          <p className="mt-3 text-sm text-foreground-muted">
+            {my('settings.profile.emailHelp')}{' '}
+            <TextLink href={localizedPath(locale, '/my/settings/security#email-heading')}>
+              {my('settings.profile.emailLink')}
+            </TextLink>
+          </p>
+        </Panel>
+      </section>
     </MyPage>
   );
 }

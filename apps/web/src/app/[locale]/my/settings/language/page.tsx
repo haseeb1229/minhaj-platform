@@ -5,7 +5,7 @@ import { getTranslations } from 'next-intl/server';
 import { endonymOf } from '@/config/locale';
 import { MyPage } from '@/components/my/frame';
 import { myPageMetadata } from '@/components/my/metadata';
-import { myTabs } from '@/components/my/sections';
+import { myTabs, myTrail } from '@/components/my/sections';
 import { TimeZonePicker } from '@/components/my/time-zone-picker';
 import { timeZoneChoices } from '@/components/my/time-zones';
 import { requireLocale } from '@/config/route-locale';
@@ -61,6 +61,13 @@ export default async function LanguagePage({
       description={<p>{t('language.description')}</p>}
       tabs={tabs}
       measure="reading"
+      trail={{
+        label: my('trail.label'),
+        crumbs: myTrail(locale, my('trail.home'), [
+          { path: '/settings/profile', text: my('trail.settings') },
+          { text: t('language.title') },
+        ]),
+      }}
     >
       <Panel>
         <ActionForm

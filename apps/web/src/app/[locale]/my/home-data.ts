@@ -27,8 +27,8 @@ import {
  * blanks another's module.
  *
  * NOTHING NEW IS READ. Every call here is one the area's pages already make:
- * Personalisation's saved items, history, Quran position, settings and
- * notifications; Learning's enrolments and upcoming classes, and the meeting
+ * Personalisation's saved items and their counts, history, Quran position,
+ * settings and notifications; Learning's enrolments and upcoming classes, and the meeting
  * address only through its disclosure read; Messaging's conversation list and
  * unread total; Fatwa's own-questions list; Membership's applicant state;
  * Donations' own history. Titles of saved and read things are their owners'
@@ -43,14 +43,17 @@ import {
 const SAVED_SHELF = 8;
 const NOTIFICATIONS = 5;
 const CONVERSATIONS = 3;
+/** Recently read things in the history module (My Minhaj Part 1). */
+const RECENT_READS = 3;
 
 /** Personalisation's reads for the home page, in one round. */
 async function personalPanels(accountId: string) {
   const actor = { accountId };
   const { saved, history, settings, notifications } = personalisationRuntime();
-  const [current, recent, progress, unread, latest] = await Promise.all([
+  const [current, recent, counts, progress, unread, latest] = await Promise.all([
     settings.settings(actor),
     saved.recent(actor, SAVED_SHELF),
+    saved.counts(actor),
     history.quranProgress(actor),
     notifications.unread(actor),
     notifications.notifications(actor, 0),
@@ -61,12 +64,17 @@ async function personalPanels(accountId: string) {
   return {
     settings: current,
     saved: recent,
+    counts,
     quran: progress,
     unread,
     notifications: latest.items.slice(0, NOTIFICATIONS),
     notificationTotal: latest.total,
     lastRead: reading?.items[0] ?? null,
+    recentReads: reading?.items.slice(0, RECENT_READS) ?? [],
     lastWatched: watching?.items[0] ?? null,
+    /** History entries kept, while history is on; null while it is off. */
+    historyTotal:
+      reading === null || watching === null ? null : reading.total + watching.total,
   };
 }
 
@@ -127,10 +135,9 @@ export async function readHome(accountId: string, locale: Locale) {
   const lastWatched = panels === null ? null : panels.lastWatched;
   const watched: PersonalTarget | null =
     lastWatched === null ? null : { kind: 'video', id: lastWatched.videoId };
-  const lastRead = panels === null ? null : panels.lastRead;
   const targets: PersonalTarget[] = [
     ...(panels === null ? [] : panels.saved.map((entry) => entry.target)),
-    ...(lastRead === null ? [] : [lastRead.target]),
+    ...(panels === null ? [] : panels.recentReads.map((entry) => entry.target)),
     ...(watched === null ? [] : [watched]),
     ...(ayah === null ? [] : [ayah]),
   ];

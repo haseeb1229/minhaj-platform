@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   PERSONAL_LIMITS,
+  READABLE_TARGET_KINDS,
   type PersonalHistoryPort,
   type ReadingEntry,
   type WatchEntry,
@@ -15,10 +16,14 @@ import {
   columnsOf,
   iso,
   isUniqueViolation,
+  kindCountSelect,
+  kindPredicate,
+  readableKindCounts,
   readableOf,
   readableSelect,
   refuse,
   targetPredicate,
+  type KindCountRow,
   type TargetRow,
 } from './shared.ts';
 
@@ -115,18 +120,20 @@ export function createPersonalHistory(): PersonalHistoryPort {
       }
     },
 
-    async reading(accountId, offset) {
+    async reading(accountId, offset, kind) {
       try {
         const skip = boundedOffset(offset);
+        const only = kindPredicate(kind, 'h');
         const [counted, rows] = await Promise.all([
           db.$queryRaw<{ total: number }[]>`
-            SELECT COUNT(*) AS [total] FROM [dbo].[ReadingHistory] WHERE [userId] = ${accountId}`,
+            SELECT COUNT(*) AS [total] FROM [dbo].[ReadingHistory] h
+            WHERE h.[userId] = ${accountId} AND ${only}`,
           db.$queryRaw<
             (Omit<TargetRow, 'videoId'> & { firstReadAt: Date; lastReadAt: Date })[]
           >`
             SELECT h.[firstReadAt], h.[lastReadAt], ${readableSelect('h')}
             FROM [dbo].[ReadingHistory] h
-            WHERE h.[userId] = ${accountId}
+            WHERE h.[userId] = ${accountId} AND ${only}
             ORDER BY h.[lastReadAt] DESC, h.[id]
             OFFSET ${skip} ROWS FETCH NEXT ${PAGE} ROWS ONLY`,
         ]);
@@ -139,6 +146,18 @@ export function createPersonalHistory(): PersonalHistoryPort {
           total: Number(counted[0]?.total ?? 0),
           offset: skip,
         };
+      } catch (error) {
+        refuse(error);
+      }
+    },
+
+    async readingKinds(accountId) {
+      try {
+        const [row] = await db.$queryRaw<NonNullable<KindCountRow>[]>`
+          SELECT ${kindCountSelect(READABLE_TARGET_KINDS, 'h')}
+          FROM [dbo].[ReadingHistory] h
+          WHERE h.[userId] = ${accountId}`;
+        return readableKindCounts(row);
       } catch (error) {
         refuse(error);
       }

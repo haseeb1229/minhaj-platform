@@ -1217,6 +1217,155 @@ live('Phase 21 Personalisation against real SQL Server, as the runtime principal
    * Account closure
    * ==================================================================== */
 
+  /* ======================================================================
+   * My Minhaj Part 1 — a list narrowed by kind or by unread, and its counts
+   * ==================================================================== */
+
+  describe('a filtered list is still the owner’s own list, and its counts add up', () => {
+    let carol: string;
+    let dave: string;
+    const carolArticles: string[] = [];
+
+    beforeAll(async () => {
+      carol = await account(db.admin);
+      dave = await account(db.admin);
+      for (let index = 0; index < 3; index += 1) carolArticles.push(nextArticle());
+      for (const id of carolArticles)
+        await saved.bookmark(carol, article(id), randomUUID());
+      await saved.bookmark(carol, { kind: 'work', id: workId }, randomUUID());
+      await saved.bookmark(carol, { kind: 'video', id: videoId }, randomUUID());
+      await saved.bookmark(carol, ayah(3), randomUUID());
+      // Dave's own bookmark of the same work, and an article of his own.
+      await saved.bookmark(dave, { kind: 'work', id: workId }, randomUUID());
+      await saved.bookmark(dave, article(nextArticle()), randomUUID());
+
+      await settings.setHistory(carol, { enabled: true, expectedVersion: 0 }, new Date());
+      await settings.setHistory(dave, { enabled: true, expectedVersion: 0 }, new Date());
+      await history.recordRead(carol, article(carolArticles[0]!), new Date());
+      await history.recordRead(carol, article(carolArticles[1]!), new Date());
+      await history.recordRead(carol, { kind: 'work', id: workId }, new Date());
+      await history.recordRead(carol, ayah(5), new Date());
+      await history.recordRead(dave, { kind: 'work', id: workId }, new Date());
+
+      for (const index of [1, 2, 3])
+        await notifications.produce(
+          {
+            accountId: carol,
+            kind: 'question-answered',
+            destination: null,
+            idempotencyKey: `proof:filters:${carol}:${String(index)}`,
+          },
+          randomUUID(),
+          new Date(),
+        );
+      await notifications.produce(
+        {
+          accountId: dave,
+          kind: 'question-declined',
+          destination: null,
+          idempotencyKey: `proof:filters:${dave}`,
+        },
+        randomUUID(),
+        new Date(),
+      );
+    });
+
+    it('counts each kind of the owner’s bookmarks, every kind present, summing to the total', async () => {
+      const kinds = await saved.bookmarkKinds(carol);
+      expect(kinds).toEqual({ ayah: 1, hadith: 0, article: 3, work: 1, video: 1 });
+      const total = (await saved.bookmarks(carol, 0)).total;
+      expect(Object.values(kinds).reduce((sum, value) => sum + value, 0)).toBe(total);
+      expect(await saved.bookmarkKinds(dave)).toEqual({
+        ayah: 0,
+        hadith: 0,
+        article: 1,
+        work: 1,
+        video: 0,
+      });
+      const nobody = await account(db.admin);
+      expect(await saved.bookmarkKinds(nobody)).toEqual({
+        ayah: 0,
+        hadith: 0,
+        article: 0,
+        work: 0,
+        video: 0,
+      });
+    });
+
+    it('narrows bookmarks to one kind, with that kind’s total — never another account’s', async () => {
+      const articlesPage = await saved.bookmarks(carol, 0, 'article');
+      expect(articlesPage.total).toBe(3);
+      expect(articlesPage.items.map((entry) => entry.target)).toEqual(
+        expect.arrayContaining(carolArticles.map(article)),
+      );
+      expect(articlesPage.items.every((entry) => entry.target.kind === 'article')).toBe(
+        true,
+      );
+      const works = await saved.bookmarks(carol, 0, 'work');
+      expect(works.total).toBe(1);
+      expect(works.items.map((entry) => entry.target)).toEqual([
+        { kind: 'work', id: workId },
+      ]);
+      expect(await saved.bookmarks(carol, 0, 'hadith')).toEqual({
+        items: [],
+        total: 0,
+        offset: 0,
+      });
+      expect((await saved.bookmarks(carol, 0, 'ayah')).items[0]?.target).toEqual(ayah(3));
+      // Past the end of a filtered list: nothing listed, the filtered total kept.
+      expect(await saved.bookmarks(carol, 20, 'article')).toEqual({
+        items: [],
+        total: 3,
+        offset: 20,
+      });
+      // Dave's work bookmark is his alone.
+      expect((await saved.bookmarks(dave, 0, 'work')).total).toBe(1);
+      expect((await saved.bookmarks(dave, 0, 'video')).total).toBe(0);
+    });
+
+    it('counts and narrows reading history the same way', async () => {
+      expect(await history.readingKinds(carol)).toEqual({
+        ayah: 1,
+        hadith: 0,
+        article: 2,
+        work: 1,
+      });
+      expect(await history.readingKinds(dave)).toEqual({
+        ayah: 0,
+        hadith: 0,
+        article: 0,
+        work: 1,
+      });
+      const works = await history.reading(carol, 0, 'work');
+      expect(works.total).toBe(1);
+      expect(works.items.map((entry) => entry.target)).toEqual([
+        { kind: 'work', id: workId },
+      ]);
+      const read = await history.reading(carol, 0, 'article');
+      expect(read.total).toBe(2);
+      expect(read.items.every((entry) => entry.target.kind === 'article')).toBe(true);
+      expect((await history.reading(carol, 0)).total).toBe(4);
+    });
+
+    it('lists only the unread when asked, with the unread total', async () => {
+      const all = await notifications.notifications(carol, 0);
+      expect(all.total).toBe(3);
+      const first = all.items[0]!;
+      await notifications.markRead(carol, first.id, new Date());
+
+      const unread = await notifications.notifications(carol, 0, true);
+      expect(unread.total).toBe(2);
+      expect(unread.total).toBe(await notifications.unread(carol));
+      expect(unread.items.map((entry) => entry.id)).not.toContain(first.id);
+      expect(unread.items.every((entry) => entry.readAt === null)).toBe(true);
+      expect((await notifications.notifications(carol, 0, false)).total).toBe(3);
+      // Somebody else's unread notification is never in Carol's unread list.
+      const daves = await notifications.notifications(dave, 0, true);
+      expect(daves.total).toBe(1);
+      expect(unread.items.map((entry) => entry.id)).not.toContain(daves.items[0]?.id);
+    });
+  });
+
   describe('closure removes every Personalisation row — of a closed account only', () => {
     /** Gives an account something in every owner table. */
     async function populate(owner: string, label: string): Promise<void> {

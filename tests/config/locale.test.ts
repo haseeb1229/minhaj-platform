@@ -610,10 +610,16 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/quran/recitation-listen.tsx',
     // Quran Part 6: where a translation's notes attach in its text, pure.
     'apps/web/src/components/quran/translation-notes.ts',
+    // My Minhaj Part 1: the announcer island, the lists' shared parts and
+    // their pure address rules, and where a Quran position stands.
+    'apps/web/src/components/my/change-announcer.tsx',
     'apps/web/src/components/my/dashboard.ts',
     'apps/web/src/components/my/frame.tsx',
+    'apps/web/src/components/my/list-parts.tsx',
+    'apps/web/src/components/my/list-view.ts',
     'apps/web/src/components/my/metadata.ts',
     'apps/web/src/components/my/my-nav.tsx',
+    'apps/web/src/components/my/quran-place.ts',
     'apps/web/src/components/my/sections.ts',
     'apps/web/src/components/my/targets.tsx',
     'apps/web/src/components/my/time-zone-picker.tsx',

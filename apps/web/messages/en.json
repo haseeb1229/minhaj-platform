@@ -6899,7 +6899,6 @@
       "distinct": "These are not the platform’s public Collections, which are curated by the editors. Nobody else sees your lists.",
       "list": "Your collections",
       "empty": "You have no collections yet. Create one below.",
-      "items": "Items: {count}",
       "updatedAt": "Last changed",
       "create": "Create a collection",
       "createSubmit": "Create collection",
@@ -6915,7 +6914,6 @@
       "private": "A private collection. Only you can see it.",
       "members": "In this collection",
       "empty": "This collection is empty. Add to it from any ayah, Hadith, article, video or book page using “Add to a collection”.",
-      "position": "Item {position}",
       "moveUp": "Move up",
       "moveDown": "Move down",
       "removeMember": "Remove from collection",
@@ -10496,7 +10494,9 @@
       "language": "Language and time zone",
       "interests": "Interests",
       "notifications": "Notifications",
-      "privacy": "Privacy"
+      "privacy": "Privacy",
+      "notes": "Notes",
+      "collections": "Collections"
     },
     "home": {
       "greeting": "As-salamu alaykum, {name}",
@@ -10568,12 +10568,23 @@
       "rail": "Waiting for you",
       "account": {
         "heading": "Your account"
+      },
+      "figures": {
+        "label": "At a glance",
+        "history": "In your history",
+        "notifications": "Unread notifications",
+        "messages": "Unread messages",
+        "courses": "Courses you are on"
       }
     },
     "saved": {
       "when": "Saved {date}",
       "emptyTitle": "Nothing saved yet",
-      "explore": "Explore the library"
+      "explore": "Explore the library",
+      "byKind": "Your bookmarks by kind",
+      "allBookmarks": "All bookmarks",
+      "allCollections": "{count, plural, one {Your # collection} other {All # collections}}",
+      "noCollections": "You have no collections yet. A collection is your own list — of a course of reading, a topic, anything."
     },
     "notes": {
       "emptyTitle": "No notes yet",
@@ -10581,16 +10592,23 @@
     },
     "collections": {
       "emptyTitle": "No collections yet",
-      "changed": "Changed {date}"
+      "changed": "Changed {date}",
+      "items": "{count, plural, =0 {Empty} one {# item} other {# items}}"
     },
     "history": {
       "emptyTitle": "Nothing here yet",
       "read": "Read {date}",
       "watched": "Watched {date}",
-      "watchExplore": "Go to Watch"
+      "watchExplore": "Go to Watch",
+      "noneOfKind": "Nothing of this kind ({kind}) is in your reading history."
     },
     "notifications": {
-      "emptyTitle": "You’re all caught up"
+      "emptyTitle": "You’re all caught up",
+      "noUnreadTitle": "Nothing unread",
+      "noUnread": "You have read every notification you have.",
+      "seeAll": "See all notifications",
+      "today": "Today",
+      "yesterday": "Yesterday"
     },
     "learning": {
       "enrolled": "Enrolled {date}"
@@ -10621,7 +10639,135 @@
         "search": "Search time zones, for example Karachi",
         "device": "Use this device’s time zone",
         "matches": "Matching time zones: {count}"
+      },
+      "profile": {
+        "emailHeading": "Sign-in email",
+        "emailHelp": "This is the address you sign in with. Changing it needs your password.",
+        "emailLink": "Change it under Security"
+      },
+      "security": {
+        "twoStep": "Two-step verification",
+        "twoStepOn": "On",
+        "twoStepOff": "Off",
+        "twoStepAttention": "Needs your attention — see below",
+        "devices": "Signed in",
+        "devicesCount": "{count, plural, one {On # device} other {On # devices}}",
+        "index": "On this page",
+        "sessionsLink": "Signed-in devices"
+      },
+      "privacy": {
+        "index": "On this page",
+        "downloads": "Download your data",
+        "downloadsIntro": "Each part of the platform keeps its own records and gives you its own file. Download any of them, at any time."
+      },
+      "interests": {
+        "pick": "Choose as many as you like."
+      },
+      "notifications": {
+        "list": "See your notifications"
       }
+    },
+    "trail": {
+      "label": "You are here",
+      "home": "My Minhaj",
+      "saved": "Saved",
+      "learning": "My learning",
+      "settings": "Settings"
+    },
+    "kinds": {
+      "ayah": "Ayat",
+      "hadith": "Hadith",
+      "article": "Articles",
+      "work": "Books",
+      "video": "Videos"
+    },
+    "list": {
+      "kinds": "Show by kind",
+      "allKinds": "All",
+      "notificationViews": "Which notifications to show",
+      "allNotifications": "All",
+      "page": "Page {page}",
+      "first": "Go to the first page",
+      "beyond": "This page is past the end of the list.",
+      "all": "Show the whole list",
+      "noneOfKind": "None of this kind",
+      "refusedTitle": "This list can’t be shown that way",
+      "refused": "The address asks for a view this list doesn’t have, so nothing is listed. Use the tabs on the page to choose what to show."
+    },
+    "count": {
+      "bookmarks": "Showing {from}–{to} of {total, plural, one {# bookmark} other {# bookmarks}}",
+      "notes": "Showing {from}–{to} of {total, plural, one {# note} other {# notes}}",
+      "reading": "Showing {from}–{to} of {total, plural, one {# entry} other {# entries}}",
+      "watch": "Showing {from}–{to} of {total, plural, one {# video} other {# videos}}",
+      "notifications": "Showing {from}–{to} of {total, plural, one {# notification} other {# notifications}}",
+      "unread": "Showing {from}–{to} of {total, plural, one {# unread notification} other {# unread notifications}}",
+      "collections": "{count, plural, one {# collection} other {# collections}} of the {max} you can keep, most recently changed first"
+    },
+    "live": {
+      "list": "{count, plural, =0 {Done. Nothing is left in this list.} one {Done. # item is left in this list.} other {Done. # items are left in this list.}}",
+      "notifications": "Done. {total, plural, =0 {No notifications are left.} one {# notification,} other {# notifications,}} {unread, plural, =0 {none unread.} one {# unread.} other {# unread.}}",
+      "collection": "Done. {count, plural, =0 {This collection is now empty.} one {It holds # item, in the order shown.} other {It holds # items, in the order shown.}}",
+      "quranCleared": "Your reading position has been cleared.",
+      "quranSet": "Your reading position is Surah {surah}, ayah {ayah}."
+    },
+    "confirm": {
+      "cancel": "Cancel",
+      "note": {
+        "title": "Delete this note?",
+        "body": "The note’s text is deleted for good and can’t be brought back. The item itself, and any bookmark or collection it is in, stay.",
+        "confirm": "Yes, delete it"
+      },
+      "clearRead": {
+        "title": "Clear read notifications?",
+        "body": "{count, plural, one {The # notification you have already read is removed for good.} other {The # notifications you have already read are removed for good.}} Unread ones stay.",
+        "confirm": "Yes, clear them"
+      },
+      "quran": {
+        "title": "Clear your reading position?",
+        "body": "Your marked place in the Quran is removed. Your bookmarks and reading history are not touched, and you can set a new place from any ayah.",
+        "confirm": "Yes, clear it"
+      }
+    },
+    "bookmarks": {
+      "noneOfKind": "You have no bookmarks of this kind ({kind})."
+    },
+    "collection": {
+      "position": "Item {position} of {count}",
+      "summary": "{count, plural, =0 {Nothing in it yet} one {# item} other {# items}} · Changed {date}"
+    },
+    "courses": {
+      "figures": "Your courses at a glance",
+      "emptyTitle": "No courses yet",
+      "shown": "Courses {from}–{to}",
+      "start": "Start the course",
+      "continue": "Continue the course",
+      "state": {
+        "all": "Courses",
+        "completed": "Completed",
+        "started": "In progress",
+        "new": "Not started"
+      }
+    },
+    "quran": {
+      "emptyTitle": "No reading position yet",
+      "howHeading": "How the reading position works",
+      "how": {
+        "open": "Open any ayah in the Quran.",
+        "set": "Choose “Set as my reading position” beside it.",
+        "back": "Come back here, or to your My Minhaj home, to continue from that ayah."
+      },
+      "surah": "Surah",
+      "ayah": "Ayah",
+      "inQuran": "Ayah in the whole Quran",
+      "ofTotal": "{value} of {total}",
+      "through": "This place is {percent} of the way through the Quran, in the order of the Mushaf.",
+      "wholeSurah": "Read the whole Surah",
+      "notShown": "This ayah can’t be opened right now, so there is no link to it. Your position is kept.",
+      "clearHelp": "Removes the marked place. Nothing else you keep is touched.",
+      "home": "The Quran",
+      "bookmarks": "Bookmarked ayat",
+      "read": "Ayat you have read",
+      "courses": "Course progress"
     }
   },
   "quranPassages": {

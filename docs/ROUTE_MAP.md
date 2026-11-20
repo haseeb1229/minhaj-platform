@@ -1467,6 +1467,18 @@ production) and offers the linked start form; another account's donation resolve
 donation is linked only when an active account starts it here — an anonymous donation never links
 later. `/my` gains a Donations panel, and `/my/settings/privacy` the Donations export.
 
+**My Minhaj Part 1 (Rebaseline R2, November 2026).** No route is added or removed. The lists gain
+**one address per view** (`apps/web/src/components/my/list-view.ts`): `/my/saved/bookmarks` and
+`/my/history/reading` take `?kind=` (`ayah`, `hadith`, `article`, `work`, `video` — reading history
+has no `video`), `/my/notifications` takes `?show=unread`, and those lists, `/my/saved/notes` and
+`/my/history/watch` take `?page=` (20 rows a page, at most page 501). The neutral view is the address
+without the parameter. `?page=1`, a malformed or out-of-range page, an empty filter, another order of
+the parameters and Phase 21's `?offset=` (by the page of 20) are each **one redirect** to the final
+address, issued only after the session is resolved; a filter value the list does not have, or a
+repeated parameter, is **refused in place** — the page says so and lists nothing — and never widened
+to the whole list. A filter narrows only the signed-in account's own list; no parameter names an
+owner. `/my/progress/courses` keeps Learning's `?offset=` paging (its read gives no total).
+
 **Donor return and status (Phase 27)**, outside the cache-safe public tree because they read the
 request: `/donate/return` is the provider's success and cancel URL — a constant page that ignores
 any query string, mutates nothing and, when the browser holds the HttpOnly status cookie, redirects

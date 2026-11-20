@@ -11,6 +11,7 @@ import {
   noteRemovalSchema,
   noteWriteSchema,
   personalIdSchema,
+  personalTargetKindSchema,
   personalTargetSchema,
   type CollectionDetail,
   type CollectionSummary,
@@ -18,12 +19,14 @@ import {
   type NotePage,
   type PersonalSavedPort,
   type SavedEntry,
+  type TargetKindCounts,
 } from '@minhaj/contracts/personalisation';
 import type { RateLimiterPort } from '@minhaj/contracts/platform';
 
 import { PersonalRefusal, asRefusal } from '../domain/refusal.ts';
 import {
   WRITE_RULE,
+  optionalFilter,
   requireActor,
   safeOffset,
   spend,
@@ -83,9 +86,20 @@ export function createSavedService(deps: {
       await run(deps.saved.unbookmark(actor.accountId, target.data));
     },
 
-    async bookmarks(actor: PersonalActor, offset: number): Promise<BookmarkPage> {
+    /** One page of bookmarks; `kind`, when given, must be a target kind. */
+    async bookmarks(
+      actor: PersonalActor,
+      offset: number,
+      kind: unknown = null,
+    ): Promise<BookmarkPage> {
       requireActor(actor);
-      return run(deps.saved.bookmarks(actor.accountId, safeOffset(offset)));
+      const only = optionalFilter(personalTargetKindSchema, kind);
+      return run(deps.saved.bookmarks(actor.accountId, safeOffset(offset), only));
+    },
+
+    async bookmarkKinds(actor: PersonalActor): Promise<TargetKindCounts> {
+      requireActor(actor);
+      return run(deps.saved.bookmarkKinds(actor.accountId));
     },
 
     async writeNote(

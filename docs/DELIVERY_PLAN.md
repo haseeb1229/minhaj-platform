@@ -5565,6 +5565,131 @@ the read-only handlers now thirty-four, each exporting no mutating verb);
 > at 1440 px); `tests/browser/shell.spec.ts` unchanged. *CI and staging evidence are recorded when
 > they exist.*
 
+> **My Minhaj Part 1 — Home, Saved, History, Quran and Course progress, Notifications and Settings
+> (owner direction: every section built from A to Z; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (ROUTE_MAP.md §5.1;
+> INFORMATION_ARCHITECTURE.md §5; DOMAIN_MODEL.md §14.6; SECURITY_BASELINE.md §19.1.2). No route is
+> added or removed, no table, column, index or migration, no new dependency and **no Server Action
+> added or changed**. Part 2 — Learning, Classes, Teachers, Messages, Questions, Membership and
+> Donations — is not redesigned here; the shared frame and navigation keep working for it.
+>
+> - **The audit (before).** Every list (Bookmarks, Notes, Reading and Watch history, Notifications)
+>   was Phase 21's offset page behind Previous/Next: no figure anywhere, no "Showing n–m of N", no
+>   page numbers, no filter, and a page past the end said only "nothing more" with no way back. The
+>   home page stated no figure at all and History showed one thing read. Notes, Collections, a
+>   Collection, the Quran position and Notifications had no tabs and no trail; a Collection's only
+>   way back was the foot links. Deleting a note, clearing read notifications and clearing the Quran
+>   position happened on one press. Removing a row, marking a notification read or reordering a
+>   collection re-rendered the page without the pressed form, so its "done" message was never seen
+>   and keyboard focus fell to the document. The Quran position named the ayah and nothing else; Course
+>   progress was a bare table; Security was a long column with no summary or index; Privacy repeated
+>   five near-identical download sections; Profile showed only the name; Interests were plain
+>   checkbox lists.
+> - **One address per view (decision).** `components/my/list-view.ts` (pure): `?kind=` on Bookmarks
+>   and Reading history, `?show=unread` on Notifications, `?page=` on those and on Notes and Watch
+>   history (20 a page, at most page 501). `?page=1`, a malformed page, an empty filter, another
+>   order and Phase 21's `?offset=` are one redirect each, after the session is resolved; an unknown
+>   filter or a repeated parameter is refused in place and never widened. Course progress keeps
+>   Learning's `?offset=` and Previous/Next — Learning's enrolment read gives no total, and no
+>   Learning read is added.
+> - **Home.** Once the account holds anything, the page opens on **figures that are true**, each a
+>   link to its list: bookmarks, notes and collections (Personalisation's `counts`), history entries
+>   kept (only while history is on), unread notifications, unread messages (only when Messaging
+>   answered) and the courses taken (only when the first page of enrolments is the whole list). A new
+>   account still meets "Make My Minhaj yours" first, with no zeros. History lists the last three
+>   things read and the last watched.
+> - **Saved.** The four Saved views — Saved, Bookmarks, Notes, Collections — are tabs of one another
+>   on every Saved page. The overview adds the bookmarks counted by kind, each chip a way into that
+>   filtered list, and the four most recently changed collections. **Bookmarks** and **Reading
+>   history**: counted kinds as tabs (All, Ayat, Hadith, Articles, Books, Videos — a kind held none
+>   of is not offered), "Showing n–m of N", numbered pages, "none of this kind" with the way back to
+>   everything, past-the-end with the way to the first page, a refused view in place. **Notes**:
+>   the same range and pages, and **Delete note** asks first (a modal confirmation over the same
+>   action; Cancel or Escape changes nothing). **Collections**: "N collections of the 50 you can
+>   keep, most recently changed first"; items counted in words. **A collection**: its trail (My
+>   Minhaj / Saved / My collections / title), "N items · Changed date" and "Item 2 of 5".
+> - **History.** Watch history has the range and numbered pages; both history pages have their
+>   trail; the history-off notice and the confirmed "Clear all history" are unchanged.
+> - **Quran reading position.** Where it stands in the Mushaf, from the Quran's fixed structure
+>   (`@minhaj/contracts/passage`, `components/my/quran-place.ts`): Surah n of 114, ayah n of the
+>   Surah, ayah n of 6,236 and the share of the way through, said as a place, never as how much was
+>   read; Continue reading and the whole Surah when the ayah is published, an honest line when it is
+>   not; how the position is set, in three steps; links to bookmarked and read ayat (`?kind=ayah`)
+>   and to Course progress; **Clear reading position asks first**.
+> - **Course progress (Learning's).** Its trail; the courses counted by state — Courses, Completed,
+>   In progress, Not started — only when the whole list is on the page, otherwise "Courses n–m";
+>   each course's state in words beside its meter and the way to start or continue it.
+> - **Notifications.** All and Unread as counted tabs, "Showing n–m of N", numbered pages, "Today"
+>   and "Yesterday" said as such, "Nothing unread" with the way to all, and **Clear read
+>   notifications asks first**, naming how many go.
+> - **Settings.** Every settings page has its trail. **Profile** shows the sign-in address, read
+>   from the session, with the way to change it under Security (behind the password). **Security**
+>   opens on the account's standing — two-step verification on, off or needing attention, and how
+>   many devices are signed in, from the reads the page already makes — and an index of its six
+>   parts; every form below is unchanged. **Privacy**: an index, and the five downloads (Personal,
+>   Learning, Messaging, Membership, Donations) gathered under one "Download your data", one card
+>   each with what the file holds and what closure does to it, each linking its owner's own handler
+>   exactly as before. **Interests**: tiles with each area's picture, the checkbox's label still the
+>   area's name alone; the form and its versioned save are unchanged. **Notification settings**
+>   links to the notifications themselves.
+> - **Feedback and focus.** `components/my/change-announcer.tsx`, at a fixed slot of the page frame
+>   so it outlives every row: when the server's answer changes a list (its total, its order, the
+>   unread count), it says the new state in a polite live region — `aria-live`, never a second
+>   `status` — and, if the pressed control has gone, moves focus to the list's status line, else to
+>   the page heading. It reads nothing and submits nothing.
+> - **Reads (Model A).** Personalisation: `bookmarks(account, offset, kind?)`,
+>   `reading(account, offset, kind?)` and `notifications(account, offset, unreadOnly?)` narrow to
+>   one kind (the typed foreign key that holds a value) or to the unread, each total the narrowed
+>   list's; `bookmarkKinds(account)` and `readingKinds(account)` count every kind in one statement.
+>   The account is in every predicate; the services validate the filter against the contract's enums
+>   (`personalTargetKindSchema`, `readableTargetKindSchema`, a boolean) and refuse anything else as
+>   `invalid` before a port is reached; the adapter takes each column from a fixed table, with bound
+>   parameters only. The home page adds Personalisation's existing `counts`. No other owner is read
+>   anew.
+> - **Mutations.** None added and none changed. The three new confirmations are the shared
+>   `ConfirmSpec` dialog over the existing Server Actions (Origin checks, the session the action
+>   resolves itself, the owner in every predicate, the write and bulk rate limits, versioned writes
+>   and the collection and history deletions' server-required confirmation box, all unchanged).
+> - **Messages.** New `my.{tabs.{notes,collections}, trail.*, kinds.*, list.*, count.*, live.*,
+>   confirm.*, home.figures.*, saved.{byKind,allBookmarks,allCollections,noCollections},
+>   bookmarks.noneOfKind, collections.items, collection.{position,summary}, history.noneOfKind,
+>   notifications.{noUnreadTitle,noUnread,seeAll,today,yesterday}, courses.*, quran.*,
+>   settings.{profile,security,privacy,interests,notifications}.*}` in en/ur/ar; removed as unused:
+>   `personal.collections.items` and `personal.collection.position` (moved to `my`, now counted in
+>   words).
+>
+> **Data facts — what staging will show.** Nothing here is seeded or migrated: every page shows the
+> signed-in account's own records. A fresh staging account sees "Make My Minhaj yours" and no
+> figures, each list's first-run state, the Quran page's three steps, and Security's "two-step
+> verification off · 1 device". An account that saves, notes and reads (with history on) sees the
+> figures, counted tabs and ranges; notifications appear only once a Fatwa question is answered or
+> declined, and Fatwa publishes nothing on staging yet, so Notifications shows its empty state
+> there. The operator-run demo data (`demo.sh`) writes no Personalisation
+> table (none appears in `packages/database/scripts/staging-demo.ts`). The local persistent database was not inspected.
+>
+> **Proof:** `tests/shell/my-list-view.test.ts` (new: every address rule — canonical reads and
+> writes, fifteen tidy-ups each one redirect to a final address, five refusals never widened, an
+> unread-only list, parameters a list does not read left alone, the page bound; the four Saved views
+> as tabs and the trail; `quranPlace` across the Mushaf and six positions with no place);
+> `tests/personalisation/service.test.ts` (new: a bad actor refused before any port for the filtered
+> reads and the counts; six malformed kinds and a video filter on reading history refused as
+> invalid with no port call; the port handed exactly the kind, none for none; counts asked of the
+> actor's own account with no rate budget spent; three malformed unread filters refused; malformed
+> offsets clamped); `tests/personalisation/persistence.integration.test.ts` (real SQL Server, the
+> runtime principal; new: per-kind bookmark counts summing to the total, every kind present, another
+> account's never counted; one kind's page with that kind's total, past the end keeping it; reading
+> history the same; the unread list matching `unread` and never another account's);
+> `tests/config/locale.test.ts` (the four new modules). Browser: `tests/browser/personalisation.spec.ts`
+> — every Phase-21 assertion kept; new, on a third fresh account: the home figures and their links,
+> no history figure while history is off; counted kind tabs, ranges, a filtered list, four untidy
+> spellings each one redirect, past the end with the way back, two refused views; a removal said
+> aloud with focus kept on the page; Notifications counted, numbered and filtered to the unread, a
+> refused view; clearing read notifications behind a confirmation that Cancel leaves untouched;
+> deleting a note only after its confirmation (Escape cancels); Security's index anchors, Privacy's
+> five download handlers, Profile's way to change the address, the Quran page's steps and links; and
+> sixteen addresses reflowing at 320 px in en, ur and ar and axe-clean (no serious or critical
+> finding) at 1440 px. *CI and staging evidence are recorded when they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation
