@@ -2,9 +2,14 @@ import { z } from 'zod';
 
 import {
   centreFinderSchema,
+  centreListingQuerySchema,
   countryCodeSchema,
+  GLOBAL_MAX_OFFSET,
+  GLOBAL_PAGE,
+  GLOBAL_PLACE_ROWS,
   globalIdSchema,
   globalSlugSchema,
+  type CentrePlace,
   type CentreScope,
   type PublicCentrePage,
   type GlobalPublicReaderPort,
@@ -21,7 +26,7 @@ import {
  */
 
 const slug = (value: string) => globalSlugSchema.safeParse(value).success;
-const offsetSchema = z.number().int().min(0).max(25_000);
+const offsetSchema = z.number().int().min(0).max(GLOBAL_MAX_OFFSET);
 
 /** What a finder query resolved to — kept distinct so each gets honest words. */
 export type FinderResult =
@@ -36,8 +41,9 @@ export type FinderResult =
 
 export function createGlobalReadService(reader: GlobalPublicReaderPort) {
   return {
-    countries(offset = 0) {
-      return reader.countries(offsetSchema.parse(offset));
+    /** Every public Country with its public Regions, Cities and Centres counted. */
+    countryDirectory() {
+      return reader.countryDirectory();
     },
     async country(countrySlug: string) {
       return slug(countrySlug) ? reader.country(countrySlug) : null;
@@ -96,7 +102,12 @@ export function createGlobalReadService(reader: GlobalPublicReaderPort) {
       if (!parsed.success) return { status: 'invalid' };
       const scope = await reader.scope(parsed.data);
       if (scope === null) return { status: 'invalid' };
-      const page = await reader.centres(scope, parsed.data.offset);
+      const page = await reader.centres({
+        scope,
+        kind: null,
+        offset: parsed.data.offset,
+        limit: GLOBAL_PAGE,
+      });
       const inventoryEmpty =
         page.items.length === 0 && parsed.data.offset === 0
           ? !(await reader.hasPublicCentres())
@@ -114,12 +125,25 @@ export function createGlobalReadService(reader: GlobalPublicReaderPort) {
       return parsed.success ? reader.scope(parsed.data) : null;
     },
 
-    /** The public Centres within one resolved geography, a page at a time. */
-    centresIn(scope: CentreScope, offset = 0) {
-      return reader.centres(scope, offsetSchema.parse(offset));
+    /**
+     * The public Centres within one resolved geography — optionally of one
+     * kind — a page at a time, with the view's total. Every field is parsed
+     * before the read.
+     */
+    centresIn(raw: unknown) {
+      return reader.centres(centreListingQuerySchema.parse(raw));
     },
-    hasPublicCentres() {
-      return reader.hasPublicCentres();
+    /**
+     * Where the public Centres of one Country (or of all) are, for a page to
+     * count its places by — or `null` when there are more than the bound: the
+     * page then offers its places uncounted rather than counting a subset.
+     */
+    async centrePlaces(countryId: string | null): Promise<readonly CentrePlace[] | null> {
+      const rows = await reader.centrePlaces(
+        countryId === null ? null : globalIdSchema.parse(countryId),
+        GLOBAL_PLACE_ROWS,
+      );
+      return rows.length > GLOBAL_PLACE_ROWS ? null : rows;
     },
     async centre(centreSlug: string) {
       return slug(centreSlug) ? reader.centre(centreSlug) : null;

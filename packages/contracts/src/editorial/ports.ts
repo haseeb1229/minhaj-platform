@@ -26,6 +26,7 @@ import type {
   NewsArchivePeriod,
   NewsKind,
   NewsPage,
+  CentreNewsPage,
   NewsPeriodFilter,
   NewsTimelineQuery,
 } from './news.ts';
@@ -174,11 +175,16 @@ export interface EditorialPublicReaderPort {
 
   /**
    * PHASE 16 — one bounded page of the published NewsArticles whose current
-   * revision names this Centre, newest first. Editorial's own tables only: the
-   * Centre is an identifier here, and whether it is public is Global's answer,
-   * asked at Layer 4.
+   * revision names one of these Centres, newest first, with their total (R2:
+   * one Centre's page, or the Centres of a Country, Region or City). Editorial's
+   * own tables only: a Centre is an identifier here, and whether it is public
+   * is Global's answer, asked at Layer 4.
    */
-  centreNews(centreId: string, offset: number, limit: number): Promise<NewsPage>;
+  centreNews(
+    centreIds: readonly string[],
+    offset: number,
+    limit: number,
+  ): Promise<CentreNewsPage>;
 
   /**
    * PHASE 14 — Events, by the same rules: PUBLISHED ONLY, the predicate in every

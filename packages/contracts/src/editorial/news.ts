@@ -200,6 +200,18 @@ export interface NewsPage {
 }
 
 /**
+ * The most Centres one centre-scoped News read names at once (Global Network,
+ * R2: a Country's, a Region's or a City's Centres). A page with more does not
+ * ask, rather than ask about a subset.
+ */
+export const NEWS_CENTRE_BATCH = 2000;
+
+/** A page of centre-scoped News, with how many the Centres hold in all. */
+export interface CentreNewsPage extends NewsPage {
+  readonly total: number;
+}
+
+/**
  * The archive and the topic hub read ONE timeline across the four families,
  * ordered by each record's chronology (Phase 30-R): the source's own
  * publication date where a NewsArticle or PressRelease states one, else the

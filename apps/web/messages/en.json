@@ -6305,13 +6305,15 @@
       "centres": "Every centre in the directory, in one list.",
       "pakistan": "The provinces, regions and cities of Pakistan, as one structure.",
       "localTitle": "Local news, events and contacts",
-      "localBody": "Each centre's page lists its own news and events and its public contact details, where the centre has published them."
+      "localBody": "Each centre's page lists its own news and events and its public contact details, where the centre has published them.",
+      "eyebrow": "Minhaj-ul-Quran worldwide",
+      "emptyTitle": "Nothing is published yet"
     },
     "emptyDirectory": "No centres have been published in the directory yet. Centres appear here as the organisation confirms their details.",
     "countriesEmpty": "No countries have been published yet.",
     "allCountries": "All countries",
     "countriesIntro": "Every country in the directory. Each lists its regions, cities and centres.",
-    "centresIntro": "Every centre in the directory, in alphabetical order of their web address.",
+    "centresIntro": "Every centre in the directory, grouped under its country.",
     "pageEmpty": "There is nothing on this page.",
     "previous": "Previous page",
     "next": "Next page",
@@ -6333,7 +6335,12 @@
       "reset": "Clear the filters",
       "results": "Centres",
       "invalid": "This filter does not match a place in the public directory. Clear the filters and choose again.",
-      "noMatch": "No centre matches this filter. Try a wider area."
+      "noMatch": "No centre matches this filter. Try a wider area.",
+      "privacy": "Nothing about where you are is read: the finder uses only the places you choose, never your location or network address.",
+      "resultsIn": "Centres in {place}",
+      "widen": "All centres in {place}",
+      "start": "Choose a country above, or start from one of the countries where centres are published.",
+      "startLabel": "Countries with centres"
     },
     "country": {
       "findIn": "Find a centre in {country}",
@@ -6343,18 +6350,27 @@
       "directCities": "Cities not in a region",
       "citiesEmpty": "No cities have been published for this country.",
       "centresEmpty": "No centres have been published in this country yet.",
-      "presenceOnly": "The organisation states it is present in this country. No centre is listed for this country yet; centres appear here as their details are confirmed."
+      "presenceOnly": "The organisation states it is present in this country. No centre is listed for this country yet; centres appear here as their details are confirmed.",
+      "more": "More of the network",
+      "allInRegion": "{count, plural, one {The # country of this region} other {All # countries of this region}}"
     },
     "region": {
       "findIn": "Find a centre in {region}",
       "cities": "Cities",
       "citiesEmpty": "No cities have been published for this region.",
-      "centresEmpty": "No centres have been published in this region yet."
+      "centresEmpty": "No centres have been published in this region yet.",
+      "servedNote": "Centres in this region or its cities, and centres elsewhere that serve one of its cities.",
+      "backToCountry": "Back to {country}",
+      "others": "Other regions of {country}"
     },
     "city": {
       "findIn": "Find a centre in {city}",
       "servedNote": "Centres in this city, and centres elsewhere that serve it.",
-      "centresEmpty": "No centre in or serving this city has been published yet."
+      "centresEmpty": "No centre in or serving this city has been published yet.",
+      "where": "{region}, {country}",
+      "backTo": "Back to {place}",
+      "nearby": "Other cities in {place}",
+      "allNearby": "See them all"
     },
     "centre": {
       "virtual": "Virtual centre",
@@ -6373,12 +6389,18 @@
       "news": "News from this centre",
       "newsEmpty": "This centre has no published news yet.",
       "newsUnavailable": "This centre's news cannot be shown right now. Please try again later.",
-      "allNews": "All news from this centre",
       "events": "Events",
       "eventsUnavailable": "This centre's events cannot be shown right now.",
       "eventsEmpty": "This centre has no upcoming events.",
       "allEvents": "All events at this centre, upcoming and past",
-      "eyebrow": "Centre"
+      "eyebrow": "Centre",
+      "findAnother": "Find another centre",
+      "servedIntro": "Cities beyond its own that this centre serves.",
+      "allNewsCount": "{count, plural, one {Its # story} other {All # of its stories}}",
+      "nearby": "More centres in",
+      "nearbyAll": "{count, plural, one {See the # centre there} other {See all # centres there}}",
+      "nearbyLabel": "Centres nearby in the directory",
+      "eventsCounts": "{upcoming, number} upcoming · {past, number} held"
     },
     "contact": {
       "title": "Contact details: {centre}",
@@ -6388,7 +6410,8 @@
       "website": "Website",
       "external": "(external site)",
       "empty": "No public contact details have been published for this centre.",
-      "general": "To write to the organisation, use the general contact page."
+      "general": "To write to the organisation, use the general contact page.",
+      "privacy": "Only the details the centre has chosen to publish are shown here."
     },
     "centreNews": {
       "title": "News: {centre}",
@@ -6397,13 +6420,19 @@
     },
     "centreEvents": {
       "title": "Events at {centre}",
-      "intro": "Events held at this centre, upcoming and past."
+      "intro": "Events held at this centre, upcoming and past.",
+      "invalidTitle": "These events cannot be listed",
+      "invalid": "The address asks for events that are neither upcoming nor past, so none is listed.",
+      "seePast": "{count, plural, one {See its # past event} other {See its # past events}}"
     },
     "pakistan": {
       "intro": "Pakistan's regions and cities, as one structure. It is the same directory as the Pakistan country page, arranged region by region.",
       "unavailable": "The Pakistan structure has not been published yet.",
       "viewCountry": "Pakistan country page",
-      "empty": "No regions or cities have been published for Pakistan yet."
+      "empty": "No regions or cities have been published for Pakistan yet.",
+      "find": "Find a centre in Pakistan",
+      "unavailableTitle": "Not published yet",
+      "emptyTitle": "No regions or cities yet"
     },
     "presence": "Minhaj-ul-Quran is present in {countries, plural, one {# country} other {# countries}} across {regions, plural, one {# region} other {# regions}} of the world.",
     "byRegion": "Countries by region",
@@ -6421,7 +6450,66 @@
     "countryNews": "Latest news from centres in {country}",
     "countryNeighbours": "Elsewhere in {region}",
     "dataNotice": "Directory details are published only once the organisation has confirmed them. Where nothing is listed, nothing has been confirmed yet.",
-    "presenceNotice": "The countries below are those the organisation states it is present in. No centre address has been published yet."
+    "presenceNotice": "The countries below are those the organisation states it is present in. No centre address has been published yet.",
+    "presenceIntro": "The countries the organisation states it is present in, by region of the world. No centre address has been published yet.",
+    "allCountriesCount": "{count, plural, one {The # country} other {All # countries}}",
+    "allCentres": "All centres",
+    "figures": {
+      "countries": "{count, plural, one {country} other {countries}}",
+      "worldRegions": "{count, plural, one {region of the world} other {regions of the world}}",
+      "centres": "{count, plural, one {centre} other {centres}}",
+      "cities": "{count, plural, one {city} other {cities}}",
+      "regions": "{count, plural, one {region} other {regions}}",
+      "withCentres": "{count, plural, one {country with centres} other {countries with centres}}",
+      "virtual": "{count, plural, one {virtual centre} other {virtual centres}}"
+    },
+    "results": {
+      "centres": "Showing {from}–{to} of {total, plural, one {# centre} other {# centres}}",
+      "countries": "Showing {from}–{to} of {total, plural, one {# country} other {# countries}}",
+      "cities": "Showing {from}–{to} of {total, plural, one {# city} other {# cities}}",
+      "news": "Showing {from}–{to} of {total, plural, one {# story} other {# stories}}",
+      "events": "Showing {from}–{to} of {total, plural, one {# event} other {# events}}",
+      "pages": "Pages: {list}"
+    },
+    "count": {
+      "centres": "{count, plural, one {# centre} other {# centres}}",
+      "centresNoun": "{count, plural, one {centre} other {centres}}",
+      "cities": "{count, plural, one {# city} other {# cities}}"
+    },
+    "countries": {
+      "emptyTitle": "No countries yet",
+      "heading": "Countries of the network",
+      "intro": "In order of region of the world, then by name. Each country lists its regions, cities and centres where they are published.",
+      "regionsLabel": "Regions of the world",
+      "allRegions": "All regions ({count})",
+      "regionOption": "{region} ({count})",
+      "invalidTitle": "This region is not one the directory uses",
+      "invalid": "The address names a region of the world the directory does not group countries by, so no country is listed for it."
+    },
+    "centres": {
+      "emptyTitle": "No centres yet",
+      "heading": "Every centre, by country",
+      "intro": "Grouped under each country. To narrow by country, region or city, use Find a Centre.",
+      "kindsLabel": "Kinds of centre",
+      "kinds": {
+        "all": "All centres",
+        "physical": "With premises",
+        "virtual": "Virtual"
+      },
+      "invalidTitle": "This kind of centre is not one the directory uses",
+      "invalid": "A centre either has premises or is virtual; the address names neither, so no centre is listed for it.",
+      "none": {
+        "physical": "No centre with premises has been published yet.",
+        "virtual": "No virtual centre has been published yet."
+      }
+    },
+    "place": {
+      "events": "Upcoming events in {place}",
+      "eventsIntro": "Held at the centres here, soonest first.",
+      "allEvents": "{count, plural, one {The # upcoming event} other {All # upcoming events}}",
+      "newsIntro": "{count, plural, one {The latest from its centres: # story in all.} other {The latest from its centres, of # stories in all.}}"
+    },
+    "presenceCountries": "Minhaj-ul-Quran is present in {countries, plural, one {# country} other {# countries}}."
   },
   "personalIsland": {
     "heading": "Save and notes",

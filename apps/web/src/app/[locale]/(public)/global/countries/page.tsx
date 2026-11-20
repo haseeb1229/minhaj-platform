@@ -1,14 +1,25 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
+import { globalPaths } from '@minhaj/contracts/global';
+
 import { CountriesPage } from '@/components/global/directory';
+import {
+  countriesCanonicalRedirect,
+  readCountriesView,
+} from '@/components/global/global-view';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
 import { requireRoute } from '@/shell/registry';
 
 /**
- * `/{locale}/global/countries` — every public Country, in bounded pages of
- * `?offset=`, each page grouped by world region.
+ * `/{locale}/global/countries` — every public Country, by world region, with
+ * `?region` (a world region) and `?page` (24 a page; R2). A view that means
+ * something has ONE address — empty controls, another order, a malformed page
+ * and Phase 16's `?offset=` are one redirect each — and an unknown region is
+ * refused where it was asked (`countriesCanonicalRedirect`). Every view is
+ * canonical to the bare listing and none is a sitemap entry.
  */
 export const dynamic = 'force-dynamic';
 
@@ -30,5 +41,8 @@ export async function generateMetadata({ params }: CountriesParams): Promise<Met
 
 export default async function CountriesRoute({ params, searchParams }: CountriesParams) {
   const locale = await requireLocale(params);
-  return <CountriesPage locale={locale} query={await searchParams} />;
+  const query = await searchParams;
+  const canonical = countriesCanonicalRedirect(globalPaths.countries(locale), query);
+  if (canonical !== null) redirect(canonical);
+  return <CountriesPage locale={locale} view={readCountriesView(query)} />;
 }

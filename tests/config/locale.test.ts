@@ -503,6 +503,12 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/global/centre.tsx',
     'apps/web/src/components/global/directory.tsx',
     'apps/web/src/components/global/presentation.ts',
+    // Global Network (R2): the shared frame, the place pages, a Centre's own
+    // listings, and the directory's pure address rules.
+    'apps/web/src/components/global/centre-activity.tsx',
+    'apps/web/src/components/global/frame.tsx',
+    'apps/web/src/components/global/global-view.ts',
+    'apps/web/src/components/global/places.tsx',
     // R2: the Countries grid's world-region grouping, a pure table.
     'apps/web/src/components/global/world-region.ts',
     // R2: the Explore family's cards (published Pages and leaders).

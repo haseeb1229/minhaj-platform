@@ -688,6 +688,14 @@ it is answered as text; Topics stay Taxonomy identifiers named at Layer 4. The c
 listings now; historical). No schema change: PressRelease still carries no contact or boilerplate
 (none is modelled, so none is shown).
 
+**Centre-scoped News for a place (Global Network, R2).** The Phase-16 `centreNews` read now takes
+the identifiers of **several** Centres (at most `NEWS_CENTRE_BATCH`, 2000) and answers one page of
+the published NewsArticles whose current revision names any of them, newest first, with their
+**total** (`CentreNewsPage`). Global resolves which public Centres a Country, Region or City holds
+at Layer 4; Editorial still matches identifiers only and reads no Global table, so the edge is the
+same one Phase 16 admitted. An empty list matches nothing — it never means every Centre. *(At
+Phase-16 exit the read took one Centre and returned no total; historical.)*
+
 #### 7.2.3 Event and EventSchedule — as delivered (Phase 14)
 
 Event is an Editorial aggregate of its own — **not a News family, not a Global record and not a
@@ -3188,6 +3196,35 @@ A Centre's news and events are ordinary Editorial records carrying a Centre refe
   never stored and never asked of the organisation. Migration's Country table names 39 countries
   since R2, "Korea" placed as the Republic of Korea only on its own page's evidence
   (MIGRATION_STRATEGY.md §19).
+
+#### 17.1.2 The public directory's reads (Global Network, R2)
+
+The directory's pages are built to the listing standard of News & Events (DELIVERY_PLAN.md,
+"Global Network"), on four public reads of `GlobalPublicReaderPort` — each under the same
+fail-closed public predicate per level, each validated by Global's read service before any read,
+bound parameters only, no new table:
+
+- **`countryDirectory`** — every public Country with its ISO code and how many **public** Regions,
+  Cities and Centres it holds, counted in one query. It is bounded by the whole ISO 3166-1 alpha-2
+  code space (`GLOBAL_COUNTRY_SPACE`, 26 × 26 = 676), so it is the complete directory and every
+  figure summed from it (Countries, Cities, Centres, Countries with Centres) is exact. *(The
+  offset-paged public `countries` read it replaces was withdrawn as unused; historical.)*
+- **`centres(query)`** — one page of public Centres within a **resolved** scope (identifiers, never
+  slugs), optionally of one **kind** (`physical` — with premises — or `virtual`, the operator's
+  own `isVirtual` fact), with the view's **total**, in the order of their Country's slug then their
+  own (`centreListingQuerySchema`). The scope rule is Phase 16's: a City holds the Centres in it or
+  serving it, once; a Region those in it, in one of its Cities or serving one of its public Cities.
+- **`countryCities`** — now with its total.
+- **`centrePlaces`** — where each public Centre of a Country (or of all) is and which **public**
+  Cities it serves, identifiers only, at most `limit + 1` rows (`GLOBAL_PLACE_ROWS`, 2000), so a
+  page tells a complete answer from one it must not count. The pure `tallyCentrePlaces` counts
+  them by the scope rule above — each Centre once per place — and a page that cannot count exactly
+  offers its places uncounted, never a count of a subset.
+
+A **world region** stays presentation (§17.1.1); "nearby" Centres are the same City, Region or
+Country — the directory's own geography, never a distance, and no coordinate is read to rank
+anything. The public read service's `hasPublicCentres` was withdrawn as unused (the finder's own
+read still asks it); historical.
 
 ### 17.2 Membership
 

@@ -4,17 +4,17 @@ import { getTranslations } from 'next-intl/server';
 import { PAKISTAN_CODE, globalPaths } from '@minhaj/contracts/global';
 
 import { globalReadRuntime } from '@/composition/global-read';
-import { PakistanPage } from '@/components/global/directory';
+import { PakistanPage } from '@/components/global/places';
 import { publicIndexingEnabled } from '@/config/indexing';
 import { absoluteUrl } from '@/config/origin';
 import { requireLocale } from '@/config/route-locale';
 
 /**
- * `/{locale}/global/pakistan` — the Pakistan structure ENTRY POINT
- * (ROUTE_MAP.md §3.9). It reads the ordinary Pakistan Country (ISO `PK`) and
+ * `/{locale}/global/pakistan` â€” the Pakistan structure ENTRY POINT
+ * (ROUTE_MAP.md Â§3.9). It reads the ordinary Pakistan Country (ISO `PK`) and
  * shows its public Regions and Cities as a structure. It is a view of that
  * Country, not a second resource: its canonical link points at the Country's
- * own page — as a domain topic view's points at its hub (§2.2) — and it is
+ * own page â€” as a domain topic view's points at its hub (Â§2.2) â€” and it is
  * never a sitemap entry, so two Pakistan pages never compete. With no public
  * Pakistan record it claims nothing and is not indexable.
  */
@@ -30,7 +30,7 @@ export async function generateMetadata({ params }: PakistanParams): Promise<Meta
   const country = await globalReadRuntime().countryByCode(PAKISTAN_CODE);
   const title = t('sections.pakistan');
   // A canonical link is a claim; it is made only when indexing is switched on
-  // and the Country it points at genuinely exists (ROUTE_MAP.md §9.5).
+  // and the Country it points at genuinely exists (ROUTE_MAP.md Â§9.5).
   if (country === null || !publicIndexingEnabled())
     return { title, robots: { index: false, follow: false } };
   return {

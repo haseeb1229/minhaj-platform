@@ -5282,6 +5282,143 @@ the read-only handlers now thirty-four, each exporting no mutating verb);
 > `photos.spec.ts`, `collections.spec.ts`, `newsletter.spec.ts` as their workers state them.
 > *CI and staging evidence are recorded when they exist.*
 
+> **Global Network — the World Network front door, the Countries and Centres listings, Find a
+> Centre, every place page, the Pakistan structure and a Centre's own pages (owner direction:
+> every section built from A to Z, one item at a time; on
+> `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (DOMAIN_MODEL.md §17.1.2,
+> §7.2.2; ROUTE_MAP.md §3.9; INFORMATION_ARCHITECTURE.md §3.9; SECURITY_BASELINE.md §17). No route
+> is added or removed, no schema change and no migration; the slug-history 301s, the `centres`
+> sitemap segment, the Pakistan page's canonical and the display-only contact page are unchanged.
+> No map, map tile, geolocation or distance is used anywhere.
+>
+> - **The audit (before).** Every list was Phase 16's offset page behind Previous/Next with no
+>   total: `/global/countries` (`?offset`, each page grouped by world region), `/global/centres`
+>   (one A–Z list by slug, no kinds, no grouping), a Country's and a Region's Cities (`?cities=`)
+>   and Centres (`?offset`), a City's Centres, a Centre's News and Events (`?offset`, the Events
+>   `?when` an uncounted pill pair, an unknown `when` silently read as upcoming). No page stated a
+>   figure beyond the landing's "present in N countries" sentence and a region's Country count; no
+>   place tile or option said how many Centres it held. Find a Centre's options were uncounted,
+>   it had no chips or range, and with no Country chosen it listed every Centre — the same view as
+>   `/global/centres` under a second address; the form's empty controls produced untidy addresses
+>   that were never redirected. No page offered Share; a Centre had nothing to read next; a Region
+>   and a City had no News or Events of their own; a Country's News was a merge of at most six
+>   Centres' newest items (none at all with more); Region and City breadcrumbs skipped Countries.
+>   The home page's Global module counted at most 300 Countries (the selector's bound) and no
+>   Centres.
+> - **One address per view (decision).** The directory's address rules are one pure module
+>   (`components/global/global-view.ts`): `/global/countries?region&page`,
+>   `/global/centres?kind&page`, `/global/find-a-centre?country&(region|city)&page`, a Country or
+>   Region `?page&cityPage`, a City `?page`, a Centre's News `?page`, its Events `?when=past&page`.
+>   Neutral values are omitted; a form's empty controls, another order, a malformed page and
+>   Phase 16's `?offset=` / `?cities=` (by each list's own page size — 24 for Global, 20 for a
+>   Centre's News and Events) are **one redirect** each; a view or place that cannot mean anything
+>   — an unknown world region, kind or `when`, a malformed or untrimmed place slug, a Region or
+>   City without its Country, a Region AND a City, a repeated value, a place that is not public —
+>   is **refused where it was asked** (the page says so and lists nothing), never redirected
+>   wider: the Events listing's posture, kept.
+> - **`/global` (the front door).** Figures from the complete directory — Countries, regions of
+>   the world, and once published Centres and Cities — the presence sentence, the ways in (Find a
+>   Centre, Countries, Centres, Pakistan), every Country by world region with its Centres counted on
+>   its tile, the local-pages note and the data notice. Until a Centre is published the hero says
+>   plainly that no centre address is published yet.
+> - **The listings.** Every list page opens on its figures and the Global sections as counted
+>   tabs (Countries N, Centres N). `/global/countries`: ordered by world region, then by name as
+>   the reader's language orders names; the world regions as a counted index with a chip;
+>   "Showing n–m of N"; numbered pages. `/global/centres`: counted kinds as tabs (All, With
+>   premises, Virtual), the page **grouped under each Country** (Countries' slug order, then the
+>   Centres'), the range and numbered pages; narrowing by place is the finder's.
+> - **Find a Centre.** The GET form's Country options are counted by their public Centres, its
+>   Region and City options by the Centres in or serving each (offered uncounted when a Country
+>   holds more Centres than one bounded read may count — never a count of a subset); chips that
+>   each remove one place; "Centres in {place}"; the range and numbered pages; the hero states
+>   that no location or network address is read. **With no Country chosen it no longer lists
+>   every Centre** — that view is `/global/centres` — but offers the Countries that have Centres,
+>   each counted, as the way in (a design change). The four outcomes stay apart: nothing chosen,
+>   no Centre in the directory, none in the place, and a refused place.
+> - **A Country, a Region, a City.** The name in its own language, the world region or parent
+>   place, the figures (Regions, Cities, Centres — each a link to its section), Find a Centre
+>   there (only where there is one) and **Share**; the Regions as counted tiles; the Cities and
+>   Centres each with "Showing n–m of N" and numbered pages; **upcoming Events** held at the
+>   Centres physically there (Country and City, with "All N upcoming events" into `/events`'s own
+>   place filter) and the **latest News** of the place's Centres (Country, Region, City, with the
+>   total); and "more like this": the Countries of the same world region, the other Regions of the
+>   Country, the other Cities of the Region (or Country). A Country whose every City is in a
+>   Region lists them on the Regions, with no empty "Cities not in a region" section. A Country of
+>   presence with nothing beneath it still says so once (Phase 30-R). Breadcrumbs now run Home ›
+>   Global Network › Countries › Country › Region › City.
+> - **The Pakistan structure.** Figures, a card per Region with its Cities and Centres counted, the
+>   Cities in no Region, Find a centre in Pakistan, the Country page; honest states when Pakistan
+>   or its Regions are not published.
+> - **A Centre.** Facts, contacts and served Cities as before; **Share**; "Find another centre";
+>   its upcoming Events with how many are upcoming and held; its News with "All N of its stories";
+>   and **more Centres nearby** — from the narrowest of its City (in or serving it), Region and
+>   Country that holds another Centre, never itself and never a distance. Its News page and Events page are "Showing n–m of N" with
+>   numbered pages; the Events page's upcoming and past views are counted tabs, an empty upcoming
+>   view offers the held ones. **The contact page stays display-only** — the contacts the Centre
+>   published, its address and where it is, a line that only published details are shown, and the
+>   general contact page; no form, no control, no mutation.
+> - **Home and navigation.** The home page's Global module reads the complete directory: the
+>   number of Countries and, once any is published, of Centres (each a link). The mega-menu's Find
+>   and Structure columns are unchanged.
+> - **Reads (Model A).** Global: `countryDirectory` (every public Country with its public Regions,
+>   Cities and Centres counted in one query under each level's own public predicate; bounded by
+>   the whole ISO alpha-2 space, `GLOBAL_COUNTRY_SPACE` = 676, so its sums are exact),
+>   `centres(query)` now one page of a resolved scope with an optional kind and the view's
+>   **total** (`centreListingQuerySchema`, parsed before the read), `countryCities` now with its
+>   total, and `centrePlaces` (where each public Centre is and which public Cities it serves,
+>   identifiers only, `limit + 1` so overflow is refused rather than truncated; counted by the pure
+>   `tallyCentrePlaces`). Editorial: `centreNews` now takes the identifiers of several Centres
+>   (`NEWS_CENTRE_BATCH` = 2000; an empty list matches nothing) and returns their total; Global
+>   resolves the Centres, Editorial matches identifiers — no new edge. Withdrawn as unused
+>   (historical): Global's offset-paged public `countries` read and the read service's
+>   `hasPublicCentres`, and the web layer's `latestAcross` merge, `readOffsetOf`,
+>   `readFinderQuery`, `withQuery` and `finderPath`. Bound parameters only; no new table.
+> - **Messages.** New `global.{landing.eyebrow, landing.emptyTitle, presenceIntro,
+>   presenceCountries, allCountriesCount, allCentres, figures.*, results.*, count.*, countries.*,
+>   centres.*, finder.{privacy, resultsIn, widen, start, startLabel}, place.*, country.{more,
+>   allInRegion}, region.{servedNote, backToCountry, others}, city.{where, backTo, nearby,
+>   allNearby}, centre.{findAnother, servedIntro, eventsCounts, allNewsCount, nearby, nearbyAll,
+>   nearbyLabel}, centreEvents.{invalidTitle, invalid, seePast}, contact.privacy, pakistan.{find,
+>   unavailableTitle, emptyTitle}}` in en/ur/ar; `global.centresIntro` now says the list is
+>   grouped by Country; removed as unused: `global.centre.allNews`.
+>
+> **Data facts — what staging will show.** Staging's directory is Stage 1A's migrated
+> `minhaj-overseas-countries` (MIGRATION_STRATEGY.md §15.1, §19.1): **30 published Countries of
+> presence and no Region, City or Centre** (the run that would add nine Countries is planned, not
+> recorded; the demo data adds no Global record). So staging shows `/global` with its figures (the
+> Countries and the regions of the world they span), the notice that no centre address is
+> published yet, the ways in and every Country by world region with no Centre counts; the
+> Countries listing with its world-region index, range and pages (30 fit two pages of 24 when all
+> regions are shown); `/global/centres` and Find a Centre each with its honest "No centres yet"
+> state leading to the Countries (the finder's Country select offers none, since none has a
+> Centre); every Country page in its presence-only state, its English name only (the source's),
+> with Share and the other Countries of its world region; and `/global/pakistan` with its honest
+> "not published yet" state leading to the Countries — the overseas table names no Pakistan record
+> (`scripts/migration/adapters/minhaj-overseas.ts`). No Region, City or Centre page exists there.
+> The local persistent database was not inspected.
+>
+> **Proof:** `tests/global/global-view.test.ts` (new: every address rule — tolerant reading,
+> canonical writing, each tidy-up and former spelling one redirect to a final address, each
+> refusal never redirected, the finder's read accepted by `centreFinderSchema` at the deepest page,
+> a Centre's former News offset read by Editorial's page of 20; and `tallyCentrePlaces` /
+> `centresAt`, each Centre once per place by the listing's rule);
+> `tests/global/global.integration.test.ts` (real SQL Server; new: the directory counts withhold
+> drafts, archived ancestors and their descendants; Centre pages with totals, kinds, a served City
+> counted once, past the end with the total; City totals; every listing field parsed before the
+> read; place rows naming only public served Cities with their Regions, overflow refused; the News
+> of several Centres with their total, an empty list matching nothing; the Phase-14 and Phase-16
+> calls moved to the new signatures, every assertion kept); `tests/global/world-region.test.ts`
+> (the removed merge's three cases leave with it); `tests/config/locale.test.ts` (the new
+> modules). Browser: `tests/browser/global.spec.ts` — the signed-in sameness is now compared once
+> both pages' Share islands have hydrated (a design change, stated in the test); every other
+> Phase-16 assertion kept; new: the landing's per-Country Centre counts, counted section tabs and
+> world regions with a chip and range, counted kinds, counted finder options with a chip, a range
+> and the "Countries with centres" way in, the GET form without script, a Country's range and
+> Share, a Centre's Share, nearby Centres and counted Events tabs, eight former or untidy spellings
+> each one redirect, four refusals answered in place, past the end; and twenty-one addresses at 320
+> and 1440 px in en, ur and ar with one `h1`, no redirect, no sideways scroll and no serious or
+> critical axe finding at 1440 px. *CI and staging evidence are recorded when they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

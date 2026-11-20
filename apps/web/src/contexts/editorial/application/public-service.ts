@@ -41,6 +41,8 @@ import {
   type NewsListingPage,
   type NewsNeighbours,
   type NewsPage,
+  type CentreNewsPage,
+  NEWS_CENTRE_BATCH,
 } from '@minhaj/contracts/editorial';
 
 const newsOffsetSchema = z.number().int().min(0).max(NEWS_MAX_OFFSET);
@@ -204,16 +206,22 @@ export function createEditorialReadService(
     /* ---- Phase 16: centre-scoped News ----------------------------------- */
 
     /**
-     * One page of the published NewsArticles scoped to a Centre, by its
-     * IDENTIFIER. Whether that Centre may be shown at all is Global's question,
-     * asked by the page that composes the two — never by Editorial.
+     * One page of the published NewsArticles scoped to any of these Centres, by
+     * their IDENTIFIERS, with the total (R2: a Centre, or the Centres of a
+     * place). Whether a Centre may be shown at all is Global's question, asked
+     * by the page that composes the two — never by Editorial. An empty list
+     * matches nothing; it never means every Centre.
      */
-    async centreNews(centreId: string, offset = 0, limit = NEWS_PAGE): Promise<NewsPage> {
-      return reader.centreNews(
-        editorialIdSchema.parse(centreId),
-        newsOffsetSchema.parse(offset),
-        z.number().int().min(1).max(NEWS_PAGE).parse(limit),
-      );
+    async centreNews(
+      centreIds: readonly string[],
+      offset = 0,
+      limit = NEWS_PAGE,
+    ): Promise<CentreNewsPage> {
+      const ids = z.array(editorialIdSchema).max(NEWS_CENTRE_BATCH).parse(centreIds);
+      const at = newsOffsetSchema.parse(offset);
+      const take = z.number().int().min(1).max(NEWS_PAGE).parse(limit);
+      if (ids.length === 0) return { items: [], more: false, total: 0 };
+      return reader.centreNews(ids, at, take);
     },
 
     /* ---- Phase 14: Events ------------------------------------------------ */

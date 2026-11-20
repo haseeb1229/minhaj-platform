@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 
 import {
   GLOBAL_CHOICES,
+  GLOBAL_COUNTRY_SPACE,
   GLOBAL_LIMITS,
   GLOBAL_PAGE,
   GLOBAL_REGION_LIST,
@@ -172,20 +173,34 @@ export function createGlobalPublicReader(): GlobalPublicReaderPort {
   }
 
   return {
-    async countries(offset) {
+    /**
+     * Every public Country with its public Regions, Cities and Centres counted
+     * in the same query, each count under that level's own public predicate.
+     */
+    async countryDirectory() {
       const rows = await db.country.findMany({
         where: PUBLIC_COUNTRY,
-        select: { ...PLACE, code: true, updatedAt: true },
+        select: {
+          ...PLACE,
+          code: true,
+          _count: {
+            select: {
+              regions: { where: PUBLIC_REGION },
+              cities: { where: PUBLIC_CITY },
+              centres: { where: PUBLIC_CENTRE },
+            },
+          },
+        },
         orderBy: [...BY_SLUG],
-        skip: boundedOffset(offset),
-        take: GLOBAL_PAGE + 1,
+        take: GLOBAL_COUNTRY_SPACE,
       });
-      return {
-        items: rows
-          .slice(0, GLOBAL_PAGE)
-          .map((row) => ({ ...place(row), code: row.code, updatedAt: row.updatedAt })),
-        hasMore: rows.length > GLOBAL_PAGE,
-      };
+      return rows.map((row) => ({
+        ...place(row),
+        code: row.code,
+        regions: row._count.regions,
+        cities: row._count.cities,
+        centres: row._count.centres,
+      }));
     },
 
     country(slug) {
@@ -231,25 +246,30 @@ export function createGlobalPublicReader(): GlobalPublicReaderPort {
     },
 
     async countryCities(countryId, region, offset) {
-      const rows = await db.city.findMany({
-        where: {
-          countryId,
-          AND: [
-            PUBLIC_CITY,
-            region === null
-              ? {}
-              : region === 'none'
-                ? { regionId: null }
-                : { regionId: region },
-          ],
-        },
-        select: PLACE,
-        orderBy: [...BY_SLUG],
-        skip: boundedOffset(offset),
-        take: GLOBAL_PAGE + 1,
-      });
+      const where = {
+        countryId,
+        AND: [
+          PUBLIC_CITY,
+          region === null
+            ? {}
+            : region === 'none'
+              ? { regionId: null }
+              : { regionId: region },
+        ],
+      } satisfies Prisma.CityWhereInput;
+      const [rows, total] = await Promise.all([
+        db.city.findMany({
+          where,
+          select: PLACE,
+          orderBy: [...BY_SLUG],
+          skip: boundedOffset(offset),
+          take: GLOBAL_PAGE + 1,
+        }),
+        db.city.count({ where }),
+      ]);
       return {
         items: rows.slice(0, GLOBAL_PAGE).map(place),
+        total,
         hasMore: rows.length > GLOBAL_PAGE,
       };
     },
@@ -334,18 +354,67 @@ export function createGlobalPublicReader(): GlobalPublicReaderPort {
       return { countryId: found.id, regionId, cityId };
     },
 
-    async centres(scope, offset) {
-      const rows = await db.centre.findMany({
-        where: { AND: [PUBLIC_CENTRE, inScope(scope)] },
-        select: SUMMARY_SELECT,
-        orderBy: [...BY_SLUG],
-        skip: boundedOffset(offset),
-        take: GLOBAL_PAGE + 1,
-      });
+    async centres({ scope, kind, offset, limit }) {
+      const where = {
+        AND: [
+          PUBLIC_CENTRE,
+          inScope(scope),
+          kind === null ? {} : { isVirtual: kind === 'virtual' },
+        ],
+      } satisfies Prisma.CentreWhereInput;
+      const take = Math.max(1, Math.min(GLOBAL_PAGE, Math.trunc(limit) || 1));
+      const [rows, total] = await Promise.all([
+        db.centre.findMany({
+          where,
+          select: SUMMARY_SELECT,
+          orderBy: [{ country: { slug: 'asc' } }, ...BY_SLUG],
+          skip: boundedOffset(offset),
+          take: take + 1,
+        }),
+        db.centre.count({ where }),
+      ]);
       return {
-        items: rows.slice(0, GLOBAL_PAGE).map(summary),
-        hasMore: rows.length > GLOBAL_PAGE,
+        items: rows.slice(0, take).map(summary),
+        total,
+        hasMore: rows.length > take,
       };
+    },
+
+    /**
+     * Where each public Centre is and which PUBLIC Cities it serves — the
+     * listing's own scope rule, as identifiers, for a page to count by. At most
+     * `limit + 1` rows, so overflow is visible rather than a silent subset.
+     */
+    async centrePlaces(countryId, limit) {
+      const rows = await db.centre.findMany({
+        where: { AND: [PUBLIC_CENTRE, countryId === null ? {} : { countryId }] },
+        select: {
+          id: true,
+          countryId: true,
+          regionId: true,
+          cityId: true,
+          isVirtual: true,
+          city: { select: { regionId: true } },
+          serves: {
+            where: { city: PUBLIC_CITY },
+            select: { cityId: true, city: { select: { regionId: true } } },
+            take: GLOBAL_LIMITS.servedCities,
+          },
+        },
+        orderBy: { id: 'asc' },
+        take: Math.max(1, Math.trunc(limit) || 1) + 1,
+      });
+      return rows.map((row) => ({
+        id: row.id,
+        countryId: row.countryId,
+        regionId: row.city?.regionId ?? row.regionId,
+        cityId: row.cityId,
+        isVirtual: row.isVirtual,
+        served: row.serves.map((served) => ({
+          cityId: served.cityId,
+          regionId: served.city.regionId,
+        })),
+      }));
     },
 
     async hasPublicCentres() {

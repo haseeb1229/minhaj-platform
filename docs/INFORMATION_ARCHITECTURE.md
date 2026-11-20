@@ -673,6 +673,21 @@ neutral answer for every address and the privacy notice beside the form.
 | — | — | Cities | Local Contacts |
 | — | — | Pakistan City Structure | — |
 
+**Global Network (2026-11-20).** The four columns by the pattern of News & Events. **Network**:
+the World Network front door opens on the directory's figures (Countries, regions of the world,
+and once published Centres and Cities), the ways in, and every Country by world region with its
+Centres counted. **Find**: Find a Centre counts its Country, Region and City options, shows chips,
+a range and numbered pages, and — before a Country is chosen — offers the Countries that have
+Centres as the way in; Centres is every Centre grouped under its Country, with counted kinds (with
+premises, virtual). **Structure**: Countries is ordered by world region with a counted region
+index; a Country, a Region and a City each open on their figures, Find a Centre there and Share,
+list their Cities and Centres with ranges and pages, and lead to the places beside them; the
+Pakistan structure counts each Region's Cities and Centres. **Local**: a Country's, Region's or
+City's page shows the latest News of its Centres and (Country, City) the upcoming Events held
+there; a Centre's page offers Share, its counted Events and News, and more Centres nearby in the
+directory's own geography; its News and Events pages are counted, ranged and numbered, and its
+contact page stays display-only. Every Global list page carries the sections as counted tabs.
+
 ---
 
 ## 4. Footer hierarchy

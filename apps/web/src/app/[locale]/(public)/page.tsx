@@ -169,7 +169,6 @@ export default async function HomePage({ params }: HomeParams) {
     rulings,
     collections,
     countries,
-    hasCentres,
     people,
     pages,
     courses,
@@ -185,8 +184,7 @@ export default async function HomePage({ params }: HomeParams) {
     readEvents(),
     readRulings(),
     editorial.collections(0),
-    network.countryChoices(),
-    network.hasPublicCentres(),
+    network.countryDirectory(),
     peopleReadRuntime().people.publicPeople({ locale, limit: PREVIEW.people }),
     editorial.explorePages(),
     learningReadRuntime().courses({}),
@@ -257,7 +255,7 @@ export default async function HomePage({ params }: HomeParams) {
         locale={locale}
         items={collections.items.slice(0, PREVIEW.collections)}
       />
-      <GlobalReach locale={locale} countries={countries} hasCentres={hasCentres} />
+      <GlobalReach locale={locale} countries={countries} />
       <LearnModule locale={locale} courses={courses.items.slice(0, PREVIEW.courses)} />
       <AreasModule locale={locale} />
       <TopicsModule locale={locale} roots={roots} />

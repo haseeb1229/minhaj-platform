@@ -4,6 +4,8 @@ import type {
   CentreDetail,
   CentreRecord,
   CentreReference,
+  CentreListingQuery,
+  CentrePlace,
   CentreScope,
   CentreSitemapRow,
   CentreValue,
@@ -17,7 +19,7 @@ import type {
   CityPage,
   CountryPage,
   PublicCentrePage,
-  PublicCountryPage,
+  PublicCountryEntry,
   PublicPlacePage,
   RegionPage,
   PublicCentre,
@@ -68,8 +70,12 @@ export interface GlobalAuthorityPort {
  * ========================================================================= */
 
 export interface GlobalPublicReaderPort {
-  /** One bounded page of public Countries, in slug order. */
-  countries(offset: number): Promise<PublicCountryPage>;
+  /**
+   * GLOBAL NETWORK (R2) — EVERY public Country, in slug order, each with how
+   * many public Regions, Cities and Centres it holds. Bounded by the whole
+   * ISO code space (`GLOBAL_COUNTRY_SPACE`), so the answer is complete.
+   */
+  countryDirectory(): Promise<readonly PublicCountryEntry[]>;
   country(slug: string): Promise<PublicCountry | null>;
   /** A public Country by its ISO code — the Pakistan entry point's question. */
   countryByCode(code: string): Promise<PublicCountry | null>;
@@ -89,7 +95,7 @@ export interface GlobalPublicReaderPort {
   countryRegions(countryId: string): Promise<readonly PublicPlace[]>;
   /**
    * One page of a public Country's public Cities: all of them, only those with
-   * no Region (`'none'`), or those of one Region.
+   * no Region (`'none'`), or those of one Region — with the view's total.
    */
   countryCities(
     countryId: string,
@@ -121,11 +127,20 @@ export interface GlobalPublicReaderPort {
     readonly city: string | null;
   }): Promise<CentreScope | null>;
   /**
-   * One bounded page of public Centres within a scope, in slug order. A City
-   * scope includes a Centre in that City OR serving it, once; a Region scope a
-   * Centre in it (directly or through its City) or serving one of its Cities.
+   * One bounded page of public Centres within a scope — and, optionally, of one
+   * kind — with the view's total, in the order of their Country's slug, then
+   * their own. A City scope includes a Centre in that City OR serving it, once;
+   * a Region scope a Centre in it (directly or through its City) or serving one
+   * of its public Cities.
    */
-  centres(scope: CentreScope, offset: number): Promise<PublicCentrePage>;
+  centres(query: CentreListingQuery): Promise<PublicCentrePage>;
+  /**
+   * GLOBAL NETWORK (R2) — where the public Centres of one Country (or of every
+   * Country) are and which public Cities they serve, identifiers only, at most
+   * `limit + 1` of them, so a caller can tell a complete answer from one it
+   * must not count.
+   */
+  centrePlaces(countryId: string | null, limit: number): Promise<readonly CentrePlace[]>;
   /** Is there any public Centre at all? Distinguishes an empty inventory from no match. */
   hasPublicCentres(): Promise<boolean>;
   centre(slug: string): Promise<PublicCentre | null>;

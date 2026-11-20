@@ -1,18 +1,20 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
 import { globalPaths } from '@minhaj/contracts/global';
 
 import { globalReadRuntime } from '@/composition/global-read';
-import { CityPage } from '@/components/global/directory';
+import { CityPage } from '@/components/global/places';
 import { placeLocales, placeName } from '@/components/global/presentation';
 import { requireLocale } from '@/config/route-locale';
+import { placeCanonicalRedirect, readPlaceView } from '@/components/global/global-view';
 import { contentMetadata } from '@/seo/metadata';
 
 /**
- * `/{locale}/global/countries/{countrySlug}/cities/{citySlug}` — one public
+ * `/{locale}/global/countries/{countrySlug}/cities/{citySlug}` â€” one public
  * City, addressed under its Country whether or not it has a Region. A former
- * Country or City slug answers ONE 301 from the request proxy.
+ * Country or City slug answers ONE 301 from the request proxy. `?page` pages
+ * its Centres (R2); Phase 16's `?offset=` is one redirect.
  */
 export const dynamic = 'force-dynamic';
 
@@ -44,5 +46,12 @@ export default async function CityRoute({ params, searchParams }: CityParams) {
   const { country, city } = await params;
   const record = await globalReadRuntime().city(country, city);
   if (record === null) notFound();
-  return <CityPage locale={locale} city={record} query={await searchParams} />;
+  const query = await searchParams;
+  const canonical = placeCanonicalRedirect(
+    globalPaths.city(locale, record.country.slug, record.slug),
+    query,
+    false,
+  );
+  if (canonical !== null) redirect(canonical);
+  return <CityPage locale={locale} city={record} view={readPlaceView(query, false)} />;
 }

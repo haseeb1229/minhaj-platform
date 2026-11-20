@@ -72,6 +72,23 @@ export const GLOBAL_LIMITS = Object.freeze({
 /** One public listing page — a grid of four, three or two columns divides it. */
 export const GLOBAL_PAGE = 24;
 
+/** The deepest offset a public listing reads. */
+export const GLOBAL_MAX_OFFSET = 25_000;
+
+/**
+ * Every Country there can be: the ISO 3166-1 alpha-2 code space, 26 × 26. A
+ * read bounded by it is the WHOLE public directory of Countries, never a page
+ * of it, so a count over it is exact.
+ */
+export const GLOBAL_COUNTRY_SPACE = 676;
+
+/**
+ * The most public Centres one place-count read returns (the Global Network
+ * pages; the same bound the Event geography filter carries). With more, the
+ * pages offer their places uncounted rather than counting a subset.
+ */
+export const GLOBAL_PLACE_ROWS = 2000;
+
 /** The most Regions a Country page lists at once: far beyond any real Country. */
 export const GLOBAL_REGION_LIST = 200;
 
@@ -468,6 +485,37 @@ export interface CentreScope {
   readonly cityId: string | null;
 }
 
+/**
+ * Whether a Centre has premises (`physical`) or is `virtual` — the operator's
+ * own fact, never inferred from a missing address.
+ */
+export const CENTRE_KINDS = Object.freeze(['physical', 'virtual'] as const);
+export type CentreKind = (typeof CENTRE_KINDS)[number];
+export const centreKindSchema = z.enum(CENTRE_KINDS);
+
+/**
+ * GLOBAL NETWORK (R2) — one page of public Centres within a RESOLVED scope,
+ * optionally of one kind, with the view's total. Identifiers only: a public
+ * slug is resolved to them by `scope` first, so nothing here can name a
+ * withheld place.
+ */
+export const centreListingQuerySchema = z
+  .object({
+    scope: z
+      .object({
+        countryId: globalIdSchema.nullable(),
+        regionId: globalIdSchema.nullable(),
+        cityId: globalIdSchema.nullable(),
+      })
+      .strict(),
+    kind: centreKindSchema.nullable().default(null),
+    offset: z.number().int().min(0).max(GLOBAL_MAX_OFFSET).default(0),
+    limit: z.number().int().min(1).max(GLOBAL_PAGE).default(GLOBAL_PAGE),
+  })
+  .strict();
+
+export type CentreListingQuery = z.infer<typeof centreListingQuerySchema>;
+
 /* ===========================================================================
  * Records — administrative
  * ========================================================================= */
@@ -628,16 +676,86 @@ export interface PublicCentre extends PublicCentreSummary {
   readonly updatedAt: Date;
 }
 
-export interface PublicCountryPage {
-  readonly items: readonly PublicCountry[];
-  readonly hasMore: boolean;
+/**
+ * GLOBAL NETWORK (R2) — one public Country as the directory lists it, with how
+ * many PUBLIC Regions, Cities and Centres it holds: each counted under the same
+ * public predicate every other read uses, so a figure never counts a withheld
+ * record.
+ */
+export interface PublicCountryEntry extends PublicCountryChoice {
+  readonly regions: number;
+  readonly cities: number;
+  readonly centres: number;
 }
+
+/**
+ * GLOBAL NETWORK (R2) — where one public Centre is and which public Cities it
+ * serves, identifiers only: what a page counts its place options by. `regionId`
+ * is the Centre's Region — its City's, or its own when it has no City — and
+ * each served City carries its Region, so a Region counts a Centre serving one
+ * of its Cities, as the listing does.
+ */
+export interface CentrePlace {
+  readonly id: string;
+  readonly countryId: string;
+  readonly regionId: string | null;
+  readonly cityId: string | null;
+  readonly isVirtual: boolean;
+  readonly served: readonly {
+    readonly cityId: string;
+    readonly regionId: string | null;
+  }[];
+}
+
+/** How many public Centres each place and each kind holds, by the listing's rule. */
+export interface CentrePlaceTally {
+  readonly countries: ReadonlyMap<string, number>;
+  readonly regions: ReadonlyMap<string, number>;
+  readonly cities: ReadonlyMap<string, number>;
+  readonly kinds: Readonly<Record<CentreKind, number>>;
+}
+
+/**
+ * The tally of a set of Centre places — PURE, so the rule is proved without a
+ * database, and it is the listing's rule (`centres`): a Country counts every
+ * Centre of it; a City every Centre in it or serving it; a Region every Centre
+ * in it, in one of its Cities, or serving one of its Cities — each Centre ONCE
+ * per place, however many ways it matches.
+ */
+export function tallyCentrePlaces(rows: readonly CentrePlace[]): CentrePlaceTally {
+  const countries = new Map<string, number>();
+  const regions = new Map<string, number>();
+  const cities = new Map<string, number>();
+  const kinds: Record<CentreKind, number> = { physical: 0, virtual: 0 };
+  const add = (map: Map<string, number>, key: string) =>
+    map.set(key, (map.get(key) ?? 0) + 1);
+  for (const row of rows) {
+    add(countries, row.countryId);
+    kinds[row.isVirtual ? 'virtual' : 'physical'] += 1;
+    const inCities = new Set<string>();
+    const inRegions = new Set<string>();
+    if (row.cityId !== null) inCities.add(row.cityId);
+    if (row.regionId !== null) inRegions.add(row.regionId);
+    for (const served of row.served) {
+      inCities.add(served.cityId);
+      if (served.regionId !== null) inRegions.add(served.regionId);
+    }
+    for (const id of inCities) add(cities, id);
+    for (const id of inRegions) add(regions, id);
+  }
+  return { countries, regions, cities, kinds };
+}
+
 export interface PublicPlacePage {
   readonly items: readonly PublicPlace[];
+  /** How many the view holds in all. */
+  readonly total: number;
   readonly hasMore: boolean;
 }
 export interface PublicCentrePage {
   readonly items: readonly PublicCentreSummary[];
+  /** How many public Centres the view holds in all. */
+  readonly total: number;
   readonly hasMore: boolean;
 }
 

@@ -6,6 +6,7 @@ import { Prisma } from '@prisma/client';
 
 import {
   NEWS_FACET_PAGE,
+  NEWS_CENTRE_BATCH,
   NEWS_KINDS,
   NEWS_PAGE,
   type ArticleDetail,
@@ -170,6 +171,7 @@ interface RecordDelegate {
   create(args: object): Promise<unknown>;
   update(args: object): Promise<RecordRow>;
   updateMany(args: object): Promise<{ count: number }>;
+  count(args: object): Promise<number>;
 }
 
 interface RevisionDelegate {
@@ -1509,19 +1511,29 @@ export function newsReads(): Pick<
      * is published again. The Centre is matched as an identifier; no Global
      * table is joined or read.
      */
-    async centreNews(centreId, offset, limit) {
+    async centreNews(centreIds, offset, limit) {
+      if (centreIds.length === 0) return { items: [], more: false, total: 0 };
       const family = FAMILIES['news-article'];
       const take = limitOf(limit, NEWS_PAGE);
-      const rows = (await family.delegates(db()).record.findMany({
-        where: { state: 'published', current: { is: { centreId } } },
-        select: summarySelect(family),
-        orderBy: newestFirst(family),
-        skip: offsetOf(offset),
-        take: take + 1,
-      })) as PublicRow[];
+      const where = {
+        state: 'published',
+        current: { is: { centreId: { in: [...centreIds].slice(0, NEWS_CENTRE_BATCH) } } },
+      };
+      const delegate = family.delegates(db()).record;
+      const [rows, total] = await Promise.all([
+        delegate.findMany({
+          where,
+          select: summarySelect(family),
+          orderBy: newestFirst(family),
+          skip: offsetOf(offset),
+          take: take + 1,
+        }) as Promise<PublicRow[]>,
+        delegate.count({ where }),
+      ]);
       return {
         items: rows.slice(0, take).map((row) => summaryOf(family, row)),
         more: rows.length > take,
+        total,
       };
     },
 

@@ -1,19 +1,25 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
 import { globalPaths } from '@minhaj/contracts/global';
 
 import { globalReadRuntime } from '@/composition/global-read';
-import { CentreNewsPage } from '@/components/global/centre';
+import { CentreNewsPage } from '@/components/global/centre-activity';
 import { centreWords, placeLocales } from '@/components/global/presentation';
 import { requireLocale } from '@/config/route-locale';
+import {
+  NEWS_PAGING,
+  placeCanonicalRedirect,
+  readPlaceView,
+} from '@/components/global/global-view';
 import { contentMetadata } from '@/seo/metadata';
 
 /**
  * `/{locale}/global/centres/{centreSlug}/news` — the Centre's published
  * NewsArticles, newest first: Editorial's own bounded read by the Centre's
- * identifier, composed here. Not public when the Centre is not.
+ * identifier, composed here. Not public when the Centre is not. `?page` (20
+ * a page; R2); Phase 16's `?offset=` is one redirect.
  */
 export const dynamic = 'force-dynamic';
 
@@ -45,5 +51,19 @@ export default async function CentreNewsRoute({
   const { slug } = await params;
   const record = await globalReadRuntime().centre(slug);
   if (record === null) notFound();
-  return <CentreNewsPage locale={locale} centre={record} query={await searchParams} />;
+  const query = await searchParams;
+  const canonical = placeCanonicalRedirect(
+    globalPaths.centreNews(locale, record.slug),
+    query,
+    false,
+    NEWS_PAGING,
+  );
+  if (canonical !== null) redirect(canonical);
+  return (
+    <CentreNewsPage
+      locale={locale}
+      centre={record}
+      view={readPlaceView(query, false, NEWS_PAGING)}
+    />
+  );
 }

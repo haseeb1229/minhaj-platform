@@ -1,20 +1,15 @@
-import { localizedPath } from '@minhaj/contracts';
-import { z } from 'zod';
-
 import type { Locale } from '@minhaj/contracts';
 import {
   labelFor,
   type CentreLabel,
+  type CentrePlace,
   type PlaceLabel,
-  type PublicPlace,
 } from '@minhaj/contracts/global';
 
 /**
  * The presentation rules every Global Network page shares — one implementation,
  * so a place name, a page link and a finder address read the same everywhere.
  */
-
-type Query = Record<string, string | string[] | undefined>;
 
 /**
  * The name a page renders and the language it is ACTUALLY in, so the markup can
@@ -46,82 +41,37 @@ export function placeLocales(record: {
   return record.labels.map((label) => label.locale);
 }
 
-/** A bounded page offset from one query key — malformed values are the first page. */
-export function readOffsetOf(query: Query, key: string): number {
-  const raw = query[key];
-  return z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(25_000)
-    .catch(0)
-    .parse(typeof raw === 'string' && raw.length <= 8 ? raw : 0);
-}
-
-/** One query value as a slug candidate, or `null`. Validated again by the reader. */
-function slugOf(query: Query, key: string): string | null {
-  const raw = query[key];
-  return typeof raw === 'string' && raw.length > 0 && raw.length <= 120 ? raw : null;
-}
-
-/** The finder's filters as the read service validates them. */
-export function readFinderQuery(query: Query) {
-  return {
-    country: slugOf(query, 'country'),
-    region: slugOf(query, 'region'),
-    city: slugOf(query, 'city'),
-    offset: readOffsetOf(query, 'offset'),
-  };
-}
-
-/** A page address with its own query values, neutral ones omitted. */
-export function withQuery(
-  path: string,
-  values: Readonly<Record<string, string | number | null>>,
-): string {
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(values))
-    if (value !== null && value !== 0 && value !== '') search.set(key, String(value));
-  const encoded = search.toString();
-  return encoded === '' ? path : `${path}?${encoded}`;
-}
-
-/** The finder's address for a scope. */
-export function finderPath(
-  locale: Locale,
-  scope: {
-    readonly country?: PublicPlace | null;
-    readonly region?: PublicPlace | null;
-    readonly city?: PublicPlace | null;
-  },
-): string {
-  return withQuery(localizedPath(locale, '/global/find-a-centre'), {
-    country: scope.country?.slug ?? null,
-    region: scope.region?.slug ?? null,
-    city: scope.city?.slug ?? null,
-  });
-}
-
 /**
- * R2 — the newest items across several newest-first pages (one per Centre in a
- * Country), each item once, newest `chronologyAt` first, at most `limit`. When
- * every page holds its own newest `limit`, the result IS the union's newest
- * `limit`; the caller asks each page for exactly that many.
+ * GLOBAL NETWORK (R2) — the identifiers of the Centres among `rows` a place
+ * holds, by the listing's own rule (`tallyCentrePlaces`): a Region, a Centre in
+ * it, in one of its Cities or serving one of its Cities; a City, a Centre in it
+ * or serving it. `physical` keeps only those physically THERE — never one
+ * merely serving it, never a virtual Centre — the Events filters' rule.
  */
-export function latestAcross<
-  T extends { readonly kind: string; readonly slug: string; readonly chronologyAt: Date },
->(pages: readonly (readonly T[])[], limit: number): readonly T[] {
-  const seen = new Map<string, T>();
-  for (const items of pages)
-    for (const item of items) {
-      const key = `${item.kind}:${item.slug}`;
-      if (!seen.has(key)) seen.set(key, item);
-    }
-  return [...seen.values()]
-    .sort(
-      (a, b) =>
-        b.chronologyAt.getTime() - a.chronologyAt.getTime() ||
-        (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0),
-    )
-    .slice(0, Math.max(0, limit));
+export function centresAt(
+  rows: readonly CentrePlace[],
+  place: { readonly regionId?: string; readonly cityId?: string },
+  physical = false,
+): string[] {
+  return rows
+    .filter((row) => {
+      if (physical) {
+        if (row.isVirtual) return false;
+        if (place.cityId !== undefined) return row.cityId === place.cityId;
+        if (place.regionId !== undefined) return row.regionId === place.regionId;
+        return true;
+      }
+      if (place.cityId !== undefined)
+        return (
+          row.cityId === place.cityId ||
+          row.served.some((served) => served.cityId === place.cityId)
+        );
+      if (place.regionId !== undefined)
+        return (
+          row.regionId === place.regionId ||
+          row.served.some((served) => served.regionId === place.regionId)
+        );
+      return true;
+    })
+    .map((row) => row.id);
 }

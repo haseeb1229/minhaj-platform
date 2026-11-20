@@ -384,15 +384,13 @@ live('Phase 16 Global Network against real SQL Server', () => {
         state: 'published',
         labels: names('Synthetic City'),
       });
-      const inSouth = await reads.centresIn(
-        { countryId: home.id, regionId: south.id, cityId: null },
-        0,
-      );
+      const inSouth = await reads.centresIn({
+        scope: { countryId: home.id, regionId: south.id, cityId: null },
+      });
       expect(inSouth.items.map((item) => item.id)).toContain(here.id);
-      const inNorth = await reads.centresIn(
-        { countryId: home.id, regionId: north.id, cityId: null },
-        0,
-      );
+      const inNorth = await reads.centresIn({
+        scope: { countryId: home.id, regionId: north.id, cityId: null },
+      });
       expect(inNorth.items.map((item) => item.id)).not.toContain(here.id);
     });
 
@@ -728,7 +726,7 @@ live('Phase 16 Global Network against real SQL Server', () => {
       expect((await newsReads.news('news-article', article.slug))?.centreId).toBe(
         here.id,
       );
-      const listed = await newsReads.centreNews(here.id);
+      const listed = await newsReads.centreNews([here.id]);
       expect(listed.items.map((item) => item.slug)).toEqual([article.slug]);
       // General News names no Centre.
       const general = await publishedNews(null);
@@ -764,8 +762,8 @@ live('Phase 16 Global Network against real SQL Server', () => {
       expect(revised.approvedRevision).toBeNull();
       expect(revised.revision.centreId).toBe(second.id);
       // Withdrawn from both Centres until it is reviewed and published again.
-      expect((await newsReads.centreNews(first.id)).items).toEqual([]);
-      expect((await newsReads.centreNews(second.id)).items).toEqual([]);
+      expect((await newsReads.centreNews([first.id])).items).toEqual([]);
+      expect((await newsReads.centreNews([second.id])).items).toEqual([]);
       const [audit] = await db.admin.query<{ total: number }>(
         `SELECT COUNT(*) AS total FROM [AuditLog] WHERE [targetId]=N'${article.id}' AND [action]=N'editorial.news-article.centre-changed';`,
       );
@@ -925,6 +923,200 @@ live('Phase 16 Global Network against real SQL Server', () => {
       expect(await reads.scope({ city: town.slug })).toBeNull();
       expect(await reads.scope({ country: 'Not A Slug' })).toBeNull();
       expect(await reads.scope({ country: home.slug, extra: 1 })).toBeNull();
+    });
+  });
+
+  describe('Global Network (R2) — the directory’s counts, totals and place rows', () => {
+    it('counts every public Country’s public Regions, Cities and Centres, withholding the rest', async () => {
+      const home = await country();
+      const open = await region(home.id);
+      const closed = await region(home.id, { state: 'archived' });
+      const town = await city(home.id, open.id);
+      await city(home.id, null);
+      await city(home.id, closed.id);
+      await city(home.id, null, { state: 'draft' });
+      await centre(home.id, { cityId: town.id });
+      await centre(home.id, {
+        isVirtual: true,
+        labels: [
+          {
+            locale: 'en',
+            name: 'Synthetic Online Centre',
+            description: null,
+            address: null,
+          },
+        ],
+      });
+      await centre(home.id, { regionId: closed.id });
+      await centre(home.id, { state: 'draft' });
+      const hidden = await country({ state: 'draft' });
+
+      const directory = await reads.countryDirectory();
+      const entry = directory.find((row) => row.id === home.id);
+      expect(entry).toMatchObject({
+        slug: home.slug,
+        code: home.code,
+        regions: 1,
+        cities: 2,
+        centres: 2,
+      });
+      expect(directory.map((row) => row.id)).not.toContain(hidden.id);
+      // Every public Country once.
+      const slugs = directory.map((row) => row.slug);
+      expect(new Set(slugs).size).toBe(slugs.length);
+    });
+
+    it('pages Centres and Cities with the view’s total, and narrows by kind', async () => {
+      const home = await country();
+      const town = await city(home.id, null);
+      for (let index = 0; index < 3; index += 1) await city(home.id, null);
+      const physical = [
+        await centre(home.id, { cityId: town.id }),
+        await centre(home.id, { cityId: town.id }),
+      ];
+      const online = await centre(home.id, {
+        isVirtual: true,
+        labels: [
+          {
+            locale: 'en',
+            name: 'Synthetic Online Centre',
+            description: null,
+            address: null,
+          },
+        ],
+      });
+      await service.changeServedCities(administrator, online.id, online.version, {
+        op: 'add',
+        cityId: town.id,
+      });
+      const scope = { countryId: home.id, regionId: null, cityId: null };
+
+      const all = await reads.centresIn({ scope, limit: 2 });
+      expect(all.total).toBe(3);
+      expect(all.items).toHaveLength(2);
+      expect(all.hasMore).toBe(true);
+      const rest = await reads.centresIn({ scope, offset: 2, limit: 2 });
+      expect(rest.items).toHaveLength(1);
+      expect(rest.hasMore).toBe(false);
+      expect([...all.items, ...rest.items].map((row) => row.id).sort()).toEqual(
+        [...physical.map((row) => row.id), online.id].sort(),
+      );
+      const virtual = await reads.centresIn({ scope, kind: 'virtual' });
+      expect(virtual.items.map((row) => row.id)).toEqual([online.id]);
+      expect(virtual.total).toBe(1);
+      expect((await reads.centresIn({ scope, kind: 'physical' })).total).toBe(2);
+      // A City counts the Centre serving it once, beside those in it.
+      const inTown = await reads.centresIn({
+        scope: { countryId: home.id, regionId: null, cityId: town.id },
+      });
+      expect(inTown.total).toBe(3);
+      // Past the end: nothing, with the total still told.
+      const beyond = await reads.centresIn({ scope, offset: 24 });
+      expect(beyond).toMatchObject({ items: [], total: 3, hasMore: false });
+
+      const cities = await reads.countryCities(home.id, 'none', 0);
+      expect(cities.total).toBe(4);
+      expect(cities.items).toHaveLength(4);
+
+      // Every field is parsed before the read.
+      for (const bad of [
+        { scope, kind: 'online' },
+        { scope, limit: 25 },
+        { scope, offset: -1 },
+        { scope: { ...scope, countryId: 'not-an-id' } },
+        { scope, extra: true },
+      ])
+        expect(() => reads.centresIn(bad), JSON.stringify(bad)).toThrow();
+    });
+
+    it('lists where each public Centre is and what it serves, and refuses to count past the bound', async () => {
+      const home = await country();
+      const area = await region(home.id);
+      const inArea = await city(home.id, area.id);
+      const plain = await city(home.id, null);
+      const hiddenTown = await city(home.id, null, { state: 'draft' });
+      const here = await centre(home.id, { cityId: inArea.id });
+      const online = await centre(home.id, {
+        isVirtual: true,
+        labels: [
+          {
+            locale: 'en',
+            name: 'Synthetic Online Centre',
+            description: null,
+            address: null,
+          },
+        ],
+      });
+      let current = await service.changeServedCities(
+        administrator,
+        online.id,
+        online.version,
+        { op: 'add', cityId: plain.id },
+      );
+      current = await service.changeServedCities(
+        administrator,
+        online.id,
+        current.version,
+        { op: 'add', cityId: inArea.id },
+      );
+      await service.changeServedCities(administrator, online.id, current.version, {
+        op: 'add',
+        cityId: hiddenTown.id,
+      });
+      await centre(home.id, { state: 'draft' });
+
+      const rows = await reads.centrePlaces(home.id);
+      if (rows === null) throw new Error('The place rows were refused.');
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      expect(rows).toHaveLength(2);
+      expect(byId.get(here.id)).toMatchObject({
+        countryId: home.id,
+        regionId: area.id,
+        cityId: inArea.id,
+        isVirtual: false,
+        served: [],
+      });
+      // Only PUBLIC served Cities, each with its Region.
+      expect(
+        [...(byId.get(online.id)?.served ?? [])].sort((a, b) =>
+          a.cityId < b.cityId ? -1 : 1,
+        ),
+      ).toEqual(
+        [
+          { cityId: plain.id, regionId: null },
+          { cityId: inArea.id, regionId: area.id },
+        ].sort((a, b) => (a.cityId < b.cityId ? -1 : 1)),
+      );
+
+      // The adapter answers one more than asked for; the service refuses then.
+      const database = await import('../../packages/database/src/index.ts');
+      expect(
+        await database.createGlobalPublicReader().centrePlaces(home.id, 1),
+      ).toHaveLength(2);
+      await expect(reads.centrePlaces('not-an-id')).rejects.toThrow();
+    });
+
+    it('lists the News of several Centres at once, with their total, and nothing for none', async () => {
+      const home = await country();
+      const first = await centre(home.id);
+      const second = await centre(home.id);
+      const one = await publishedNews(first.id);
+      const two = await publishedNews(second.id);
+      const both = await newsReads.centreNews([first.id, second.id]);
+      expect(both.total).toBe(2);
+      expect(both.items.map((item) => item.slug).sort()).toEqual(
+        [one.slug, two.slug].sort(),
+      );
+      const paged = await newsReads.centreNews([first.id, second.id], 0, 1);
+      expect(paged).toMatchObject({ total: 2, more: true });
+      expect(paged.items).toHaveLength(1);
+      // An empty list matches nothing — it never means every Centre.
+      expect(await newsReads.centreNews([])).toEqual({
+        items: [],
+        more: false,
+        total: 0,
+      });
+      await expect(newsReads.centreNews(['not-an-id'])).rejects.toThrow();
     });
   });
 });

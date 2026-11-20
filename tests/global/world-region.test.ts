@@ -5,7 +5,6 @@ import {
   groupByWorldRegion,
   worldRegionOf,
 } from '../../apps/web/src/components/global/world-region.ts';
-import { latestAcross } from '../../apps/web/src/components/global/presentation.ts';
 
 /**
  * R2 — the Countries grid's world-region grouping: a fixed table applied to
@@ -73,41 +72,5 @@ describe('groupByWorldRegion', () => {
 
   it('returns nothing for no countries', () => {
     expect(groupByWorldRegion([])).toEqual([]);
-  });
-});
-
-describe('latestAcross', () => {
-  const item = (slug: string, day: number, kind = 'news-article') => ({
-    kind,
-    slug,
-    chronologyAt: new Date(Date.UTC(2026, 0, day)),
-  });
-
-  it('merges newest-first pages into the newest few, each item once', () => {
-    const merged = latestAcross(
-      [
-        [item('c', 9), item('a', 3)],
-        [item('b', 7), item('c', 9), item('d', 1)],
-      ],
-      3,
-    );
-    expect(merged.map((entry) => entry.slug)).toEqual(['c', 'b', 'a']);
-  });
-
-  it('breaks a tie on the same day by slug, and keeps two kinds apart', () => {
-    const merged = latestAcross(
-      [[item('z', 5), item('m', 5, 'press-release')], [item('m', 5)]],
-      5,
-    );
-    expect(merged.map((entry) => `${entry.kind}:${entry.slug}`)).toEqual([
-      'press-release:m',
-      'news-article:m',
-      'news-article:z',
-    ]);
-  });
-
-  it('returns nothing for no pages or a zero limit', () => {
-    expect(latestAcross([], 3)).toEqual([]);
-    expect(latestAcross([[item('a', 1)]], 0)).toEqual([]);
   });
 });

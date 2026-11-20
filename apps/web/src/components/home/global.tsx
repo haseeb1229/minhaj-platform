@@ -1,5 +1,5 @@
 import type { Locale } from '@minhaj/contracts';
-import { globalPaths, type PublicCountryChoice } from '@minhaj/contracts/global';
+import { globalPaths, type PublicCountryEntry } from '@minhaj/contracts/global';
 import { getTranslations } from 'next-intl/server';
 
 import { placeName } from '@/components/global/presentation';
@@ -10,10 +10,12 @@ import { pathFor, requireRoute } from '@/shell/registry';
 import { HomeSection } from './section';
 
 /**
- * GLOBAL REACH (R2): how many countries the directory lists, as one figure,
- * and every one of them by name — a typographic map of the network, set in
- * newspaper columns and ordered as the reader's language orders names. Each
- * name opens its country's page. Nothing renders when no country is published.
+ * GLOBAL REACH (R2): how many countries the directory lists and — once any is
+ * published — how many Centres, as figures read from the complete directory
+ * (`countryDirectory`, so both are exact), and every country by name — a
+ * typographic map of the network, set in newspaper columns and ordered as the
+ * reader's language orders names. Each name opens its country's page. Nothing
+ * renders when no country is published.
  *
  * THE WAY ON is the Centre finder once a Centre is listed; before that it is
  * the countries directory, never an empty finder, and the introduction says
@@ -22,14 +24,14 @@ import { HomeSection } from './section';
 export async function GlobalReach({
   locale,
   countries,
-  hasCentres,
 }: {
   readonly locale: Locale;
-  readonly countries: readonly PublicCountryChoice[];
-  /** True once the directory lists at least one public Centre. */
-  readonly hasCentres: boolean;
+  /** Every public Country, with its public Centres counted. */
+  readonly countries: readonly PublicCountryEntry[];
 }) {
   if (countries.length === 0) return null;
+  const centres = countries.reduce((sum, country) => sum + country.centres, 0);
+  const hasCentres = centres > 0;
   const [t, global] = await Promise.all([
     getTranslations({ locale, namespace: 'shell' }),
     getTranslations({ locale, namespace: 'global' }),
@@ -55,10 +57,20 @@ export async function GlobalReach({
       }}
     >
       <div className="grid grid-cols-1 gap-x-12 gap-y-8 lg:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
-        <Stat
-          value={new Intl.NumberFormat(locale).format(countries.length)}
-          label={t('home.global.countries', { count: countries.length })}
-        />
+        <div className="flex flex-wrap gap-x-10 gap-y-6 lg:flex-col">
+          <Stat
+            value={new Intl.NumberFormat(locale).format(countries.length)}
+            label={t('home.global.countries', { count: countries.length })}
+            href={globalPaths.countries(locale)}
+          />
+          {hasCentres ? (
+            <Stat
+              value={new Intl.NumberFormat(locale).format(centres)}
+              label={global('figures.centres', { count: centres })}
+              href={globalPaths.centres(locale)}
+            />
+          ) : null}
+        </div>
         <ul
           aria-label={global('sections.countries')}
           className="m-0 list-none columns-2 gap-x-8 p-0 sm:columns-3 xl:columns-4"

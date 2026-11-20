@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
-import type { BrowserContext, Page } from '@playwright/test';
+import { AxeBuilder } from '@axe-core/playwright';
+import type { BrowserContext, Page, TestInfo } from '@playwright/test';
 
 import type { SqlSession } from '../../packages/database/src/lifecycle/sql-connection.ts';
 import {
@@ -29,6 +30,12 @@ import {
  * and attributed only while the Centre is public; the administration is
  * refused, read-only or writable by permission and refuses a stale save; and
  * Urdu and Arabic render right-to-left with no horizontal scroll at 320px.
+ *
+ * GLOBAL NETWORK (R2): the directory to the listing standard — counted tabs,
+ * world regions, kinds and finder options; chips, ranges and numbered pages;
+ * Share and nearby Centres; one address per view with every former spelling
+ * one redirect and every meaningless view refused in place; and every surface
+ * axe-clean at 1440 px and reflowing at 320 px in en, ur and ar.
  *
  * EVERYTHING IS SYNTHETIC. No real centre, place, address or telephone number
  * is named; every address is `.invalid`; every Country code is drawn from the
@@ -300,8 +307,9 @@ test.describe('an anonymous visitor explores the Global Network', () => {
         exact: false,
       }),
     ).toBeVisible();
-    // The Countries directory is paged with `?offset=`, never cut at a bound:
-    // a page past the end says so and links back.
+    // The Countries directory is paged, never cut at a bound: Phase 16's
+    // `?offset=` is one redirect to its page (R2), and a page past the end
+    // says so and links back.
     expect((await page.request.get('/global/countries?offset=abc')).status()).toBe(200);
     expect(
       await (await page.request.get('/global/countries?offset=960')).text(),
@@ -328,12 +336,19 @@ test.describe('an anonymous visitor explores the Global Network', () => {
   });
 
   test('shows the same Centre knowledge signed in as signed out', async ({ page }) => {
+    // Global Network (R2): a Centre page offers Share, which appears once its
+    // island hydrates — so both pages are compared hydrated (a design change;
+    // the sameness compared is unchanged).
     await page.goto(centrePath('en', slug.physical));
+    await expect(page.getByRole('button', { name: 'Share', exact: true })).toBeVisible();
     const anonymous = await page.getByRole('main').innerText();
     expect(anonymous).toContain(NAME.physical);
 
     const response = await reader.goto(centrePath('en', slug.physical));
     expect(response?.headers()['set-cookie']).toBeUndefined();
+    await expect(
+      reader.getByRole('button', { name: 'Share', exact: true }),
+    ).toBeVisible();
     expect(await reader.getByRole('main').innerText()).toBe(anonymous);
   });
 
@@ -536,6 +551,300 @@ test.describe('an anonymous visitor explores the Global Network', () => {
     ).toBeVisible();
   });
 });
+
+/* ========================================================================== */
+
+/** A response's redirect target as a path and query. */
+function targetOf(location: string | undefined): string {
+  const url = new URL(location ?? '', baseUrl());
+  return url.pathname + url.search;
+}
+
+test.describe('the directory to the listing standard (Global Network, R2)', () => {
+  test('counts the directory: section tabs, world regions, Centres per Country and by kind', async ({
+    page,
+  }) => {
+    // The landing lists every Country by world region, each with its Centres.
+    await page.goto('/global');
+    const other = page
+      .getByRole('main')
+      .getByRole('list', { name: 'Other countries', exact: true });
+    await expect(
+      other.getByRole('link', { name: new RegExp(NAME.plainCountry) }),
+    ).toContainText('2 centres');
+
+    // The Countries listing: counted section tabs and world regions, a chip.
+    await page.goto('/global/countries');
+    const sections = page.getByRole('navigation', { name: 'Global Network sections' });
+    await expect(
+      sections.getByRole('link', { name: /^Countries\s*\d+$/u }),
+    ).toHaveAttribute('aria-current', 'page');
+    await expect(
+      sections.getByRole('link', { name: /^Centres\s*\d+$/u }),
+    ).toHaveAttribute('href', '/global/centres');
+    const regions = page.getByRole('navigation', { name: 'Regions of the world' });
+    await expect(
+      regions.getByRole('link', { name: /^All regions \(\d+\)$/ }),
+    ).toHaveAttribute('aria-current', 'page');
+    await regions.getByRole('link', { name: /^Other countries \(\d+\)$/ }).click();
+    await page.waitForURL((url) => url.search === '?region=other');
+    await expect(
+      page
+        .getByRole('list', { name: 'Filters in use' })
+        .getByRole('link', { name: 'Remove filter: Other countries' }),
+    ).toHaveAttribute('href', '/global/countries');
+    await expect(
+      page.getByRole('main').getByText(/^Showing 1–\d+ of \d+ countr/),
+    ).toBeVisible();
+
+    // The Centres listing: counted kinds, every card of the virtual view virtual.
+    await page.goto('/global/centres?kind=virtual');
+    const kinds = page.getByRole('navigation', { name: 'Kinds of centre' });
+    await expect(kinds.getByRole('link', { name: /^Virtual\s*\d+$/u })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect(
+      kinds.getByRole('link', { name: /^With premises\s*\d+$/u }),
+    ).toHaveAttribute('href', '/global/centres?kind=physical');
+    const cards = page.getByRole('main').locator('li.card-surface');
+    expect(await cards.count()).toBeGreaterThan(0);
+    for (const card of await cards.all())
+      await expect(card).toContainText('Virtual centre');
+    await expect(page.getByText(NAME.physical)).toHaveCount(0);
+  });
+
+  test('finds by counted places, with chips, a range, and a way in before a choice', async ({
+    page,
+    browser,
+  }) => {
+    // Before a Country is chosen: the Countries that have Centres, counted.
+    await page.goto('/global/find-a-centre');
+    await expect(
+      page
+        .getByRole('list', { name: 'Countries with centres' })
+        .getByRole('link', { name: new RegExp(NAME.plainCountry) }),
+    ).toHaveAttribute('href', `/global/find-a-centre?country=${slug.plainCountry}`);
+    await expect(page.getByRole('list', { name: 'Centres', exact: true })).toHaveCount(0);
+
+    await page.goto(`/global/find-a-centre?country=${slug.plainCountry}`);
+    await expect(
+      page.getByLabel('Country', { exact: true }).locator('option:checked'),
+    ).toHaveText(`${NAME.plainCountry} (2)`);
+    await expect(
+      page
+        .getByLabel('City', { exact: true })
+        .locator('option', { hasText: NAME.plainCity }),
+    ).toHaveText(`${NAME.plainCity} (2)`);
+    await expect(
+      page
+        .getByRole('list', { name: 'Filters in use' })
+        .getByRole('link', { name: `Remove filter: ${NAME.plainCountry}` }),
+    ).toHaveAttribute('href', '/global/find-a-centre');
+    await expect(
+      page.getByRole('heading', { name: `Centres in ${NAME.plainCountry}`, exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('main').getByText('Showing 1–2 of 2 centres', { exact: true }),
+    ).toBeVisible();
+
+    // The GET form works without script.
+    const plain = await browser.newContext({
+      baseURL: baseUrl(),
+      javaScriptEnabled: false,
+    });
+    try {
+      const noScript = await plain.newPage();
+      await noScript.goto('/global/find-a-centre');
+      await noScript
+        .getByLabel('Country', { exact: true })
+        .selectOption(slug.plainCountry);
+      await noScript.getByRole('button', { name: 'Find centres', exact: true }).click();
+      await noScript.waitForURL((url) => url.search === `?country=${slug.plainCountry}`);
+      await expect(
+        noScript
+          .getByRole('list', { name: 'Centres', exact: true })
+          .getByRole('link', { name: NAME.physical }),
+      ).toBeVisible();
+    } finally {
+      await plain.close();
+    }
+  });
+
+  test('gives a place its range, Share and neighbours, and a Centre its Share, nearby and counted Events', async ({
+    page,
+  }) => {
+    await page.goto(`/global/countries/${slug.plainCountry}`);
+    const centres = page.locator('section[aria-labelledby="country-centres"]');
+    await expect(
+      centres.getByText('Showing 1–2 of 2 centres', { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Share', exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole('main')
+        .getByRole('link', { name: `Find a centre in ${NAME.plainCountry}` }),
+    ).toHaveAttribute('href', `/global/find-a-centre?country=${slug.plainCountry}`);
+
+    await page.goto(centrePath('en', slug.physical));
+    await expect(page.getByRole('button', { name: 'Share', exact: true })).toBeVisible();
+    const nearby = page.locator('section[aria-labelledby="centre-nearby"]');
+    await expect(
+      nearby.getByRole('heading', { name: `More centres in ${NAME.plainCity}` }),
+    ).toBeVisible();
+    await expect(nearby.getByRole('link', { name: NAME.long })).toBeVisible();
+    await expect(nearby.getByRole('link', { name: NAME.physical })).toHaveCount(0);
+    await expect(
+      nearby.getByRole('link', { name: 'See all 2 centres there' }),
+    ).toHaveAttribute(
+      'href',
+      `/global/countries/${slug.plainCountry}/cities/${slug.plainCity}`,
+    );
+
+    await page.goto(`${centrePath('en', slug.physical)}/events`);
+    const when = page.getByRole('navigation', { name: 'Upcoming or past events' });
+    await expect(
+      when.getByRole('link', { name: /^Upcoming events\s*0$/u }),
+    ).toHaveAttribute('aria-current', 'page');
+    await expect(when.getByRole('link', { name: /^Past events\s*0$/u })).toHaveAttribute(
+      'href',
+      `${centrePath('en', slug.physical)}/events?when=past`,
+    );
+    await expect(
+      page.getByRole('main').getByText('This centre has no upcoming events.'),
+    ).toBeVisible();
+  });
+
+  test('answers former and untidy spellings with ONE redirect, and refuses a view that means nothing in place', async ({
+    request,
+  }) => {
+    for (const [from, to] of [
+      ['/global/countries?offset=24', '/global/countries?page=2'],
+      ['/global/countries?page=1', '/global/countries'],
+      ['/global/centres?kind=&offset=0', '/global/centres'],
+      [
+        `/global/find-a-centre?country=${slug.regionalCountry}&region=&city=`,
+        `/global/find-a-centre?country=${slug.regionalCountry}`,
+      ],
+      [
+        `/global/find-a-centre?city=${slug.regionalCity}&country=${slug.regionalCountry}`,
+        `/global/find-a-centre?country=${slug.regionalCountry}&city=${slug.regionalCity}`,
+      ],
+      [
+        `/ur/global/countries/${slug.plainCountry}?offset=0&cities=0`,
+        `/ur/global/countries/${slug.plainCountry}`,
+      ],
+      [
+        `${centrePath('en', slug.physical)}/news?offset=20`,
+        `${centrePath('en', slug.physical)}/news?page=2`,
+      ],
+      [
+        `${centrePath('ar', slug.virtual)}/events?when=upcoming`,
+        `${centrePath('ar', slug.virtual)}/events`,
+      ],
+    ] as const) {
+      const answer = await request.get(from, { maxRedirects: 0 });
+      expect([307, 308], from).toContain(answer.status());
+      expect(targetOf(answer.headers()['location']), from).toBe(to);
+      expect((await request.get(to, { maxRedirects: 0 })).status(), to).toBe(200);
+    }
+
+    for (const [path, words] of [
+      ['/global/countries?region=atlantis', 'This region is not one the directory uses'],
+      [
+        '/global/centres?kind=online',
+        'This kind of centre is not one the directory uses',
+      ],
+      [
+        `${centrePath('en', slug.virtual)}/events?when=soon`,
+        'These events cannot be listed',
+      ],
+      [
+        `/global/find-a-centre?city=${slug.regionalCity}`,
+        'This filter does not match a place in the public directory.',
+      ],
+    ] as const) {
+      const answer = await request.get(path, { maxRedirects: 0 });
+      expect(answer.status(), path).toBe(200);
+      expect(await answer.text(), path).toContain(words);
+    }
+
+    // Past the end: said so, with the way to the first page.
+    const beyond = await request.get(`/global/countries/${slug.plainCountry}?page=9`, {
+      maxRedirects: 0,
+    });
+    expect(beyond.status()).toBe(200);
+    expect(await beyond.text()).toContain('There is nothing on this page.');
+  });
+
+  test('is axe-clean at 1440 px and reflows at 320 px in en, ur and ar', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(480_000);
+    const physical = centrePath('en', slug.physical);
+    for (const [width, height] of [
+      [320, 800],
+      [1440, 900],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      for (const target of [
+        '/global',
+        '/global/countries',
+        '/global/countries?region=other',
+        '/global/centres',
+        '/global/centres?kind=virtual',
+        '/global/find-a-centre',
+        `/global/find-a-centre?country=${slug.plainCountry}`,
+        `/global/countries/${slug.plainCountry}`,
+        `/global/countries/${slug.regionalCountry}/regions/${slug.region}`,
+        `/global/countries/${slug.regionalCountry}/cities/${slug.regionalCity}`,
+        '/global/pakistan',
+        physical,
+        `${physical}/news`,
+        `${physical}/events?when=past`,
+        `${physical}/contact`,
+        '/ur/global',
+        `/ur/global/find-a-centre?country=${slug.regionalCountry}`,
+        centrePath('ur', slug.virtual),
+        '/ar/global/countries',
+        `/ar/global/countries/${slug.regionalCountry}`,
+        `${centrePath('ar', slug.physical)}/events`,
+      ]) {
+        const response = await page.goto(target);
+        expect(response?.status(), target).toBe(200);
+        // Each address is its view's one address: no redirect was taken.
+        expect(new URL(page.url()).pathname + new URL(page.url()).search, target).toBe(
+          target,
+        );
+        await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+        const { overflow, offenders } = await overflowOf(page);
+        expect
+          .soft(overflow, `${String(width)}px ${target}\n${offenders.join('\n')}`)
+          .toBeLessThanOrEqual(0);
+        if (width === 1440) await axe(page, target, testInfo);
+      }
+    }
+  });
+});
+
+/** No serious or critical axe finding; anything lesser is annotated. */
+async function axe(page: Page, target: string, testInfo: TestInfo): Promise<void> {
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  const blocking = results.violations.filter(
+    (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+  );
+  for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+    testInfo.annotations.push({
+      type: 'axe',
+      description: `${target}: ${finding.id} (${String(finding.impact)})`,
+    });
+  expect(
+    blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+    target,
+  ).toEqual([]);
+}
 
 /* ========================================================================== */
 

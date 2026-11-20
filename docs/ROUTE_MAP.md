@@ -1130,9 +1130,9 @@ approved activation. A named category, topic view or ruling still answers 404 wh
 | `/newsletter` · `/newsletter/confirm` · `/newsletter/unsubscribe` | Subscription — delivered in Phase 21 (DOMAIN_MODEL.md §14.6). `/newsletter` submits an address and always answers the same, whatever its state; nothing is sent until the address confirms. `confirm` and `unsubscribe` are the emailed links (class D, SECURITY_BASELINE.md §7.4): the GET renders only whether the link is still usable and a button, and the POST consumes it — confirmation once, unsubscribe idempotently and without an account. Both are `noindex`, carry no canonical or alternate with the token, and are never sitemap entries |
 | `/events` · `/events/{slug}` · `/events/{slug}/gallery` · `/events/{slug}/calendar` | Events — `?when, topic, year, month, country, city, centre, page` (News & Events Part 2; Phase 14: `?upcoming, past, country, city, centre`, with `?offset=`). Delivered in Phase 14: `/events` lists upcoming Events by default and `?when=past` the held ones; `?country=`, `?city=` and `?centre=` narrow to Events held at Centres physically there. Every query is canonical to `/events` and never a sitemap entry; there is no `/events/upcoming` or `/events/past`. `/events/{slug}/gallery` is a `noindex` navigational view over the Event's listed Galleries — each keeps its one canonical `/media/galleries/{slug}` — and exists only for an Event that associates a Gallery. A former Event slug, with or without `/gallery`, answers one 301. Since News & Events Part 2, `/events/{slug}/calendar` is the published Event as an iCalendar file (a GET read: `text/calendar` attachment, `noindex`, `no-store`, no session; a former slug with the suffix answers the same one 301) |
 | `/media/photos` · `/media/galleries` · `/{slug}` · `/media/archive` · `/media/downloads` | Media — Phase 12 delivers photos, galleries, each Gallery at `/media/galleries/{slug}`, and the archive (*historical:* `?year, month`, a listing of its own; since News & Events Part 2 `/media/photos` takes `?year, month, gallery, language, sort, page`, `/media/galleries` `?sort, page`, a Gallery `?page`, and the archive only `?year` — an index into the photos listing; §3.9 below). A Photo has no page of its own. `/media/downloads` has **no route** until a rights decision authorises downloads |
-| `/global` · `/global/find-a-centre` | World network and centre finder — Phase 16. The finder's `?country, region, city` are queries canonical to it |
+| `/global` · `/global/find-a-centre` | World network and centre finder — Phase 16. The finder's `?country, region, city` are queries canonical to it (since the Global Network rebuild also `?page`, Phase 16's `?offset` one redirect — below) |
 | `/global/countries` · `/{slug}` · `/{slug}/regions/{regionSlug}` · `/{slug}/cities/{citySlug}` | Geography — intermediate levels may be absent (DOMAIN_MODEL.md §17.1). Delivered in Phase 16; a Region or City address is scoped by its Country, and a former slug at either level answers one 301 |
-| `/global/centres` · `/{slug}` · `/{slug}/{news\|events\|contact}` | Centres — `news` and the display-only `contact` delivered in Phase 16; `events` (Local Events, `?when=past` canonical to it) delivered in Phase 14 |
+| `/global/centres` · `/{slug}` · `/{slug}/{news\|events\|contact}` | Centres — `news` and the display-only `contact` delivered in Phase 16; `events` (Local Events, `?when=past` canonical to it) delivered in Phase 14. Since the Global Network rebuild `/global/centres` takes `?kind, page`, `news` `?page` and `events` `?when, page` (below) |
 | `/global/pakistan` | Pakistan structure entry point — a view of the Pakistan Country, canonical to its Country page and never a sitemap entry (Phase 16) |
 
 **News & Events Part 1 (2026-11-17).** `/news` and the three family listings are **one listing,
@@ -1184,6 +1184,29 @@ address, neutral values omitted, canonical to its base listing and never a sitem
 
 *Superseded in part:* the 2026-11-08 direction below that `/collections` names the kinds a
 Collection may hold "under the lede" — since Part 2 those kinds are its counted tabs.
+
+**Global Network (2026-11-20).** The Global routes, by the same rules — every view one address,
+neutral values omitted, canonical to its base page and never a sitemap entry; no route is added
+or removed:
+
+- **`/global/countries`** takes `?region` (a world region: `south-asia`, `middle-east-north-africa`,
+  `europe-central-asia`, `north-america`, `latin-america-caribbean`, `sub-saharan-africa`,
+  `east-asia-pacific`, `other`) and `?page` (24 a page). **`/global/centres`** takes
+  `?kind=physical|virtual` and `?page`. **`/global/find-a-centre`** takes `?country`, then
+  `?region` OR `?city` of it, and `?page`; with no Country it lists no Centre (that view is
+  `/global/centres`) but offers the Countries that have Centres.
+- A **Country** or **Region** page takes `?page` (its Centres) and `?cityPage` (its Cities); a
+  **City** `?page`; a **Centre's News** `?page` (20 a page); a **Centre's Events** `?when=past` and
+  `?page` (20 a page).
+- A form's empty controls, another order, a malformed page and Phase 16's `?offset=` (and a
+  Country's or Region's `?cities=`) — read by each list's own page size — are each **one redirect**
+  to the view's one address. An unknown world region, kind or `when`, a malformed or untrimmed
+  place slug, a Region or City without its Country, a Region and a City together, a repeated value
+  or a place that is not public is **refused where it was asked** (the page says so and lists
+  nothing), never redirected wider.
+
+*Superseded in part:* the 2026-11-08 direction below that `/global/countries` is paged with
+`?offset=` — since the Global Network rebuild it is `?page`, the former offset one redirect.
 
 **Rebaseline R2.** *Historical in part, superseded by News & Events Part 1 above:* `/news` and each
 family listing (`/news/press-releases`, `/statements`, `/media-coverage`) took **`?lang=en|ur|ar`**

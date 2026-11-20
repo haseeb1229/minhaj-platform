@@ -1840,6 +1840,18 @@ value as RFC 5545 TEXT — escaped, control characters dropped, folded — so no
 line or add a property (`tests/editorial/event-calendar.test.ts`). The reader's own time zone is
 asked of the browser after hydration and sent nowhere.
 
+**The Global Network directory stays a session-free public read (2026-11-20).** The rebuilt
+directory adds no route, no mutation and no client data path: every page reads only
+`@/composition/global-read` and Editorial's public root, sets no cookie and renders the same
+knowledge signed in or out. Find a Centre reads no location, network address or browser position
+— only the places a visitor chooses — and nothing is ranked by distance. Every count is taken
+under the same fail-closed public predicate as the records (a withheld ancestor hides what is
+beneath it from every figure, option and tile), and a filter naming a place that is not public is
+refused in words, never widened, so a count or a refusal discloses nothing about withheld places.
+A Centre's contact page remains display-only — the details it published and nothing that sends.
+Share is the shared island: the device's share sheet or the address copied, sending nothing
+anywhere.
+
 ---
 
 ## 18. Secrets, database and dependency security

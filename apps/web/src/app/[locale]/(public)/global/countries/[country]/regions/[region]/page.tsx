@@ -1,18 +1,20 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
 import { globalPaths } from '@minhaj/contracts/global';
 
 import { globalReadRuntime } from '@/composition/global-read';
-import { RegionPage } from '@/components/global/directory';
+import { RegionPage } from '@/components/global/places';
 import { placeLocales, placeName } from '@/components/global/presentation';
 import { requireLocale } from '@/config/route-locale';
+import { placeCanonicalRedirect, readPlaceView } from '@/components/global/global-view';
 import { contentMetadata } from '@/seo/metadata';
 
 /**
- * `/{locale}/global/countries/{countrySlug}/regions/{regionSlug}` — one public
+ * `/{locale}/global/countries/{countrySlug}/regions/{regionSlug}` â€” one public
  * Region of a public Country. A former Country or Region slug, or both,
- * answers ONE 301 to the current address from the request proxy.
+ * answers ONE 301 to the current address from the request proxy. `?page`
+ * pages its Centres and `?cityPage` its Cities (R2).
  */
 export const dynamic = 'force-dynamic';
 
@@ -45,5 +47,12 @@ export default async function RegionRoute({ params, searchParams }: RegionParams
   const { country, region } = await params;
   const record = await globalReadRuntime().region(country, region);
   if (record === null) notFound();
-  return <RegionPage locale={locale} region={record} query={await searchParams} />;
+  const query = await searchParams;
+  const canonical = placeCanonicalRedirect(
+    globalPaths.region(locale, record.country.slug, record.slug),
+    query,
+    true,
+  );
+  if (canonical !== null) redirect(canonical);
+  return <RegionPage locale={locale} region={record} view={readPlaceView(query, true)} />;
 }

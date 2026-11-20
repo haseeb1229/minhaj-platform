@@ -1,20 +1,26 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
 import { globalPaths } from '@minhaj/contracts/global';
 
 import { globalReadRuntime } from '@/composition/global-read';
-import { CentreEventsPage } from '@/components/global/centre';
+import { CentreEventsPage } from '@/components/global/centre-activity';
 import { centreWords, placeLocales } from '@/components/global/presentation';
 import { requireLocale } from '@/config/route-locale';
+import {
+  centreEventsCanonicalRedirect,
+  readCentreEventsView,
+} from '@/components/global/global-view';
 import { contentMetadata } from '@/seo/metadata';
 
 /**
  * `/{locale}/global/centres/{centreSlug}/events` — the Centre's published
  * Events, upcoming by default and `?when=past` for those held: Editorial's own
  * bounded read by the Centre's identifier, composed here. Not public when the
- * Centre is not; the `when` query is canonical to this address.
+ * Centre is not; the `when` query is canonical to this address. `?page` (R2),
+ * with Phase 16's `?offset=` one redirect; an unknown `when` is refused where
+ * it was asked.
  */
 export const dynamic = 'force-dynamic';
 
@@ -48,5 +54,17 @@ export default async function CentreEventsRoute({
   const { slug } = await params;
   const record = await globalReadRuntime().centre(slug);
   if (record === null) notFound();
-  return <CentreEventsPage locale={locale} centre={record} query={await searchParams} />;
+  const query = await searchParams;
+  const canonical = centreEventsCanonicalRedirect(
+    globalPaths.centreEvents(locale, record.slug),
+    query,
+  );
+  if (canonical !== null) redirect(canonical);
+  return (
+    <CentreEventsPage
+      locale={locale}
+      centre={record}
+      view={readCentreEventsView(query)}
+    />
+  );
 }
