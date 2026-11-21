@@ -41,6 +41,11 @@ const WIDTHS = {
  * `main`. The Teacher area names itself in text instead, so each of its pages
  * has exactly one `h1`.
  *
+ * `band` (Teacher area, R2): the Teacher area shows no band at all, as My
+ * Minhaj does not — the product bar already names the area, and each page's
+ * trail and `h1` are the first things its reader meets. The administration
+ * keeps its band.
+ *
  * The skip link is the first stop on every workspace page and moves past the
  * band and the navigation to the content column — a sidebar of two dozen links
  * is exactly the block a keyboard user must be able to bypass (WCAG 2.4.1).
@@ -50,6 +55,7 @@ export function WorkspaceShell({
   skipLabel,
   area,
   areaIsHeading = false,
+  band = true,
   description,
   width = 'standard',
   nav,
@@ -59,6 +65,7 @@ export function WorkspaceShell({
   readonly skipLabel: string;
   readonly area: string;
   readonly areaIsHeading?: boolean;
+  readonly band?: boolean;
   readonly description?: string;
   readonly width?: keyof typeof WIDTHS;
   readonly nav?: ReactNode;
@@ -81,20 +88,22 @@ export function WorkspaceShell({
        */}
       <ProductBar locale={locale} area={area} columnClassName={column} />
 
-      <div className="border-b border-border bg-surface">
-        <div className={`${column} flex flex-col gap-1 py-5`}>
-          {areaIsHeading ? (
-            <PageHeading>{area}</PageHeading>
-          ) : (
-            <p className="font-serif text-2xl font-semibold">{area}</p>
-          )}
-          {description === undefined ? null : (
-            <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
-              {description}
-            </p>
-          )}
+      {band ? (
+        <div className="border-b border-border bg-surface">
+          <div className={`${column} flex flex-col gap-1 py-5`}>
+            {areaIsHeading ? (
+              <PageHeading>{area}</PageHeading>
+            ) : (
+              <p className="font-serif text-2xl font-semibold">{area}</p>
+            )}
+            {description === undefined ? null : (
+              <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
+                {description}
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div
         className={`${column} grid flex-1 grid-cols-[minmax(0,1fr)] content-start gap-6 py-6 lg:gap-10 lg:py-8 ${

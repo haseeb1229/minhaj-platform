@@ -2433,6 +2433,24 @@ the home page). `LEARNER_OFFSET_MAX` (25,000) names the bound both learner servi
 so the pages stop where the service does. The upcoming classes stay one bounded read
 (`CLASS_PAGE`): a page counts them only while they fit it. Nothing else a learner reads changed.
 
+**A teacher's lists carry their totals (Teacher area, R2 — November 2026).** No table, column,
+index or migration, and no write is added or changed. `TeacherStudentPage` adds `total`, counted
+under the page's own statement shape (the same scope EXISTS and the bound Course filter); the new
+`studentCounts(teacher)` counts the distinct learners in all and per current Course — numbers only,
+no learner named, so it is not audited (listing and opening a learner stay audited as before).
+`attendanceReport(teacher, offset, filter)` takes a filter — `courseId` (one Course; the scope join
+answers a Course the teacher does not teach with nothing, exactly like one that does not exist) and
+`unmarked` (only classes with an eligible participant still unmarked) — and returns `total` counted
+over the same derived table, every value a bound parameter and the statement's shape fixed.
+`availability(teacher, offset, view)` takes `AVAILABILITY_VIEWS` (`open` = open with no live Booking,
+`booked` = open with one, `withdrawn`), each a key of a FIXED predicate table, and returns `total`;
+`availabilityCounts(teacher)` counts the three. The teaching service refuses a malformed Course,
+a non-boolean `unmarked` or a view outside the list as `invalid` before any port, clamps a malformed
+offset to the first page, and identifies the teacher (live `teaching.perform`, activation) first on
+every read, as before. `TEACHING_OFFSET_MAX` (25,000) names the bound the teaching service already
+applied, and `TEACHER_STUDENT_CLASSES` (100) the class history a learner's page shows, so the pages
+stop and say "or more" where the adapter does.
+
 ---
 
 ## 14. Personalisation & Notifications

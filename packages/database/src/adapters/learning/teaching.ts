@@ -2,12 +2,16 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 
+import { Prisma } from '@prisma/client';
+
 import type { Locale } from '@minhaj/contracts';
 import {
   CLASS_LIMITS,
   CLASS_PAGE,
+  TEACHER_STUDENT_CLASSES,
   type AttendanceReportRow,
   type AttendanceStatus,
+  type AvailabilityView,
   type TeacherIdentity,
   type TeacherStudentDetail,
   type TeacherStudentSummary,
@@ -76,14 +80,38 @@ import {
  * activated, scheduled, this teacher's current scope. No list reads it.
  */
 
-/** Courses one teacher may hold at once, and classes one student history shows. */
+/** Courses one teacher may hold at once; classes one student history shows is the contract's. */
 const TEACHER_COURSES = 100;
-const STUDENT_CLASSES = 100;
+const STUDENT_CLASSES = TEACHER_STUDENT_CLASSES;
 
 /** The session narrowing every teaching read and write composes. */
 function own(teacher: TeacherIdentity): SessionWhere {
   return { scope: currentScope(teacher) };
 }
+
+/**
+ * The Enrolments a teacher's learner list reads, over alias `e`: on a Course
+ * this teacher teaches NOW (the EXISTS carries the whole scope), optionally
+ * one of them. A bound parameter for the Course, never a fragment of text.
+ */
+function studentsWhere(teacher: TeacherIdentity, courseId: string | null): Prisma.Sql {
+  return Prisma.sql`EXISTS (
+      SELECT 1 FROM [dbo].[CourseTeachingAssignment] s
+      WHERE s.[courseId] = e.[courseId] AND ${currentScopeSql(teacher)})
+    AND (${courseId} IS NULL OR e.[courseId] = ${courseId})`;
+}
+
+/**
+ * What a window has become (Teacher area, R2), as a model `where` beside the
+ * owner: open and unclaimed, claimed by a live Booking, or withdrawn. A FIXED
+ * table — the view is a key of it, never text that reaches a statement.
+ */
+const LIVE_BOOKING = { state: { not: 'cancelled' } } as const;
+const AVAILABILITY_VIEW_WHERE = {
+  open: { state: 'open', bookings: { none: LIVE_BOOKING } },
+  booked: { state: 'open', bookings: { some: LIVE_BOOKING } },
+  withdrawn: { state: 'withdrawn' },
+} as const satisfies Record<AvailabilityView, Prisma.AvailabilityWhereInput>;
 
 /** Completed lessons per (account, Course), in ONE statement for a page. */
 async function completedByPair(
@@ -239,19 +267,53 @@ export function createTeaching(): TeachingPort {
      * unscoped Course filter is an empty page, never a wider one.
      */
     async students(teacher, courseId, offset) {
-      if (teacher.assignmentIds.length === 0) return { items: [], hasMore: false };
-      const rows = await db.$queryRaw<{ userId: string }[]>`
-        SELECT e.[userId]
-        FROM [dbo].[Enrolment] e
-        WHERE EXISTS (
-            SELECT 1 FROM [dbo].[CourseTeachingAssignment] s
-            WHERE s.[courseId] = e.[courseId] AND ${currentScopeSql(teacher)})
-          AND (${courseId} IS NULL OR e.[courseId] = ${courseId})
-        GROUP BY e.[userId]
-        ORDER BY e.[userId]
-        OFFSET ${boundedOffset(offset)} ROWS FETCH NEXT ${CLASS_PAGE + 1} ROWS ONLY`;
+      if (teacher.assignmentIds.length === 0)
+        return { items: [], hasMore: false, total: 0 };
+      const where = studentsWhere(teacher, courseId);
+      const [rows, counted] = await Promise.all([
+        db.$queryRaw<{ userId: string }[]>`
+          SELECT e.[userId]
+          FROM [dbo].[Enrolment] e
+          WHERE ${where}
+          GROUP BY e.[userId]
+          ORDER BY e.[userId]
+          OFFSET ${boundedOffset(offset)} ROWS FETCH NEXT ${CLASS_PAGE + 1} ROWS ONLY`,
+        db.$queryRaw<{ total: number }[]>`
+          SELECT COUNT_BIG(DISTINCT e.[userId]) AS [total]
+          FROM [dbo].[Enrolment] e
+          WHERE ${where}`,
+      ]);
       const page = rows.slice(0, CLASS_PAGE).map((row) => row.userId);
-      return { items: await summaries(teacher, page), hasMore: rows.length > CLASS_PAGE };
+      return {
+        items: await summaries(teacher, page),
+        hasMore: rows.length > CLASS_PAGE,
+        total: Number(counted[0]?.total ?? 0),
+      };
+    },
+
+    /** Learners in all and per current Course: numbers only, never who. */
+    async studentCounts(teacher) {
+      if (teacher.assignmentIds.length === 0) return { total: 0, courses: [] };
+      const where = studentsWhere(teacher, null);
+      const [perCourse, counted] = await Promise.all([
+        db.$queryRaw<{ courseId: string; learners: number }[]>`
+          SELECT e.[courseId], COUNT_BIG(DISTINCT e.[userId]) AS [learners]
+          FROM [dbo].[Enrolment] e
+          WHERE ${where}
+          GROUP BY e.[courseId]
+          ORDER BY e.[courseId]`,
+        db.$queryRaw<{ total: number }[]>`
+          SELECT COUNT_BIG(DISTINCT e.[userId]) AS [total]
+          FROM [dbo].[Enrolment] e
+          WHERE ${where}`,
+      ]);
+      return {
+        total: Number(counted[0]?.total ?? 0),
+        courses: perCourse.map((row) => ({
+          courseId: row.courseId,
+          learners: Number(row.learners),
+        })),
+      };
     },
 
     /** One learner with their class history on this teacher's current scopes — or `null` if unrelated. */
@@ -458,35 +520,48 @@ export function createTeaching(): TeachingPort {
      * past — latest first, with the marks counted IN SQL: present, absent, and
      * eligible participants without a row.
      */
-    async attendanceReport(teacher, offset) {
+    async attendanceReport(teacher, offset, filter) {
       if (teacher.assignmentIds.length === 0 || !(await activated(db)))
-        return { items: [], hasMore: false };
-      const now = new Date();
-      const rows = await db.$queryRaw<
-        { id: string; present: number; absent: number; unmarked: number }[]
-      >`
-        SELECT cs.[id],
-          (SELECT COUNT_BIG(*) FROM [dbo].[Attendance] a
-            WHERE a.[sessionId] = cs.[id] AND a.[status] = N'present') AS [present],
-          (SELECT COUNT_BIG(*) FROM [dbo].[Attendance] a
-            WHERE a.[sessionId] = cs.[id] AND a.[status] = N'absent') AS [absent],
-          (SELECT COUNT_BIG(*) FROM (
-              SELECT b.[userId] FROM [dbo].[Booking] b
-              WHERE b.[sessionId] = cs.[id] AND cs.[kind] = N'trial' AND b.[state] <> N'cancelled'
-              UNION
-              SELECT e.[userId] FROM [dbo].[Enrolment] e
-              WHERE e.[courseId] = cs.[courseId] AND cs.[kind] = N'course'
-            ) AS p
-            WHERE NOT EXISTS (
-              SELECT 1 FROM [dbo].[Attendance] a
-              WHERE a.[sessionId] = cs.[id] AND a.[userId] = p.[userId])) AS [unmarked]
-        FROM [dbo].[ClassSession] cs
-        JOIN [dbo].[CourseTeachingAssignment] s ON s.[id] = cs.[scopeId]
-        WHERE ${currentScopeSql(teacher)}
-          AND cs.[state] IN (N'completed', N'scheduled')
-          AND cs.[startsAt] < ${now}
-        ORDER BY cs.[startsAt] DESC, cs.[id] ASC
-        OFFSET ${boundedOffset(offset)} ROWS FETCH NEXT ${CLASS_PAGE + 1} ROWS ONLY`;
+        return { items: [], hasMore: false, total: 0 };
+      const courseId = filter.courseId ?? null;
+      const unmarkedOnly = filter.unmarked === true ? 1 : 0;
+      // ONE STATEMENT SHAPE for the page and its total (Teacher area, R2):
+      // started classes of this teacher's current scopes, optionally one
+      // Course, optionally only those with an eligible participant unmarked.
+      // Every value is a bound parameter; the shape never varies.
+      const report = Prisma.sql`
+        SELECT r.* FROM (
+          SELECT cs.[id], cs.[startsAt],
+            (SELECT COUNT_BIG(*) FROM [dbo].[Attendance] a
+              WHERE a.[sessionId] = cs.[id] AND a.[status] = N'present') AS [present],
+            (SELECT COUNT_BIG(*) FROM [dbo].[Attendance] a
+              WHERE a.[sessionId] = cs.[id] AND a.[status] = N'absent') AS [absent],
+            (SELECT COUNT_BIG(*) FROM (
+                SELECT b.[userId] FROM [dbo].[Booking] b
+                WHERE b.[sessionId] = cs.[id] AND cs.[kind] = N'trial' AND b.[state] <> N'cancelled'
+                UNION
+                SELECT e.[userId] FROM [dbo].[Enrolment] e
+                WHERE e.[courseId] = cs.[courseId] AND cs.[kind] = N'course'
+              ) AS p
+              WHERE NOT EXISTS (
+                SELECT 1 FROM [dbo].[Attendance] a
+                WHERE a.[sessionId] = cs.[id] AND a.[userId] = p.[userId])) AS [unmarked]
+          FROM [dbo].[ClassSession] cs
+          JOIN [dbo].[CourseTeachingAssignment] s ON s.[id] = cs.[scopeId]
+          WHERE ${currentScopeSql(teacher)}
+            AND cs.[state] IN (N'completed', N'scheduled')
+            AND cs.[startsAt] < ${new Date()}
+            AND (${courseId} IS NULL OR cs.[courseId] = ${courseId})
+        ) AS r
+        WHERE (${unmarkedOnly} = 0 OR r.[unmarked] > 0)`;
+      const [rows, counted] = await Promise.all([
+        db.$queryRaw<{ id: string; present: number; absent: number; unmarked: number }[]>`
+          ${report}
+          ORDER BY r.[startsAt] DESC, r.[id] ASC
+          OFFSET ${boundedOffset(offset)} ROWS FETCH NEXT ${CLASS_PAGE + 1} ROWS ONLY`,
+        db.$queryRaw<{ total: number }[]>`
+          SELECT COUNT_BIG(*) AS [total] FROM (${report}) AS counted`,
+      ]);
       const page = rows.slice(0, CLASS_PAGE);
       const views = await sessionViewsByIds(
         db,
@@ -506,24 +581,55 @@ export function createTeaching(): TeachingPort {
               },
             ];
       });
-      return { items, hasMore: rows.length > CLASS_PAGE };
+      return {
+        items,
+        hasMore: rows.length > CLASS_PAGE,
+        total: Number(counted[0]?.total ?? 0),
+      };
     },
 
-    /** Open windows first, soonest first; then withdrawn ones. */
-    async availability(teacher, offset) {
+    /**
+     * Open windows first, soonest first; then withdrawn ones — optionally only
+     * what a window has become (Teacher area, R2), with that list's total.
+     */
+    async availability(teacher, offset, view) {
       if (teacher.assignmentIds.length === 0 || !(await activated(db)))
-        return { items: [], hasMore: false };
-      const rows = await db.availability.findMany({
-        where: { userId: teacher.accountId },
-        select: AVAILABILITY_SELECT,
-        orderBy: [{ state: 'asc' }, { startsAt: 'asc' }, { id: 'asc' }],
-        skip: boundedOffset(offset),
-        take: CLASS_PAGE + 1,
-      });
+        return { items: [], hasMore: false, total: 0 };
+      const where = {
+        userId: teacher.accountId,
+        ...(view === null ? {} : AVAILABILITY_VIEW_WHERE[view]),
+      };
+      const [rows, total] = await Promise.all([
+        db.availability.findMany({
+          where,
+          select: AVAILABILITY_SELECT,
+          orderBy: [{ state: 'asc' }, { startsAt: 'asc' }, { id: 'asc' }],
+          skip: boundedOffset(offset),
+          take: CLASS_PAGE + 1,
+        }),
+        db.availability.count({ where }),
+      ]);
       return {
         items: rows.slice(0, CLASS_PAGE).map(toAvailabilityRecord),
         hasMore: rows.length > CLASS_PAGE,
+        total,
       };
+    },
+
+    /** This teacher's windows counted by what each has become. */
+    async availabilityCounts(teacher) {
+      if (teacher.assignmentIds.length === 0 || !(await activated(db)))
+        return { open: 0, booked: 0, withdrawn: 0 };
+      const count = (view: AvailabilityView) =>
+        db.availability.count({
+          where: { userId: teacher.accountId, ...AVAILABILITY_VIEW_WHERE[view] },
+        });
+      const [open, booked, withdrawn] = await Promise.all([
+        count('open'),
+        count('booked'),
+        count('withdrawn'),
+      ]);
+      return { open, booked, withdrawn };
     },
 
     /**

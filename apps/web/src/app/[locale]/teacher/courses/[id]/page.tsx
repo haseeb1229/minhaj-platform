@@ -10,7 +10,10 @@ import {
   readTeacherCourse,
 } from '@/components/teacher/course-frame';
 import { NotActivated } from '@/components/teacher/parts';
+import { learningRead } from '@/components/my-learning/read';
+import { MyFigures } from '@/components/my/summary-parts';
 import { EmptyState, Panel, SectionHeading, TextLink } from '@/components/ui';
+import { learningRuntime } from '@/composition/learning';
 import { teacherPageMetadata } from '@/components/teacher/metadata';
 import { requireLocale } from '@/config/route-locale';
 import { requireTeacher } from '../../guard';
@@ -20,6 +23,10 @@ import { requireTeacher } from '../../guard';
  * modules and lessons in order, each lesson opening its text on the
  * materials page. Read-only: the syllabus is the catalogue's, edited by the
  * Learning administration, never by a teacher.
+ *
+ * AT A GLANCE (Teacher area, R2): the Course's modules, lessons and learners
+ * as true figures — the learners Learning's own count for this Course, each
+ * figure a way to where the counted things are.
  */
 export async function generateMetadata({
   params,
@@ -50,6 +57,14 @@ export default async function TeacherCoursePage({
   if (!read.ok) return <CourseUnavailable locale={locale} t={t} />;
   const { course } = read;
   const label = pickLabel(course.labels, locale, course.primaryLocale);
+  const counts = await learningRead('teaching-course-counts', () =>
+    learningRuntime().teaching.studentCounts(gate.actor),
+  );
+  const learners = counts.ok
+    ? (counts.value.courses.find((entry) => entry.courseId === course.id)?.learners ?? 0)
+    : null;
+  const number = new Intl.NumberFormat(locale);
+  const root = localizedPath(locale, `/teacher/courses/${encodeURIComponent(course.id)}`);
   const materials = localizedPath(
     locale,
     `/teacher/courses/${encodeURIComponent(course.id)}/materials`,
@@ -75,12 +90,6 @@ export default async function TeacherCoursePage({
               {label.description}
             </p>
           )}
-          <p className="text-sm">
-            {t('courses.syllabusSize', {
-              modules: String(course.modules),
-              lessons: String(course.lessons),
-            })}
-          </p>
           {course.state === 'published' ? (
             <p>
               <TextLink
@@ -98,6 +107,32 @@ export default async function TeacherCoursePage({
       locale={locale}
       t={t}
     >
+      <MyFigures
+        label={t('course.figures.label')}
+        figures={[
+          {
+            key: 'modules',
+            value: number.format(course.modules),
+            label: t('course.figures.modules'),
+          },
+          {
+            key: 'lessons',
+            value: number.format(course.lessons),
+            label: t('course.figures.lessons'),
+            href: materials,
+          },
+          ...(learners === null
+            ? []
+            : [
+                {
+                  key: 'learners',
+                  value: number.format(learners),
+                  label: t('course.figures.learners'),
+                  href: `${root}/students`,
+                },
+              ]),
+        ]}
+      />
       <section className="flex flex-col gap-3" aria-labelledby="course-syllabus">
         <span id="course-syllabus">
           <SectionHeading>{t('course.syllabus')}</SectionHeading>

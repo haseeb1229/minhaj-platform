@@ -1,7 +1,5 @@
 import type { Locale } from '@minhaj/contracts';
 import {
-  CLASS_PAGE,
-  learningIdSchema,
   REMINDER_LEAD_MINUTES,
   type ClassSessionRecord,
   type ReminderLeadMinutes,
@@ -13,62 +11,13 @@ import { addDays, dateIn, dayStartIn } from './week';
  * Presentation decisions for the Teacher area — PURE and free of React
  * (ROUTE_MAP.md §6; DELIVERY_PLAN.md Phase 23).
  *
- * Which offset or Course a URL asks for, where one day starts and ends in the
- * teacher's own zone, how a page of classes groups by day, and how a class's
- * two times — the one it was scheduled in and the teacher's own — are written.
+ * Where one day starts and ends in the teacher's own zone, and how a class's
+ * two times — the one it was scheduled in and the teacher's own — are
+ * written. (What a list's address asks for is `list-view.ts`'s since the
+ * Teacher area's R2 rebuild; the offset, Course and lesson readers that lived
+ * here are gone with Phase 23's Previous/Next — historical.)
  * Each has ONE implementation, so every page reads them the same way.
  */
-
-type Query = Record<string, string | string[] | undefined>;
-
-/** The first value of one query parameter, or `null`. */
-export function single(query: Query, name: string): string | null {
-  const raw = query[name];
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  return value ?? null;
-}
-
-/** A plain `?offset=` in whole pages' steps, bounded; anything else is 0. */
-export function readOffset(query: Query): number {
-  const raw = single(query, 'offset');
-  if (raw === null || !/^\d{1,5}$/.test(raw)) return 0;
-  const value = Number(raw);
-  return value <= 25_000 ? value : 0;
-}
-
-/** A list page's address: the path alone for the first page. */
-export function offsetHref(path: string, offset: number, extra = ''): string {
-  const query = [offset <= 0 ? '' : `offset=${String(offset)}`, extra]
-    .filter((part) => part !== '')
-    .join('&');
-  return query === '' ? path : `${path}?${query}`;
-}
-
-/** The previous and next page addresses of one list. */
-export function pager(
-  path: string,
-  offset: number,
-  hasMore: boolean,
-  extra = '',
-): { readonly previous: string | null; readonly next: string | null } {
-  return {
-    previous:
-      offset === 0 ? null : offsetHref(path, Math.max(0, offset - CLASS_PAGE), extra),
-    next: hasMore ? offsetHref(path, offset + CLASS_PAGE, extra) : null,
-  };
-}
-
-/** A `?course=` that is a well-formed identifier, or `null`. Never repaired. */
-export function readCourseFilter(query: Query): string | null {
-  const parsed = learningIdSchema.safeParse(single(query, 'course'));
-  return parsed.success ? parsed.data : null;
-}
-
-/** A `?lesson=` short enough to be an identifier, or `null`. */
-export function readLesson(query: Query): string | null {
-  const value = single(query, 'lesson');
-  return value !== null && value.length <= 64 ? value : null;
-}
 
 /* ===========================================================================
  * Time

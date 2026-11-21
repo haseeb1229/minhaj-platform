@@ -9,9 +9,10 @@ import type { CourseDetail, LearningActor } from '@minhaj/contracts/learning';
 
 import { LearningTitle } from '@/components/my-learning/parts';
 import { learningRead } from '@/components/my-learning/read';
-import { Alert, Icon, LinkTabs, TextLink } from '@/components/ui';
+import { pickLabel } from '@/components/my-learning/presentation';
+import { Alert } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
-import { TeacherFrame, type TeacherTranslator } from './parts';
+import { TeacherFrame, teacherTrail, type TeacherTranslator } from './parts';
 
 /**
  * One assigned Course, as every page under `/teacher/courses/{id}` opens it.
@@ -39,14 +40,17 @@ export async function readTeacherCourse(
 export type CourseView = 'syllabus' | 'students' | 'sessions' | 'materials';
 
 /**
- * The frame of one Course's page: the Course's title as the page's heading,
- * the way back to the Course list beside it, and the four views of the Course
- * as route tabs with the current one marked.
+ * The frame of one Course's page: its trail (Teacher area / Courses / the
+ * Course, then the view), the Course's title as the page's heading, and the
+ * four views of the Course as route tabs with the current one marked. A
+ * self-paced Course has no classes, so its Classes view is not offered.
  */
 export function CourseFrame({
   course,
   view,
   description,
+  action,
+  announce,
   locale,
   t,
   children,
@@ -54,6 +58,8 @@ export function CourseFrame({
   readonly course: CourseDetail;
   readonly view: CourseView;
   readonly description?: ReactNode;
+  readonly action?: ReactNode;
+  readonly announce?: { readonly value: string; readonly message: string };
   readonly locale: Locale;
   readonly t: TeacherTranslator;
   readonly children: ReactNode;
@@ -66,9 +72,20 @@ export function CourseFrame({
   }[] = [
     { key: 'syllabus', href: root, text: t('course.syllabus') },
     { key: 'students', href: `${root}/students`, text: t('courses.students') },
-    { key: 'sessions', href: `${root}/sessions`, text: t('courses.sessions') },
+    ...(course.format === 'live' || view === 'sessions'
+      ? [
+          {
+            key: 'sessions' as const,
+            href: `${root}/sessions`,
+            text: t('courses.sessions'),
+          },
+        ]
+      : []),
     { key: 'materials', href: `${root}/materials`, text: t('courses.materials') },
   ];
+  const title =
+    pickLabel(course.labels, locale, course.primaryLocale)?.title ?? course.slug;
+  const current = tabs.find((tab) => tab.key === view);
   return (
     <TeacherFrame
       title={
@@ -79,24 +96,23 @@ export function CourseFrame({
         />
       }
       {...(description === undefined ? {} : { description })}
-      action={
-        <a
-          href={localizedPath(locale, '/teacher/courses')}
-          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-action underline-offset-4 hover:underline"
-        >
-          <Icon name="arrow-start" size={16} />
-          {t('course.back')}
-        </a>
-      }
-    >
-      <LinkTabs
-        label={t('course.sections')}
-        tabs={tabs.map((tab) => ({
+      {...(action === undefined ? {} : { action })}
+      {...(announce === undefined ? {} : { announce })}
+      trail={teacherTrail(locale, t, [
+        { href: localizedPath(locale, '/teacher/courses'), text: t('nav.courses') },
+        ...(view === 'syllabus' || current === undefined
+          ? [{ text: title }]
+          : [{ href: root, text: title }, { text: current.text }]),
+      ])}
+      tabs={{
+        label: t('course.sections'),
+        items: tabs.map((tab) => ({
           href: tab.href,
           text: tab.text,
           current: tab.key === view,
-        }))}
-      />
+        })),
+      }}
+    >
       {children}
     </TeacherFrame>
   );
@@ -111,13 +127,14 @@ export function CourseUnavailable({
   readonly t: TeacherTranslator;
 }) {
   return (
-    <TeacherFrame title={t('course.fallbackTitle')}>
+    <TeacherFrame
+      title={t('course.fallbackTitle')}
+      trail={teacherTrail(locale, t, [
+        { href: localizedPath(locale, '/teacher/courses'), text: t('nav.courses') },
+        { text: t('course.fallbackTitle') },
+      ])}
+    >
       <Alert tone="error">{t('failure.load')}</Alert>
-      <p>
-        <TextLink href={localizedPath(locale, '/teacher/courses')}>
-          {t('course.back')}
-        </TextLink>
-      </p>
     </TeacherFrame>
   );
 }

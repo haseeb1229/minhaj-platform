@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
+import { redirect } from 'next/navigation';
 
 import { LearningTitle } from '@/components/my-learning/parts';
 import {
+  lessonQueryIsTidy,
   lessonsInOrder,
   paragraphs,
   pickLabel,
@@ -16,7 +18,6 @@ import {
   readTeacherCourse,
 } from '@/components/teacher/course-frame';
 import { NotActivated } from '@/components/teacher/parts';
-import { readLesson } from '@/components/teacher/presentation';
 import { Alert, EmptyState, Panel, SectionHeading, TextLink } from '@/components/ui';
 import { teacherPageMetadata } from '@/components/teacher/metadata';
 import { learningRuntime } from '@/composition/learning';
@@ -27,8 +28,13 @@ import { requireTeacher } from '../../../guard';
  * One assigned Course's materials (ROUTE_MAP.md §6): its syllabus and one
  * lesson's text at a time, exactly as an enrolled learner reads it.
  *
- * `?lesson=` CHOOSES, IT DOES NOT TRUST. A lesson the address names is opened
- * only when it is genuinely in this syllabus; otherwise the first lesson is.
+ * `?lesson=` CHOOSES, IT DOES NOT TRUST — AND IS ONE ADDRESS (Teacher area,
+ * R2). A lesson the address names is opened only when it names, once, a
+ * lesson of this syllabus; anything else — repeated, unknown, malformed — is
+ * one redirect to the materials' own address (the first lesson), decided
+ * after the Course is known to be the teacher's, exactly as My Minhaj's
+ * Course page does (`lessonQueryIsTidy`). Phase 23 silently opened the first
+ * lesson under the untidy address (historical).
  * The body is plain text, rendered as paragraphs of text nodes — there is no
  * markup in a lesson body to interpret. Nothing here records anything.
  *
@@ -66,11 +72,13 @@ export default async function CourseMaterialsPage({
   const read = await readTeacherCourse(gate.actor, id);
   if (!read.ok) return <CourseUnavailable locale={locale} t={t} />;
   const { course } = read;
+  const raw = (await searchParams)['lesson'];
+  if (!lessonQueryIsTidy(course.outline, raw, true)) redirect(path);
   const lessons = lessonsInOrder(course.outline);
   const chosen = selectedLesson(
     course.outline,
     new Set(),
-    readLesson(await searchParams),
+    typeof raw === 'string' ? raw : null,
   );
   const lessonRead =
     chosen === null
@@ -84,6 +92,7 @@ export default async function CourseMaterialsPage({
   const position =
     chosen === null ? -1 : lessons.findIndex((entry) => entry.id === chosen);
   const next = position === -1 ? undefined : lessons[position + 1];
+  const previous = position <= 0 ? undefined : lessons[position - 1];
 
   return (
     <CourseFrame
@@ -160,12 +169,24 @@ export default async function CourseMaterialsPage({
               </p>
             ))}
           </div>
-          {next === undefined ? null : (
-            <p>
-              <TextLink href={`${path}?lesson=${encodeURIComponent(next.id)}`}>
-                {t('materials.next')}
-              </TextLink>
-            </p>
+          {previous === undefined && next === undefined ? null : (
+            <nav
+              aria-label={t('materials.around')}
+              className="flex flex-wrap justify-between gap-x-6 gap-y-2 border-t border-border pt-4"
+            >
+              {previous === undefined ? (
+                <span />
+              ) : (
+                <TextLink href={`${path}?lesson=${encodeURIComponent(previous.id)}`}>
+                  {t('materials.previous')}
+                </TextLink>
+              )}
+              {next === undefined ? null : (
+                <TextLink href={`${path}?lesson=${encodeURIComponent(next.id)}`}>
+                  {t('materials.next')}
+                </TextLink>
+              )}
+            </nav>
           )}
         </section>
       )}

@@ -25,11 +25,13 @@ import { requireTeacher } from './guard';
  * with learners on the Courses they teach now — and the entry is listed like
  * every other section.
  *
- * THE WORKSPACE FRAME names the area in its header band as text, not a
- * heading, so each page keeps exactly one `h1` inside its own `main`. The
- * sections are a column beside the content on a wide screen and a horizontal
- * scroller on a narrow one; while live learning is not activated there is no
- * navigation at all, because no section has content to reach.
+ * ONE PRIVATE PRODUCT (R2). The product bar names the area; below it, as in
+ * My Minhaj, there is no second band repeating the name — each page opens on
+ * its own trail and its one `h1` (historical: until the Teacher area's R2
+ * rebuild a band named the area as text above the pages). The sections are a
+ * column beside the content on a wide screen and a horizontal scroller on a
+ * narrow one; while live learning is not activated there is no navigation at
+ * all, because no section has content to reach.
  */
 export async function generateMetadata({
   params,
@@ -61,6 +63,7 @@ export default async function TeacherLayout({
       locale={locale}
       skipLabel={w('skip')}
       area={t('title')}
+      band={false}
       width="wide"
       nav={
         gate.activated ? (

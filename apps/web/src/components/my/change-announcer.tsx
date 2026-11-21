@@ -14,6 +14,10 @@ import { useEffect, useRef, useState } from 'react';
  * and, if the focused control has gone, moves focus to the list's own status
  * line (`focusId`), else to the page's heading.
  *
+ * SHARED BY THE PRIVATE AREAS. My Minhaj and, since the Teacher area's R2
+ * rebuild, the Teacher area's pages use it the same way; with no status line
+ * to take focus, it falls back to the page's own `h1` in its `main`.
+ *
  * PRESENTATION ONLY. It holds no permission, reads nothing and submits
  * nothing; `value` and `message` are what the server rendered. It says nothing
  * on the first render — only a change the person made since is news.
@@ -51,8 +55,7 @@ export function ChangeAnnouncer({
     const active = document.activeElement;
     if (active !== null && active !== document.body && active.isConnected) return;
     const target =
-      document.getElementById(focusId) ??
-      document.querySelector<HTMLElement>('#my-content main h1');
+      document.getElementById(focusId) ?? document.querySelector<HTMLElement>('main h1');
     if (target === null) return;
     if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
     target.focus({ preventScroll: false });

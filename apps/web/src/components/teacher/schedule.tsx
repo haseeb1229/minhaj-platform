@@ -19,8 +19,12 @@ import type { WeekDay } from './week';
  * teacher's zone; a class scheduled in another zone also says its own time,
  * so nobody converts in their head.
  *
- * NEVER THE MEETING ADDRESS. A row knows only whether a link is held
- * (`hasMeetingUrl`); the address is read on the class's own page alone.
+ * THE MEETING ADDRESS ONLY WHERE A PAGE READ IT. A row knows whether a link
+ * is held (`hasMeetingUrl`). Today's classes (Teacher area, R2) may hand a
+ * row the address the one disclosure operation returned for that class, as
+ * My Classes does for a learner: it becomes the 'Join' link's `href` — a
+ * described external link, never text. Every other list (the week, a
+ * Course's classes) gets none.
  *
  * CONTROLS FOLLOW THE CLASS'S STAGE (`classControls`). "Take attendance" is
  * offered only once a class has begun — the service refuses earlier marks, and
@@ -113,6 +117,7 @@ export function SessionRow({
   zone,
   now,
   showDate = false,
+  joinUrl = null,
   t,
 }: {
   readonly view: ClassSessionView;
@@ -121,6 +126,11 @@ export function SessionRow({
   readonly now: Date;
   /** Show the day as well as the time — for a list that spans several days. */
   readonly showDate?: boolean;
+  /**
+   * The class's meeting address, read by the one disclosure operation for a
+   * scheduled class of today's list — or `null`, and no link is drawn.
+   */
+  readonly joinUrl?: string | null;
   readonly t: TeacherTranslator;
 }) {
   const { session, course } = view;
@@ -187,28 +197,55 @@ export function SessionRow({
         ) : null}
       </div>
 
-      {controls.attendance ? (
-        <div className="col-start-2 sm:col-start-auto">
-          <a
-            href={localizedPath(
-              locale,
-              `/teacher/attendance/${encodeURIComponent(session.id)}`,
-            )}
-            className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-strong bg-surface-raised px-3 text-sm font-semibold no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border"
-          >
-            <Icon name="check" size={16} />
-            {t('agenda.attendance')}
-            <span className="sr-only">
-              {' — '}
-              <LearningTitle
-                labels={course.labels}
-                primaryLocale={course.primaryLocale}
-                locale={locale}
-              />
-              {', '}
-              {own({ dateStyle: 'medium', timeStyle: 'short' })}
-            </span>
-          </a>
+      {controls.attendance || (joinUrl !== null && session.state === 'scheduled') ? (
+        <div className="col-start-2 flex flex-wrap gap-2 sm:col-start-auto sm:flex-col sm:items-end">
+          {joinUrl !== null && session.state === 'scheduled' ? (
+            <a
+              href={joinUrl}
+              rel="noreferrer noopener"
+              target="_blank"
+              className={`inline-flex min-h-11 items-center gap-2 rounded-control px-3 text-sm font-semibold no-underline transition-colors duration-[var(--duration-fast)] ${
+                stage === 'live'
+                  ? 'bg-action text-action-foreground hover:bg-action-hover active:bg-action-hover'
+                  : 'border border-border-strong bg-surface-raised hover:bg-surface-sunken active:bg-border'
+              }`}
+            >
+              <Icon name="video" size={16} />
+              {t('agenda.join')}
+              <span className="sr-only">
+                {' — '}
+                <LearningTitle
+                  labels={course.labels}
+                  primaryLocale={course.primaryLocale}
+                  locale={locale}
+                />
+                {', '}
+                {own({ timeStyle: 'short' })} {t('agenda.newTab')}
+              </span>
+            </a>
+          ) : null}
+          {controls.attendance ? (
+            <a
+              href={localizedPath(
+                locale,
+                `/teacher/attendance/${encodeURIComponent(session.id)}`,
+              )}
+              className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-strong bg-surface-raised px-3 text-sm font-semibold no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border"
+            >
+              <Icon name="check" size={16} />
+              {t('agenda.attendance')}
+              <span className="sr-only">
+                {' — '}
+                <LearningTitle
+                  labels={course.labels}
+                  primaryLocale={course.primaryLocale}
+                  locale={locale}
+                />
+                {', '}
+                {own({ dateStyle: 'medium', timeStyle: 'short' })}
+              </span>
+            </a>
+          ) : null}
         </div>
       ) : null}
     </li>

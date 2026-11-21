@@ -4,7 +4,7 @@ import { getTranslations } from 'next-intl/server';
 
 import type { ContributorCapabilities } from '@minhaj/contracts/identity';
 
-import { NotActivated, TeacherFrame } from '@/components/teacher/parts';
+import { NotActivated, TeacherFrame, teacherTrail } from '@/components/teacher/parts';
 import { Alert, DetailRow, Panel, SectionHeading, TextLink } from '@/components/ui';
 import { teacherPageMetadata } from '@/components/teacher/metadata';
 import { identityRuntime } from '@/composition/identity';
@@ -75,6 +75,7 @@ export default async function TeacherProfilePage({
     <TeacherFrame
       title={t('profile.title')}
       description={<p>{t('profile.description')}</p>}
+      trail={teacherTrail(locale, t, [{ text: t('nav.profile') }])}
     >
       {!read.ok ? (
         <Alert tone="error">{t('profile.unavailable')}</Alert>

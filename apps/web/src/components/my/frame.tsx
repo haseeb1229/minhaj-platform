@@ -6,6 +6,7 @@ import { ProductBar } from '@/components/shell/product-bar';
 import { Icon } from '@/components/ui/icon';
 import { LinkTabs } from '@/components/ui/link-tabs';
 import { Breadcrumbs, PageHeading } from '@/components/ui/layout';
+import { meterWidthClass } from '@/components/ui/meter';
 import { ChangeAnnouncer } from './change-announcer';
 import { MY_LIST_STATUS } from './list-parts';
 
@@ -298,7 +299,6 @@ export function ProgressMeter({
   readonly percent: number;
   readonly children: ReactNode;
 }) {
-  const step = Math.round(Math.min(100, Math.max(0, percent)) / 5);
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <span className="text-caption text-foreground-muted tabular-nums">{children}</span>
@@ -306,37 +306,10 @@ export function ProgressMeter({
         aria-hidden="true"
         className="block h-1.5 overflow-hidden rounded-full bg-surface-sunken"
       >
-        <span className={`block h-full rounded-full bg-action ${METER_WIDTHS[step]}`} />
+        <span
+          className={`block h-full rounded-full bg-action ${meterWidthClass(percent)}`}
+        />
       </span>
     </div>
   );
 }
-
-/**
- * The meter's fill in twenty-one steps of five percent. The Content Security
- * Policy refuses inline styles, and Tailwind sees only classes written out in
- * full, so the widths are a fixed table rather than an interpolation.
- */
-const METER_WIDTHS = [
-  'w-0',
-  'w-[5%]',
-  'w-[10%]',
-  'w-[15%]',
-  'w-[20%]',
-  'w-[25%]',
-  'w-[30%]',
-  'w-[35%]',
-  'w-[40%]',
-  'w-[45%]',
-  'w-[50%]',
-  'w-[55%]',
-  'w-[60%]',
-  'w-[65%]',
-  'w-[70%]',
-  'w-[75%]',
-  'w-[80%]',
-  'w-[85%]',
-  'w-[90%]',
-  'w-[95%]',
-  'w-full',
-] as const;

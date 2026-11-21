@@ -5824,6 +5824,138 @@ the read-only handlers now thirty-four, each exporting no mutating verb);
 > dialog (a genuine design change; it first proves Cancel leaves the request). *CI and staging
 > evidence are recorded when they exist.*
 
+> **Teacher area — Overview, Today's classes, a class, Calendar, Availability, Courses, a Course
+> (Syllabus, Students, Classes, Materials), Students, a learner, Attendance, marking a class,
+> Reports, Messages, a conversation, Resources and Profile (owner direction: every section built
+> from A to Z; on `feature/rebaseline-r2-full-ecosystem-completion`).** Delivered (ROUTE_MAP.md §6;
+> INFORMATION_ARCHITECTURE.md §6; DOMAIN_MODEL.md §13.5; SECURITY_BASELINE.md §11, §19.1.4;
+> ARCHITECTURE.md §13.4). No route is added or removed, no table, column, index or migration, no new
+> dependency and **no Server Action added or changed**. My Minhaj, `/admin/people/teachers` and the
+> public `/learn/teachers` keep their behaviour.
+>
+> - **The audit (before).** No Teacher page had a trail, and a band under the product bar repeated
+>   the area's name. Students, a Course's students, Attendance, Reports and the Availability list
+>   paged by Phase 23's `?offset=` behind Previous/Next with no count, no "Showing n–m of N" and no
+>   page numbers; the Students filter was a select and a Show button, a Course the teacher does not
+>   teach was silently "applied" and listed nobody, and a page past the end said only "nothing on
+>   this page". Attendance read four pages of every past class and kept the unmarked ones, so its
+>   list and the Overview's "classes to mark" were bounded ("24+") rather than true; a Course's past
+>   classes were the same report filtered in the page. The Overview had no figures, and no class
+>   offered a join link anywhere but its own page. The calendar's `?week=` accepted any date of a
+>   week (seven addresses per week) and the materials' `?lesson=` any value. Withdrawing a window,
+>   removing a meeting link and marking a class held happened on one press; a withdrawn window or a
+>   mark re-rendered the page with no word of what changed and the pressed control gone. Every
+>   learner's progress bar drew full (an inline `style` width, refused by `style-src 'self'`). A
+>   teacher with no Course, an empty inbox and an empty availability list each said one line.
+> - **One address per view (decision).** `components/teacher/list-view.ts` applies My Minhaj's list
+>   rules (`components/my/list-view.ts`) by Learning's page of 24 up to `TEACHING_OFFSET_MAX`:
+>   `/teacher/students?course=&page=` (only a Course the teacher teaches now), `?page=` on a Course's
+>   students and classes, Attendance and Reports, `/teacher/availability?week=&show=&page=`. Every
+>   untidy spelling — Phase 23's `?offset=` included — is **one redirect after the session and the
+>   live role**; a Course the teacher does not teach, an unknown, malformed or repeated value is
+>   **refused in place**, the same answer for each, never widened. `?week=` names a week by its
+>   Monday (the current week bare); `?lesson=` is kept only when it names, once, a lesson of the
+>   syllabus. `/teacher/messages` keeps Messaging's cursor. `myListHref` now appends a list's
+>   parameters to a path that already holds `?week=` (unchanged for every My Minhaj list).
+> - **Shared parts.** Every Teacher page is built on My Minhaj's page frame (`MyPage`, `MySection`,
+>   through `components/teacher/parts.tsx`) — trail ("Teacher area / Students / the learner", under
+>   its own label), one `h1`, tabs, and the change announcer's fixed slot (`change-announcer.tsx`,
+>   whose focus fallback is now any page's `main h1`); `MyFigures`, `MySteps`, `list-parts.tsx` and
+>   `ConfirmSpec` are reused as they are. `WorkspaceShell` gains `band` (the Teacher area passes
+>   `false`; the administration keeps its band). A meter's fill moved from `MyPage`'s
+>   `ProgressMeter` into `components/ui/meter.ts`, shared by it and the student directory island.
+> - **Overview.** True figures, each a link: classes today (while the day's read holds them all),
+>   classes with attendance to mark (Learning's count), learners and Courses. "Needs your attention":
+>   attendance to mark (now a true count), classes ended but not marked held, upcoming classes with
+>   no link, unread messages. Today's classes each with **"Join on Google Meet"** when scheduled with a
+>   link; later this week; unread conversations; learners yet to begin; every section. No Course yet:
+>   what happens next in three steps.
+> - **Today's classes.** The trail, "n classes today · m in progress or still to come", the join
+>   links, and on a free day the next class named and linked.
+> - **A class.** The trail leads to the calendar week holding it. **Removing the meeting link and
+>   marking the class held ask first** (`ConfirmSpec`); after each mark the counts (present, absent,
+>   not marked) are said aloud. The move and cancel dialogs are unchanged.
+> - **Calendar.** The trail, one address per week, and "This week: n classes and m open windows"
+>   when the reads were whole.
+> - **Availability.** The trail, the windows counted (Open, Booked, Withdrawn) as figures and tabs,
+>   "Showing n–m of N windows", numbered pages, three first-run steps, and **withdrawing asks
+>   first**, the new counts said aloud with focus moved to the list's status line.
+> - **Courses and a Course.** Courses: figures (Courses, learners) and each card's learners. A Course:
+>   trail, figures (modules, lessons, learners), its views as tabs (Classes only for a live Course);
+>   its Classes ("Past classes", formerly "Recent classes") number every past class with its
+>   counts; its Materials lead to the previous and the next lesson; its Students are ranged and
+>   numbered.
+> - **Students and a learner.** Counted Course tabs, "Showing n–m of N learners", numbered pages, the
+>   page's name-and-progress search (unchanged); progress bars now true. A learner: trail, figures
+>   (Courses with you, classes, attended, missed — "100+" at the history's bound) and a meter per
+>   Course; messaging per Course unchanged.
+> - **Attendance, a class's marks and Reports.** Attendance and Reports are tabs; each counted,
+>   ranged and numbered; the empty states say what will appear and lead to the reports.
+> - **Messages and a conversation.** The inbox: the trail, figures only while the whole inbox is on
+>   the page, a status line, three first-run steps. A conversation: Teacher area / Messages / the
+>   learner. Socket.IO, the composer, reporting and blocking are unchanged.
+> - **Resources and Profile.** Their trails; content unchanged.
+> - **Reads (Model A).** Learning: `TeacherStudentPage.total`; `studentCounts(teacher)`;
+>   `attendanceReport(teacher, offset, { courseId?, unmarked? })` with `total`;
+>   `availability(teacher, offset, view)` with `total`; `availabilityCounts(teacher)`;
+>   `TEACHING_OFFSET_MAX` and `TEACHER_STUDENT_CLASSES` named in the contract. Each total is the page's
+>   own predicate counted in the same adapter (the teacher's current scope in every statement, bound
+>   parameters, a fixed statement shape; a window view is a key of a fixed predicate table). The
+>   service identifies the teacher first and refuses a malformed Course, a non-boolean `unmarked` or
+>   an unknown view as `invalid` before any port. Counts name nobody and are not audited; listing and
+>   opening a learner stay audited. No other owner gains a read; Messaging's inbox is counted only
+>   from the page it already decided.
+> - **Mutations.** None added and none changed. The three confirmations are presentation over the
+>   unchanged Server Actions (Origin checks, the session each resolves, the live authority and scope
+>   re-read in the service, the per-account teaching write limit, expected versions, Meet URL
+>   validation, the `not-started` rule and the audit rows).
+> - **Messages.** New `teacher.{trail.*, count.*, live.*, confirm.*, students.{byCourse,emptyTitle,
+>   emptyCourse}, courses.{learners,figures.*}, course.figures.*, student.{figures.*,orMore},
+>   materials.{previous,around}, reports.emptyBody, availability.{figures,views,all,emptyTitle,
+>   noneOfView,stepsLabel,steps.*}, calendar.summary, today.nextClass, noScope.{stepsLabel,steps.*},
+>   messagesPage.*, home.figures.*, agenda.{join,newTab}}` in en/ur/ar; `teacher.course.pastHelp`
+>   and `teacher.course.past` reworded (every past class, not the most recent); removed as unused:
+>   `teacher.common.beyond`, `teacher.students.{filter,apply,filtered}`, `teacher.student.back`,
+>   `teacher.course.back` and `teacher.attendancePage.bounded`.
+>
+> **Data facts — what staging will show.** Nothing here is seeded or migrated. Staging's live-learning
+> activation decides what a teacher meets: with none in force, every Teacher page shows the honest
+> "not switched on" page and no navigation. With the operator-run demo data (`demo.sh`, R2) the demo
+> teacher sees their figures, today's and the week's classes (a join link on a class of today with a
+> link), their Course's learners counted and paged, the demo student's figures, availability counted
+> by state, and their inbox counted; a teacher with no Course sees the three steps. The local
+> persistent database was not inspected.
+>
+> **Proof:** `tests/learning/teacher-list-view.test.ts` (new: paging by Learning's 24 up to the
+> teaching bound; twelve untidy spellings each one redirect to a final address; another teacher's,
+> an unknown-shape, a near-miss and a repeated Course and a repeated page refused; the availability
+> views; a week by its Monday and seven untidy weeks each one redirect; a list beside a week keeping
+> it; the meter table); `tests/learning/classes-service.test.ts` (new: the filter and view handed to
+> the port exactly, with the actor's own identity; five malformed filters and four unknown views
+> refused as `invalid` with no port call; malformed offsets clamped; counts asked for the session's
+> identity and not audited; every counted read refused to a non-teacher and while not activated
+> before any port; a signed-out or malformed actor refused before Identity is asked);
+> `tests/learning/classes.integration.test.ts` (real SQL Server; new: no total for a profile alone, a
+> key without a scope or a revoked assignment; the learner total and per-Course counts; teacher A
+> counts nothing of teacher B's — learners, the filtered report, windows; the windows by view with
+> their totals; the unmarked and per-Course report and its total, past the end keeping it; existing
+> calls name "everything" explicitly in the new signature); `tests/config/locale.test.ts` (the two new
+> modules). Browser — in the project that owns the activation, `learning.spec.ts` (new: the
+> Overview's four figures and their links, today's join link as a described link and never text,
+> trails on every page, students counted and five untidy addresses one redirect, three refused
+> Courses with nothing listed, past the end, a learner's figures, attendance and reports counted,
+> a Course's figures, classes and lesson tidy, a week by its Monday, availability counted, untidy and
+> refused views, **withdrawing a window cancelled by Escape and by Go back, then confirmed, said
+> aloud with focus on the status line**, removing a link cancelled, a profile alone still the 404 and
+> a signed-out visitor the sign-in page; eighteen Teacher pages in en, ur and ar right-to-left where
+> they should be, without sideways scroll at 320 and 1440 px, one `h1` in order and no serious or
+> critical axe finding) and `messaging.spec.ts` (the teacher's conversation trail and inbox figures).
+> Every earlier assertion is kept except two in `learning.spec.ts`, each a genuine design change with
+> its intent kept: "a completed class" now confirms marking the class held in the dialog (it first
+> proves Go back leaves the class scheduled), and the booked window's "Booked" is read in the list of
+> windows, since the new figures and tabs name the state too. Integration calls name the new filter
+> and view explicitly (`{}`, `null` — "everything", as before). *CI and staging evidence are recorded
+> when they exist.*
 ---
 
 ### Phase 31 — Search Completeness Validation

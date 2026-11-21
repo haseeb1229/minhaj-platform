@@ -2,6 +2,8 @@
 
 import { useId, useState, useSyncExternalStore } from 'react';
 
+import { meterPercent, meterWidthClass } from '@/components/ui/meter';
+
 import { matchesLearner, PROGRESS_STAGES, type ProgressStage } from './student-progress';
 
 /**
@@ -16,6 +18,11 @@ import { matchesLearner, PROGRESS_STAGES, type ProgressStage } from './student-p
  * PROGRESSIVE ENHANCEMENT. Without JavaScript the whole page is listed and the
  * search controls are not shown, because a control that does nothing is worse
  * than none.
+ *
+ * NO STYLE ATTRIBUTE. Each progress bar takes its width from the shared meter
+ * table (`@/components/ui/meter`): the platform's `style-src 'self'` refuses an
+ * inline `style` in server-rendered markup, which drew every bar full before
+ * the Teacher area's R2 rebuild.
  */
 
 export interface DirectoryCourse {
@@ -186,18 +193,7 @@ export function StudentDirectory({
                       className="block h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-surface-sunken"
                     >
                       <span
-                        className="block h-full rounded-full bg-action"
-                        style={{
-                          inlineSize: `${String(
-                            course.total === 0
-                              ? 0
-                              : Math.round(
-                                  (Math.min(course.completed, course.total) /
-                                    course.total) *
-                                    100,
-                                ),
-                          )}%`,
-                        }}
+                        className={`block h-full rounded-full bg-action ${meterWidthClass(meterPercent(course.completed, course.total))}`}
                       />
                     </span>
                     <p className="flex flex-wrap gap-x-4 gap-y-1 text-caption text-foreground-muted">

@@ -3,11 +3,15 @@ import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 
+import { TEACHER_STUDENT_CLASSES } from '@minhaj/contracts/learning';
+
 import { messagingMessages } from '@/components/messaging/parts';
 import { messagingRead } from '@/components/messaging/read';
 import { LearningTitle } from '@/components/my-learning/parts';
 import { pickLabel } from '@/components/my-learning/presentation';
 import { learningRead } from '@/components/my-learning/read';
+import { ProgressMeter } from '@/components/my/frame';
+import { MyFigures } from '@/components/my/summary-parts';
 import { participantNames } from '@/components/teacher/names';
 import {
   AttendanceWord,
@@ -16,7 +20,9 @@ import {
   OwnTime,
   SessionStateBadge,
   TeacherFrame,
+  teacherTrail,
 } from '@/components/teacher/parts';
+import { meterPercent } from '@/components/ui/meter';
 import {
   Alert,
   DataCell,
@@ -50,6 +56,12 @@ import { startTeacherConversationAction } from '../../messages/actions';
  * — that relationship's conversation. The button appears only while
  * teacher–student messaging is activated; the Messaging service re-decides
  * the relationship when it is pressed.
+ *
+ * AT A GLANCE (Teacher area, R2): the trail (Teacher area / Students / the
+ * learner), and figures that are true of what the page holds — the Courses
+ * with this teacher, the classes, and how many were attended and missed;
+ * when the history reached its bound the figures say "or more" rather than a
+ * number they are not. Each Course's progress is a meter beside its words.
  */
 export async function generateMetadata({
   params,
@@ -77,9 +89,19 @@ export default async function StudentPage({
   const read = await learningRead('teaching-student', () =>
     learningRuntime().teaching.student(gate.actor, id),
   );
+  const studentsCrumb = {
+    href: localizedPath(locale, '/teacher/students'),
+    text: t('nav.students'),
+  };
   if (!read.ok)
     return (
-      <TeacherFrame title={t('student.fallbackTitle')}>
+      <TeacherFrame
+        title={t('student.fallbackTitle')}
+        trail={teacherTrail(locale, t, [
+          studentsCrumb,
+          { text: t('student.fallbackTitle') },
+        ])}
+      >
         <Alert tone="error">{t('failure.load')}</Alert>
       </TeacherFrame>
     );
@@ -94,13 +116,12 @@ export default async function StudentPage({
   const m = await getTranslations({ locale, namespace: 'messages' });
   const learnerName = names.get(student.accountId) ?? t('common.learner');
   const accountZone = gate.session.account.timezone;
-  const back = (
-    <p>
-      <TextLink href={localizedPath(locale, '/teacher/students')}>
-        {t('student.back')}
-      </TextLink>
-    </p>
-  );
+  const number = new Intl.NumberFormat(locale);
+  const bounded = student.classes.length >= TEACHER_STUDENT_CLASSES;
+  const counted = (value: number) =>
+    bounded ? t('student.orMore', { count: number.format(value) }) : number.format(value);
+  const marked = (status: 'present' | 'absent') =>
+    student.classes.filter((entry) => entry.attendance === status).length;
 
   return (
     <TeacherFrame
@@ -110,7 +131,33 @@ export default async function StudentPage({
         </span>
       }
       description={<p>{t('student.description')}</p>}
+      trail={teacherTrail(locale, t, [studentsCrumb, { text: learnerName }])}
     >
+      <MyFigures
+        label={t('student.figures.label')}
+        figures={[
+          {
+            key: 'courses',
+            value: number.format(student.courses.length),
+            label: t('student.figures.courses'),
+          },
+          {
+            key: 'classes',
+            value: counted(student.classes.length),
+            label: t('student.figures.classes'),
+          },
+          {
+            key: 'present',
+            value: counted(marked('present')),
+            label: t('student.figures.present'),
+          },
+          {
+            key: 'absent',
+            value: counted(marked('absent')),
+            label: t('student.figures.absent'),
+          },
+        ]}
+      />
       <section className="flex flex-col gap-3" aria-labelledby="student-courses">
         <span id="student-courses">
           <SectionHeading>{t('student.courses')}</SectionHeading>
@@ -134,14 +181,16 @@ export default async function StudentPage({
                       locale={locale}
                     />
                   </TextLink>
-                  <span>
+                  <ProgressMeter
+                    percent={meterPercent(entry.completedLessons, entry.course.lessons)}
+                  >
                     {t('students.progress', {
                       completed: String(
                         Math.min(entry.completedLessons, entry.course.lessons),
                       ),
                       total: String(entry.course.lessons),
                     })}
-                  </span>
+                  </ProgressMeter>
                   <span className="text-foreground-muted">
                     {t('students.enrolledAt')}{' '}
                     <OwnTime
@@ -238,8 +287,6 @@ export default async function StudentPage({
           </DataTable>
         )}
       </section>
-
-      {back}
     </TeacherFrame>
   );
 }

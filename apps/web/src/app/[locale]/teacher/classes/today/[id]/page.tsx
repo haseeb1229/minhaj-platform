@@ -7,6 +7,7 @@ import { MEETING_PROVIDERS, reminderLeadOf } from '@minhaj/contracts/learning';
 import { supportedTimeZones } from '@minhaj/contracts/platform';
 
 import { LearningTitle } from '@/components/my-learning/parts';
+import { pickLabel } from '@/components/my-learning/presentation';
 import { learningRead } from '@/components/my-learning/read';
 import { ConfirmField } from '@/components/personal/parts';
 import { AttendanceMarks } from '@/components/teacher/attendance-marks';
@@ -20,10 +21,12 @@ import {
   TeacherFrame,
   TeacherSection,
   teacherMessages,
+  teacherTrail,
 } from '@/components/teacher/parts';
 import { ownZone, REMINDER_CHOICES } from '@/components/teacher/presentation';
 import { StageBadge } from '@/components/teacher/schedule';
 import { ScheduleForm } from '@/components/teacher/schedule-form';
+import { dateIn, weekHref, weekStartOf } from '@/components/teacher/week';
 import { Alert, Field, Icon, Panel, Select, TextInput, TextLink } from '@/components/ui';
 import { Dialog } from '@/components/ui/dialog';
 import { learningRuntime } from '@/composition/learning';
@@ -65,6 +68,15 @@ import { requireTeacher } from '../../../guard';
  * presentation, the tick is the confirmation. The cancel operation takes no
  * reason, so none is asked for.
  *
+ * IRREVERSIBLE ACTS ASK FIRST (Teacher area, R2). Removing the meeting link
+ * and marking the class held open the shared confirmation (`ConfirmSpec`)
+ * over their unchanged Server Actions; Cancel or Escape changes nothing.
+ * After a mark, the class's counts — present, absent, not marked — are said
+ * aloud, and focus stays on the control or returns to the page heading.
+ *
+ * WHERE IT SITS. The trail leads to the calendar's week that holds the class
+ * (Teacher area / Calendar / the Course).
+ *
  * EVERY CHANGE NAMES THE VERSION IT SAW. A class moved, cancelled or
  * completed elsewhere since the page loaded is refused as a conflict, never
  * silently overwritten.
@@ -99,9 +111,16 @@ export default async function ClassDetailPage({
   const read = await learningRead('teaching-session', () =>
     teaching.session(gate.actor, id),
   );
+  const calendarPath = localizedPath(locale, '/teacher/calendar');
   if (!read.ok)
     return (
-      <TeacherFrame title={t('session.fallbackTitle')}>
+      <TeacherFrame
+        title={t('session.fallbackTitle')}
+        trail={teacherTrail(locale, t, [
+          { href: calendarPath, text: t('nav.calendar') },
+          { text: t('session.fallbackTitle') },
+        ])}
+      >
         <Alert tone="error">{t('failure.load')}</Alert>
       </TeacherFrame>
     );
@@ -136,6 +155,16 @@ export default async function ClassDetailPage({
     timeZone: zone,
   }).format(session.startsAt);
   const joinUrl = meeting.ok ? meeting.value : null;
+  const marks = participants.ok ? participants.value : [];
+  const present = marks.filter((entry) => entry.attendance === 'present').length;
+  const absent = marks.filter((entry) => entry.attendance === 'absent').length;
+  const unmarked = marks.length - present - absent;
+  const today = dateIn(now, zone);
+  const weekOfClass = weekHref(
+    calendarPath,
+    weekStartOf(dateIn(session.startsAt, zone)),
+    today,
+  );
   const guide =
     stage === 'upcoming'
       ? t('session.guide.upcoming', { time: startTime })
@@ -147,6 +176,22 @@ export default async function ClassDetailPage({
 
   return (
     <TeacherFrame
+      trail={teacherTrail(locale, t, [
+        { href: weekOfClass, text: t('nav.calendar') },
+        {
+          text:
+            pickLabel(course.labels, locale, course.primaryLocale)?.title ?? course.slug,
+        },
+      ])}
+      announce={{
+        value: `${String(present)}:${String(absent)}:${String(unmarked)}:${session.state}`,
+        message: t('live.class', {
+          state: t(`state.${session.state}`),
+          present,
+          absent,
+          unmarked,
+        }),
+      }}
       title={
         <LearningTitle
           labels={course.labels}
@@ -220,6 +265,12 @@ export default async function ClassDetailPage({
                     action={completeSessionAction}
                     submitLabel={t('complete.submit')}
                     pendingLabel={t('common.working')}
+                    confirm={{
+                      title: t('confirm.complete.title'),
+                      body: t('confirm.complete.body'),
+                      confirmLabel: t('confirm.complete.confirm'),
+                      cancelLabel: t('confirm.keep'),
+                    }}
                     messages={teacherMessages(t, { success: t('complete.completed') })}
                   >
                     <input type="hidden" name="locale" value={locale} />
@@ -301,6 +352,12 @@ export default async function ClassDetailPage({
                         submitLabel={t('meeting.clear')}
                         pendingLabel={t('common.working')}
                         tone="secondary"
+                        confirm={{
+                          title: t('confirm.clearMeeting.title'),
+                          body: t('confirm.clearMeeting.body'),
+                          confirmLabel: t('confirm.clearMeeting.confirm'),
+                          cancelLabel: t('confirm.keep'),
+                        }}
                         messages={teacherMessages(t, { success: t('meeting.cleared') })}
                       >
                         <input type="hidden" name="locale" value={locale} />

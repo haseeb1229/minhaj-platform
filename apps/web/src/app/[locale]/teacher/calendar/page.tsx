@@ -1,18 +1,24 @@
 import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
+import { redirect } from 'next/navigation';
 
 import { learningRead } from '@/components/my-learning/read';
 import { teacherPageMetadata } from '@/components/teacher/metadata';
-import { NotActivated, TeacherFrame, TeacherSection } from '@/components/teacher/parts';
-import { ownZone, single, zoneName } from '@/components/teacher/presentation';
+import { readWeekView } from '@/components/teacher/list-view';
+import {
+  NotActivated,
+  TeacherFrame,
+  TeacherSection,
+  teacherTrail,
+} from '@/components/teacher/parts';
+import { ownZone, zoneName } from '@/components/teacher/presentation';
 import { collectPages } from '@/components/teacher/read';
 import { WeekGrid, WeekLegend, WeekNav, weekTitle } from '@/components/teacher/schedule';
 import {
   adjacentWeeks,
   buildWeek,
   dateIn,
-  readWeek,
   weekHref,
   weekSpan,
   weekStartOf,
@@ -33,6 +39,14 @@ import { requireTeacher } from '../guard';
  * bounded number of pages and stopped as soon as it passes the week. A class
  * is a solid block, an open window a dashed one; a booked window is not drawn,
  * because its class already is.
+ *
+ * ONE ADDRESS PER WEEK (Teacher area, R2). A week is named by its Monday and
+ * the current week by the bare address; any other date of a week, the current
+ * week spelled out, a date out of reach or a malformed or repeated `?week=`
+ * is one redirect to the week's own address, after the session and role
+ * (historical: Phase 23 and R2 showed the nearest week under any spelling).
+ * The week says what it holds in one line — its classes and open windows —
+ * only when the reads were whole.
  */
 export async function generateMetadata({
   params,
@@ -65,7 +79,9 @@ export default async function CalendarPage({
   const zone = ownZone(accountZone);
   const now = new Date();
   const today = dateIn(now, zone);
-  const weekStart = readWeek(single(await searchParams, 'week'), today);
+  const week = readWeekView(path, await searchParams, today);
+  if (week.outcome === 'redirect') redirect(week.path);
+  const weekStart = week.weekStart;
   const span = weekSpan(weekStart, zone);
   const { teaching } = learningRuntime();
   const [sessions, windows] = await Promise.all([
@@ -78,11 +94,10 @@ export default async function CalendarPage({
     ),
     learningRead('teaching-calendar-availability', () =>
       collectPages(
-        (offset) => teaching.availability(gate.actor, offset),
+        (offset) => teaching.availability(gate.actor, offset, 'open'),
         WINDOW_PAGES,
-        // Open windows come first, soonest first; then withdrawn ones.
-        (window) =>
-          window.state !== 'open' || window.startsAt.getTime() >= span.to.getTime(),
+        // Open, unbooked windows only, soonest first (a booked one is its class).
+        (window) => window.startsAt.getTime() >= span.to.getTime(),
       ),
     ),
   ]);
@@ -103,17 +118,21 @@ export default async function CalendarPage({
   const description = (
     <p>{t('calendar.description', { zone: zoneName(zone, span.from, locale) })}</p>
   );
+  const trail = teacherTrail(locale, t, [{ text: t('nav.calendar') }]);
 
   if (!sessions.ok)
     return (
-      <TeacherFrame title={t('calendar.title')} description={description} action={nav}>
+      <TeacherFrame
+        title={t('calendar.title')}
+        description={description}
+        action={nav}
+        trail={trail}
+      >
         <Alert tone="error">{t('failure.load')}</Alert>
       </TeacherFrame>
     );
 
-  const open = windows.ok
-    ? windows.value.items.filter((window) => window.state === 'open' && !window.booked)
-    : [];
+  const open = windows.ok ? windows.value.items : [];
   const days = buildWeek({
     span,
     zone,
@@ -122,6 +141,9 @@ export default async function CalendarPage({
     windows: open,
   });
   const empty = days.every((day) => day.sessions.length + day.windows.length === 0);
+  const held = days.reduce((total, day) => total + day.sessions.length, 0);
+  const offered = days.reduce((total, day) => total + day.windows.length, 0);
+  const whole = windows.ok && !sessions.value.truncated && !windows.value.truncated;
   const later = sessions.value.items.find(
     (view) =>
       view.session.state === 'scheduled' &&
@@ -129,7 +151,12 @@ export default async function CalendarPage({
   );
 
   return (
-    <TeacherFrame title={t('calendar.title')} description={description} action={nav}>
+    <TeacherFrame
+      title={t('calendar.title')}
+      description={description}
+      action={nav}
+      trail={trail}
+    >
       {accountZone === null ? <Alert tone="info">{t('common.noTimeZone')}</Alert> : null}
       {windows.ok ? null : <Alert tone="error">{t('calendar.windowsUnavailable')}</Alert>}
 
@@ -155,6 +182,11 @@ export default async function CalendarPage({
           </EmptyState>
         ) : (
           <>
+            {whole ? (
+              <p className="text-sm text-foreground-muted">
+                {t('calendar.summary', { classes: held, windows: offered })}
+              </p>
+            ) : null}
             <WeekLegend windows={open.length > 0} t={t} />
             <WeekGrid days={days} locale={locale} zone={zone} now={now} t={t} />
           </>

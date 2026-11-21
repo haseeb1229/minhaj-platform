@@ -11,8 +11,9 @@ import type {
   SessionState,
 } from '@minhaj/contracts/learning';
 
-import { Alert, EmptyState, SectionHeader, StatusBadge } from '@/components/ui';
-import { WorkspacePage } from '@/components/workspace/parts';
+import { MyPage, MySection } from '@/components/my/frame';
+import { MySteps } from '@/components/my/summary-parts';
+import { Alert, EmptyState, StatusBadge } from '@/components/ui';
 import { classRange, ownZone, zoneName } from './presentation';
 
 /**
@@ -26,37 +27,87 @@ import { classRange, ownZone, zoneName } from './presentation';
  * of the record — and the teacher's own, so a teacher in Lahore reading a
  * class scheduled in London sees both and is never left converting.
  *
+ * ONE PRIVATE PRODUCT (Teacher area, R2). A Teacher-area page is built from
+ * the same page frame as My Minhaj (`MyPage`): its trail (Teacher area /
+ * section / the page), its one `h1`, its tabs where a page is one of several
+ * views, and the fixed slot where a change is said aloud
+ * (`change-announcer.tsx`). Sections are My Minhaj's unboxed sections.
+ *
  * LOGICAL PROPERTIES ONLY (`check:rtl`), so the same markup is right in
  * English, Urdu and Arabic.
  */
 
 export type TeacherTranslator = Awaited<ReturnType<typeof getTranslations<'teacher'>>>;
 
+/** One step of a trail: a link, or — the last — the page itself. */
+export interface TeacherCrumb {
+  readonly href?: string;
+  readonly text: string;
+}
+
+export interface TeacherTrail {
+  readonly label: string;
+  readonly crumbs: readonly TeacherCrumb[];
+}
+
+/** Where a page sits: "Teacher area / Students / a learner", the last crumb the page. */
+export function teacherTrail(
+  locale: Locale,
+  t: TeacherTranslator,
+  crumbs: readonly TeacherCrumb[],
+): TeacherTrail {
+  return {
+    label: t('trail.label'),
+    crumbs: [
+      { href: localizedPath(locale, '/teacher'), text: t('trail.home') },
+      ...crumbs,
+    ],
+  };
+}
+
 /**
- * The heading and introduction of a Teacher-area page, inside the area's
- * workspace frame — the full width of the content column, since a teacher's
- * calendar and reports are tables.
+ * A Teacher-area page: its trail, heading and introduction, an optional
+ * primary action, optional tabs, the announcer's fixed slot, and its content —
+ * the full width of the content column, since a teacher's calendar and
+ * reports are tables.
  */
 export function TeacherFrame({
   title,
   description,
   action,
+  trail,
+  tabs,
+  announce,
   children,
 }: {
   readonly title: ReactNode;
   readonly description?: ReactNode;
   /** The page's one primary action, beside its heading. */
   readonly action?: ReactNode;
+  readonly trail?: TeacherTrail;
+  readonly tabs?: {
+    readonly label: string;
+    readonly items: readonly {
+      readonly href: string;
+      readonly text: string;
+      readonly current: boolean;
+    }[];
+  };
+  /** What a list or a class is now, as the server rendered it — said aloud when it changes. */
+  readonly announce?: { readonly value: string; readonly message: string };
   readonly children: ReactNode;
 }) {
   return (
-    <WorkspacePage
+    <MyPage
       title={title}
       {...(description === undefined ? {} : { description })}
       {...(action === undefined ? {} : { action })}
+      {...(trail === undefined ? {} : { trail })}
+      {...(tabs === undefined ? {} : { tabs })}
+      {...(announce === undefined ? {} : { announce })}
     >
       {children}
-    </WorkspacePage>
+    </MyPage>
   );
 }
 
@@ -75,26 +126,26 @@ export function TeacherSection({
   readonly id: string;
   readonly heading: ReactNode;
   readonly intro?: ReactNode;
-  readonly action?: { readonly href: string; readonly text: ReactNode };
+  readonly action?: { readonly href: string; readonly text: string };
   readonly children: ReactNode;
 }) {
   return (
-    <section aria-labelledby={id} className="flex min-w-0 flex-col gap-4">
-      <SectionHeader
-        id={id}
-        heading={heading}
-        {...(intro === undefined ? {} : { intro })}
-        {...(action === undefined ? {} : { action })}
-      />
+    <MySection
+      id={id}
+      heading={heading}
+      {...(intro === undefined ? {} : { intro })}
+      {...(action === undefined ? {} : { link: action })}
+    >
       {children}
-    </section>
+    </MySection>
   );
 }
 
 /**
  * What a teacher with no Course yet sees: not an empty dashboard, but what
  * happens next — Courses are assigned by the learning team, and the classes,
- * learners and materials follow from that. Availability can be offered now.
+ * learners and materials follow from that, in three steps. Availability can be
+ * offered now.
  */
 export function NoScope({
   locale,
@@ -104,16 +155,26 @@ export function NoScope({
   readonly t: TeacherTranslator;
 }) {
   return (
-    <EmptyState
-      icon="book"
-      title={t('noScope.title')}
-      action={{
-        href: localizedPath(locale, '/teacher/availability'),
-        text: t('noScope.action'),
-      }}
-    >
-      {t('noScope.body')}
-    </EmptyState>
+    <div className="flex flex-col gap-4">
+      <EmptyState
+        icon="book"
+        title={t('noScope.title')}
+        action={{
+          href: localizedPath(locale, '/teacher/availability'),
+          text: t('noScope.action'),
+        }}
+      >
+        {t('noScope.body')}
+      </EmptyState>
+      <MySteps
+        label={t('noScope.stepsLabel')}
+        steps={(['assigned', 'prepare', 'offer'] as const).map((key) => ({
+          key,
+          title: t(`noScope.steps.${key}.title`),
+          body: t(`noScope.steps.${key}.body`),
+        }))}
+      />
+    </div>
   );
 }
 
@@ -250,5 +311,23 @@ export function teacherMessages(
     'not-started': t('failure.notStarted'),
     booked: t('failure.booked'),
     ...overrides,
+  };
+}
+
+export type MyTranslator = Awaited<ReturnType<typeof getTranslations<'my'>>>;
+
+/** The words a Teacher-area list's pager speaks: the area's own, and My Minhaj's page label. */
+export function pagerWords(
+  t: TeacherTranslator,
+  my: MyTranslator,
+): {
+  readonly previous: string;
+  readonly next: string;
+  readonly page: (page: number) => string;
+} {
+  return {
+    previous: t('common.previous'),
+    next: t('common.next'),
+    page: (page) => my('list.page', { page }),
   };
 }

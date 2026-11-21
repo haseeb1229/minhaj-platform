@@ -244,6 +244,115 @@ describe('the Teacher area', () => {
   });
 });
 
+describe('the Teacher area’s counted reads (R2)', () => {
+  const teacher = { accountId: 'account-teacher' };
+  const identity = { accountId: 'account-teacher', assignmentIds: [ID(9)] };
+
+  it('hands the port exactly the attendance filter, and the actor’s own identity', async () => {
+    const t = teaching();
+    t.store.answers.set('attendanceReport', { items: [], hasMore: false, total: 0 });
+    await t.service.attendanceReport(teacher, 24, { unmarked: true });
+    await t.service.attendanceReport(teacher, 0, { courseId: ID(1) });
+    await t.service.attendanceReport(teacher, 0, { courseId: ID(1), unmarked: false });
+    await t.service.attendanceReport(teacher);
+    expect(t.store.calls.map((call) => call.input)).toEqual([
+      [identity, 24, { courseId: null, unmarked: true }],
+      [identity, 0, { courseId: ID(1), unmarked: false }],
+      [identity, 0, { courseId: ID(1), unmarked: false }],
+      [identity, 0, { courseId: null, unmarked: false }],
+    ]);
+  });
+
+  it.each([
+    [{ courseId: 'not-a-course' }],
+    [{ courseId: 42 }],
+    [{ courseId: `${ID(1)}; DROP TABLE x` }],
+    [{ unmarked: 'true' }],
+    [{ unmarked: 1 }],
+  ])(
+    'refuses a malformed attendance filter %o as invalid before any port',
+    async (filter) => {
+      const t = teaching();
+      expect(await refusal(t.service.attendanceReport(teacher, 0, filter as never))).toBe(
+        'invalid',
+      );
+      expect(t.store.calls).toEqual([]);
+    },
+  );
+
+  it('hands the port exactly the availability view, and refuses any other as invalid', async () => {
+    const t = teaching();
+    t.store.answers.set('availability', { items: [], hasMore: false, total: 0 });
+    await t.service.availability(teacher, 0, 'open');
+    await t.service.availability(teacher, 48, 'withdrawn');
+    await t.service.availability(teacher);
+    expect(t.store.calls.map((call) => call.input)).toEqual([
+      [identity, 0, 'open'],
+      [identity, 48, 'withdrawn'],
+      [identity, 0, null],
+    ]);
+    for (const bad of ['Open', 'cancelled', '', 'all'])
+      expect(await refusal(t.service.availability(teacher, 0, bad as never))).toBe(
+        'invalid',
+      );
+    expect(t.store.calls).toHaveLength(3);
+  });
+
+  it('clamps a malformed offset to the first page rather than reading past the bound', async () => {
+    const t = teaching();
+    t.store.answers.set('attendanceReport', { items: [], hasMore: false, total: 0 });
+    t.store.answers.set('availability', { items: [], hasMore: false, total: 0 });
+    await t.service.attendanceReport(teacher, -24, {});
+    await t.service.attendanceReport(teacher, 25_001, {});
+    await t.service.availability(teacher, 1.5, null);
+    expect(t.store.calls.map((call) => (call.input as unknown[])[1])).toEqual([0, 0, 0]);
+  });
+
+  it('counts learners and windows for the session’s own identity, and audits no count', async () => {
+    const t = teaching();
+    t.store.answers.set('studentCounts', { total: 3, courses: [] });
+    t.store.answers.set('availabilityCounts', { open: 1, booked: 0, withdrawn: 2 });
+    expect(await t.service.studentCounts(teacher)).toEqual({ total: 3, courses: [] });
+    expect(await t.service.availabilityCounts(teacher)).toEqual({
+      open: 1,
+      booked: 0,
+      withdrawn: 2,
+    });
+    expect(t.store.calls).toEqual([
+      { method: 'studentCounts', input: identity },
+      { method: 'availabilityCounts', input: identity },
+    ]);
+    // Numbers only: nobody is named, so nothing is audited.
+    expect(t.audited).toEqual([]);
+  });
+
+  it('refuses every counted read to a non-teacher, and while not activated, before any port', async () => {
+    for (const [options, reason] of [
+      [{ assignments: [] }, 'not-a-teacher'],
+      [{ activated: false }, 'not-activated'],
+    ] as const) {
+      const t = teaching(options);
+      for (const work of [
+        t.service.studentCounts(teacher),
+        t.service.availabilityCounts(teacher),
+        t.service.attendanceReport(teacher, 0, { unmarked: true }),
+        t.service.availability(teacher, 0, 'open'),
+        t.service.students(teacher, null, 0),
+      ])
+        expect(await refusal(work)).toBe(reason);
+      expect(t.store.calls).toEqual([]);
+    }
+  });
+
+  it('refuses a signed-out or malformed actor before Identity is asked', async () => {
+    const t = teaching();
+    for (const actor of [null, {}, { accountId: '' }, { accountId: 42 }])
+      expect(await refusal(t.service.studentCounts(actor as never))).toBe('denied');
+    expect(t.asked).toEqual([]);
+    expect(t.store.calls).toEqual([]);
+  });
+});
+
 function admin(
   options: {
     readonly permissions?: readonly string[];

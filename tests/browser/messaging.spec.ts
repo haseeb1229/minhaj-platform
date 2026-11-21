@@ -1090,6 +1090,30 @@ test.describe('the Messaging surfaces', () => {
     await expect(
       teacher.page.getByRole('navigation', { name: copy('my.trail.label') }),
     ).toHaveCount(0);
+    // Teacher area (R2): its own trail instead — Teacher area / Messages / the learner.
+    const teacherTrail = teacher.page
+      .getByRole('main')
+      .getByRole('navigation', { name: copy('teacher.trail.label') });
+    await expect(
+      teacherTrail.getByRole('link', { name: copy('teacher.nav.messages') }),
+    ).toHaveAttribute('href', '/teacher/messages');
+    await expect(teacherTrail.locator('[aria-current="page"]')).toHaveText(TEXT.learner);
+    // The teacher's inbox: its trail, and figures that are true of a whole inbox.
+    await teacher.page.goto('/teacher/messages');
+    await expect(teacherTrail.locator('[aria-current="page"]')).toHaveText(
+      copy('teacher.nav.messages'),
+    );
+    const inboxFigures = teacher.page
+      .getByRole('main')
+      .getByRole('list', { name: copy('my.messagesPage.figures') });
+    await expect(
+      inboxFigures
+        .getByRole('listitem')
+        .filter({ hasText: copy('my.messagesPage.conversations') }),
+    ).toContainText('1');
+    await expect(teacher.page.getByRole('main').locator('#my-list-status')).toHaveText(
+      /^1 conversation, most recent activity first$/u,
+    );
 
     for (const locale of ['en', 'ur', 'ar'] as const)
       for (const address of [

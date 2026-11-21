@@ -9,6 +9,7 @@ import {
   messagingRead,
   participantNames as messagingNames,
 } from '@/components/messaging/read';
+import { MyFigures } from '@/components/my/summary-parts';
 import { LearningTitle } from '@/components/my-learning/parts';
 import { learningRead } from '@/components/my-learning/read';
 import { teacherPageMetadata } from '@/components/teacher/metadata';
@@ -22,7 +23,7 @@ import {
   type TeacherTranslator,
 } from '@/components/teacher/parts';
 import { dayBounds, needsMeeting, ownZone } from '@/components/teacher/presentation';
-import { collectPages } from '@/components/teacher/read';
+import { collectPages, todaysJoinLinks } from '@/components/teacher/read';
 import { Agenda, SessionRow } from '@/components/teacher/schedule';
 import { progressStage } from '@/components/teacher/student-progress';
 import { dateIn, weekSpan, weekStartOf } from '@/components/teacher/week';
@@ -54,8 +55,16 @@ import { requireTeacher } from './guard';
  * first page of the teacher's learners — the same audited listing the Students
  * page reads — and the section says it is a first look, not the whole roster.
  *
- * NEVER THE MEETING ADDRESS. A row here knows only whether a link is held; the
- * address is read on the class's own page.
+ * THE DAY'S JOIN LINKS, AND NO OTHER (Teacher area, R2). Today's classes
+ * that hold a meeting link offer "Join on Google Meet" — each address read by
+ * the one disclosure operation, as My Classes reads a learner's — and no
+ * other list here carries an address (historical: until the Teacher area's
+ * R2 rebuild no row did, and the address was read on the class's page alone).
+ *
+ * TRUE FIGURES (Teacher area, R2): today's classes (while the day's one read
+ * holds them all), the classes with attendance to mark (Learning's own count
+ * of the narrowed report — no longer "24+"), the learners and the Courses.
+ * Each is a link to where the counted things are.
  */
 export async function generateMetadata({
   params,
@@ -108,10 +117,11 @@ export default async function TeacherOverviewPage({
 
   const day = dayBounds(now, zone);
   const week = weekSpan(weekStartOf(today), zone);
-  const [todayRead, ahead, report, learners, inbox] = await Promise.all([
-    learningRead('teaching-overview-today', () =>
-      teaching.today(gate.actor, day.from, day.to),
-    ),
+  const [todayRead, ahead, report, toMark, counts, learners, inbox] = await Promise.all([
+    learningRead('teaching-overview-today', async () => {
+      const page = await teaching.today(gate.actor, day.from, day.to);
+      return { ...page, joins: await todaysJoinLinks(gate.actor, page.items) };
+    }),
     learningRead('teaching-overview-calendar', () =>
       collectPages(
         (offset) => teaching.calendar(gate.actor, null, offset),
@@ -124,6 +134,10 @@ export default async function TeacherOverviewPage({
         REPORT_PAGES,
       ),
     ),
+    learningRead('teaching-overview-to-mark', () =>
+      teaching.attendanceReport(gate.actor, 0, { unmarked: true }),
+    ),
+    learningRead('teaching-overview-counts', () => teaching.studentCounts(gate.actor)),
     learningRead('teaching-overview-students', () =>
       teaching.students(gate.actor, null, 0),
     ),
@@ -163,18 +177,17 @@ export default async function TeacherOverviewPage({
     readonly href: string;
     readonly link: string;
   }[] = [];
+  if (toMark.ok && toMark.value.total > 0)
+    attention.push({
+      key: 'attendance',
+      icon: 'check',
+      text: t('home.attention.attendance', {
+        count: String(toMark.value.total),
+      }),
+      href: localizedPath(locale, '/teacher/attendance'),
+      link: t('home.attention.attendanceLink'),
+    });
   if (report.ok) {
-    const unmarked = report.value.items.filter((row) => row.unmarked > 0);
-    if (unmarked.length > 0)
-      attention.push({
-        key: 'attendance',
-        icon: 'check',
-        text: t('home.attention.attendance', {
-          count: plus(unmarked.length, report.value.truncated),
-        }),
-        href: localizedPath(locale, '/teacher/attendance'),
-        link: t('home.attention.attendanceLink'),
-      });
     const unheld = report.value.items.filter(
       (row) =>
         row.session.state === 'scheduled' &&
@@ -229,7 +242,50 @@ export default async function TeacherOverviewPage({
       href: localizedPath(locale, '/teacher/messages'),
       link: t('home.attention.messagesLink'),
     });
-  const failed = !report.ok || !ahead.ok || !inbox.ok;
+  const failed = !report.ok || !ahead.ok || !inbox.ok || !toMark.ok;
+  const number = new Intl.NumberFormat(locale);
+  const figures = [
+    ...(todayRead.ok && !todayRead.value.hasMore
+      ? [
+          {
+            key: 'today',
+            value: number.format(todayRead.value.items.length),
+            label: t('home.figures.today'),
+            href: localizedPath(locale, '/teacher/classes/today'),
+          },
+        ]
+      : []),
+    ...(toMark.ok
+      ? [
+          {
+            key: 'toMark',
+            value: number.format(toMark.value.total),
+            label: t('home.figures.toMark'),
+            href: localizedPath(locale, '/teacher/attendance'),
+          },
+        ]
+      : []),
+    ...(counts.ok
+      ? [
+          {
+            key: 'learners',
+            value: number.format(counts.value.total),
+            label: t('home.figures.learners'),
+            href: localizedPath(locale, '/teacher/students'),
+          },
+        ]
+      : []),
+    ...(courses.ok
+      ? [
+          {
+            key: 'courses',
+            value: number.format(courses.value.length),
+            label: t('home.figures.courses'),
+            href: localizedPath(locale, '/teacher/courses'),
+          },
+        ]
+      : []),
+  ];
 
   /* ---- Side reads ------------------------------------------------------- */
 
@@ -264,6 +320,7 @@ export default async function TeacherOverviewPage({
       }
     >
       {accountZone === null ? <Alert tone="info">{t('common.noTimeZone')}</Alert> : null}
+      <MyFigures label={t('home.figures.label')} figures={figures} />
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="flex min-w-0 flex-col gap-8">
@@ -322,6 +379,7 @@ export default async function TeacherOverviewPage({
                     locale={locale}
                     zone={zone}
                     now={now}
+                    joinUrl={todayRead.value.joins.get(view.session.id) ?? null}
                     t={t}
                   />
                 ))}

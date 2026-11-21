@@ -2344,6 +2344,7 @@ function dateIn(days: number): string {
 const WHEN = {
   windowOne: [`${dateIn(2)}T09:00`, `${dateIn(2)}T10:00`],
   windowTwo: [`${dateIn(2)}T12:00`, `${dateIn(2)}T13:00`],
+  windowThree: [`${dateIn(2)}T15:00`, `${dateIn(2)}T16:00`],
   regular: [`${dateIn(3)}T10:00`, `${dateIn(3)}T11:00`],
   moved: [`${dateIn(3)}T14:00`, `${dateIn(3)}T15:00`],
   stale: [`${dateIn(3)}T16:00`, `${dateIn(3)}T17:00`],
@@ -2917,8 +2918,12 @@ test.describe('Phase 23 — a class, from a request to a join link', () => {
     const teacher = teacherOne.page;
     await teacher.goto('/teacher/availability');
     const main = teacher.getByRole('main');
+    // Teacher area (R2): the figures and tabs name the states too, so the
+    // window's own word is read in the list of windows.
     await expect(
-      main.getByText(copy('teacher.availability.booked'), { exact: true }),
+      main
+        .getByRole('list', { name: copy('teacher.availability.list'), exact: true })
+        .getByText(copy('teacher.availability.booked'), { exact: true }),
     ).toBeVisible();
     await expect(main).toContainText(copy('teacher.availability.cannotWithdraw'));
     await expect(
@@ -3494,6 +3499,368 @@ test.describe('Phase 23 — a class’s life', () => {
     expect(marks).toEqual([{ status: 'absent' }]);
   });
 
+  test('Teacher area R2 — figures that are true, today’s join link, trails, counted lists with one address per view, and withdrawing a window asks first', async () => {
+    test.setTimeout(300_000);
+    const teacher = teacherOne.page;
+    const main = teacher.getByRole('main');
+    const trail = main.getByRole('navigation', { name: copy('teacher.trail.label') });
+    const status = main.locator('#my-list-status');
+    const origin = new URL(teacher.url()).origin;
+    const learners = await scalar(
+      `SELECT COUNT_BIG(DISTINCT [userId]) AS [value] FROM [dbo].[Enrolment] WHERE [courseId]=N'${ids.live}';`,
+    );
+    const unmarked = await scalar(
+      `SELECT COUNT_BIG(*) AS [value] FROM [dbo].[Enrolment] e WHERE e.[courseId]=N'${ids.live}' AND NOT EXISTS (SELECT 1 FROM [dbo].[Attendance] a WHERE a.[sessionId]=N'${regularSessionId}' AND a.[userId]=e.[userId]);`,
+    );
+    const toMark = unmarked > 0 ? 1 : 0;
+
+    /** One redirect, after the session and the role, to a final address. */
+    const tidies = async (asked: string, final: string) => {
+      const answer = await teacher.context().request.get(asked, { maxRedirects: 0 });
+      expect([307, 308], asked).toContain(answer.status());
+      const location = new URL(answer.headers()['location'] ?? '', origin);
+      expect(location.pathname + location.search, asked).toBe(final);
+      expect(
+        (await teacher.context().request.get(final, { maxRedirects: 0 })).status(),
+        final,
+      ).toBe(200);
+    };
+
+    // THE OVERVIEW: true figures, each a way in, and today's class with its
+    // join link — the address only as a described link's href, never text.
+    await teacher.goto('/teacher');
+    await expect(mainHeading(teacher)).toHaveText(copy('teacher.home.title'));
+    await expect(trail).toHaveCount(0);
+    const figures = main.getByRole('list', { name: copy('teacher.home.figures.label') });
+    for (const [key, href] of [
+      ['today', '/teacher/classes/today'],
+      ['toMark', '/teacher/attendance'],
+      ['learners', '/teacher/students'],
+      ['courses', '/teacher/courses'],
+    ] as const)
+      await expect(
+        figures.getByRole('link', { name: copy(`teacher.home.figures.${key}`) }),
+        key,
+      ).toHaveAttribute('href', href);
+    await expect(
+      figures
+        .getByRole('listitem')
+        .filter({ hasText: copy('teacher.home.figures.learners') }),
+    ).toContainText(String(learners));
+    await expect(
+      figures
+        .getByRole('listitem')
+        .filter({ hasText: copy('teacher.home.figures.toMark') }),
+    ).toContainText(String(toMark));
+    // The class began half an hour ago; it is "today" in the teacher's zone
+    // (UTC) unless this runs in the first half-hour of a UTC day.
+    const sameDay =
+      new Date(Date.now() - 30 * 60_000).toISOString().slice(0, 10) ===
+      new Date().toISOString().slice(0, 10);
+    const join = main.locator(`a[href="${MEET.join}"]`);
+    if (sameDay) {
+      await expect(join).toHaveCount(1);
+      await expect(join).toContainText(copy('teacher.agenda.join'));
+      await expect(join).toHaveAttribute('target', '_blank');
+      await expect(join).toHaveAttribute('rel', /noopener/);
+    }
+    expect(await main.innerText()).not.toContain('abc-defg-hij');
+
+    // TODAY: the trail, the day counted, and the same join link.
+    await teacher.goto('/teacher/classes/today');
+    await expect(trail.locator('[aria-current="page"]')).toHaveText(
+      copy('teacher.nav.today'),
+    );
+    await expect(
+      trail.getByRole('link', { name: copy('teacher.trail.home') }),
+    ).toHaveAttribute('href', '/teacher');
+    if (sameDay) {
+      await expect(status).toBeVisible();
+      await expect(main.locator(`a[href="${MEET.join}"]`)).toHaveCount(1);
+    }
+    expect(await main.innerText()).not.toContain('abc-defg-hij');
+
+    // STUDENTS: counted, ranged, one address per view.
+    await teacher.goto('/teacher/students');
+    await expect(trail.locator('[aria-current="page"]')).toHaveText(
+      copy('teacher.nav.students'),
+    );
+    await expect(status).toHaveText(
+      new RegExp(`^Showing 1–${String(learners)} of ${String(learners)} learners?$`, 'u'),
+    );
+    await tidies('/teacher/students?page=1', '/teacher/students');
+    await tidies('/teacher/students?offset=0', '/teacher/students');
+    await tidies('/teacher/students?offset=24', '/teacher/students?page=2');
+    await tidies(
+      `/teacher/students?page=1&course=${ids.live}`,
+      `/teacher/students?course=${ids.live}`,
+    );
+    await tidies('/ur/teacher/students?offset=24', '/ur/teacher/students?page=2');
+    // A Course they teach is a view; one they do not — another's, an unknown
+    // one, a malformed one — is refused in place with nothing listed.
+    await teacher.goto(`/teacher/students?course=${ids.live}`);
+    await expect(status).toHaveText(new RegExp(`of ${String(learners)} learners?$`, 'u'));
+    for (const course of [ids.paced, randomUUID(), 'not-a-course']) {
+      const response = await teacher.goto(`/teacher/students?course=${course}`);
+      expect(response?.status(), course).toBe(200);
+      await expect(main, course).toContainText(copy('my.list.refusedTitle'));
+      await expect(
+        main.getByRole('list', { name: copy('teacher.students.list') }),
+      ).toHaveCount(0);
+      await expect(main, course).not.toContainText(student.name);
+    }
+    // Past the end: said, with the way back.
+    await teacher.goto('/teacher/students?page=2');
+    await expect(main).toContainText(copy('my.list.beyond'));
+    await expect(
+      main.getByRole('link', { name: copy('my.list.first'), exact: true }),
+    ).toHaveAttribute('href', '/teacher/students');
+
+    // A LEARNER: Teacher area / Students / the learner, and true figures.
+    await teacher.goto(`/teacher/students/${student.id}`);
+    await expect(
+      trail.getByRole('link', { name: copy('teacher.nav.students') }),
+    ).toHaveAttribute('href', '/teacher/students');
+    await expect(trail.locator('[aria-current="page"]')).toHaveText(student.name);
+    const learnerFigures = main.getByRole('list', {
+      name: copy('teacher.student.figures.label'),
+    });
+    await expect(
+      learnerFigures
+        .getByRole('listitem')
+        .filter({ hasText: copy('teacher.student.figures.absent') }),
+    ).toContainText('1');
+
+    // ATTENDANCE: the unmarked classes counted; the reports counted.
+    await teacher.goto('/teacher/attendance');
+    await expect(trail.locator('[aria-current="page"]')).toHaveText(
+      copy('teacher.nav.attendance'),
+    );
+    const views = main.getByRole('navigation', {
+      name: copy('teacher.attendancePage.views'),
+    });
+    await expect(views.locator('[aria-current="page"]')).toHaveText(
+      copy('teacher.attendancePage.pendingTab'),
+    );
+    if (toMark === 0)
+      await expect(main).toContainText(copy('teacher.attendancePage.empty'));
+    else
+      await expect(status).toHaveText(
+        /^Showing 1–1 of 1 class with attendance to mark$/u,
+      );
+    await teacher.goto('/teacher/attendance/reports');
+    await expect(
+      trail.getByRole('link', { name: copy('teacher.nav.attendance') }),
+    ).toHaveAttribute('href', '/teacher/attendance');
+    await expect(status).toHaveText(/^Showing 1–1 of 1 past class$/u);
+    await tidies('/teacher/attendance?page=1', '/teacher/attendance');
+    await tidies('/teacher/attendance/reports?offset=0', '/teacher/attendance/reports');
+
+    // A COURSE: its trail, figures and tabs; its past classes counted; one
+    // address per lesson.
+    const coursePath = `/teacher/courses/${ids.live}`;
+    await teacher.goto(coursePath);
+    await expect(
+      trail.getByRole('link', { name: copy('teacher.nav.courses') }),
+    ).toHaveAttribute('href', '/teacher/courses');
+    await expect(trail.locator('[aria-current="page"]')).toHaveText(TEXT.live);
+    const courseFigures = main.getByRole('list', {
+      name: copy('teacher.course.figures.label'),
+    });
+    await expect(
+      courseFigures
+        .getByRole('listitem')
+        .filter({ hasText: copy('teacher.course.figures.learners') }),
+    ).toContainText(String(learners));
+    await teacher.goto(`${coursePath}/sessions`);
+    await expect(trail.locator('[aria-current="page"]')).toHaveText(
+      copy('teacher.courses.sessions'),
+    );
+    await expect(status).toHaveText(/^Showing 1–1 of 1 past class$/u);
+    await tidies(`${coursePath}/sessions?offset=0`, `${coursePath}/sessions`);
+    await tidies(`${coursePath}/students?page=1`, `${coursePath}/students`);
+    await tidies(
+      `${coursePath}/materials?lesson=${randomUUID()}`,
+      `${coursePath}/materials`,
+    );
+    await tidies(
+      `${coursePath}/materials?lesson=not-a-lesson`,
+      `${coursePath}/materials`,
+    );
+
+    // THE CALENDAR: a week by its Monday, any other spelling one redirect.
+    const today = new Date();
+    const monday = new Date(
+      Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()),
+    );
+    monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7) + 7);
+    const nextMonday = monday.toISOString().slice(0, 10);
+    const wednesday = new Date(monday.getTime() + 2 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    await tidies(
+      `/teacher/calendar?week=${wednesday}`,
+      `/teacher/calendar?week=${nextMonday}`,
+    );
+    await tidies('/teacher/calendar?week=not-a-week', '/teacher/calendar');
+
+    // AVAILABILITY: counted by what each window has become; withdrawing asks
+    // first, Go back changes nothing, and the change is said aloud.
+    await teacher.goto('/teacher/availability');
+    await expect(trail.locator('[aria-current="page"]')).toHaveText(
+      copy('teacher.nav.availability'),
+    );
+    await teacher
+      .getByLabel(copy('teacher.availability.timeZone'), { exact: true })
+      .selectOption('UTC');
+    await teacher
+      .getByLabel(copy('teacher.availability.starts'), { exact: true })
+      .fill(WHEN.windowThree[0]);
+    await teacher
+      .getByLabel(copy('teacher.availability.ends'), { exact: true })
+      .fill(WHEN.windowThree[1]);
+    await teacher
+      .getByRole('button', { name: copy('teacher.availability.submit') })
+      .click();
+    await expect(
+      teacher
+        .getByRole('status')
+        .filter({ hasText: copy('teacher.availability.opened') }),
+    ).toBeVisible();
+    const windowFigures = main.getByRole('list', {
+      name: copy('teacher.availability.figures'),
+    });
+    await expect(
+      windowFigures.getByRole('link', { name: copy('teacher.availability.open') }),
+    ).toHaveAttribute('href', '/teacher/availability?show=open');
+    await expect(
+      windowFigures
+        .getByRole('listitem')
+        .filter({ hasText: copy('teacher.availability.open') }),
+    ).toContainText('2');
+    await expect(
+      windowFigures
+        .getByRole('listitem')
+        .filter({ hasText: copy('teacher.availability.booked') }),
+    ).toContainText('1');
+    await tidies('/teacher/availability?offset=0', '/teacher/availability');
+    await tidies(
+      '/teacher/availability?page=1&show=open',
+      '/teacher/availability?show=open',
+    );
+    await tidies(
+      `/teacher/availability?week=${wednesday}&show=open`,
+      `/teacher/availability?week=${nextMonday}&show=open`,
+    );
+    for (const refused of ['?show=Open', '?show=cancelled', '?show=open&show=booked']) {
+      await teacher.goto(`/teacher/availability${refused}`);
+      await expect(main, refused).toContainText(copy('my.list.refusedTitle'));
+      await expect(
+        main.getByRole('list', { name: copy('teacher.availability.list'), exact: true }),
+        refused,
+      ).toHaveCount(0);
+    }
+
+    await teacher.goto('/teacher/availability?show=open');
+    await expect(status).toHaveText(/^Showing 1–2 of 2 windows$/u);
+    // Open windows are listed soonest first: the third offered is the later one.
+    const third = main
+      .getByRole('list', { name: copy('teacher.availability.list'), exact: true })
+      .getByRole('listitem')
+      .last();
+    const thirdId = await rowOf<{ id: string }>(
+      `SELECT [id] FROM [dbo].[Availability] WHERE [userId]=N'${teacherOne.id}' AND [startsLocal]=N'${WHEN.windowThree[0]}';`,
+    );
+    const withdraw = teacher.getByRole('dialog', {
+      name: copy('teacher.confirm.withdraw.title'),
+    });
+    await third
+      .getByRole('button', { name: copy('teacher.availability.withdraw') })
+      .click();
+    await expect(withdraw).toBeVisible();
+    await teacher.keyboard.press('Escape');
+    await expect(withdraw).toBeHidden();
+    await third
+      .getByRole('button', { name: copy('teacher.availability.withdraw') })
+      .click();
+    await withdraw
+      .getByRole('button', { name: copy('teacher.confirm.keep') })
+      .first()
+      .click();
+    await expect(withdraw).toBeHidden();
+    expect(
+      await rowOf(
+        `SELECT [state] FROM [dbo].[Availability] WHERE [id]=N'${thirdId?.id ?? ''}';`,
+      ),
+    ).toEqual({ state: 'open' });
+    await third
+      .getByRole('button', { name: copy('teacher.availability.withdraw') })
+      .click();
+    await withdraw
+      .getByRole('button', { name: copy('teacher.confirm.withdraw.confirm') })
+      .click();
+    // The row left this view: the new state is said aloud, and focus moved to
+    // the list's status line rather than falling to the document.
+    await expect(status).toHaveText(/^Showing 1–1 of 1 window$/u);
+    await expect(main.locator('[aria-live="polite"]')).toContainText(/1 window is open/u);
+    await expect(status).toBeFocused();
+    expect(
+      await rowOf(
+        `SELECT [state] FROM [dbo].[Availability] WHERE [id]=N'${thirdId?.id ?? ''}';`,
+      ),
+    ).toEqual({ state: 'withdrawn' });
+
+    // THE CLASS: removing its link asks first, and going back keeps it.
+    await teacher.goto(`/teacher/classes/today/${regularSessionId}`);
+    await expect(
+      trail.getByRole('link', { name: copy('teacher.nav.calendar') }),
+    ).toHaveAttribute('href', /^\/teacher\/calendar/u);
+    await expect(trail.locator('[aria-current="page"]')).toHaveText(TEXT.live);
+    const clear = teacher.getByRole('dialog', {
+      name: copy('teacher.confirm.clearMeeting.title'),
+    });
+    await teacher.getByRole('button', { name: copy('teacher.meeting.clear') }).click();
+    await expect(clear).toBeVisible();
+    await clear
+      .getByRole('button', { name: copy('teacher.confirm.keep') })
+      .first()
+      .click();
+    await expect(clear).toBeHidden();
+    expect(
+      await rowOf(
+        `SELECT [meetingUrl] FROM [dbo].[ClassSession] WHERE [id]=N'${regularSessionId}';`,
+      ),
+    ).toEqual({ meetingUrl: MEET.join });
+
+    // Every other page carries its trail.
+    for (const [address, current] of [
+      ['/teacher/courses', copy('teacher.nav.courses')],
+      ['/teacher/resources', copy('teacher.nav.resources')],
+      ['/teacher/profile', copy('teacher.nav.profile')],
+      ['/teacher/calendar', copy('teacher.nav.calendar')],
+      ['/teacher/messages', copy('teacher.nav.messages')],
+      [`/teacher/attendance/${regularSessionId}`, TEXT.live],
+    ] as const) {
+      await teacher.goto(address);
+      await expect(trail.locator('[aria-current="page"]'), address).toHaveText(current);
+    }
+
+    // Nobody else is tidied anywhere: a profile alone meets the 404, and a
+    // signed-out visitor the sign-in page — never a redirect to a view first.
+    const refusedAnswer = await profileOnly.page
+      .context()
+      .request.get('/teacher/students?offset=24', { maxRedirects: 0 });
+    expect(refusedAnswer.status()).toBe(404);
+    const anonymous = await teacher.context().browser()?.newContext();
+    if (anonymous !== undefined) {
+      const answer = await anonymous.request.get(`${origin}/teacher/students?offset=24`, {
+        maxRedirects: 0,
+      });
+      expect(answer.headers()['location'] ?? '').toContain('/signin?returnTo=');
+      await anonymous.close();
+    }
+  });
+
   test('the learner cancels their trial from My Classes under reduced motion, and its join link goes', async () => {
     const page = student.page;
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -3580,7 +3947,27 @@ test.describe('Phase 23 — a class’s life', () => {
     const teacher = teacherOne.page;
     await teacher.goto(`/teacher/classes/today/${regularSessionId}`);
     await expect(mainHeading(teacher)).toHaveText(TEXT.live);
+    // Teacher area (R2): marking a class held is irreversible, so it asks
+    // first — and going back changes nothing.
+    const held = teacher.getByRole('dialog', {
+      name: copy('teacher.confirm.complete.title'),
+    });
     await teacher.getByRole('button', { name: copy('teacher.complete.submit') }).click();
+    await expect(held).toBeVisible();
+    await held
+      .getByRole('button', { name: copy('teacher.confirm.keep') })
+      .first()
+      .click();
+    await expect(held).toBeHidden();
+    expect(
+      await rowOf(
+        `SELECT [state] FROM [dbo].[ClassSession] WHERE [id]=N'${regularSessionId}';`,
+      ),
+    ).toEqual({ state: 'scheduled' });
+    await teacher.getByRole('button', { name: copy('teacher.complete.submit') }).click();
+    await held
+      .getByRole('button', { name: copy('teacher.confirm.complete.confirm') })
+      .click();
     const main = teacher.getByRole('main');
     await expect(main).toContainText(
       copy('teacher.session.closed', { state: copy('teacher.state.completed') }),
@@ -3889,5 +4276,66 @@ test.describe('Phase 23 — every locale, every width, the keyboard', () => {
     await expect(
       upcoming.getByText(copy('myClasses.state.scheduled'), { exact: true }),
     ).toBeVisible();
+  });
+
+  test('Teacher area R2 — every page is right-to-left in Urdu and Arabic, fits 320 and 1440 pixels, keeps one h1 and its headings in order, and is axe-clean', async () => {
+    const testInfo = test.info();
+    test.setTimeout(2_400_000);
+    const viewer = teacherTwo.page;
+    for (const locale of ['en', 'ur', 'ar'] as const)
+      for (const address of [
+        '/teacher',
+        '/teacher/classes/today',
+        `/teacher/classes/today/${laterSessionId}`,
+        '/teacher/calendar',
+        '/teacher/availability',
+        '/teacher/courses',
+        `/teacher/courses/${ids.live}`,
+        `/teacher/courses/${ids.live}/students`,
+        `/teacher/courses/${ids.live}/sessions`,
+        `/teacher/courses/${ids.live}/materials`,
+        '/teacher/students',
+        `/teacher/students/${student.id}`,
+        '/teacher/attendance',
+        '/teacher/attendance/reports',
+        `/teacher/attendance/${laterSessionId}`,
+        '/teacher/messages',
+        '/teacher/resources',
+        '/teacher/profile',
+      ]) {
+        const target = localizedPath(locale, address);
+        for (const width of [320, 1440]) {
+          await viewer.setViewportSize({ width, height: 900 });
+          const response = await viewer.goto(target);
+          expect(response?.status(), target).toBe(200);
+          await expect(mainHeading(viewer), target).toBeVisible();
+          await expect(viewer.locator('html'), target).toHaveAttribute(
+            'dir',
+            locale === 'en' ? 'ltr' : 'rtl',
+          );
+          expect(
+            await overflowOf(viewer),
+            `${String(width)}px ${target}`,
+          ).toBeLessThanOrEqual(0);
+        }
+        await expectHeadingsInOrder(viewer, target);
+        const results = await new AxeBuilder({ page: viewer })
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+          .analyze();
+        const blocking = results.violations.filter(
+          (violation) =>
+            violation.impact === 'serious' || violation.impact === 'critical',
+        );
+        for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+          testInfo.annotations.push({
+            type: 'axe',
+            description: `${target}: ${finding.id} (${String(finding.impact)})`,
+          });
+        expect(
+          blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+          target,
+        ).toEqual([]);
+      }
+    await viewer.setViewportSize({ width: 1280, height: 800 });
   });
 });

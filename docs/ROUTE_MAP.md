@@ -1627,6 +1627,31 @@ Profile — plus the attendance reports, both on the full home and on the "no co
 (R2 had narrowed the list to four shortcuts — historical, superseded). A teaching-authority holder
 reaches `/teacher` from My Minhaj's "Your work" group (§5).
 
+**Teacher area (Rebaseline R2, November 2026).** No Teacher route is added or removed. The lists
+take My Minhaj's **one address per view** (`apps/web/src/components/teacher/list-view.ts` over
+`components/my/list-view.ts`), paging by Learning's page of 24 up to `TEACHING_OFFSET_MAX` (25,000):
+`/teacher/students` takes `?course=` (only a Course the teacher teaches NOW) and `?page=`;
+`/teacher/courses/{id}/students`, `/teacher/courses/{id}/sessions` (its past classes),
+`/teacher/attendance` and `/teacher/attendance/reports` take `?page=`; `/teacher/availability` takes
+`?show=` (`open`, `booked`, `withdrawn`) and `?page=`. Phase 23's `?offset=` (read by 24), `?page=1`,
+a malformed page, an empty filter and another order of the parameters are each **one redirect** to
+the final address, issued only after the session and the live `teaching.perform` check (a profile
+alone still meets the 404, a signed-out visitor the sign-in page — never a redirect first); a
+`?course=` the teacher does not teach, an unknown, malformed or repeated value is **refused in place**
+— the same answer for each — and never widened. `?week=` now names a week by its **Monday**, the
+current week being the address without it: any other date of a week, the current week spelled out, a
+malformed, unreal, out-of-reach or repeated value is one redirect to the week's own address (Phase
+23/R2 showed the nearest week under any spelling — historical). On `/teacher/availability` the week
+comes first and every list link keeps it (`?week=…&show=…&page=…`).
+`/teacher/courses/{id}/materials?lesson=` is kept only when it names, once, a lesson of that
+syllabus; anything else is one redirect to the materials' own address, after the Course is known to be
+the teacher's (a Course they do not teach is still the 404 first). `/teacher/messages` keeps
+Messaging's opaque `?cursor=`. Every page below `/teacher` carries its trail (Teacher area / section /
+the page, under its own label, never My Minhaj's), and the area has no second band under the product
+bar. **Today's classes** — on `/teacher` and `/teacher/classes/today` — offer "Join on Google Meet" for
+a scheduled class that holds a link (SECURITY_BASELINE.md §11); no other Teacher list carries an
+address.
+
 ---
 
 ## 7. Admin routes

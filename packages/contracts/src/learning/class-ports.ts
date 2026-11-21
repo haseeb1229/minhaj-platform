@@ -1,9 +1,13 @@
 import type { MeetingProviderKey } from './meeting.ts';
 import type {
   AdminTrialRequestPage,
-  AttendanceReportRow,
+  AttendanceReportFilter,
+  AttendanceReportPage,
   AttendanceStatus,
+  AvailabilityCounts,
+  AvailabilityPage,
   AvailabilityRecord,
+  AvailabilityView,
   BookingRecord,
   ClassAdminQuery,
   ClassCommunicationIntentRecord,
@@ -20,6 +24,7 @@ import type {
   PublicSessionPage,
   PublicSessionView,
   SessionParticipant,
+  TeacherStudentCounts,
   TeacherStudentDetail,
   TeacherStudentPage,
   TeachingScopePage,
@@ -136,12 +141,17 @@ export interface TeachingPort {
     lessonId: string,
   ): Promise<LessonRecord | null>;
 
-  /** Learners enrolled on the Courses this teacher currently teaches. Bounded page. */
+  /**
+   * Learners enrolled on the Courses this teacher currently teaches. Bounded
+   * page, with the total its predicate holds (Teacher area, R2).
+   */
   students(
     teacher: TeacherIdentity,
     courseId: string | null,
     offset: number,
   ): Promise<TeacherStudentPage>;
+  /** Teacher area (R2): learners counted in all and per current Course — numbers only. */
+  studentCounts(teacher: TeacherIdentity): Promise<TeacherStudentCounts>;
   /** One such learner, with their class history on those Courses; `null` if unrelated. */
   student(
     teacher: TeacherIdentity,
@@ -198,21 +208,28 @@ export interface TeachingPort {
     readonly accountId: string;
     readonly status: AttendanceStatus;
   }): Promise<readonly SessionParticipant[]>;
+  /**
+   * This teacher's started classes, latest first, with their marks counted —
+   * narrowed (Teacher area, R2) to one current Course and/or to those with a
+   * participant still unmarked, the total counted under the same predicate.
+   */
   attendanceReport(
     teacher: TeacherIdentity,
     offset: number,
-  ): Promise<{
-    readonly items: readonly AttendanceReportRow[];
-    readonly hasMore: boolean;
-  }>;
+    filter: AttendanceReportFilter,
+  ): Promise<AttendanceReportPage>;
 
+  /**
+   * This teacher's windows, open first — narrowed (Teacher area, R2) to what a
+   * window has become, the total counted under the same predicate.
+   */
   availability(
     teacher: TeacherIdentity,
     offset: number,
-  ): Promise<{
-    readonly items: readonly AvailabilityRecord[];
-    readonly hasMore: boolean;
-  }>;
+    view: AvailabilityView | null,
+  ): Promise<AvailabilityPage>;
+  /** Teacher area (R2): this teacher's windows counted by what each has become. */
+  availabilityCounts(teacher: TeacherIdentity): Promise<AvailabilityCounts>;
   /** Opens one window; refused on overlap with another open window of this teacher. */
   openAvailability(input: {
     readonly teacher: TeacherIdentity;

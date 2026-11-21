@@ -11,7 +11,7 @@ import { ActionForm, type FormActionState } from '@/app/[locale]/(identity)/form
 import { MyPage } from '@/components/my/frame';
 import { myTrail } from '@/components/my/sections';
 import { displayTimeZone } from '@/components/personal/presentation';
-import { TeacherFrame } from '@/components/teacher/parts';
+import { TeacherFrame, teacherTrail } from '@/components/teacher/parts';
 import { Alert, EmptyState, TextLink } from '@/components/ui';
 import { messagingRuntime } from '@/composition/messaging';
 import { CatchUpButton } from './catch-up.client';
@@ -74,6 +74,9 @@ import { courseListings, messagingRead, participantNames } from './read';
  * MY MINHAJ PART 2: on `/my` the page carries its trail — My Minhaj /
  * Messages (or Support, for a support conversation) / the conversation's name
  * — and the ended and failed answers carry it too. A 404 is still the 404.
+ * The Teacher area's R2 rebuild gives `/teacher` its own: Teacher area /
+ * Messages / the learner's name, under the Teacher area's label, never My
+ * Minhaj's.
  */
 
 /** The words the realtime island speaks with. */
@@ -123,13 +126,17 @@ function Frame({
   readonly t: MessagingTranslator;
   readonly title: ReactNode;
   readonly description?: ReactNode;
-  /** Where the page sits — shown on `/my` only. */
+  /** Where the page sits, in the area it is shown in. */
   readonly trail: Trail;
   readonly children: ReactNode;
 }) {
   if (surface === 'teacher')
     return (
-      <TeacherFrame title={title} {...(description === undefined ? {} : { description })}>
+      <TeacherFrame
+        title={title}
+        trail={trail}
+        {...(description === undefined ? {} : { description })}
+      >
         {children}
         <p>
           <TextLink href={conversationsPath('teacher', locale)}>
@@ -174,15 +181,25 @@ export async function ConversationScreen({
 }) {
   const t = await getTranslations({ locale, namespace: 'messages' });
   const my = await getTranslations({ locale, namespace: 'my' });
+  const teacher =
+    surface === 'teacher'
+      ? await getTranslations({ locale, namespace: 'teacher' })
+      : null;
   const actor = { accountId };
-  const trail = (text: string, support = false): Trail => ({
-    label: my('trail.label'),
-    crumbs: myTrail(locale, my('trail.home'), [
-      { path: '/messages', text: my('trail.messages') },
-      ...(support ? [{ path: '/messages/support', text: t('nav.support') }] : []),
-      { text },
-    ]),
-  });
+  const trail = (text: string, support = false): Trail =>
+    teacher === null
+      ? {
+          label: my('trail.label'),
+          crumbs: myTrail(locale, my('trail.home'), [
+            { path: '/messages', text: my('trail.messages') },
+            ...(support ? [{ path: '/messages/support', text: t('nav.support') }] : []),
+            { text },
+          ]),
+        }
+      : teacherTrail(locale, teacher, [
+          { href: conversationsPath('teacher', locale), text: teacher('nav.messages') },
+          { text },
+        ]);
   const { service } = messagingRuntime();
 
   const read = await messagingRead('messaging-conversation', async () => {

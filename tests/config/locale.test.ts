@@ -414,6 +414,9 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/teacher/student-directory.tsx',
     'apps/web/src/components/teacher/student-progress.ts',
     'apps/web/src/components/teacher/week.ts',
+    // The Teacher area (R2): one address per view — the lists paged and
+    // filtered by My Minhaj's rules, and the week by its Monday (pure).
+    'apps/web/src/components/teacher/list-view.ts',
     // Phase 24. Messaging's shared parts. The conversation screen and its
     // reads are reached only from the guarded `/my`, `/teacher` and
     // `/admin/messaging` pages, which resolve the session first; the client
@@ -539,6 +542,8 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/ui/layout.tsx',
     'apps/web/src/components/ui/link-tabs.tsx',
     'apps/web/src/components/ui/pager.tsx',
+    // The Teacher area (R2): a meter's fill as a class, never a style attribute.
+    'apps/web/src/components/ui/meter.ts',
     'apps/web/src/components/ui/shelf.tsx',
     'apps/web/src/components/ui/tabs.tsx',
     'apps/web/src/components/ui/confirm-action.tsx',

@@ -1072,7 +1072,31 @@ completed, cancelled) and **attendance and "mark held" are never offered before 
 started** — the UI mirrors Learning's `not-started` refusal (DOMAIN_MODEL.md §13.5); Students can
 be narrowed by name and progress within the page shown; every page is titled by its own fixed name.
 Not built (recorded, not promised): a learner's last activity, a server-side student search,
-per-Course past classes, a CSV export, materials upload and recurring availability.
+a CSV export, materials upload and recurring availability. (Per-Course past classes were in this
+list at R2's first redesign — historical; the Teacher area's R2 rebuild below delivers them.)
+
+**Teacher area (R2, November 2026)** brings every Teacher page to the private-area standard My
+Minhaj set, on the same page frame. Every page below the Overview carries its trail ("Teacher area /
+Students / the learner", "Teacher area / Courses / the Course / Students", "Teacher area / Calendar /
+the Course" for a class, leading to the week that holds it), and the area has no second band under
+the product bar. **Overview** opens on figures that are true and lead to their lists — today's
+classes, classes with attendance to mark, learners, Courses — then what needs attention (attendance
+to mark, now a true count; classes ended but not marked held; upcoming classes without a link; unread
+messages), today's classes with **"Join on Google Meet"** for each scheduled class that holds a link,
+the rest of the week, unread conversations and learners yet to begin. **Today's classes** says how
+many the day holds and how many are still to come, offers the same join links, and on a free day
+names the next class. **Students** are counted by Course as tabs, say "Showing n–m of N learners" and
+page by number; **a learner** has figures (Courses, classes, attended, missed) and a meter per Course.
+**Courses** count the Courses and their learners, each card its own learners; **a Course** opens on
+its modules, lessons and learners, with its views (Syllabus, Students, Classes for a live Course,
+Materials) as tabs; its classes count and number every past one; its materials lead to the previous
+and next lesson. **Attendance** counts the classes still to mark and **Reports** every past class,
+each with "Showing n–m of N" and numbered pages. **Availability** counts the windows by what each has
+become (Open, Booked, Withdrawn) as figures and tabs, teaches a first visit in three steps, and asks
+before a window is withdrawn. **A class** asks before its meeting link is removed and before it is
+marked held; marks are said aloud as counts. **Messages** counts the conversations only while the
+whole inbox is on the page and teaches a first visit in three steps. A teacher with no Course meets
+what happens next in three steps. The tree above is unchanged.
 
 ---
 

@@ -1361,6 +1361,16 @@ withdrawn Enrolment closes it on the next request. The address is in no list, lo
 or email: service mail links to the person's own private class page. The platform calls no Google API
 and holds no Google credential (OPEN_DECISIONS.md §5.2, §5.3).
 
+**Today's classes (Teacher area, R2, November 2026).** As My Classes already did for a learner's own
+upcoming classes, the Teacher area's two views of TODAY — the Overview's "Today" and
+`/teacher/classes/today` — read the address of each scheduled class of that day that holds one, through
+the same single disclosure operation (`teaching.meetingUrl`: activated, scheduled, this teacher's
+current scope, in one statement), and place it only as the `href` of a described external "Join on
+Google Meet" link (`rel="noreferrer noopener"`, new tab) — never as text, in a form field or in a log.
+Every other Teacher list (the week, a Course's classes, attendance, reports) carries no address, and
+no other surface changed (historical: until this rebuild the teacher read it on the class's own page
+alone).
+
 ---
 
 ## 12. Messaging security
@@ -2180,6 +2190,26 @@ vetting, retention or adults-only rule exists and no real teacher is named (DOMA
   replacement-required; no session or scope is deleted and no other participant's history changes.
 - **Logging.** Structured, by operation name; no meeting address, participant list, requester,
   recipient address or reminder body.
+- **Teacher area (R2, November 2026).** The new reads (DOMAIN_MODEL.md §13.5) are a teacher's own:
+  each first identifies the teacher (activation, live `teaching.perform`), and the adapter carries
+  the whole current-scope predicate — a learner total, a per-Course count, the attendance report
+  narrowed to one Course or to the unmarked, and the windows by what each has become are all counted
+  under the same predicate as the page they total, with bound parameters and a fixed statement shape
+  (a window view is a key of a fixed predicate table). A Course the teacher does not teach answers
+  nothing — no rows, no total — exactly like one that does not exist; the counts name nobody and are
+  not audited, while listing and opening a learner stay audited as before. The pages refuse a
+  `?course=` the teacher does not teach, an unknown, malformed or repeated filter in place (the
+  same answer for each) and issue every tidying redirect only after the session and the live role
+  check, to a same-site path the page builds itself — a profile alone still meets the 404, a
+  signed-out visitor the sign-in page. **No Server Action was added or changed**: withdrawing a
+  window, removing a meeting link and marking a class held now ask first through the shared
+  `ConfirmSpec` dialog over the unchanged actions (Origin checks, the session the action resolves,
+  the live authority and scope re-read in the service, the per-account teaching write limit, the
+  expected version, Meet URL validation, the `not-started` rule and the audit rows all unchanged);
+  cancelling a class keeps its dialog and its server-required confirmation box. Learner data shown is
+  unchanged in kind: names from Identity, Enrolments, progress and marks — no contact detail.
+  Failed reads log operation names only (`teaching-students-counts`, `teaching-attendance-pending`,
+  …), never an account, a Course or an address.
 
 #### 19.1.5 Phase-24 messaging
 

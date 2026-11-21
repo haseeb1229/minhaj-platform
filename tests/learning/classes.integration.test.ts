@@ -378,9 +378,16 @@ live(
         });
         expect(await reader.courseSessions(new Date(), live.id)).toEqual([]);
         expect(await reader.operationalTeachers(new Date())).toEqual([]);
-        expect(await teaching.availability(identity(teacher), 0)).toEqual({
+        expect(await teaching.availability(identity(teacher), 0, null)).toEqual({
           items: [],
           hasMore: false,
+          total: 0,
+        });
+        // Teacher area (R2): nothing is counted while switched off either.
+        expect(await teaching.availabilityCounts(identity(teacher))).toEqual({
+          open: 0,
+          booked: 0,
+          withdrawn: 0,
         });
 
         // THE FLOOR: an insert that skips the adapter meets the same gate.
@@ -593,7 +600,16 @@ live(
           expect(await teaching.session(who, session.session.id)).toBeNull();
           expect(await teaching.participants(who, session.session.id)).toEqual([]);
           expect(await teaching.meetingUrl(who, session.session.id)).toBeNull();
-          expect((await teaching.attendanceReport(who, 0)).items).toEqual([]);
+          expect((await teaching.attendanceReport(who, 0, {})).items).toEqual([]);
+          // Teacher area (R2): the counted reads answer nothing, and no total.
+          expect((await teaching.students(who, null, 0)).total).toBe(0);
+          expect(await teaching.studentCounts(who)).toEqual({ total: 0, courses: [] });
+          expect(
+            await teaching.attendanceReport(who, 0, {
+              courseId: live.id,
+              unmarked: true,
+            }),
+          ).toEqual({ items: [], hasMore: false, total: 0 });
           expect(
             await reasonOf(
               teaching.setMeeting({
@@ -638,6 +654,19 @@ live(
           (await teaching.students(me, null, 0)).items.map((s) => s.accountId),
         ).toEqual([alice]);
         expect((await teaching.students(me, live.id, 0)).items).toHaveLength(1);
+        // Teacher area (R2): each total is the page's own predicate, counted.
+        expect((await teaching.students(me, null, 0)).total).toBe(1);
+        expect((await teaching.students(me, live.id, 0)).total).toBe(1);
+        expect(await teaching.studentCounts(me)).toEqual({
+          total: 1,
+          courses: [{ courseId: live.id, learners: 1 }],
+        });
+        // Past the end keeps the total.
+        expect(await teaching.students(me, null, 24)).toMatchObject({
+          items: [],
+          hasMore: false,
+          total: 1,
+        });
         expect(
           (await teaching.student(me, alice))?.classes.map((c) => c.participation),
         ).toEqual(['enrolment']);
@@ -683,10 +712,31 @@ live(
         expect(await teaching.course(me, courseB.id)).toBeNull();
         expect((await teaching.students(me, null, 0)).items).toEqual([]);
         expect((await teaching.students(me, courseB.id, 0)).items).toEqual([]);
+        // Teacher area (R2): B's Course named as a filter is an empty page with
+        // no total — never a wider one — and B's learners and windows are
+        // never counted for A.
+        expect((await teaching.students(me, courseB.id, 0)).total).toBe(0);
+        expect(await teaching.studentCounts(me)).toEqual({ total: 0, courses: [] });
+        expect(await teaching.attendanceReport(me, 0, { courseId: courseB.id })).toEqual({
+          items: [],
+          hasMore: false,
+          total: 0,
+        });
+        expect(await teaching.availabilityCounts(me)).toEqual({
+          open: 0,
+          booked: 0,
+          withdrawn: 0,
+        });
+        expect((await teaching.availability(me, 0, 'open')).total).toBe(0);
+        expect(await teaching.availabilityCounts(identity(b.teacher))).toEqual({
+          open: 1,
+          booked: 0,
+          withdrawn: 0,
+        });
         expect(await teaching.student(me, bob)).toBeNull();
         expect(await teaching.session(me, sessionB.session.id)).toBeNull();
         expect(await teaching.meetingUrl(me, sessionB.session.id)).toBeNull();
-        expect((await teaching.availability(me, 0)).items).toEqual([]);
+        expect((await teaching.availability(me, 0, null)).items).toEqual([]);
         expect(
           await reasonOf(
             teaching.withdrawAvailability({
@@ -707,7 +757,9 @@ live(
           ),
         ).toBe('not-found');
         expect(
-          (await teaching.availability(identity(b.teacher), 0)).items.map((w) => w.id),
+          (await teaching.availability(identity(b.teacher), 0, null)).items.map(
+            (w) => w.id,
+          ),
         ).toEqual([windowB.id]);
       });
     });
@@ -795,7 +847,7 @@ live(
         expect(
           (await teaching.openAvailability({ teacher: me, window: window(60.5) })).state,
         ).toBe('open');
-        const listed = await teaching.availability(me, 0);
+        const listed = await teaching.availability(me, 0, null);
         expect(listed.items.map((w) => w.state)).toEqual(['open', 'open', 'withdrawn']);
 
         // A booked window cannot be withdrawn: the trial is cancelled through its Booking.
@@ -810,10 +862,43 @@ live(
           ),
         ).toBe('window-unavailable');
         expect(
-          (await teaching.availability(me, 0)).items.find(
+          (await teaching.availability(me, 0, null)).items.find(
             (w) => w.id === booked.window.id,
           )?.booked,
         ).toBe(true);
+
+        // Teacher area (R2): the windows counted by what each has become, and
+        // each view's page and total under the same predicate.
+        expect(await teaching.availabilityCounts(me)).toEqual({
+          open: 2,
+          booked: 1,
+          withdrawn: 1,
+        });
+        const byView = async (view: 'open' | 'booked' | 'withdrawn' | null) => {
+          const page = await teaching.availability(me, 0, view);
+          return {
+            total: page.total,
+            states: page.items.map((w) => [w.state, w.booked]),
+          };
+        };
+        expect(await byView('open')).toEqual({
+          total: 2,
+          states: [
+            ['open', false],
+            ['open', false],
+          ],
+        });
+        expect(await byView('booked')).toEqual({ total: 1, states: [['open', true]] });
+        expect(await byView('withdrawn')).toEqual({
+          total: 1,
+          states: [['withdrawn', false]],
+        });
+        expect((await byView(null)).total).toBe(4);
+        expect(await teaching.availability(me, 48, 'open')).toEqual({
+          items: [],
+          hasMore: false,
+          total: 2,
+        });
       });
     });
 
@@ -1556,7 +1641,7 @@ live(
           ),
         ).toBe('not-participant');
 
-        const report = await teaching.attendanceReport(me, 0);
+        const report = await teaching.attendanceReport(me, 0, {});
         expect(
           report.items.map((row) => [
             row.session.id,
@@ -1565,8 +1650,38 @@ live(
             row.unmarked,
           ]),
         ).toEqual([[session.session.id, 0, 1, 0]]);
+        // Teacher area (R2): every participant is marked, so the unmarked view
+        // is empty and counts nothing; the Course view holds the class.
+        expect(await teaching.attendanceReport(me, 0, { unmarked: true })).toEqual({
+          items: [],
+          hasMore: false,
+          total: 0,
+        });
+        expect(
+          (await teaching.attendanceReport(me, 0, { courseId: live.id })).total,
+        ).toBe(1);
         await learner.enrol(bob, live.id);
-        expect((await teaching.attendanceReport(me, 0)).items[0]?.unmarked).toBe(1);
+        expect((await teaching.attendanceReport(me, 0, {})).items[0]?.unmarked).toBe(1);
+        // Now one participant is unmarked: the class is listed and counted to mark.
+        const toMark = await teaching.attendanceReport(me, 0, {
+          courseId: live.id,
+          unmarked: true,
+        });
+        expect(toMark.total).toBe(1);
+        expect(toMark.items.map((row) => row.session.id)).toEqual([session.session.id]);
+        // Another teacher never sees it, filtered or not.
+        expect(
+          await teaching.attendanceReport(other, 0, {
+            courseId: live.id,
+            unmarked: true,
+          }),
+        ).toEqual({ items: [], hasMore: false, total: 0 });
+        // Past the end keeps the narrowed total.
+        expect(await teaching.attendanceReport(me, 24, { unmarked: true })).toEqual({
+          items: [],
+          hasMore: false,
+          total: 1,
+        });
         expect((await teaching.student(me, alice))?.classes[0]?.attendance).toBe(
           'absent',
         );
@@ -1757,7 +1872,7 @@ live(
         ).toBe('terminal');
         // The window is free again for another learner.
         expect(
-          (await teaching.availability(me, 0)).items.find(
+          (await teaching.availability(me, 0, null)).items.find(
             (w) => w.id === booked.window.id,
           )?.booked,
         ).toBe(false);

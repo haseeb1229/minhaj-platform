@@ -1,6 +1,12 @@
 import 'server-only';
 
-import { CLASS_PAGE } from '@minhaj/contracts/learning';
+import {
+  CLASS_PAGE,
+  type ClassSessionView,
+  type LearningActor,
+} from '@minhaj/contracts/learning';
+
+import { learningRuntime } from '@/composition/learning';
 
 /**
  * Several pages of one bounded Learning read, gathered for a view the port
@@ -30,4 +36,30 @@ export async function collectPages<T>(
       return { items, truncated: false };
   }
   return { items, truncated: true };
+}
+
+/**
+ * The meeting addresses of TODAY's scheduled classes that hold one, by class
+ * (Teacher area, R2) — each read by the one disclosure operation, as My
+ * Classes reads a learner's, so the day's agenda can offer "Join". Only for
+ * the classes a page is already listing for today; never logged, never
+ * written as text.
+ */
+export async function todaysJoinLinks(
+  actor: LearningActor,
+  views: readonly ClassSessionView[],
+): Promise<ReadonlyMap<string, string>> {
+  const { teaching } = learningRuntime();
+  const held = views.filter(
+    (view) => view.session.state === 'scheduled' && view.session.hasMeetingUrl,
+  );
+  const entries = await Promise.all(
+    held.map(
+      async (view) =>
+        [view.session.id, await teaching.meetingUrl(actor, view.session.id)] as const,
+    ),
+  );
+  return new Map(
+    entries.flatMap(([id, url]) => (url === null ? [] : [[id, url] as const])),
+  );
 }

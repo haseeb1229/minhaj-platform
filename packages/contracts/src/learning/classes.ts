@@ -115,6 +115,13 @@ export const CLASS_LIMITS = Object.freeze({
 /** One page of classes, students, requests or windows. */
 export const CLASS_PAGE = 24;
 
+/**
+ * The furthest offset a teacher's own list (learners, past classes, windows)
+ * is read from; a larger one reads the first page. The Teacher area (R2)
+ * names it so the pages that number those lists stop where the service does.
+ */
+export const TEACHING_OFFSET_MAX = 25_000;
+
 /** How many upcoming classes one Course page shows (Learn Part 1). */
 export const COURSE_SESSIONS = 4;
 
@@ -331,7 +338,27 @@ export interface TeacherStudentSummary {
 export interface TeacherStudentPage {
   readonly items: readonly TeacherStudentSummary[];
   readonly hasMore: boolean;
+  /**
+   * Teacher area (R2): how many learners the page's own predicate holds — the
+   * same scope and Course filter, counted in the same adapter.
+   */
+  readonly total: number;
 }
+
+/**
+ * Teacher area (R2): how many learners are on the teacher's current Courses,
+ * in all and per Course — Learning's counts, never who they are.
+ */
+export interface TeacherStudentCounts {
+  readonly total: number;
+  readonly courses: readonly { readonly courseId: string; readonly learners: number }[];
+}
+
+/**
+ * The class history one learner's page shows with their teacher, most recent
+ * first: at most this many (Teacher area, R2 — the bound a page names).
+ */
+export const TEACHER_STUDENT_CLASSES = 100;
 
 /** One learner's class history with this teacher, by typed identifier. */
 export interface TeacherStudentDetail extends TeacherStudentSummary {
@@ -357,6 +384,37 @@ export interface AttendanceReportRow {
   readonly absent: number;
   readonly unmarked: number;
 }
+
+/**
+ * Teacher area (R2): which of a teacher's started classes a report lists — one
+ * Course they teach now, those with a participant still unmarked, or both.
+ */
+export interface AttendanceReportFilter {
+  readonly courseId?: string | null;
+  readonly unmarked?: boolean;
+}
+
+/** One page of a teacher's attendance report, with the filtered list's total. */
+export interface AttendanceReportPage {
+  readonly items: readonly AttendanceReportRow[];
+  readonly hasMore: boolean;
+  readonly total: number;
+}
+
+/**
+ * Teacher area (R2): what an availability window has become — open for a
+ * trial booking, booked (its class exists), or withdrawn.
+ */
+export const AVAILABILITY_VIEWS = Object.freeze(['open', 'booked', 'withdrawn'] as const);
+export type AvailabilityView = (typeof AVAILABILITY_VIEWS)[number];
+
+export interface AvailabilityPage {
+  readonly items: readonly AvailabilityRecord[];
+  readonly hasMore: boolean;
+  readonly total: number;
+}
+
+export type AvailabilityCounts = Readonly<Record<AvailabilityView, number>>;
 
 /* ---- Learner views ---------------------------------------------------- */
 

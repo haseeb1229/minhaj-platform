@@ -7828,7 +7828,6 @@
       "learner": "Learner",
       "previous": "Previous page",
       "next": "Next page",
-      "beyond": "There is nothing on this page. Go back to the first page.",
       "class": "Class",
       "when": "When",
       "state": "State",
@@ -7909,7 +7908,8 @@
       "empty": "No classes today",
       "emptyBody": "Your whole week — every class and open availability window — is on the calendar.",
       "emptyAction": "Open the calendar",
-      "list": "Today’s classes"
+      "list": "Today’s classes",
+      "nextClass": "Your next class: {when}"
     },
     "session": {
       "fallbackTitle": "Class",
@@ -7977,19 +7977,20 @@
       "emptyBody": "You have no classes and no open availability windows this week.",
       "nextWeekWith": "Go to the week of your next class",
       "bounded": "This week has more classes than can be shown at once. Today’s classes and each course’s classes list them all.",
-      "windowsUnavailable": "Your availability can’t be shown right now; your classes are shown below."
+      "windowsUnavailable": "Your availability can’t be shown right now; your classes are shown below.",
+      "summary": "This week: {classes, plural, =0 {no classes} one {# class} other {# classes}} and {windows, plural, =0 {no open windows} one {# open window} other {# open windows}}."
     },
     "students": {
       "title": "Students",
       "description": "Learners enrolled on the courses you currently teach, with how far they are through each. Only their learning is shown here: no contact details, and no notes.",
-      "filter": "Course",
       "allCourses": "All your courses",
-      "apply": "Show",
-      "filtered": "Showing learners on one course.",
       "empty": "Nobody is enrolled on your courses yet.",
       "list": "Students",
       "progress": "Lessons complete: {completed} of {total}",
-      "enrolledAt": "Enrolled"
+      "enrolledAt": "Enrolled",
+      "byCourse": "Show learners by course",
+      "emptyTitle": "No learners yet",
+      "emptyCourse": "Nobody is enrolled on this course yet. Learners appear here as soon as they enrol."
     },
     "student": {
       "fallbackTitle": "Student",
@@ -7999,7 +8000,14 @@
       "classes": "Class history with you",
       "classesEmpty": "No classes with this learner yet.",
       "attendance": "Attendance",
-      "back": "Back to students"
+      "figures": {
+        "label": "This learner at a glance",
+        "courses": "Courses with you",
+        "classes": "Classes with you",
+        "present": "Attended",
+        "absent": "Missed"
+      },
+      "orMore": "{count}+"
     },
     "courses": {
       "title": "Courses",
@@ -8009,24 +8017,35 @@
       "syllabusSize": "{modules} modules, {lessons} lessons",
       "materials": "Materials",
       "students": "Students",
-      "sessions": "Classes"
+      "sessions": "Classes",
+      "learners": "{count, plural, =0 {No learners yet} one {# learner} other {# learners}}",
+      "figures": {
+        "label": "Teaching at a glance",
+        "courses": "Courses you teach",
+        "learners": "Learners on them"
+      }
     },
     "course": {
       "fallbackTitle": "Course",
       "syllabus": "Syllabus",
       "module": "Module {number}:",
       "publicPage": "Course page",
-      "back": "Back to courses",
       "sections": "This course",
       "studentsTitle": "Students on this course",
       "upcoming": "Upcoming classes",
       "upcomingHelp": "Your classes for this course in the next 62 days.",
       "upcomingEmpty": "No upcoming classes for this course.",
       "upcomingMore": "More classes may exist beyond those shown here. The calendar lists them all:",
-      "past": "Recent classes",
-      "pastHelp": "The most recent past classes for this course, with their attendance counts.",
+      "past": "Past classes",
+      "pastHelp": "Every past class of this course, most recent first, with its attendance counts.",
       "pastEmpty": "No past classes for this course yet.",
-      "notLive": "This course is self-paced: it has no live classes."
+      "notLive": "This course is self-paced: it has no live classes.",
+      "figures": {
+        "label": "This course at a glance",
+        "modules": "Modules",
+        "lessons": "Lessons",
+        "learners": "Learners"
+      }
     },
     "materials": {
       "description": "The syllabus and lesson text of this course, as learners read it. Choose a lesson to read its text.",
@@ -8034,7 +8053,9 @@
       "position": "Lesson {number} of {total}",
       "unavailable": "This lesson can’t be shown right now. Please try again later.",
       "next": "Next lesson",
-      "noLessons": "This course has no lessons yet."
+      "noLessons": "This course has no lessons yet.",
+      "previous": "Previous lesson",
+      "around": "Lessons either side"
     },
     "resources": {
       "title": "Resources",
@@ -8045,7 +8066,6 @@
       "title": "Attendance",
       "description": "Past classes with participants not yet marked, most recent first. Open a class to mark who was present.",
       "empty": "Every participant of your recent classes is marked.",
-      "bounded": "Older classes are on the reports page.",
       "reports": "Attendance reports",
       "markTitle": "Mark attendance",
       "markDescription": "Who was present at this class. A mark can be changed at any time.",
@@ -8060,7 +8080,8 @@
       "caption": "Past classes and their attendance counts",
       "present": "Present",
       "absent": "Absent",
-      "unmarked": "Not marked"
+      "unmarked": "Not marked",
+      "emptyBody": "Once a class you teach has started, it is listed here with how many were present, absent or not yet marked."
     },
     "availability": {
       "title": "Availability",
@@ -8083,7 +8104,27 @@
       "withdraw": "Withdraw this window",
       "withdrew": "The window was withdrawn.",
       "cannotWithdraw": "A booked window can’t be withdrawn; cancel its class instead.",
-      "weekHelp": "Your classes and open windows this week, in {zone}. A booked window shows as its class."
+      "weekHelp": "Your classes and open windows this week, in {zone}. A booked window shows as its class.",
+      "figures": "Your availability at a glance",
+      "views": "Show windows by state",
+      "all": "All windows",
+      "emptyTitle": "No windows yet",
+      "noneOfView": "None of your windows is in this state: {view}.",
+      "stepsLabel": "How trial classes reach you",
+      "steps": {
+        "offer": {
+          "title": "Offer a window",
+          "body": "Choose a time you are free, below. Learners never see your windows directly."
+        },
+        "confirm": {
+          "title": "The learning team confirms",
+          "body": "A learner’s trial request is confirmed into one of your open windows by the learning team."
+        },
+        "teach": {
+          "title": "Teach the class",
+          "body": "The booked window becomes a trial class on your calendar. Add its Google Meet link there."
+        }
+      }
     },
     "profile": {
       "title": "Profile",
@@ -8134,7 +8175,22 @@
     "noScope": {
       "title": "You aren’t teaching a course yet",
       "body": "The learning team assigns courses to teachers. Once a course is yours, its classes, learners and materials appear here. In the meantime you can offer times when you are free for trial classes.",
-      "action": "Offer availability"
+      "action": "Offer availability",
+      "stepsLabel": "What happens next",
+      "steps": {
+        "assigned": {
+          "title": "A course is assigned",
+          "body": "The learning team assigns you a course; it appears under Courses."
+        },
+        "prepare": {
+          "title": "Read its materials",
+          "body": "Each course’s syllabus and lessons are under Resources, as learners read them."
+        },
+        "offer": {
+          "title": "Offer availability",
+          "body": "Offer times you are free, so trial classes can be booked with you."
+        }
+      }
     },
     "stage": {
       "live": "In progress",
@@ -8146,7 +8202,9 @@
     },
     "agenda": {
       "classTime": "Class time: {time} ({zone})",
-      "attendance": "Take attendance"
+      "attendance": "Take attendance",
+      "join": "Join on Google Meet",
+      "newTab": "(opens in a new tab)"
     },
     "week": {
       "previous": "Previous week",
@@ -8196,7 +8254,14 @@
       "shortcut": {
         "reports": "Attendance reports"
       },
-      "unavailable": "This part can’t be shown right now."
+      "unavailable": "This part can’t be shown right now.",
+      "figures": {
+        "label": "Your day at a glance",
+        "today": "Classes today",
+        "toMark": "Classes to mark",
+        "learners": "Learners",
+        "courses": "Courses"
+      }
     },
     "courseList": {
       "format": {
@@ -8217,6 +8282,56 @@
       "notStarted": "Not started",
       "inProgress": "In progress",
       "completed": "Completed"
+    },
+    "trail": {
+      "label": "Where you are in the Teacher area",
+      "home": "Teacher area"
+    },
+    "count": {
+      "students": "Showing {from}–{to} of {total, plural, one {# learner} other {# learners}}",
+      "toMark": "Showing {from}–{to} of {total, plural, one {# class} other {# classes}} with attendance to mark",
+      "reports": "Showing {from}–{to} of {total, plural, one {# past class} other {# past classes}}",
+      "windows": "Showing {from}–{to} of {total, plural, one {# window} other {# windows}}",
+      "today": "{count, plural, one {# class today} other {# classes today}} · {ahead, plural, =0 {none still to come} other {# in progress or still to come}}"
+    },
+    "live": {
+      "windows": "Done. {open, plural, =0 {No window is open} one {# window is open} other {# windows are open}}, {booked, plural, =0 {none booked.} other {# booked.}}",
+      "class": "This class is {state}. Present: {present}. Absent: {absent}. Not marked: {unmarked}."
+    },
+    "confirm": {
+      "keep": "Go back",
+      "withdraw": {
+        "title": "Withdraw this window?",
+        "body": "Learners can no longer be booked into this time. The window stays in your list as withdrawn, and you can offer the time again.",
+        "confirm": "Yes, withdraw it"
+      },
+      "complete": {
+        "title": "Mark this class as held?",
+        "body": "A held class is closed for good: it can’t be moved or cancelled any more, and its meeting link is removed. Attendance can still be marked afterwards.",
+        "confirm": "Yes, mark it held"
+      },
+      "clearMeeting": {
+        "title": "Remove the meeting link?",
+        "body": "Learners on this class lose the way to join until you add a link again. The meeting itself in Google Meet is not touched.",
+        "confirm": "Yes, remove it"
+      }
+    },
+    "messagesPage": {
+      "stepsLabel": "How messaging with learners works",
+      "steps": {
+        "student": {
+          "title": "Open a learner",
+          "body": "From Students, open a learner on a course you teach now."
+        },
+        "write": {
+          "title": "Message them about the course",
+          "body": "Use “Message” beside the course. Text only, and only the two of you can read it."
+        },
+        "reply": {
+          "title": "Replies arrive here",
+          "body": "Each conversation is listed here while you teach the course and they are enrolled on it."
+        }
+      }
     }
   },
   "learnLive": {

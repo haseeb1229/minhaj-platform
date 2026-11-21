@@ -2045,7 +2045,12 @@ form submits directly, SECURITY_BASELINE.md §16.2). The keyboard and scroll rul
 pure, unit-tested functions (`interaction.ts`, e.g. roving focus that follows what the visitor sees
 in RTL). **My Minhaj has its own frame** (`components/my/frame.tsx`): the shared product bar, the
 area's navigation column and a page column with one `h1`, `minmax(0, 1fr)` columns so nothing
-overflows at 320px — presentation only, reading no session, permission or record.
+overflows at 320px — presentation only, reading no session, permission or record. **The Teacher
+area's pages are built on the same page frame** (`MyPage` through `components/teacher/parts.tsx`,
+since the Teacher area's R2 rebuild): its trail, `h1`, tabs and the change announcer's fixed slot,
+inside the workspace shell with its band switched off (`WorkspaceShell band={false}`), so the product
+bar alone names the area; the administration keeps its band. A meter's fill is a class from a fixed
+table (`components/ui/meter.ts`), never a `style` attribute the CSP would refuse.
 
 ### 13.5 Responsive layout
 

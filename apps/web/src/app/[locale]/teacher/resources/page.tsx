@@ -6,7 +6,12 @@ import { LearningTitle } from '@/components/my-learning/parts';
 import { pickLabel } from '@/components/my-learning/presentation';
 import { learningRead } from '@/components/my-learning/read';
 import { teacherPageMetadata } from '@/components/teacher/metadata';
-import { NoScope, NotActivated, TeacherFrame } from '@/components/teacher/parts';
+import {
+  NoScope,
+  NotActivated,
+  TeacherFrame,
+  teacherTrail,
+} from '@/components/teacher/parts';
 import { Alert, Icon } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
 import { requireLocale } from '@/config/route-locale';
@@ -47,6 +52,7 @@ export default async function ResourcesPage({
     <TeacherFrame
       title={t('resources.title')}
       description={<p>{t('resources.description')}</p>}
+      trail={teacherTrail(locale, t, [{ text: t('nav.resources') }])}
     >
       {!read.ok ? (
         <Alert tone="error">{t('failure.load')}</Alert>

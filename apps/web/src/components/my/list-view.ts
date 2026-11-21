@@ -71,6 +71,17 @@ export function myListPageMax(spec?: MyListPaging): number {
   return Math.floor((spec?.offsetMax ?? PERSONAL_LIMITS.offsetMax) / sizeOf(spec)) + 1;
 }
 
+/**
+ * A list's own parameters after its path. The Teacher area (R2) keeps a list
+ * on a page that also shows a week (`/teacher/availability?week=…`): that
+ * page passes the week's canonical address as the list's `path`, and the
+ * list's parameters follow it.
+ */
+function withSearch(path: string, text: string): string {
+  if (text === '') return path;
+  return `${path}${path.includes('?') ? '&' : '?'}${text}`;
+}
+
 /** The address of one view, in canonical form. */
 export function myListHref<F extends string>(
   spec: MyListSpec<F>,
@@ -80,8 +91,7 @@ export function myListHref<F extends string>(
   if (spec.param !== undefined && view.filter !== null)
     search.set(spec.param, view.filter);
   if (view.page > 1) search.set('page', String(view.page));
-  const text = search.toString();
-  return text === '' ? spec.path : `${spec.path}?${text}`;
+  return withSearch(spec.path, search.toString());
 }
 
 const PAGE_PATTERN = /^[1-9][0-9]{0,3}$/;
@@ -135,8 +145,7 @@ export function readMyList<F extends string>(
     const value = single(key);
     if (keys.includes(key) && value !== undefined) requested.append(key, value);
   }
-  const asked = requested.toString();
-  const askedHref = asked === '' ? spec.path : `${spec.path}?${asked}`;
+  const askedHref = withSearch(spec.path, requested.toString());
   return askedHref === canonical
     ? { outcome: 'view', view }
     : { outcome: 'redirect', to: canonical };

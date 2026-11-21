@@ -1,29 +1,58 @@
 import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
+import { redirect } from 'next/navigation';
 
+import {
+  MyListBeyond,
+  MyListFilters,
+  MyListPager,
+  MyListRefused,
+  MyListStatus,
+} from '@/components/my/list-parts';
+import {
+  myListHref,
+  myListOffset,
+  myListRange,
+  readMyList,
+} from '@/components/my/list-view';
 import { pickLabel } from '@/components/my-learning/presentation';
 import { learningRead } from '@/components/my-learning/read';
+import { teacherList, TEACHER_PAGING } from '@/components/teacher/list-view';
 import { teacherPageMetadata } from '@/components/teacher/metadata';
 import { participantNames } from '@/components/teacher/names';
-import { NoScope, NotActivated, TeacherFrame } from '@/components/teacher/parts';
-import { pager, readCourseFilter, readOffset } from '@/components/teacher/presentation';
+import {
+  NoScope,
+  NotActivated,
+  pagerWords,
+  TeacherFrame,
+  teacherTrail,
+} from '@/components/teacher/parts';
 import { StudentList } from '@/components/teacher/student-list';
-import { Alert, Button, EmptyState, Field, Pager, Select } from '@/components/ui';
+import { Alert, EmptyState } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
 import { requireLocale } from '@/config/route-locale';
 import { requireTeacher } from '../guard';
 
 /**
  * Students (ROUTE_MAP.md §6; R2): the learners enrolled on the Courses the
- * teacher currently teaches — a bounded page, optionally narrowed by the
- * server to one of those Courses — with each learner's progress on each, and
- * a search by name and by progress over the page shown.
+ * teacher currently teaches, with each learner's progress on each, a page at
+ * a time, and a search by name and by progress over the page shown.
+ *
+ * ONE ADDRESS PER VIEW (Teacher area, R2). `?course=` narrows to one Course
+ * the teacher teaches NOW and `?page=` numbers the pages; the Courses are
+ * counted tabs ("All your courses 12", one per Course), the list says
+ * "Showing 1–24 of 30 learners", and the pages are numbered. Phase 23's
+ * `?offset=` and every untidy spelling are one redirect, after the session
+ * and the teacher's role; a Course the teacher does not teach — or one that
+ * does not exist, or a malformed one — is refused in place, the same answer
+ * for each, and never widened to everyone.
  *
  * LEARNING FACTS ONLY. A name from Identity, an Enrolment and a count of
  * completed lessons from Learning; no address, no notes, no contact. Listing
- * a page is audited by the service as identifiers only (§13.4). The search
- * narrows what is already on the page and reads nothing more.
+ * a page is audited by the service as identifiers only (§13.4); the counts
+ * name nobody. The search narrows what is already on the page and reads
+ * nothing more.
  */
 export async function generateMetadata({
   params,
@@ -48,83 +77,139 @@ export default async function StudentsPage({
   const gate = await requireTeacher(locale, path);
   const t = await getTranslations({ locale, namespace: 'teacher' });
   if (!gate.activated) return <NotActivated t={t} />;
+  const my = await getTranslations({ locale, namespace: 'my' });
 
-  const query = await searchParams;
-  const offset = readOffset(query);
-  const courseId = readCourseFilter(query);
   const { teaching } = learningRuntime();
-  const [courses, read] = await Promise.all([
+  const [courses, counts] = await Promise.all([
     learningRead('teaching-students-courses', () => teaching.courses(gate.actor)),
-    learningRead('teaching-students', () =>
-      teaching.students(gate.actor, courseId, offset),
-    ),
+    learningRead('teaching-students-counts', () => teaching.studentCounts(gate.actor)),
   ]);
-  // A filter naming a Course the teacher does not teach is simply not applied
-  // as a choice; the service answers it with nobody, which is the truth.
-  const names = read.ok
-    ? await participantNames(read.value.items.map((entry) => entry.accountId))
-    : new Map<string, string>();
-  const extra = courseId === null ? '' : `course=${courseId}`;
-  const page = read.ok ? pager(path, offset, read.value.hasMore, extra) : null;
-  const description = <p>{t('students.description')}</p>;
+  const frame = {
+    title: t('students.title'),
+    description: <p>{t('students.description')}</p>,
+    trail: teacherTrail(locale, t, [{ text: t('nav.students') }]),
+  };
 
-  if (courses.ok && courses.value.length === 0)
+  if (!courses.ok)
     return (
-      <TeacherFrame title={t('students.title')} description={description}>
+      <TeacherFrame {...frame}>
+        <Alert tone="error">{t('failure.load')}</Alert>
+      </TeacherFrame>
+    );
+  if (courses.value.length === 0)
+    return (
+      <TeacherFrame {...frame}>
         <NoScope locale={locale} t={t} />
       </TeacherFrame>
     );
 
+  const spec = teacherList(path, {
+    param: 'course',
+    values: courses.value.map((entry) => entry.course.id),
+  });
+  const asked = readMyList(spec, await searchParams);
+  if (asked.outcome === 'redirect') redirect(asked.to);
+  if (asked.outcome === 'refused')
+    return (
+      <TeacherFrame {...frame}>
+        <MyListRefused
+          title={my('list.refusedTitle')}
+          text={my('list.refused')}
+          all={path}
+          allText={my('list.all')}
+        />
+      </TeacherFrame>
+    );
+
+  const { view } = asked;
+  const read = await learningRead('teaching-students', () =>
+    teaching.students(gate.actor, view.filter, myListOffset(view.page, TEACHER_PAGING)),
+  );
+  const names = read.ok
+    ? await participantNames(read.value.items.map((entry) => entry.accountId))
+    : new Map<string, string>();
+  const perCourse = new Map(
+    counts.ok
+      ? counts.value.courses.map((entry) => [entry.courseId, entry.learners])
+      : [],
+  );
+  const number = new Intl.NumberFormat(locale);
+  const range = read.ok
+    ? myListRange(view.page, read.value.items.length, TEACHER_PAGING)
+    : null;
+
   return (
-    <TeacherFrame title={t('students.title')} description={description}>
-      {courses.ok && courses.value.length > 1 ? (
-        <form
-          method="get"
-          action={path}
-          className="flex flex-wrap items-end gap-3 rounded-panel border border-border bg-surface px-4 py-3"
-        >
-          <div className="min-w-0 grow basis-64">
-            <Field id="students-course" label={t('students.filter')}>
-              {(props) => (
-                <Select {...props} name="course" defaultValue={courseId ?? ''}>
-                  <option value="">{t('students.allCourses')}</option>
-                  {courses.value.map((entry) => (
-                    <option key={entry.course.id} value={entry.course.id}>
-                      {pickLabel(entry.course.labels, locale, entry.course.primaryLocale)
-                        ?.title ?? entry.course.slug}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-          </div>
-          <Button tone="secondary">{t('students.apply')}</Button>
-        </form>
+    <TeacherFrame {...frame}>
+      {counts.ok ? (
+        <MyListFilters
+          label={t('students.byCourse')}
+          spec={spec}
+          current={view.filter}
+          minimum={3}
+          format={(count) => number.format(count)}
+          items={[
+            {
+              value: null,
+              text: t('students.allCourses'),
+              count: counts.value.total,
+            },
+            ...courses.value.map(({ course }) => ({
+              value: course.id,
+              text:
+                pickLabel(course.labels, locale, course.primaryLocale)?.title ??
+                course.slug,
+              count: perCourse.get(course.id) ?? 0,
+            })),
+          ]}
+        />
       ) : null}
-      {courseId === null ? null : <p className="text-sm">{t('students.filtered')}</p>}
 
       {!read.ok ? (
         <Alert tone="error">{t('failure.load')}</Alert>
       ) : read.value.items.length === 0 ? (
-        <EmptyState>{offset === 0 ? t('students.empty') : t('common.beyond')}</EmptyState>
+        read.value.total > 0 ? (
+          <MyListBeyond
+            text={my('list.beyond')}
+            first={myListHref(spec, { page: 1, filter: view.filter })}
+            firstText={my('list.first')}
+          />
+        ) : view.filter === null ? (
+          <EmptyState icon="user" title={t('students.emptyTitle')}>
+            {t('students.empty')}
+          </EmptyState>
+        ) : (
+          <EmptyState icon="user" action={{ href: path, text: t('students.allCourses') }}>
+            {t('students.emptyCourse')}
+          </EmptyState>
+        )
       ) : (
-        <StudentList
-          label={t('students.list')}
-          students={read.value.items}
-          names={names}
-          locale={locale}
-          accountZone={gate.session.account.timezone}
-          t={t}
-        />
-      )}
-      {page === null ? null : (
-        <Pager
-          label={t('students.list')}
-          previous={page.previous}
-          next={page.next}
-          previousLabel={t('common.previous')}
-          nextLabel={t('common.next')}
-        />
+        <>
+          {range === null ? null : (
+            <MyListStatus>
+              {t('count.students', {
+                from: number.format(range.from),
+                to: number.format(range.to),
+                total: read.value.total,
+              })}
+            </MyListStatus>
+          )}
+          <StudentList
+            label={t('students.list')}
+            students={read.value.items}
+            names={names}
+            locale={locale}
+            accountZone={gate.session.account.timezone}
+            t={t}
+          />
+          <MyListPager
+            label={t('students.list')}
+            spec={spec}
+            view={view}
+            total={read.value.total}
+            locale={locale}
+            words={pagerWords(t, my)}
+          />
+        </>
       )}
     </TeacherFrame>
   );

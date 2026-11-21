@@ -1,25 +1,42 @@
 import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
+import { redirect } from 'next/navigation';
 
+import { AVAILABILITY_VIEWS, type AvailabilityView } from '@minhaj/contracts/learning';
 import { supportedTimeZones } from '@minhaj/contracts/platform';
 
+import {
+  MyListBeyond,
+  MyListFilters,
+  MyListPager,
+  MyListRefused,
+  MyListStatus,
+} from '@/components/my/list-parts';
+import {
+  myListHref,
+  myListOffset,
+  myListRange,
+  readMyList,
+} from '@/components/my/list-view';
+import { MyFigures, MySteps } from '@/components/my/summary-parts';
 import { learningRead } from '@/components/my-learning/read';
+import {
+  readWeekView,
+  teacherList,
+  TEACHER_PAGING,
+} from '@/components/teacher/list-view';
 import { teacherPageMetadata } from '@/components/teacher/metadata';
 import {
   ClassTime,
   NotActivated,
+  pagerWords,
   TeacherFrame,
   TeacherSection,
   teacherMessages,
+  teacherTrail,
 } from '@/components/teacher/parts';
-import {
-  ownZone,
-  pager,
-  readOffset,
-  single,
-  zoneName,
-} from '@/components/teacher/presentation';
+import { ownZone, zoneName } from '@/components/teacher/presentation';
 import { collectPages } from '@/components/teacher/read';
 import { ScheduleForm } from '@/components/teacher/schedule-form';
 import { WeekGrid, WeekLegend, WeekNav, weekTitle } from '@/components/teacher/schedule';
@@ -28,12 +45,11 @@ import {
   adjacentWeeks,
   buildWeek,
   dateIn,
-  readWeek,
   weekHref,
   weekSpan,
   weekStartOf,
 } from '@/components/teacher/week';
-import { Alert, EmptyState, Pager, Panel, StatusBadge } from '@/components/ui';
+import { Alert, EmptyState, Panel, StatusBadge } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
@@ -52,7 +68,18 @@ import { requireTeacher } from '../guard';
  * service would refuse by construction. In the week, a booked window is not
  * drawn: its class is.
  *
- * `?week=` moves the week; `?offset=` pages the list. The two are independent.
+ * THE LIST, COUNTED (Teacher area, R2). The windows are counted by what each
+ * has become — open, booked, withdrawn — as figures and as tabs
+ * (`?show=open|booked|withdrawn`), with "Showing 1–24 of 30 windows" and
+ * numbered pages (`?page=`). `?week=` moves the week and is kept by every link
+ * of the list; each address has one spelling, Phase 23's `?offset=` included,
+ * and an untidy one is one redirect after the session and the teacher's role.
+ * An unknown view is refused in place.
+ *
+ * WITHDRAWING ASKS FIRST, AND IS SAID ALOUD. "Withdraw this window" opens the
+ * shared confirmation over the unchanged Server Action; once the server's
+ * answer re-renders the list, the new counts are announced and, if the
+ * pressed control has gone, focus moves to the list's status line.
  */
 export async function generateMetadata({
   params,
@@ -80,56 +107,126 @@ export default async function AvailabilityPage({
   const gate = await requireTeacher(locale, path);
   const t = await getTranslations({ locale, namespace: 'teacher' });
   if (!gate.activated) return <NotActivated t={t} />;
+  const my = await getTranslations({ locale, namespace: 'my' });
 
   const query = await searchParams;
-  const offset = readOffset(query);
   const accountZone = gate.session.account.timezone;
   const zone = ownZone(accountZone);
   const now = new Date();
   const today = dateIn(now, zone);
-  const weekStart = readWeek(single(query, 'week'), today);
-  const span = weekSpan(weekStart, zone);
+
+  // One address per view: the week first, then the list's own parameters.
+  const week = readWeekView(path, query, today);
+  const spec = teacherList<AvailabilityView>(week.path, {
+    param: 'show',
+    values: AVAILABILITY_VIEWS,
+  });
+  const asked = readMyList(spec, query);
+  if (week.outcome === 'redirect')
+    redirect(
+      asked.outcome === 'view'
+        ? myListHref(spec, asked.view)
+        : asked.outcome === 'redirect'
+          ? asked.to
+          : week.path,
+    );
+  if (asked.outcome === 'redirect') redirect(asked.to);
+
+  const span = weekSpan(week.weekStart, zone);
   const { teaching } = learningRuntime();
-  const [read, sessions, windows] = await Promise.all([
-    learningRead('teaching-availability', () =>
-      teaching.availability(gate.actor, offset),
+  const view = asked.outcome === 'view' ? asked.view : null;
+  const [read, counts, sessions, windows] = await Promise.all([
+    view === null
+      ? Promise.resolve(null)
+      : learningRead('teaching-availability', () =>
+          teaching.availability(
+            gate.actor,
+            myListOffset(view.page, TEACHER_PAGING),
+            view.filter,
+          ),
+        ),
+    learningRead('teaching-availability-counts', () =>
+      teaching.availabilityCounts(gate.actor),
     ),
     learningRead('teaching-availability-week', () =>
       collectPages(
         (page) => teaching.calendar(gate.actor, span.from, page),
         WEEK_PAGES,
-        (view) => view.session.startsAt.getTime() >= span.to.getTime(),
+        (entry) => entry.session.startsAt.getTime() >= span.to.getTime(),
       ),
     ),
     learningRead('teaching-availability-week-windows', () =>
       collectPages(
-        (page) => teaching.availability(gate.actor, page),
+        (page) => teaching.availability(gate.actor, page, 'open'),
         WINDOW_PAGES,
-        (window) =>
-          window.state !== 'open' || window.startsAt.getTime() >= span.to.getTime(),
+        (window) => window.startsAt.getTime() >= span.to.getTime(),
       ),
     ),
   ]);
   const tomorrow = addDays(today, 1);
-  const page = read.ok ? pager(path, offset, read.value.hasMore) : null;
-  const adjacent = adjacentWeeks(weekStart, today);
-  const open = windows.ok
-    ? windows.value.items.filter((window) => window.state === 'open' && !window.booked)
-    : [];
+  const adjacent = adjacentWeeks(week.weekStart, today);
   const days = buildWeek({
     span,
     zone,
     today,
     sessions: sessions.ok ? sessions.value.items : [],
-    windows: open,
+    windows: windows.ok ? windows.value.items : [],
   });
+  const number = new Intl.NumberFormat(locale);
+  const all = counts.ok
+    ? counts.value.open + counts.value.booked + counts.value.withdrawn
+    : null;
+  const firstRun = all === 0;
+  const range =
+    view !== null && read?.ok === true
+      ? myListRange(view.page, read.value.items.length, TEACHER_PAGING)
+      : null;
+  const viewWords: Readonly<Record<AvailabilityView, string>> = {
+    open: t('availability.open'),
+    booked: t('availability.booked'),
+    withdrawn: t('availability.withdrawn'),
+  };
 
   return (
     <TeacherFrame
       title={t('availability.title')}
       description={<p>{t('availability.description')}</p>}
+      trail={teacherTrail(locale, t, [{ text: t('nav.availability') }])}
+      {...(counts.ok
+        ? {
+            announce: {
+              value: `${String(counts.value.open)}:${String(counts.value.booked)}:${String(counts.value.withdrawn)}`,
+              message: t('live.windows', {
+                open: counts.value.open,
+                booked: counts.value.booked,
+              }),
+            },
+          }
+        : {})}
     >
       {accountZone === null ? <Alert tone="info">{t('common.noTimeZone')}</Alert> : null}
+
+      {counts.ok && !firstRun ? (
+        <MyFigures
+          label={t('availability.figures')}
+          figures={AVAILABILITY_VIEWS.map((key) => ({
+            key,
+            value: number.format(counts.value[key]),
+            label: viewWords[key],
+            href: myListHref(spec, { page: 1, filter: key }),
+          }))}
+        />
+      ) : null}
+      {firstRun ? (
+        <MySteps
+          label={t('availability.stepsLabel')}
+          steps={(['offer', 'confirm', 'teach'] as const).map((key) => ({
+            key,
+            title: t(`availability.steps.${key}.title`),
+            body: t(`availability.steps.${key}.body`),
+          }))}
+        />
+      ) : null}
 
       <TeacherSection
         id="availability-week"
@@ -143,7 +240,7 @@ export default async function AvailabilityPage({
             previous={
               adjacent.previous === null ? null : weekHref(path, adjacent.previous, today)
             }
-            current={weekStart === weekStartOf(today) ? null : path}
+            current={week.weekStart === weekStartOf(today) ? null : path}
             next={adjacent.next === null ? null : weekHref(path, adjacent.next, today)}
             t={t}
           />
@@ -157,79 +254,134 @@ export default async function AvailabilityPage({
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-8 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <TeacherSection id="availability-list" heading={t('availability.list')}>
-          {!read.ok ? (
+          {counts.ok && view !== null ? (
+            <MyListFilters
+              label={t('availability.views')}
+              spec={spec}
+              current={view.filter}
+              minimum={2}
+              format={(count) => number.format(count)}
+              items={[
+                { value: null, text: t('availability.all'), count: all ?? 0 },
+                ...AVAILABILITY_VIEWS.map((key) => ({
+                  value: key,
+                  text: viewWords[key],
+                  count: counts.value[key],
+                })),
+              ]}
+            />
+          ) : null}
+          {view === null ? (
+            <MyListRefused
+              title={my('list.refusedTitle')}
+              text={my('list.refused')}
+              all={week.path}
+              allText={my('list.all')}
+            />
+          ) : read === null || !read.ok ? (
             <Alert tone="error">{t('failure.load')}</Alert>
           ) : read.value.items.length === 0 ? (
-            <EmptyState>
-              {offset === 0 ? t('availability.empty') : t('common.beyond')}
-            </EmptyState>
+            read.value.total > 0 ? (
+              <MyListBeyond
+                text={my('list.beyond')}
+                first={myListHref(spec, { page: 1, filter: view.filter })}
+                firstText={my('list.first')}
+              />
+            ) : view.filter === null ? (
+              <EmptyState icon="calendar" title={t('availability.emptyTitle')}>
+                {t('availability.empty')}
+              </EmptyState>
+            ) : (
+              <EmptyState
+                icon="calendar"
+                action={{ href: week.path, text: t('availability.all') }}
+              >
+                {t('availability.noneOfView', { view: viewWords[view.filter] })}
+              </EmptyState>
+            )
           ) : (
-            <ol
-              className="rounded-panel border border-border bg-surface-raised px-4 shadow-panel sm:px-5"
-              aria-label={t('availability.list')}
-            >
-              {read.value.items.map((window) => (
-                <li
-                  key={window.id}
-                  className="flex flex-wrap items-start justify-between gap-3 border-b border-border py-4 last:border-b-0"
-                >
-                  <div className="flex min-w-0 flex-col gap-2">
-                    <p>
-                      {window.state === 'withdrawn' ? (
-                        <StatusBadge tone="neutral">
-                          {t('availability.withdrawn')}
-                        </StatusBadge>
-                      ) : window.booked ? (
-                        <StatusBadge tone="caution">
-                          {t('availability.booked')}
-                        </StatusBadge>
-                      ) : (
-                        <StatusBadge tone="positive">
-                          {t('availability.open')}
-                        </StatusBadge>
-                      )}
-                    </p>
-                    <ClassTime
-                      session={window}
-                      locale={locale}
-                      accountZone={accountZone}
-                      t={t}
-                    />
-                    {window.state === 'open' && window.booked ? (
-                      <p className="text-sm">{t('availability.cannotWithdraw')}</p>
-                    ) : null}
-                  </div>
-                  {window.state === 'open' && !window.booked ? (
-                    <ActionForm
-                      action={withdrawAvailabilityAction}
-                      submitLabel={t('availability.withdraw')}
-                      pendingLabel={t('common.working')}
-                      tone="secondary"
-                      messages={teacherMessages(t, {
-                        success: t('availability.withdrew'),
-                      })}
-                    >
-                      <input type="hidden" name="locale" value={locale} />
-                      <input type="hidden" name="id" value={window.id} />
-                      <input
-                        type="hidden"
-                        name="version"
-                        value={String(window.version)}
+            <>
+              {range === null ? null : (
+                <MyListStatus>
+                  {t('count.windows', {
+                    from: number.format(range.from),
+                    to: number.format(range.to),
+                    total: read.value.total,
+                  })}
+                </MyListStatus>
+              )}
+              <ol
+                className="rounded-panel border border-border bg-surface-raised px-4 shadow-panel sm:px-5"
+                aria-label={t('availability.list')}
+              >
+                {read.value.items.map((window) => (
+                  <li
+                    key={window.id}
+                    className="flex flex-wrap items-start justify-between gap-3 border-b border-border py-4 last:border-b-0"
+                  >
+                    <div className="flex min-w-0 flex-col gap-2">
+                      <p>
+                        {window.state === 'withdrawn' ? (
+                          <StatusBadge tone="neutral">
+                            {t('availability.withdrawn')}
+                          </StatusBadge>
+                        ) : window.booked ? (
+                          <StatusBadge tone="caution">
+                            {t('availability.booked')}
+                          </StatusBadge>
+                        ) : (
+                          <StatusBadge tone="positive">
+                            {t('availability.open')}
+                          </StatusBadge>
+                        )}
+                      </p>
+                      <ClassTime
+                        session={window}
+                        locale={locale}
+                        accountZone={accountZone}
+                        t={t}
                       />
-                    </ActionForm>
-                  ) : null}
-                </li>
-              ))}
-            </ol>
-          )}
-          {page === null ? null : (
-            <Pager
-              label={t('availability.list')}
-              previous={page.previous}
-              next={page.next}
-              previousLabel={t('common.previous')}
-              nextLabel={t('common.next')}
-            />
+                      {window.state === 'open' && window.booked ? (
+                        <p className="text-sm">{t('availability.cannotWithdraw')}</p>
+                      ) : null}
+                    </div>
+                    {window.state === 'open' && !window.booked ? (
+                      <ActionForm
+                        action={withdrawAvailabilityAction}
+                        submitLabel={t('availability.withdraw')}
+                        pendingLabel={t('common.working')}
+                        tone="secondary"
+                        messages={teacherMessages(t, {
+                          success: t('availability.withdrew'),
+                        })}
+                        confirm={{
+                          title: t('confirm.withdraw.title'),
+                          body: t('confirm.withdraw.body'),
+                          confirmLabel: t('confirm.withdraw.confirm'),
+                          cancelLabel: t('confirm.keep'),
+                        }}
+                      >
+                        <input type="hidden" name="locale" value={locale} />
+                        <input type="hidden" name="id" value={window.id} />
+                        <input
+                          type="hidden"
+                          name="version"
+                          value={String(window.version)}
+                        />
+                      </ActionForm>
+                    ) : null}
+                  </li>
+                ))}
+              </ol>
+              <MyListPager
+                label={t('availability.list')}
+                spec={spec}
+                view={view}
+                total={read.value.total}
+                locale={locale}
+                words={pagerWords(t, my)}
+              />
+            </>
           )}
         </TeacherSection>
 

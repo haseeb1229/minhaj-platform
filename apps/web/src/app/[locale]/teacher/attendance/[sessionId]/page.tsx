@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 
 import { LearningTitle } from '@/components/my-learning/parts';
+import { pickLabel } from '@/components/my-learning/presentation';
 import { learningRead } from '@/components/my-learning/read';
 import { AttendanceMarks } from '@/components/teacher/attendance-marks';
 import { classControls } from '@/components/teacher/class-stage';
@@ -14,6 +15,7 @@ import {
   NotActivated,
   SessionStateBadge,
   TeacherFrame,
+  teacherTrail,
 } from '@/components/teacher/parts';
 import { ownZone } from '@/components/teacher/presentation';
 import { ActionLink, Alert } from '@/components/ui';
@@ -30,6 +32,11 @@ import { requireTeacher } from '../../guard';
  * ONLY ONCE THE CLASS HAS BEGUN (audit F38). Before its start the page lists
  * who is on the class and says when marking opens; it offers no mark the
  * service would refuse.
+ *
+ * WHERE IT SITS, AND WHAT CHANGED (Teacher area, R2). The trail is Teacher
+ * area / Attendance / the Course; after each mark the class's counts —
+ * present, absent, not marked — are said aloud, and focus stays on the
+ * pressed control or returns to the page heading.
  */
 export async function generateMetadata({
   params,
@@ -61,9 +68,19 @@ export default async function MarkAttendancePage({
   const read = await learningRead('teaching-attendance-session', () =>
     teaching.session(gate.actor, sessionId),
   );
+  const attendanceCrumb = {
+    href: localizedPath(locale, '/teacher/attendance'),
+    text: t('nav.attendance'),
+  };
   if (!read.ok)
     return (
-      <TeacherFrame title={t('attendancePage.markTitle')}>
+      <TeacherFrame
+        title={t('attendancePage.markTitle')}
+        trail={teacherTrail(locale, t, [
+          attendanceCrumb,
+          { text: t('attendancePage.markTitle') },
+        ])}
+      >
         <Alert tone="error">{t('failure.load')}</Alert>
       </TeacherFrame>
     );
@@ -78,10 +95,30 @@ export default async function MarkAttendancePage({
   const names = participants.ok
     ? await participantNames(participants.value.map((entry) => entry.accountId))
     : new Map<string, string>();
+  const marks = participants.ok ? participants.value : [];
+  const present = marks.filter((entry) => entry.attendance === 'present').length;
+  const absent = marks.filter((entry) => entry.attendance === 'absent').length;
+  const unmarked = marks.length - present - absent;
 
   return (
     <TeacherFrame
       title={t('attendancePage.markTitle')}
+      trail={teacherTrail(locale, t, [
+        attendanceCrumb,
+        {
+          text:
+            pickLabel(course.labels, locale, course.primaryLocale)?.title ?? course.slug,
+        },
+      ])}
+      announce={{
+        value: `${String(present)}:${String(absent)}:${String(unmarked)}`,
+        message: t('live.class', {
+          state: t(`state.${session.state}`),
+          present,
+          absent,
+          unmarked,
+        }),
+      }}
       description={
         <>
           <p className="flex flex-wrap items-center gap-2">

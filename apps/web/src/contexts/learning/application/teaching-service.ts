@@ -3,6 +3,8 @@ import 'server-only';
 import { z } from 'zod';
 
 import {
+  AVAILABILITY_VIEWS,
+  TEACHING_OFFSET_MAX,
   attendanceStatusSchema,
   classIdSchema,
   classVersionSchema,
@@ -12,6 +14,8 @@ import {
   normaliseMeeting,
   reminderLeadOf,
   rescheduleInputSchema,
+  type AttendanceReportFilter,
+  type AvailabilityView,
   type LearningActivationPort,
   type LearningActor,
   type LearningTeachingAuthorityPort,
@@ -96,7 +100,7 @@ export function createTeachingService(deps: {
   }
 
   const offset = (value: number) =>
-    Number.isInteger(value) && value >= 0 && value <= 25_000 ? value : 0;
+    Number.isInteger(value) && value >= 0 && value <= TEACHING_OFFSET_MAX ? value : 0;
 
   async function audited(
     teacher: TeacherIdentity,
@@ -164,6 +168,15 @@ export function createTeachingService(deps: {
           course ?? teacher.accountId,
         );
       return page;
+    },
+
+    /**
+     * Teacher area (R2): how many learners, in all and per current Course.
+     * Numbers only — no learner is named or listed, so nothing is audited.
+     */
+    async studentCounts(actor: LearningActor) {
+      const teacher = await identify(actor);
+      return run(store.studentCounts(teacher));
     },
 
     async student(actor: LearningActor, accountId: string) {
@@ -348,16 +361,59 @@ export function createTeachingService(deps: {
       );
     },
 
-    async attendanceReport(actor: LearningActor, start = 0) {
+    /**
+     * The teacher's started classes with their marks counted. The filter
+     * (Teacher area, R2) narrows to one Course and/or to the classes with a
+     * participant unmarked; anything that is not a well-formed identifier or a
+     * boolean is refused as `invalid` before the port is reached. A Course
+     * the teacher does not teach is not refused here — the adapter's scope
+     * answers it with nothing, exactly as for one that does not exist.
+     */
+    async attendanceReport(
+      actor: LearningActor,
+      start = 0,
+      filter: AttendanceReportFilter = {},
+    ) {
       const teacher = await identify(actor);
-      return run(store.attendanceReport(teacher, offset(start)));
+      const raw = filter as { readonly courseId?: unknown; readonly unmarked?: unknown };
+      const course =
+        raw.courseId === undefined || raw.courseId === null
+          ? null
+          : classIdSchema.safeParse(raw.courseId);
+      if (course !== null && !course.success) throw new LearningRefusal('invalid');
+      if (raw.unmarked !== undefined && typeof raw.unmarked !== 'boolean')
+        throw new LearningRefusal('invalid');
+      return run(
+        store.attendanceReport(teacher, offset(start), {
+          courseId: course === null ? null : course.data,
+          unmarked: raw.unmarked === true,
+        }),
+      );
     },
 
     /* ---- Availability ----------------------------------------------------- */
 
-    async availability(actor: LearningActor, start = 0) {
+    /**
+     * The teacher's windows, optionally only what each has become (Teacher
+     * area, R2). A view outside `AVAILABILITY_VIEWS` is refused as `invalid`
+     * before the port is reached; the owner is always the session's account.
+     */
+    async availability(
+      actor: LearningActor,
+      start = 0,
+      view: AvailabilityView | null = null,
+    ) {
       const teacher = await identify(actor);
-      return run(store.availability(teacher, offset(start)));
+      const admitted =
+        view === null ? null : AVAILABILITY_VIEWS.find((value) => value === view);
+      if (admitted === undefined) throw new LearningRefusal('invalid');
+      return run(store.availability(teacher, offset(start), admitted));
+    },
+
+    /** Teacher area (R2): the teacher's own windows counted by what each has become. */
+    async availabilityCounts(actor: LearningActor) {
+      const teacher = await identify(actor);
+      return run(store.availabilityCounts(teacher));
     },
 
     async openAvailability(actor: LearningActor, raw: unknown) {

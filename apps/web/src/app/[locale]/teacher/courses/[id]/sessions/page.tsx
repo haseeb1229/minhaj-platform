@@ -1,15 +1,29 @@
 import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
+import { redirect } from 'next/navigation';
 
+import {
+  MyListBeyond,
+  MyListPager,
+  MyListRefused,
+  MyListStatus,
+} from '@/components/my/list-parts';
+import {
+  myListHref,
+  myListOffset,
+  myListRange,
+  readMyList,
+} from '@/components/my/list-view';
 import { learningRead } from '@/components/my-learning/read';
 import {
   CourseFrame,
   CourseUnavailable,
   readTeacherCourse,
 } from '@/components/teacher/course-frame';
+import { teacherList, TEACHER_PAGING } from '@/components/teacher/list-view';
 import { teacherPageMetadata } from '@/components/teacher/metadata';
-import { NotActivated, TeacherSection } from '@/components/teacher/parts';
+import { NotActivated, pagerWords, TeacherSection } from '@/components/teacher/parts';
 import { ownZone } from '@/components/teacher/presentation';
 import { collectPages } from '@/components/teacher/read';
 import { ReportTable } from '@/components/teacher/report-table';
@@ -21,13 +35,19 @@ import { requireTeacher } from '../../../guard';
 
 /**
  * The classes of one assigned Course (ROUTE_MAP.md §6): the upcoming ones in
- * the teacher's 62-day calendar, and the recent past ones with their
- * attendance counts.
+ * the teacher's 62-day calendar, and every past one with its attendance
+ * counts.
  *
- * BOUNDED, AND SAYS SO. Upcoming classes are read for THIS Course only, a
- * bounded number of pages; past ones come from the attendance report across
- * the teacher's Courses and are kept for this one. When a bound is reached
- * the page says more may exist — it never presents a cut list as complete.
+ * UPCOMING: BOUNDED, AND SAYS SO. Upcoming classes are read for THIS Course
+ * only, a bounded number of pages; when the bound is reached the page says
+ * more may exist and links the calendar.
+ *
+ * PAST: COUNTED AND NUMBERED (Teacher area, R2). Learning narrows the
+ * attendance report to this Course and counts it under the same predicate,
+ * so the past classes say "Showing 1–24 of 40 past classes" and number their
+ * pages by `?page=` — where Phase 23 read four pages of every Course's report
+ * and kept this one's (historical). Untidy spellings are one redirect, after
+ * the Course is known to be the teacher's.
  */
 export async function generateMetadata({
   params,
@@ -41,21 +61,24 @@ export async function generateMetadata({
 export const dynamic = 'force-dynamic';
 
 const CALENDAR_PAGES = 10;
-const REPORT_PAGES = 4;
 
 export default async function CourseSessionsPage({
   params,
+  searchParams,
 }: {
   readonly params: Promise<{ readonly locale: string; readonly id: string }>;
+  readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const locale = await requireLocale(params);
   const { id } = await params;
-  const gate = await requireTeacher(
+  const path = localizedPath(
     locale,
-    localizedPath(locale, `/teacher/courses/${encodeURIComponent(id)}/sessions`),
+    `/teacher/courses/${encodeURIComponent(id)}/sessions`,
   );
+  const gate = await requireTeacher(locale, path);
   const t = await getTranslations({ locale, namespace: 'teacher' });
   if (!gate.activated) return <NotActivated t={t} />;
+  const my = await getTranslations({ locale, namespace: 'my' });
 
   const read = await readTeacherCourse(gate.actor, id);
   if (!read.ok) return <CourseUnavailable locale={locale} t={t} />;
@@ -65,9 +88,25 @@ export default async function CourseSessionsPage({
   if (course.format !== 'live')
     return (
       <CourseFrame course={course} view="sessions" locale={locale} t={t}>
-        <EmptyState>{t('course.notLive')}</EmptyState>
+        <EmptyState icon="book">{t('course.notLive')}</EmptyState>
       </CourseFrame>
     );
+
+  const spec = teacherList<never>(path);
+  const asked = readMyList(spec, await searchParams);
+  if (asked.outcome === 'redirect') redirect(asked.to);
+  if (asked.outcome === 'refused')
+    return (
+      <CourseFrame course={course} view="sessions" locale={locale} t={t}>
+        <MyListRefused
+          title={my('list.refusedTitle')}
+          text={my('list.refused')}
+          all={path}
+          allText={my('list.all')}
+        />
+      </CourseFrame>
+    );
+  const { view } = asked;
 
   const { teaching } = learningRuntime();
   const [upcoming, past] = await Promise.all([
@@ -78,17 +117,17 @@ export default async function CourseSessionsPage({
       ),
     ),
     learningRead('teaching-course-past', () =>
-      collectPages(
-        (offset) => teaching.attendanceReport(gate.actor, offset),
-        REPORT_PAGES,
-      ),
+      teaching.attendanceReport(gate.actor, myListOffset(view.page, TEACHER_PAGING), {
+        courseId: course.id,
+      }),
     ),
   ]);
-  const mine = <T extends { readonly course: { readonly id: string } }>(
-    items: readonly T[],
-  ) => items.filter((item) => item.course.id === course.id);
   const now = new Date();
   const zone = ownZone(accountZone);
+  const number = new Intl.NumberFormat(locale);
+  const range = past.ok
+    ? myListRange(view.page, past.value.items.length, TEACHER_PAGING)
+    : null;
 
   return (
     <CourseFrame course={course} view="sessions" locale={locale} t={t}>
@@ -99,14 +138,14 @@ export default async function CourseSessionsPage({
       >
         {!upcoming.ok ? (
           <Alert tone="error">{t('failure.load')}</Alert>
-        ) : mine(upcoming.value.items).length === 0 ? (
-          <EmptyState>{t('course.upcomingEmpty')}</EmptyState>
+        ) : upcoming.value.items.length === 0 ? (
+          <EmptyState icon="calendar">{t('course.upcomingEmpty')}</EmptyState>
         ) : (
           <Agenda label={t('course.upcoming')}>
-            {mine(upcoming.value.items).map((view) => (
+            {upcoming.value.items.map((entry) => (
               <SessionRow
-                key={view.session.id}
-                view={view}
+                key={entry.session.id}
+                view={entry}
                 locale={locale}
                 zone={zone}
                 now={now}
@@ -133,15 +172,42 @@ export default async function CourseSessionsPage({
       >
         {!past.ok ? (
           <Alert tone="error">{t('failure.load')}</Alert>
-        ) : mine(past.value.items).length === 0 ? (
-          <EmptyState>{t('course.pastEmpty')}</EmptyState>
+        ) : past.value.items.length === 0 ? (
+          past.value.total > 0 ? (
+            <MyListBeyond
+              text={my('list.beyond')}
+              first={myListHref(spec, { page: 1, filter: null })}
+              firstText={my('list.first')}
+            />
+          ) : (
+            <EmptyState icon="list">{t('course.pastEmpty')}</EmptyState>
+          )
         ) : (
-          <ReportTable
-            rows={mine(past.value.items)}
-            locale={locale}
-            accountZone={accountZone}
-            t={t}
-          />
+          <>
+            {range === null ? null : (
+              <MyListStatus>
+                {t('count.reports', {
+                  from: number.format(range.from),
+                  to: number.format(range.to),
+                  total: past.value.total,
+                })}
+              </MyListStatus>
+            )}
+            <ReportTable
+              rows={past.value.items}
+              locale={locale}
+              accountZone={accountZone}
+              t={t}
+            />
+            <MyListPager
+              label={t('course.past')}
+              spec={spec}
+              view={view}
+              total={past.value.total}
+              locale={locale}
+              words={pagerWords(t, my)}
+            />
+          </>
         )}
       </TeacherSection>
     </CourseFrame>
