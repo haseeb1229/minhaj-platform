@@ -7,10 +7,26 @@ import {
   type PersonalTargetKind,
 } from '../../packages/contracts/src/personalisation/index.ts';
 import {
+  FATWA_MAX_OFFSET,
+  FATWA_OWNER_STATUSES,
+  FATWA_PAGE_SIZE,
+  type FatwaOwnerStatus,
+} from '../../packages/contracts/src/fatwa/index.ts';
+import { DONATION_STATES } from '../../packages/contracts/src/donations/index.ts';
+import {
+  LEARNER_OFFSET_MAX,
+  LEARNING_PAGE,
+} from '../../packages/contracts/src/learning/index.ts';
+import {
+  DONATION_GROUPS,
+  donationGroup,
+} from '../../apps/web/src/components/donations/presentation.ts';
+import {
   MY_LIST_PAGE,
   MY_LIST_PAGE_MAX,
   myListHref,
   myListOffset,
+  myListPageMax,
   myListPages,
   myListRange,
   readMyList,
@@ -199,5 +215,107 @@ describe('where a Quran reading position stands', () => {
     ['not a number', Number.NaN, 1],
   ])('has no place for %s', (_label, surah, ayah) => {
     expect(quranPlace(surah, ayah, SURAH_AYAH_COUNTS)).toBeNull();
+  });
+});
+
+/* ===========================================================================
+ * My Minhaj Part 2 — lists whose owner pages by its own size
+ * ========================================================================= */
+
+describe('a list paged by its owner (My Minhaj Part 2)', () => {
+  const COURSES: MyListSpec<never> = {
+    path: '/my/learning',
+    size: LEARNING_PAGE,
+    offsetMax: LEARNER_OFFSET_MAX,
+  };
+  const QUESTIONS: MyListSpec<FatwaOwnerStatus> = {
+    path: '/ar/my/questions',
+    param: 'status',
+    filters: FATWA_OWNER_STATUSES,
+    size: FATWA_PAGE_SIZE,
+    offsetMax: FATWA_MAX_OFFSET,
+  };
+
+  it('reads offsets, ranges and page counts by the owner’s page', () => {
+    expect(myListOffset(3, COURSES)).toBe(48);
+    expect(myListRange(2, 5, COURSES)).toEqual({ from: 25, to: 29 });
+    expect(myListPages(49, COURSES)).toBe(3);
+    expect(myListPages(0, COURSES)).toBe(1);
+    expect(myListPageMax(COURSES)).toBe(Math.floor(LEARNER_OFFSET_MAX / 24) + 1);
+    // Personalisation's lists are unchanged.
+    expect(myListOffset(3)).toBe(40);
+    expect(myListPageMax()).toBe(MY_LIST_PAGE_MAX);
+  });
+
+  it('turns the legacy offset into the owner’s page, once', () => {
+    expect(readMyList(COURSES, { offset: '24' })).toEqual({
+      outcome: 'redirect',
+      to: '/my/learning?page=2',
+    });
+    expect(readMyList(COURSES, { offset: '47' })).toEqual({
+      outcome: 'redirect',
+      to: '/my/learning?page=2',
+    });
+    expect(readMyList(COURSES, { offset: '0' })).toEqual({
+      outcome: 'redirect',
+      to: '/my/learning',
+    });
+    expect(readMyList(QUESTIONS, { offset: '40' })).toEqual({
+      outcome: 'redirect',
+      to: '/ar/my/questions?page=3',
+    });
+    // Beyond the owner's bound is the first page, never a page it cannot read.
+    expect(readMyList(QUESTIONS, { offset: String(FATWA_MAX_OFFSET + 20) })).toEqual({
+      outcome: 'redirect',
+      to: '/ar/my/questions',
+    });
+    expect(readMyList(COURSES, { page: String(myListPageMax(COURSES) + 1) })).toEqual({
+      outcome: 'redirect',
+      to: '/my/learning',
+    });
+  });
+
+  it('admits each owner status and refuses anything else in place', () => {
+    for (const status of FATWA_OWNER_STATUSES)
+      expect(readMyList(QUESTIONS, { status, page: '2' })).toEqual({
+        outcome: 'view',
+        view: { page: 2, filter: status },
+      });
+    for (const status of ['submitted', 'triaged', 'all', 'Answered', 'in-progress'])
+      expect(readMyList(QUESTIONS, { status }), status).toEqual({ outcome: 'refused' });
+    expect(readMyList(QUESTIONS, { status: ['answered', 'declined'] })).toEqual({
+      outcome: 'refused',
+    });
+    expect(readMyList(QUESTIONS, { page: '2', status: 'answered' })).toEqual({
+      outcome: 'redirect',
+      to: '/ar/my/questions?status=answered&page=2',
+    });
+  });
+});
+
+describe('the Classes and Messages views (My Minhaj Part 2)', () => {
+  it('pairs Classes with Teachers, and Conversations with Support', () => {
+    expect(myTabs('en', 'classes', 'teachers', (key) => key)).toEqual([
+      { href: '/my/classes', text: 'classes', current: false },
+      { href: '/my/teachers', text: 'teachers', current: true },
+    ]);
+    expect(myTabs('ur', 'messages', 'conversations', (key) => key)).toEqual([
+      { href: '/ur/my/messages', text: 'conversations', current: true },
+      { href: '/ur/my/messages/support', text: 'support', current: false },
+    ]);
+  });
+});
+
+describe('what happened to a donation (My Minhaj Part 2)', () => {
+  it('puts every state in exactly one group', () => {
+    const groups = DONATION_STATES.map((state) => donationGroup(state));
+    expect(groups.every((group) => DONATION_GROUPS.includes(group))).toBe(true);
+    expect(donationGroup('succeeded')).toBe('completed');
+    expect(donationGroup('partially_refunded')).toBe('completed');
+    expect(donationGroup('pending')).toBe('pending');
+    for (const state of ['failed', 'cancelled', 'expired'] as const)
+      expect(donationGroup(state)).toBe('unfinished');
+    for (const state of ['refunded', 'disputed', 'charged_back'] as const)
+      expect(donationGroup(state)).toBe('reversed');
   });
 });

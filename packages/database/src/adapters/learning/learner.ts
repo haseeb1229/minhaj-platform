@@ -200,14 +200,18 @@ export function createLearner(): LearnerPort {
       }
     },
 
+    /** The account's Enrolments, newest first, with the total under the same predicate. */
     async courses(userId, offset) {
-      const rows = await db.enrolment.findMany({
-        where: { userId },
-        select: { enrolledAt: true, course: { select: COURSE_LISTING_SELECT } },
-        orderBy: [{ enrolledAt: 'desc' }, { courseId: 'asc' }],
-        skip: boundedOffset(offset),
-        take: LEARNING_PAGE + 1,
-      });
+      const [rows, total] = await Promise.all([
+        db.enrolment.findMany({
+          where: { userId },
+          select: { enrolledAt: true, course: { select: COURSE_LISTING_SELECT } },
+          orderBy: [{ enrolledAt: 'desc' }, { courseId: 'asc' }],
+          skip: boundedOffset(offset),
+          take: LEARNING_PAGE + 1,
+        }),
+        db.enrolment.count({ where: { userId } }),
+      ]);
       const page = rows.slice(0, LEARNING_PAGE);
       const completed = await completedByCourse(
         db,
@@ -222,6 +226,7 @@ export function createLearner(): LearnerPort {
           completedLessons: completed.get(row.course.id) ?? 0,
         })),
         hasMore: rows.length > LEARNING_PAGE,
+        total,
       };
     },
 

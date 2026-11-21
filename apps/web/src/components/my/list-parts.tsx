@@ -103,7 +103,7 @@ export function MyListPager<F extends string>({
   };
   readonly locale: string;
 }) {
-  const pages = myListPages(total);
+  const pages = myListPages(total, spec);
   // Past the end there is no current page to mark: `MyListBeyond` leads back.
   if (view.page > pages) return null;
   const at = (page: number) => myListHref(spec, { page, filter: view.filter });

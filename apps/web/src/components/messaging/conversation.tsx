@@ -9,6 +9,7 @@ import type { MessagingSurface } from '@minhaj/contracts/messaging';
 
 import { ActionForm, type FormActionState } from '@/app/[locale]/(identity)/form-state';
 import { MyPage } from '@/components/my/frame';
+import { myTrail } from '@/components/my/sections';
 import { displayTimeZone } from '@/components/personal/presentation';
 import { TeacherFrame } from '@/components/teacher/parts';
 import { Alert, EmptyState, TextLink } from '@/components/ui';
@@ -69,6 +70,10 @@ import { courseListings, messagingRead, participantNames } from './read';
  * says in words whether live updates are on. Everything above still holds
  * with the transport down or JavaScript off. An older page, an ended, closed
  * or read-only conversation has no island: nothing can arrive there.
+ *
+ * MY MINHAJ PART 2: on `/my` the page carries its trail — My Minhaj /
+ * Messages (or Support, for a support conversation) / the conversation's name
+ * — and the ended and failed answers carry it too. A 404 is still the 404.
  */
 
 /** The words the realtime island speaks with. */
@@ -99,12 +104,18 @@ export interface ConversationActions {
   readonly report: Action;
 }
 
+interface Trail {
+  readonly label: string;
+  readonly crumbs: readonly { readonly href?: string; readonly text: string }[];
+}
+
 function Frame({
   surface,
   locale,
   t,
   title,
   description,
+  trail,
   children,
 }: {
   readonly surface: MessagingSurface;
@@ -112,6 +123,8 @@ function Frame({
   readonly t: MessagingTranslator;
   readonly title: ReactNode;
   readonly description?: ReactNode;
+  /** Where the page sits — shown on `/my` only. */
+  readonly trail: Trail;
   readonly children: ReactNode;
 }) {
   if (surface === 'teacher')
@@ -130,6 +143,7 @@ function Frame({
       title={title}
       measure="reading"
       related={{ label: t('nav.label'), links: messagingLinks(locale, t) }}
+      trail={trail}
       {...(description === undefined ? {} : { description })}
     >
       {children}
@@ -159,7 +173,16 @@ export async function ConversationScreen({
   readonly actions: ConversationActions;
 }) {
   const t = await getTranslations({ locale, namespace: 'messages' });
+  const my = await getTranslations({ locale, namespace: 'my' });
   const actor = { accountId };
+  const trail = (text: string, support = false): Trail => ({
+    label: my('trail.label'),
+    crumbs: myTrail(locale, my('trail.home'), [
+      { path: '/messages', text: my('trail.messages') },
+      ...(support ? [{ path: '/messages/support', text: t('nav.support') }] : []),
+      { text },
+    ]),
+  });
   const { service } = messagingRuntime();
 
   const read = await messagingRead('messaging-conversation', async () => {
@@ -172,12 +195,24 @@ export async function ConversationScreen({
     if (read.failure === 'not-found' || read.failure === 'invalid') notFound();
     if (read.failure === 'ended')
       return (
-        <Frame surface={surface} locale={locale} t={t} title={t('ended.title')}>
+        <Frame
+          surface={surface}
+          locale={locale}
+          t={t}
+          title={t('ended.title')}
+          trail={trail(t('ended.title'))}
+        >
           <Alert tone="info">{t('ended.body')}</Alert>
         </Frame>
       );
     return (
-      <Frame surface={surface} locale={locale} t={t} title={t('thread.fallbackTitle')}>
+      <Frame
+        surface={surface}
+        locale={locale}
+        t={t}
+        title={t('thread.fallbackTitle')}
+        trail={trail(t('thread.fallbackTitle'))}
+      >
         <Alert tone="error">{t('failure.load')}</Alert>
       </Frame>
     );
@@ -266,6 +301,7 @@ export async function ConversationScreen({
           {name}
         </span>
       }
+      trail={trail(name, !direct)}
       description={description}
     >
       {withLive(

@@ -1015,6 +1015,13 @@ live('Phase 22 Learning against real SQL Server, as the runtime principal', () =
       const page = await learner.courses(alice, 0);
       expect(page.items).toHaveLength(1);
       expect(page.items[0]).toMatchObject({ available: true, completedLessons: 1 });
+      // My Minhaj Part 2: the total is the same predicate's, and past the end keeps it.
+      expect(page.total).toBe(1);
+      expect(await learner.courses(alice, 24)).toEqual({
+        items: [],
+        hasMore: false,
+        total: 1,
+      });
       expect(await learner.courseState(alice, course.id)).toEqual({
         enrolled: true,
         trialRequested: false,
@@ -1063,7 +1070,11 @@ live('Phase 22 Learning against real SQL Server, as the runtime principal', () =
       const before = await ownedRows(db.admin, alice);
       expect(before).toBe(3);
 
-      expect((await learner.courses(bob, 0)).items).toEqual([]);
+      expect(await learner.courses(bob, 0)).toEqual({
+        items: [],
+        hasMore: false,
+        total: 0,
+      });
       expect(await learner.course(bob, course.slug)).toBeNull();
       expect(await learner.lesson(bob, course.id, lesson)).toBeNull();
       expect(await learner.completeLesson(bob, course.id, lesson)).toBe('not-enrolled');

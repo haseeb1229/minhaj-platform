@@ -5644,8 +5644,7 @@
       "answered": "Published ruling",
       "answeredNote": "The published ruling carries a separately written, anonymised question — never your own words.",
       "answeredLink": "Read the published ruling",
-      "back": "All your questions",
-      "account": "Back to My Minhaj"
+      "back": "All your questions"
     }
   },
   "hadithAdmin": {
@@ -8342,8 +8341,7 @@
     },
     "list": {
       "previous": "Previous page",
-      "next": "Next page",
-      "beyond": "There is nothing on this page. Go back to the first page."
+      "next": "Next page"
     },
     "failure": {
       "invalid": "That could not be done. Reload the page and try again.",
@@ -10481,7 +10479,9 @@
         "saved": "Saved views",
         "history": "History views",
         "learning": "Learning views",
-        "settings": "Settings pages"
+        "settings": "Settings pages",
+        "classes": "Classes views",
+        "messages": "Message views"
       },
       "saved": "All saved",
       "bookmarks": "Bookmarks",
@@ -10496,7 +10496,11 @@
       "notifications": "Notifications",
       "privacy": "Privacy",
       "notes": "Notes",
-      "collections": "Collections"
+      "collections": "Collections",
+      "classes": "Classes",
+      "teachers": "Teachers",
+      "conversations": "Conversations",
+      "support": "Support"
     },
     "home": {
       "greeting": "As-salamu alaykum, {name}",
@@ -10672,7 +10676,13 @@
       "home": "My Minhaj",
       "saved": "Saved",
       "learning": "My learning",
-      "settings": "Settings"
+      "settings": "Settings",
+      "classes": "My classes",
+      "teachers": "My teachers",
+      "messages": "Messages",
+      "questions": "My questions",
+      "membership": "My Membership",
+      "giving": "My donations"
     },
     "kinds": {
       "ayah": "Ayat",
@@ -10701,14 +10711,21 @@
       "watch": "Showing {from}–{to} of {total, plural, one {# video} other {# videos}}",
       "notifications": "Showing {from}–{to} of {total, plural, one {# notification} other {# notifications}}",
       "unread": "Showing {from}–{to} of {total, plural, one {# unread notification} other {# unread notifications}}",
-      "collections": "{count, plural, one {# collection} other {# collections}} of the {max} you can keep, most recently changed first"
+      "collections": "{count, plural, one {# collection} other {# collections}} of the {max} you can keep, most recently changed first",
+      "courses": "Showing {from}–{to} of {total, plural, one {# course} other {# courses}}",
+      "pastClasses": "Showing {from}–{to} of {total, plural, one {# past class} other {# past classes}}",
+      "questions": "Showing {from}–{to} of {total, plural, one {# question} other {# questions}}",
+      "donations": "Showing {from}–{to} of {total, plural, one {# donation} other {# donations}}"
     },
     "live": {
       "list": "{count, plural, =0 {Done. Nothing is left in this list.} one {Done. # item is left in this list.} other {Done. # items are left in this list.}}",
       "notifications": "Done. {total, plural, =0 {No notifications are left.} one {# notification,} other {# notifications,}} {unread, plural, =0 {none unread.} one {# unread.} other {# unread.}}",
       "collection": "Done. {count, plural, =0 {This collection is now empty.} one {It holds # item, in the order shown.} other {It holds # items, in the order shown.}}",
       "quranCleared": "Your reading position has been cleared.",
-      "quranSet": "Your reading position is Surah {surah}, ayah {ayah}."
+      "quranSet": "Your reading position is Surah {surah}, ayah {ayah}.",
+      "trials": "Done. {count, plural, =0 {No trial request is left.} one {# trial request is left.} other {# trial requests are left.}}",
+      "classes": "Done. {upcoming, plural, =0 {No upcoming class,} one {# upcoming class,} other {# upcoming classes,}} {past, plural, =0 {no past class.} one {# past class.} other {# past classes.}}",
+      "messages": "{count, plural, =0 {Nothing is unread.} one {# message is unread.} other {# messages are unread.}}"
     },
     "confirm": {
       "cancel": "Cancel",
@@ -10726,6 +10743,11 @@
         "title": "Clear your reading position?",
         "body": "Your marked place in the Quran is removed. Your bookmarks and reading history are not touched, and you can set a new place from any ayah.",
         "confirm": "Yes, clear it"
+      },
+      "trial": {
+        "title": "Withdraw this trial request?",
+        "body": "Your request for a trial class on this course is removed. You can ask again from the course page at any time.",
+        "confirm": "Yes, withdraw it"
       }
     },
     "bookmarks": {
@@ -10768,6 +10790,153 @@
       "bookmarks": "Bookmarked ayat",
       "read": "Ayat you have read",
       "courses": "Course progress"
+    },
+    "learningPage": {
+      "figures": "Your learning at a glance",
+      "stepsLabel": "How learning works",
+      "steps": {
+        "find": {
+          "title": "Find a course",
+          "body": "Browse the courses and open one that suits you."
+        },
+        "enrol": {
+          "title": "Enrol",
+          "body": "Press “Enrol” on the course page. It is free and you can leave at any time."
+        },
+        "progress": {
+          "title": "Learn at your pace",
+          "body": "Read each lesson and mark it complete. Your progress appears here."
+        }
+      },
+      "pathCompleted": "Courses completed: {completed} of {total}"
+    },
+    "coursePage": {
+      "moduleDone": "{done} of {total, plural, one {# lesson} other {# lessons}} complete",
+      "lessonNav": "Lessons before and after this one",
+      "previous": "Previous lesson"
+    },
+    "pathPage": {
+      "figures": "This path at a glance",
+      "courses": "Courses in the path",
+      "enrolled": "Enrolled",
+      "completed": "Completed",
+      "allDone": "You have completed every course in this learning path.",
+      "next": "Next step"
+    },
+    "classesPage": {
+      "figures": "Your classes at a glance",
+      "upcoming": "Upcoming",
+      "past": "Past",
+      "emptyTitle": "No classes yet",
+      "emptyHow": "A class appears here when you are enrolled on a live course that has one scheduled, or when a trial class is arranged for you.",
+      "nextOnly": "The next {count} classes are shown.",
+      "today": "Today",
+      "tomorrow": "Tomorrow"
+    },
+    "teachersPage": {
+      "emptyTitle": "No teachers yet",
+      "stepsLabel": "How a teacher appears here",
+      "steps": {
+        "enrol": {
+          "title": "Enrol on a course",
+          "body": "The teachers of a course you are on are listed here."
+        },
+        "class": {
+          "title": "Take a class",
+          "body": "A teacher whose class you attend or are booked on is listed too."
+        },
+        "message": {
+          "title": "Write to them",
+          "body": "While you are on their course you can message them from here."
+        }
+      },
+      "count": "{count, plural, one {# teacher} other {# teachers}}"
+    },
+    "messagesPage": {
+      "figures": "Your messages at a glance",
+      "conversations": "Conversations",
+      "unreadConversations": "With unread messages",
+      "unreadMessages": "Unread messages",
+      "all": "{count, plural, one {# conversation} other {# conversations}}, most recent activity first",
+      "newest": "The {count, plural, one {# most recently active conversation} other {# most recently active conversations}}",
+      "older": "{count, plural, one {# older conversation} other {# older conversations}}",
+      "emptyTitle": "No conversations yet",
+      "stepsLabel": "How messaging works",
+      "steps": {
+        "enrol": {
+          "title": "Enrol on a course",
+          "body": "You can write to the teachers of a course you are on now."
+        },
+        "write": {
+          "title": "Start a conversation",
+          "body": "Use “Message” beside your teacher. Text only, and only the two of you can read it."
+        },
+        "support": {
+          "title": "Ask Minhaj Support",
+          "body": "For a question about your account or the platform, write to the support team."
+        }
+      }
+    },
+    "supportPage": {
+      "earlier": "{count, plural, one {# earlier conversation} other {# earlier conversations}}, most recent first"
+    },
+    "questionsPage": {
+      "failure": "Your questions can’t be shown right now. Please try again later.",
+      "views": "Show questions by status",
+      "emptyTitle": "No questions yet",
+      "stepsLabel": "What happens when you ask",
+      "steps": {
+        "ask": {
+          "title": "You ask",
+          "body": "Your question is kept privately with your account. Only those who answer questions can read it."
+        },
+        "read": {
+          "title": "It is considered",
+          "body": "Its status here changes as it moves on. No response time is promised."
+        },
+        "answer": {
+          "title": "An answer may be published",
+          "body": "If it is answered, a separately written, anonymised question is published with the ruling — never your own words."
+        }
+      },
+      "noneOfStatus": "None of your questions has this status."
+    },
+    "questionPage": {
+      "stepsHeading": "Where your question stands",
+      "steps": {
+        "received": "Received",
+        "in_progress": "Being answered",
+        "answered": "Answered"
+      },
+      "state": {
+        "done": "Done",
+        "now": "Now",
+        "next": "Not yet",
+        "ended": "Ended here"
+      }
+    },
+    "membershipPage": {
+      "figures": "Your membership at a glance",
+      "active": "Memberships held now",
+      "open": "Applications in progress",
+      "earlier": "Earlier applications",
+      "orMore": "{count} or more"
+    },
+    "givingPage": {
+      "figures": "Your giving at a glance",
+      "all": "Donations",
+      "views": "Show donations by what happened",
+      "group": {
+        "completed": "Payment received",
+        "pending": "Waiting for the provider",
+        "unfinished": "Not completed",
+        "reversed": "Refunded or reversed"
+      },
+      "orMore": "{count} or more",
+      "shownBounded": "Showing {from}–{to} of {total, plural, one {# donation} other {# donations}} among your {max} most recent",
+      "noneOfGroup": "None of your donations is in this group.",
+      "previous": "Previous page",
+      "next": "Next page"
     }
   },
   "quranPassages": {

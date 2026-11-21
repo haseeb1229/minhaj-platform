@@ -66,3 +66,21 @@ export function selectedLesson(
     lessons.find((lesson) => !completed.has(lesson.id))?.id ?? lessons[0]?.id ?? null
   );
 }
+
+/**
+ * My Minhaj Part 2 — ONE ADDRESS PER LESSON. A Course page's `?lesson=` is
+ * kept only when it names, once, a lesson of this syllabus while the Course is
+ * published; anything else — a repeated parameter, an unknown or malformed
+ * identifier, a lesson of a Course that has left the catalogue — is tidied by
+ * ONE redirect to the Course's own address, after the session and the
+ * person's own Enrolment have been resolved. It never selects anything.
+ */
+export function lessonQueryIsTidy(
+  outline: readonly ModuleOutline[],
+  raw: string | readonly string[] | undefined,
+  available: boolean,
+): boolean {
+  if (raw === undefined) return true;
+  if (typeof raw !== 'string' || !available) return false;
+  return lessonsInOrder(outline).some((lesson) => lesson.id === raw);
+}

@@ -494,6 +494,27 @@ live('Phase 20 Fatwa against real SQL Server, as the runtime principal', () => {
       expect(Object.keys(page.items[0] ?? {})).not.toContain('body');
       expect(JSON.stringify(page)).not.toContain(PRIVATE_TEXT);
     });
+
+    it('narrows and counts by owner status — the asker’s own only (My Minhaj Part 2)', async () => {
+      const none = { received: 0, in_progress: 0, answered: 0, declined: 0, closed: 0 };
+      expect(await owner.questionCounts(askerA)).toEqual({ ...none, received: 1 });
+      expect(await owner.questionCounts(askerB)).toEqual({ ...none, received: 1 });
+      const received = await owner.questions(askerA, 0, 'received');
+      expect(received.total).toBe(1);
+      expect(received.items.map((item) => item.id)).toEqual([q.one]);
+      // Another status holds none of A's — and never B's question.
+      for (const status of ['in_progress', 'answered', 'declined', 'closed'] as const) {
+        const narrowed = await owner.questions(askerA, 0, status);
+        expect(narrowed, status).toEqual({ items: [], total: 0, offset: 0 });
+      }
+      // Past the end keeps the narrowed total.
+      expect(await owner.questions(askerA, 20, 'received')).toEqual({
+        items: [],
+        total: 1,
+        offset: 20,
+      });
+      expect(JSON.stringify(await owner.questions(askerA, 0, null))).not.toContain(q.two);
+    });
   });
 
   /* ======================================================================

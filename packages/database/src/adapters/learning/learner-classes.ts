@@ -125,17 +125,23 @@ export function createClassLearner(): ClassLearnerPort {
       return rows.map(toLearnerView);
     },
 
+    /** One page, latest first, and the total under the SAME predicate (My Minhaj Part 2). */
     async past(userId, now, offset) {
-      const rows = await db.classSession.findMany({
-        where: pastWhere(userId, now),
-        select: learnerSelect(userId),
-        orderBy: [...BY_START_DESC],
-        skip: boundedOffset(offset),
-        take: CLASS_PAGE + 1,
-      });
+      const where = pastWhere(userId, now);
+      const [rows, total] = await Promise.all([
+        db.classSession.findMany({
+          where,
+          select: learnerSelect(userId),
+          orderBy: [...BY_START_DESC],
+          skip: boundedOffset(offset),
+          take: CLASS_PAGE + 1,
+        }),
+        db.classSession.count({ where }),
+      ]);
       return {
         items: rows.slice(0, CLASS_PAGE).map(toLearnerView),
         hasMore: rows.length > CLASS_PAGE,
+        total,
       };
     },
 

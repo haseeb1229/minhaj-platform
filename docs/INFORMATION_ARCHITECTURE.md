@@ -892,8 +892,33 @@ the page. The Quran position says where it stands in the Mushaf (Surah n of 114,
 Surah, ayah n of 6,236) and how it is set. Security opens on the account's standing (two-step
 verification, signed-in devices) and an index of its parts; Privacy gathers its five downloads under
 one "Download your data"; Profile shows the sign-in address with the way to change it; Interests
-are tiles. Part 2 (Learning, Classes, Teachers, Messages, Questions, Membership, Donations) follows
-separately.
+are tiles. Part 2 (Learning, Classes, Teachers, Messages, Questions, Membership, Donations) followed
+separately (below).
+
+**My Minhaj Part 2 (R2, November 2026)** brings Learning, Classes, Teachers, Messages, Questions,
+Membership and Donations to the same standard. Every page carries its trail ("My Minhaj / My
+learning / the Course", "My Minhaj / Messages / Support / Minhaj Support"); Classes and Teachers are
+tabs of each other, and so are Conversations and Support. **My learning** counts the courses by
+state (Courses, Completed, In progress, Not started) when the whole list is on the page, says
+"Showing n–m of N", pages by number, gives each course its state and the way to start or continue
+it, shows each learning path's share completed, teaches a first visit in three steps (find a
+course, enrol, learn at your pace), and asks before a trial request is withdrawn. **A course** has
+a meter for the whole course, a count per module, and the previous and next lesson; **a path** its
+figures and the next step named. **My classes** counts the upcoming and the past, names each
+upcoming class's day ("Today", "Tomorrow", a date) in the person's zone, numbers the past classes,
+and says on a first visit how a class comes to be listed. **My teachers** counts the teachers and
+says how one appears. **Messages** counts the conversations, the unread ones and the unread
+messages only while the whole inbox is on the page (otherwise it says which conversations it shows)
+and teaches a first visit in three steps; **Support** says how many earlier conversations it
+shows. **My questions** is counted by the status the asker is told (Received, In progress,
+Answered, Declined, Closed) with a tab each, "Showing n–m of N", numbered pages, a first visit's
+three steps (what asking does, that no response time is promised, that an answer is published as a
+separately written anonymised question), and says so when the service is not taking questions; **a
+question** shows where it stands as three steps (received, being answered, answered) or the ending
+it had. **My Membership** opens on the person's standing (held now, in progress, earlier). **My
+donations** counts the gifts (all, payment received, waiting for the provider) and filters them by
+what happened (Payment received, Waiting for the provider, Not completed, Refunded or reversed),
+with "Showing n–m of N" and numbered pages over its bounded history.
 
 The tree below is unchanged as a statement of what exists; Certificates and Learning Streaks stay
 absent (ROUTE_MAP.md §5).

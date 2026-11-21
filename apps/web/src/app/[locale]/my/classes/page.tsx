@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
+import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
 import {
   CLASS_PAGE,
+  LEARNER_OFFSET_MAX,
   sessionIsFuture,
   type LearnerClassView,
 } from '@minhaj/contracts/learning';
@@ -21,21 +23,26 @@ import { LearningTitle } from '@/components/my-learning/parts';
 import { pickLabel } from '@/components/my-learning/presentation';
 import { learningRead } from '@/components/my-learning/read';
 import { ConfirmField } from '@/components/personal/parts';
-import {
-  personalOffsetHref,
-  readPersonalOffset,
-} from '@/components/personal/presentation';
-import {
-  Alert,
-  EmptyState,
-  Pager,
-  Panel,
-  SectionHeading,
-  TextLink,
-} from '@/components/ui';
+import { Alert, EmptyState, Panel, TextLink } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
-import { MyPage, OnwardLink } from '@/components/my/frame';
+import { MyPage, MySection, OnwardLink } from '@/components/my/frame';
+import {
+  MyListBeyond,
+  MyListPager,
+  MyListRefused,
+  MyListStatus,
+} from '@/components/my/list-parts';
+import {
+  myListHref,
+  myListOffset,
+  myListRange,
+  readMyList,
+  type MyListSpec,
+} from '@/components/my/list-view';
 import { myPageMetadata } from '@/components/my/metadata';
+import { myTabs, myTrail } from '@/components/my/sections';
+import { MyFigures } from '@/components/my/summary-parts';
+import { relativeDay, zonedDate } from '@/components/my/time';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
 import { requireActiveSession } from '../guard';
@@ -56,6 +63,13 @@ import { cancelBookingAction } from './actions';
  *
  * HONEST WHILE SWITCHED OFF. When live learning is not activated the page says
  * so in words rather than listing an empty week.
+ *
+ * MY MINHAJ PART 2: Classes and Teachers as tabs, the trail, the figures that
+ * are true (the upcoming classes while they fit the one bounded read, the past
+ * ones from Learning's own total), each upcoming class naming its day
+ * ("Today", "Tomorrow", a date) in the person's zone, and the past classes
+ * numbered (`?page=`, Learning's page of 24; the legacy `?offset=` is one
+ * redirect after the session is resolved).
  */
 export async function generateMetadata({
   params,
@@ -97,32 +111,55 @@ export default async function MyClassesPage({
   const path = localizedPath(locale, '/my/classes');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myClasses' });
-  // The live schedule is this page's own action; it is not repeated at its foot.
-  const related = {
-    label: t('nav.label'),
-    links: classLinks(locale, t).filter(
-      (link) => link.href !== localizedPath(locale, '/learn/live'),
-    ),
+  const my = await getTranslations({ locale, namespace: 'my' });
+  const spec: MyListSpec<never> = {
+    path,
+    size: CLASS_PAGE,
+    offsetMax: LEARNER_OFFSET_MAX,
   };
-  const offset = readPersonalOffset(await searchParams);
+  const asked = readMyList(spec, await searchParams);
+  if (asked.outcome === 'redirect') redirect(asked.to);
+
+  const schedulePath = localizedPath(locale, '/learn/live');
+  const frame = {
+    // The live schedule is this page's own action; it is not repeated at its foot.
+    related: {
+      label: t('nav.label'),
+      links: classLinks(locale, t).filter((link) => link.href !== schedulePath),
+    },
+    title: t('title'),
+    description: <p>{t('description')}</p>,
+    action: <OnwardLink href={schedulePath}>{t('nav.schedule')}</OnwardLink>,
+    tabs: {
+      label: my('tabs.label.classes'),
+      items: myTabs(locale, 'classes', 'classes', (key) => my(`tabs.${key}`)),
+    },
+    trail: {
+      label: my('trail.label'),
+      crumbs: myTrail(locale, my('trail.home'), [{ text: my('trail.classes') }]),
+    },
+  };
+
+  if (asked.outcome === 'refused')
+    return (
+      <MyPage {...frame}>
+        <MyListRefused
+          title={my('list.refusedTitle')}
+          text={my('list.refused')}
+          all={path}
+          allText={my('list.all')}
+        />
+      </MyPage>
+    );
+
+  const view = asked.view;
   const read = await learningRead('learning-my-classes', () =>
-    classPanels(session.account.id, offset),
-  );
-  const description = <p>{t('description')}</p>;
-  const schedule = (
-    <OnwardLink href={localizedPath(locale, '/learn/live')}>
-      {t('nav.schedule')}
-    </OnwardLink>
+    classPanels(session.account.id, myListOffset(view.page, spec)),
   );
 
   if (!read.ok)
     return (
-      <MyPage
-        related={related}
-        title={t('title')}
-        description={description}
-        action={schedule}
-      >
+      <MyPage {...frame}>
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -130,6 +167,11 @@ export default async function MyClassesPage({
   const { activated, upcoming, past, joins } = read.value;
   const timeZone = session.account.timezone;
   const now = new Date();
+  const number = new Intl.NumberFormat(locale);
+  const range = myListRange(view.page, past.items.length, spec);
+  // The upcoming read is bounded: its length is a count only while it fits.
+  const upcomingWhole = upcoming.length < CLASS_PAGE;
+  const firstRun = upcoming.length === 0 && past.total === 0;
 
   const courseTitle = (entry: LearnerClassView) => {
     const title = (
@@ -178,76 +220,135 @@ export default async function MyClassesPage({
     );
   };
 
+  // Each upcoming class names its day in the person's own zone.
+  const dayName = (startsAt: Date) => {
+    const relative = relativeDay(startsAt, now, timeZone);
+    return relative === 'today'
+      ? my('classesPage.today')
+      : relative === 'tomorrow'
+        ? my('classesPage.tomorrow')
+        : zonedDate(startsAt, locale, timeZone);
+  };
+
   return (
     <MyPage
-      related={related}
-      title={t('title')}
-      description={description}
-      action={schedule}
+      {...frame}
+      announce={{
+        value: `${String(upcoming.length)}:${String(past.total)}`,
+        message: my('live.classes', { upcoming: upcoming.length, past: past.total }),
+      }}
     >
       {activated ? null : <Alert tone="info">{t('notActivated')}</Alert>}
 
+      {firstRun ? null : (
+        <MyFigures
+          label={my('classesPage.figures')}
+          figures={[
+            ...(upcomingWhole
+              ? [
+                  {
+                    key: 'upcoming',
+                    value: number.format(upcoming.length),
+                    label: my('classesPage.upcoming'),
+                  },
+                ]
+              : []),
+            {
+              key: 'past',
+              value: number.format(past.total),
+              label: my('classesPage.past'),
+            },
+          ]}
+        />
+      )}
+
       {/* ---- Upcoming ---------------------------------------------------- */}
 
-      <section className="flex flex-col gap-3" aria-labelledby="classes-upcoming">
-        <span id="classes-upcoming">
-          <SectionHeading>{t('upcoming.heading')}</SectionHeading>
-        </span>
-        <p className="text-sm text-foreground-muted">{t('upcoming.help')}</p>
+      <MySection
+        id="classes-upcoming"
+        heading={t('upcoming.heading')}
+        intro={t('upcoming.help')}
+      >
         {upcoming.length === 0 ? (
-          <EmptyState>{t('upcoming.empty')}</EmptyState>
+          <EmptyState
+            icon="calendar"
+            {...(firstRun ? { title: my('classesPage.emptyTitle') } : {})}
+            action={{ href: schedulePath, text: t('nav.schedule') }}
+          >
+            {t('upcoming.empty')} {firstRun ? my('classesPage.emptyHow') : null}
+          </EmptyState>
         ) : (
-          <ol aria-label={t('upcoming.heading')} className="flex flex-col gap-3">
-            {upcoming.map((entry) => {
-              const join = joins.get(entry.session.id);
-              return (
-                <Panel key={entry.session.id} as="li">
-                  <div className="flex min-w-0 flex-col gap-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <ParticipationBadge entry={entry} t={t} />
-                      <SessionStateBadge state={entry.session.state} t={t} />
-                    </div>
-                    <p className="text-lg font-semibold">{courseTitle(entry)}</p>
-                    <ClassSchedule
-                      session={entry.session}
-                      locale={locale}
-                      timeZone={timeZone}
-                      t={t}
-                    />
-                    <p>
-                      <TextLink href={`${path}/${entry.session.id}`}>
-                        {t('upcoming.detail', {
-                          title:
-                            pickLabel(
-                              entry.course.labels,
-                              locale,
-                              entry.course.primaryLocale,
-                            )?.title ?? '',
-                        })}
-                      </TextLink>
-                    </p>
-                    {join === undefined ? null : (
-                      <p>
-                        <JoinLink url={join} label={t('join')} />
+          <div className="flex flex-col gap-5">
+            {upcomingWhole ? null : (
+              <p className="text-sm text-foreground-muted">
+                {my('classesPage.nextOnly', { count: CLASS_PAGE })}
+              </p>
+            )}
+            <ol aria-label={t('upcoming.heading')} className="flex flex-col gap-3">
+              {upcoming.map((entry) => {
+                const join = joins.get(entry.session.id);
+                return (
+                  <Panel key={entry.session.id} as="li">
+                    <div className="flex min-w-0 flex-col gap-3">
+                      <p className="text-sm font-semibold text-accent">
+                        {dayName(entry.session.startsAt)}
                       </p>
-                    )}
-                    {cancelForm(entry)}
-                  </div>
-                </Panel>
-              );
-            })}
-          </ol>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ParticipationBadge entry={entry} t={t} />
+                        <SessionStateBadge state={entry.session.state} t={t} />
+                      </div>
+                      <p className="text-lg font-semibold">{courseTitle(entry)}</p>
+                      <ClassSchedule
+                        session={entry.session}
+                        locale={locale}
+                        timeZone={timeZone}
+                        t={t}
+                      />
+                      <p>
+                        <TextLink href={`${path}/${entry.session.id}`}>
+                          {t('upcoming.detail', {
+                            title:
+                              pickLabel(
+                                entry.course.labels,
+                                locale,
+                                entry.course.primaryLocale,
+                              )?.title ?? '',
+                          })}
+                        </TextLink>
+                      </p>
+                      {join === undefined ? null : (
+                        <p>
+                          <JoinLink url={join} label={t('join')} />
+                        </p>
+                      )}
+                      {cancelForm(entry)}
+                    </div>
+                  </Panel>
+                );
+              })}
+            </ol>
+          </div>
         )}
-      </section>
+      </MySection>
 
       {/* ---- Past -------------------------------------------------------- */}
 
-      <section className="flex flex-col gap-3" aria-labelledby="classes-past">
-        <span id="classes-past">
-          <SectionHeading>{t('past.heading')}</SectionHeading>
-        </span>
+      <MySection id="classes-past" heading={t('past.heading')}>
+        {range === null ? null : (
+          <MyListStatus>
+            {my('count.pastClasses', { ...range, total: past.total })}
+          </MyListStatus>
+        )}
         {past.items.length === 0 ? (
-          <EmptyState>{offset === 0 ? t('past.empty') : t('list.beyond')}</EmptyState>
+          past.total === 0 ? (
+            <EmptyState>{t('past.empty')}</EmptyState>
+          ) : (
+            <MyListBeyond
+              text={my('list.beyond')}
+              first={myListHref(spec, { page: 1, filter: null })}
+              firstText={my('list.first')}
+            />
+          )
         ) : (
           <ol aria-label={t('past.heading')} className="flex flex-col gap-3">
             {past.items.map((entry) => (
@@ -280,18 +381,19 @@ export default async function MyClassesPage({
             ))}
           </ol>
         )}
-        <Pager
+        <MyListPager
           label={t('past.heading')}
-          previous={
-            offset === 0
-              ? null
-              : personalOffsetHref(path, Math.max(0, offset - CLASS_PAGE))
-          }
-          next={past.hasMore ? personalOffsetHref(path, offset + CLASS_PAGE) : null}
-          previousLabel={t('list.previous')}
-          nextLabel={t('list.next')}
+          spec={spec}
+          view={view}
+          total={past.total}
+          locale={locale}
+          words={{
+            previous: t('list.previous'),
+            next: t('list.next'),
+            page: (page) => my('list.page', { page }),
+          }}
         />
-      </section>
+      </MySection>
     </MyPage>
   );
 }

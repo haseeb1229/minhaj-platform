@@ -1,8 +1,13 @@
 import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
+import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
-import { LEARNING_PAGE } from '@minhaj/contracts/learning';
+import {
+  LEARNER_OFFSET_MAX,
+  LEARNING_PAGE,
+  courseCompleted,
+} from '@minhaj/contracts/learning';
 
 import {
   LearningTitle,
@@ -13,15 +18,25 @@ import { pickLabel } from '@/components/my-learning/presentation';
 import { learningRead } from '@/components/my-learning/read';
 import { lessonPercent } from '@/components/my/dashboard';
 import { MyPage, MySection, OnwardLink, ProgressMeter } from '@/components/my/frame';
+import {
+  MyListBeyond,
+  MyListPager,
+  MyListRefused,
+  MyListStatus,
+} from '@/components/my/list-parts';
+import {
+  myListHref,
+  myListOffset,
+  myListRange,
+  readMyList,
+  type MyListSpec,
+} from '@/components/my/list-view';
 import { myPageMetadata } from '@/components/my/metadata';
-import { myTabs } from '@/components/my/sections';
+import { myTabs, myTrail } from '@/components/my/sections';
+import { MyFigures, MySteps } from '@/components/my/summary-parts';
 import { shortDate } from '@/components/my/time';
 import { PersonalTime } from '@/components/personal/parts';
-import {
-  personalOffsetHref,
-  readPersonalOffset,
-} from '@/components/personal/presentation';
-import { Alert, EmptyState, Pager, Panel, TextLink } from '@/components/ui';
+import { Alert, EmptyState, Panel, StatusBadge, TextLink } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
 import { learningLinks } from '@/components/my-learning/nav';
 import { requireLocale } from '@/config/route-locale';
@@ -41,6 +56,13 @@ import { withdrawTrialAction } from './actions';
  * A TRIAL REQUEST IS NEVER A CLASS. Each is listed as a request that has not
  * been scheduled, with a way to withdraw it; nothing here offers a time, a
  * teacher or a confirmation.
+ *
+ * MY MINHAJ PART 2: one address per view (`?page=`, Learning's page of 24;
+ * the legacy `?offset=` and other spellings are one redirect after the
+ * session is resolved), "Showing n–m of N" from Learning's own total, numbered
+ * pages, the courses counted by state only when the whole list is on the page,
+ * each course's state and the way into it, the first-run steps, and
+ * withdrawing a trial request asks first and is said aloud.
  */
 export async function generateMetadata({
   params,
@@ -52,6 +74,8 @@ export async function generateMetadata({
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
+
+type CourseState = 'completed' | 'started' | 'new';
 
 async function learningPanels(accountId: string, offset: number) {
   const actor = { accountId };
@@ -75,126 +99,206 @@ export default async function MyLearningPage({
   const path = localizedPath(locale, '/my/learning');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myLearning' });
-  // The catalogue is this page's own action; it is not repeated at its foot.
-  const related = {
-    label: t('nav.label'),
-    links: learningLinks(locale, t).filter(
-      (link) => link.href !== localizedPath(locale, '/learn/courses'),
-    ),
-  };
-  const offset = readPersonalOffset(await searchParams);
-  const read = await learningRead('learning-my-learning', () =>
-    learningPanels(session.account.id, offset),
-  );
   const my = await getTranslations({ locale, namespace: 'my' });
-  const tabs = {
-    label: my('tabs.label.learning'),
-    items: myTabs(locale, 'learning', 'courses', (key) => my(`tabs.${key}`)),
+  const spec: MyListSpec<never> = {
+    path,
+    size: LEARNING_PAGE,
+    offsetMax: LEARNER_OFFSET_MAX,
   };
-  const browse = (
-    <OnwardLink href={localizedPath(locale, '/learn/courses')}>
-      {t('nav.catalogue')}
-    </OnwardLink>
+  const asked = readMyList(spec, await searchParams);
+  if (asked.outcome === 'redirect') redirect(asked.to);
+
+  const catalogue = localizedPath(locale, '/learn/courses');
+  const frame = {
+    // The catalogue is this page's own action; it is not repeated at its foot.
+    related: {
+      label: t('nav.label'),
+      links: learningLinks(locale, t).filter((link) => link.href !== catalogue),
+    },
+    title: t('title'),
+    description: <p>{t('description')}</p>,
+    tabs: {
+      label: my('tabs.label.learning'),
+      items: myTabs(locale, 'learning', 'courses', (key) => my(`tabs.${key}`)),
+    },
+    action: <OnwardLink href={catalogue}>{t('nav.catalogue')}</OnwardLink>,
+    trail: {
+      label: my('trail.label'),
+      crumbs: myTrail(locale, my('trail.home'), [{ text: my('trail.learning') }]),
+    },
+  };
+
+  if (asked.outcome === 'refused')
+    return (
+      <MyPage {...frame}>
+        <MyListRefused
+          title={my('list.refusedTitle')}
+          text={my('list.refused')}
+          all={path}
+          allText={my('list.all')}
+        />
+      </MyPage>
+    );
+
+  const view = asked.view;
+  const read = await learningRead('learning-my-learning', () =>
+    learningPanels(session.account.id, myListOffset(view.page, spec)),
   );
-  const description = <p>{t('description')}</p>;
 
   if (!read.ok)
     return (
-      <MyPage
-        related={related}
-        title={t('title')}
-        description={description}
-        tabs={tabs}
-        action={browse}
-      >
+      <MyPage {...frame}>
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
 
   const { courses, paths, trials } = read.value;
   const timeZone = session.account.timezone;
+  const number = new Intl.NumberFormat(locale);
+  const range = myListRange(view.page, courses.items.length, spec);
+  const stateOf = (completed: number, lessons: number): CourseState =>
+    courseCompleted(completed, lessons) ? 'completed' : completed > 0 ? 'started' : 'new';
+  const states = courses.items.map((entry) =>
+    stateOf(entry.completedLessons, entry.course.lessons),
+  );
+  // Counted by state only when every Course is on this one page.
+  const whole = view.page === 1 && courses.items.length === courses.total;
+  const tally = (state: CourseState) => states.filter((entry) => entry === state).length;
 
   return (
     <MyPage
-      related={related}
-      title={t('title')}
-      description={description}
-      tabs={tabs}
-      action={browse}
+      {...frame}
+      announce={{
+        value: `${String(courses.total)}:${String(trials.length)}`,
+        message: my('live.trials', { count: trials.length }),
+      }}
     >
       {/* ---- Courses ----------------------------------------------------- */}
 
       <MySection id="learning-courses" heading={t('courses.heading')}>
+        {whole && courses.total > 0 ? (
+          <MyFigures
+            label={my('learningPage.figures')}
+            figures={(
+              [
+                ['all', courses.total],
+                ['completed', tally('completed')],
+                ['started', tally('started')],
+                ['new', tally('new')],
+              ] as const
+            ).map(([key, value]) => ({
+              key,
+              value: number.format(value),
+              label: my(`courses.state.${key}`),
+            }))}
+          />
+        ) : null}
+        {range === null ? null : (
+          <MyListStatus>
+            {my('count.courses', { ...range, total: courses.total })}
+          </MyListStatus>
+        )}
+
         {courses.items.length === 0 ? (
-          offset === 0 ? (
-            <EmptyState
-              icon="book"
-              action={{
-                href: localizedPath(locale, '/learn/courses'),
-                text: t('courses.browse'),
-              }}
-            >
-              {t('courses.empty')}
-            </EmptyState>
+          courses.total === 0 ? (
+            <div className="flex flex-col gap-4">
+              <EmptyState
+                icon="book"
+                title={my('courses.emptyTitle')}
+                action={{ href: catalogue, text: t('courses.browse') }}
+              >
+                {t('courses.empty')}
+              </EmptyState>
+              <MySteps
+                label={my('learningPage.stepsLabel')}
+                steps={(['find', 'enrol', 'progress'] as const).map((key) => ({
+                  key,
+                  title: my(`learningPage.steps.${key}.title`),
+                  body: my(`learningPage.steps.${key}.body`),
+                }))}
+              />
+            </div>
           ) : (
-            <EmptyState>{t('list.beyond')}</EmptyState>
+            <MyListBeyond
+              text={my('list.beyond')}
+              first={myListHref(spec, { page: 1, filter: null })}
+              firstText={my('list.first')}
+            />
           )
         ) : (
           <ol
             aria-label={t('courses.heading')}
-            className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2"
+            className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-[repeat(2,minmax(0,1fr))]"
           >
-            {courses.items.map((entry) => (
-              <li
-                key={entry.course.id}
-                className="flex min-w-0 flex-col gap-3 rounded-panel border border-border bg-surface-raised p-5 shadow-panel"
-              >
-                <h3 className="text-subheading font-semibold text-balance">
-                  <a
-                    href={localizedPath(
-                      locale,
-                      `/my/learning/courses/${encodeURIComponent(entry.course.slug)}`,
-                    )}
-                    className="text-foreground underline decoration-accent-rule underline-offset-4 hover:decoration-action"
-                  >
-                    <LearningTitle
-                      labels={entry.course.labels}
-                      primaryLocale={entry.course.primaryLocale}
-                      locale={locale}
-                    />
-                  </a>
-                </h3>
-                <ProgressMeter
-                  percent={lessonPercent(entry.completedLessons, entry.course.lessons)}
+            {courses.items.map((entry, index) => {
+              const state = states[index] ?? 'new';
+              const href = localizedPath(
+                locale,
+                `/my/learning/courses/${encodeURIComponent(entry.course.slug)}`,
+              );
+              return (
+                <li
+                  key={entry.course.id}
+                  className="flex min-w-0 flex-col gap-3 rounded-panel border border-border bg-surface-raised p-5 shadow-panel"
                 >
-                  <ProgressStatus
-                    completed={entry.completedLessons}
-                    lessons={entry.course.lessons}
-                    t={t}
-                  />
-                </ProgressMeter>
-                <p className="mt-auto text-caption text-foreground-muted">
-                  {my('learning.enrolled', {
-                    date: shortDate(entry.enrolledAt, locale, timeZone),
-                  })}
-                </p>
-                {entry.available ? null : (
-                  <p className="text-sm">{t('courses.unavailable')}</p>
-                )}
-              </li>
-            ))}
+                  <h3 className="text-subheading font-semibold text-balance">
+                    <a
+                      href={href}
+                      className="text-foreground underline decoration-accent-rule underline-offset-4 hover:decoration-action"
+                    >
+                      <LearningTitle
+                        labels={entry.course.labels}
+                        primaryLocale={entry.course.primaryLocale}
+                        locale={locale}
+                      />
+                    </a>
+                  </h3>
+                  {state === 'completed' ? null : (
+                    <span>
+                      <StatusBadge tone={state === 'started' ? 'caution' : 'neutral'}>
+                        {my(`courses.state.${state}`)}
+                      </StatusBadge>
+                    </span>
+                  )}
+                  <ProgressMeter
+                    percent={lessonPercent(entry.completedLessons, entry.course.lessons)}
+                  >
+                    <ProgressStatus
+                      completed={entry.completedLessons}
+                      lessons={entry.course.lessons}
+                      t={t}
+                    />
+                  </ProgressMeter>
+                  <p className="mt-auto text-caption text-foreground-muted">
+                    {my('learning.enrolled', {
+                      date: shortDate(entry.enrolledAt, locale, timeZone),
+                    })}
+                  </p>
+                  {entry.available ? (
+                    state === 'completed' ? null : (
+                      <OnwardLink href={href}>
+                        {state === 'new' ? my('courses.start') : my('courses.continue')}
+                      </OnwardLink>
+                    )
+                  ) : (
+                    <p className="text-sm">{t('courses.unavailable')}</p>
+                  )}
+                </li>
+              );
+            })}
           </ol>
         )}
-        <Pager
+        <MyListPager
           label={t('courses.heading')}
-          previous={
-            offset === 0
-              ? null
-              : personalOffsetHref(path, Math.max(0, offset - LEARNING_PAGE))
-          }
-          next={courses.hasMore ? personalOffsetHref(path, offset + LEARNING_PAGE) : null}
-          previousLabel={t('list.previous')}
-          nextLabel={t('list.next')}
+          spec={spec}
+          view={view}
+          total={courses.total}
+          locale={locale}
+          words={{
+            previous: t('list.previous'),
+            next: t('list.next'),
+            page: (page) => my('list.page', { page }),
+          }}
         />
       </MySection>
 
@@ -204,33 +308,49 @@ export default async function MyLearningPage({
         {paths.length === 0 ? (
           <EmptyState>{t('paths.empty')}</EmptyState>
         ) : (
-          <ul aria-label={t('paths.heading')} className="flex flex-col gap-3">
-            {paths.map((entry) => (
-              <Panel key={entry.path.id} as="li">
-                <div className="flex min-w-0 flex-col gap-2">
-                  <TextLink
-                    href={localizedPath(
-                      locale,
-                      `/my/learning/paths/${encodeURIComponent(entry.path.slug)}`,
-                    )}
-                  >
-                    <LearningTitle
-                      labels={entry.path.labels}
-                      primaryLocale={entry.path.primaryLocale}
-                      locale={locale}
-                    />
-                  </TextLink>
-                  <p className="text-sm">
-                    {t('paths.enrolledCount', {
-                      enrolled: String(
-                        entry.courses.filter((course) => course.enrolled).length,
-                      ),
-                      total: String(entry.courses.length),
-                    })}
-                  </p>
-                </div>
-              </Panel>
-            ))}
+          <ul
+            aria-label={t('paths.heading')}
+            className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[repeat(2,minmax(0,1fr))]"
+          >
+            {paths.map((entry) => {
+              const enrolled = entry.courses.filter((course) => course.enrolled).length;
+              const completed = entry.courses.filter(
+                (course) =>
+                  course.enrolled &&
+                  courseCompleted(course.completedLessons, course.course.lessons),
+              ).length;
+              const total = entry.courses.length;
+              return (
+                <Panel key={entry.path.id} as="li">
+                  <div className="flex min-w-0 flex-col gap-3">
+                    <TextLink
+                      href={localizedPath(
+                        locale,
+                        `/my/learning/paths/${encodeURIComponent(entry.path.slug)}`,
+                      )}
+                    >
+                      <LearningTitle
+                        labels={entry.path.labels}
+                        primaryLocale={entry.path.primaryLocale}
+                        locale={locale}
+                      />
+                    </TextLink>
+                    <ProgressMeter percent={total === 0 ? 0 : (completed / total) * 100}>
+                      {my('learningPage.pathCompleted', {
+                        completed: number.format(completed),
+                        total: number.format(total),
+                      })}
+                    </ProgressMeter>
+                    <p className="text-sm">
+                      {t('paths.enrolledCount', {
+                        enrolled: String(enrolled),
+                        total: String(total),
+                      })}
+                    </p>
+                  </div>
+                </Panel>
+              );
+            })}
           </ul>
         )}
       </MySection>
@@ -312,6 +432,12 @@ export default async function MyLearningPage({
                         pendingLabel={t('common.working')}
                         tone="secondary"
                         messages={learningMessages(t, { success: t('trials.withdrawn') })}
+                        confirm={{
+                          title: my('confirm.trial.title'),
+                          body: my('confirm.trial.body'),
+                          confirmLabel: my('confirm.trial.confirm'),
+                          cancelLabel: my('confirm.cancel'),
+                        }}
                       >
                         <input type="hidden" name="locale" value={locale} />
                         <input type="hidden" name="courseId" value={request.course.id} />

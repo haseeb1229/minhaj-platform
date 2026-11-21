@@ -8,6 +8,7 @@ import { fatwaRuntime } from '@/composition/fatwa';
 import { Alert, Field, Panel, TextArea, TextLink } from '@/components/ui';
 import { MyPage } from '@/components/my/frame';
 import { myPageMetadata } from '@/components/my/metadata';
+import { myTrail } from '@/components/my/sections';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../(identity)/form-state';
 import { requireActiveSession } from '../../guard';
@@ -24,6 +25,9 @@ import { submitFatwaQuestion } from './actions';
  * NOTHING IS ASKED FOR WHILE THE SERVICE IS INACTIVE. No form is rendered at
  * all, so no sensitive text can be typed into a service nobody is authorised
  * to answer; the action and the database refuse it again regardless.
+ *
+ * MY MINHAJ PART 2: the trail (My Minhaj / My questions / Ask a question) in
+ * place of the back link; the way to how answering works is kept.
  */
 export async function generateMetadata({
   params,
@@ -44,6 +48,7 @@ export default async function AskQuestionPage({
   const locale = await requireLocale(params);
   await requireActiveSession(locale, localizedPath(locale, '/my/questions/ask'));
   const t = await getTranslations({ locale, namespace: 'fatwa' });
+  const my = await getTranslations({ locale, namespace: 'my' });
   const availability = await fatwaRuntime().ask.availability();
   const limits = { min: FATWA_LIMITS.questionMin, max: FATWA_LIMITS.questionMax };
 
@@ -52,6 +57,13 @@ export default async function AskQuestionPage({
       title={t('ask.title')}
       description={<p>{t('ask.intro')}</p>}
       measure="reading"
+      trail={{
+        label: my('trail.label'),
+        crumbs: myTrail(locale, my('trail.home'), [
+          { path: '/questions', text: my('trail.questions') },
+          { text: t('ask.title') },
+        ]),
+      }}
     >
       {availability.active ? (
         <>
@@ -107,12 +119,11 @@ export default async function AskQuestionPage({
         <Alert tone="info">{t('ask.unavailable')}</Alert>
       )}
 
-      <nav className="flex flex-col gap-2" aria-label={t('my.title')}>
-        <TextLink href={localizedPath(locale, '/my/questions')}>{t('my.back')}</TextLink>
+      <p>
         <TextLink href={localizedPath(locale, '/fatwa/how-it-works')}>
           {t('sections.howItWorks')}
         </TextLink>
-      </nav>
+      </p>
     </MyPage>
   );
 }

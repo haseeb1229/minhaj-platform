@@ -1,6 +1,7 @@
 import 'server-only';
 
 import {
+  LEARNER_OFFSET_MAX,
   classIdSchema,
   classVersionSchema,
   learningAccountIdSchema,
@@ -51,7 +52,7 @@ export function createClassLearnerService(deps: {
   }
 
   const offset = (value: number) =>
-    Number.isInteger(value) && value >= 0 && value <= 25_000 ? value : 0;
+    Number.isInteger(value) && value >= 0 && value <= LEARNER_OFFSET_MAX ? value : 0;
 
   return {
     /** Whether live learning is activated — the honest state My Classes shows. */

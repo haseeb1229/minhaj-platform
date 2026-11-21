@@ -15,12 +15,14 @@ import {
   SessionStateBadge,
 } from '@/components/my-classes/parts';
 import { LearningTitle } from '@/components/my-learning/parts';
+import { pickLabel } from '@/components/my-learning/presentation';
 import { learningRead } from '@/components/my-learning/read';
 import { ConfirmField } from '@/components/personal/parts';
 import { Alert, Panel, SectionHeading, TextLink } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
 import { MyPage } from '@/components/my/frame';
 import { myPageMetadata } from '@/components/my/metadata';
+import { myTrail } from '@/components/my/sections';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../(identity)/form-state';
 import { requireActiveSession } from '../../guard';
@@ -37,6 +39,9 @@ import { cancelBookingAction } from '../actions';
  * THE JOIN LINK IS THE DISCLOSURE READ'S ANSWER, shown only when it returns
  * one. The person's own confirmed future trial may be cancelled here, under
  * the Booking version they are looking at.
+ *
+ * MY MINHAJ PART 2: the trail (My Minhaj / My classes / the Course). An
+ * unknown and a forbidden class are still the same 404.
  */
 export async function generateMetadata({
   params,
@@ -59,8 +64,16 @@ export default async function MyClassPage({
   const path = localizedPath(locale, `/my/classes/${encodeURIComponent(id)}`);
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myClasses' });
+  const my = await getTranslations({ locale, namespace: 'my' });
   const related = { label: t('nav.label'), links: classLinks(locale, t) };
   const actor = { accountId: session.account.id };
+  const trail = (text: string) => ({
+    label: my('trail.label'),
+    crumbs: myTrail(locale, my('trail.home'), [
+      { path: '/classes', text: my('trail.classes') },
+      { text },
+    ]),
+  });
 
   const read = await learningRead('learning-my-class', async () => {
     const { myClasses } = learningRuntime();
@@ -74,7 +87,11 @@ export default async function MyClassPage({
   });
   if (!read.ok)
     return (
-      <MyPage related={related} title={t('detail.fallbackTitle')}>
+      <MyPage
+        related={related}
+        title={t('detail.fallbackTitle')}
+        trail={trail(t('detail.fallbackTitle'))}
+      >
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -99,6 +116,10 @@ export default async function MyClassPage({
     <MyPage
       related={related}
       title={title}
+      trail={trail(
+        pickLabel(course.labels, locale, course.primaryLocale)?.title ??
+          t('detail.fallbackTitle'),
+      )}
       description={
         <div className="flex flex-wrap items-center gap-2">
           <ParticipationBadge entry={entry} t={t} />

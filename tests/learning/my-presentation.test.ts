@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ModuleOutline } from '../../packages/contracts/src/learning/index.ts';
 import {
+  lessonQueryIsTidy,
   lessonsInOrder,
   paragraphs,
   pickLabel,
@@ -90,5 +91,23 @@ describe('the lesson a Course page opens', () => {
   it('opens the first lesson once all are complete, and nothing for an empty syllabus', () => {
     expect(selectedLesson(OUTLINE, new Set([ID(11), ID(12), ID(21)]), null)).toBe(ID(11));
     expect(selectedLesson([], new Set(), null)).toBeNull();
+  });
+});
+
+describe('one address per lesson (My Minhaj Part 2)', () => {
+  it('keeps no lesson, or one lesson of this syllabus, while the Course is published', () => {
+    expect(lessonQueryIsTidy(OUTLINE, undefined, true)).toBe(true);
+    expect(lessonQueryIsTidy(OUTLINE, undefined, false)).toBe(true);
+    for (const id of [ID(11), ID(12), ID(21)])
+      expect(lessonQueryIsTidy(OUTLINE, id, true)).toBe(true);
+  });
+
+  it('tidies anything else — never reading it as a lesson', () => {
+    for (const raw of [ID(99), 'not-an-id', '', `${ID(11)} `, `${ID(11)}0`])
+      expect(lessonQueryIsTidy(OUTLINE, raw, true), raw).toBe(false);
+    // A repeated parameter, even of two real lessons.
+    expect(lessonQueryIsTidy(OUTLINE, [ID(11), ID(12)], true)).toBe(false);
+    // A Course that has left the catalogue opens no lesson at all.
+    expect(lessonQueryIsTidy(OUTLINE, ID(11), false)).toBe(false);
   });
 });

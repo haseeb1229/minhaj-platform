@@ -109,6 +109,13 @@ export const LEARNING_LIMITS = Object.freeze({
 /** One public or administrative listing page. */
 export const LEARNING_PAGE = 24;
 
+/**
+ * The furthest offset a learner's own list (Enrolments, past classes) is read
+ * from; a larger one reads the first page (My Minhaj Part 2 names it, so the
+ * pages that number those lists stop where the service does).
+ */
+export const LEARNER_OFFSET_MAX = 25_000;
+
 /** A content-language reference, in the shape Taxonomy's `Language.code` takes. */
 export const learningLanguageCodeSchema = z
   .string()
@@ -485,6 +492,11 @@ export interface LearnerCourseSummary {
 export interface LearnerCoursePage {
   readonly items: readonly LearnerCourseSummary[];
   readonly hasMore: boolean;
+  /**
+   * My Minhaj Part 2: how many Courses the account is enrolled on in all —
+   * the same predicate as the page, so "Showing 25–48 of 50" is true.
+   */
+  readonly total: number;
 }
 
 /** One enrolled Course with the learner's completed lessons. */

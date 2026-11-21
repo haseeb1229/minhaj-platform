@@ -830,6 +830,72 @@ test.describe('a fixture activation', () => {
     ).not.toContain(`/my/questions/${questionId}`);
   });
 
+  test('My Minhaj Part 2 — My questions counts by status, keeps one address per view, and a question shows where it stands', async () => {
+    const page = asker;
+    const main = page.getByRole('main');
+    const trail = main.getByRole('navigation', { name: 'You are here' });
+    await page.goto('/my/questions');
+    await expect(trail.locator('[aria-current="page"]')).toHaveText('My questions');
+    await expect(main.locator('#my-list-status')).toHaveText(
+      /^Showing 1–1 of 1 question$/u,
+    );
+    // Counted by the coarse status the asker is told. With every question at
+    // one status the tabs would say nothing "All" does not, so none are
+    // offered; a status view, asked for, names itself beside All.
+    const views = main.getByRole('navigation', { name: 'Show questions by status' });
+    await expect(views).toHaveCount(0);
+    await page.goto('/my/questions?status=received');
+    await expect(views.getByRole('link')).toHaveCount(2);
+    await expect(views.locator('[aria-current="page"]')).toContainText('Received');
+    await expect(
+      main.getByRole('list', { name: 'Your questions' }).getByRole('listitem'),
+    ).toHaveCount(1);
+
+    // Tidied ONCE after the session; an unknown status is refused in place.
+    const origin = new URL(page.url()).origin;
+    for (const [asked, final] of [
+      ['/my/questions?page=1', '/my/questions'],
+      ['/my/questions?offset=0', '/my/questions'],
+      ['/my/questions?offset=20', '/my/questions?page=2'],
+      ['/my/questions?page=2&status=answered', '/my/questions?status=answered&page=2'],
+      ['/my/questions?status=', '/my/questions'],
+    ] as const) {
+      const answer = await page.context().request.get(asked, { maxRedirects: 0 });
+      expect([307, 308], asked).toContain(answer.status());
+      const location = new URL(answer.headers()['location'] ?? '', origin);
+      expect(location.pathname + location.search, asked).toBe(final);
+    }
+    for (const refused of [
+      '/my/questions?status=submitted',
+      '/my/questions?status=all',
+      '/my/questions?status=received&status=answered',
+    ]) {
+      const response = await page.goto(refused);
+      expect(response?.status(), refused).toBe(200);
+      await expect(main, refused).toContainText('This list can’t be shown that way');
+      await expect(
+        main.getByRole('list', { name: 'Your questions' }),
+        refused,
+      ).toHaveCount(0);
+    }
+    // A status none of the questions has: said, with the way to all of them.
+    await page.goto('/my/questions?status=answered');
+    await expect(main).toContainText('None of your questions has this status.');
+    // Past the end: said, with the way back.
+    await page.goto('/my/questions?page=2');
+    await expect(main).toContainText('This page is past the end of the list.');
+
+    // The question's own page: its trail and where it stands — words only.
+    await page.goto(`/my/questions/${questionId}`);
+    await expect(trail.getByRole('link', { name: 'My questions' })).toHaveAttribute(
+      'href',
+      '/my/questions',
+    );
+    const steps = main.locator('section[aria-labelledby="question-steps"]');
+    await expect(steps.locator('[aria-current="step"]')).toContainText('Received');
+    await expect(steps.getByRole('listitem')).toHaveCount(3);
+  });
+
   test('question.receive files and assigns the question — the list never shows its words', async () => {
     const page = receiver;
     await page.goto('/admin/fatwa/questions');

@@ -2167,6 +2167,19 @@ SECURITY_BASELINE.md §19.1). No jurisdiction-specific retention period is inven
 asker and scholar (Phase 24), notifications (Phase 21), consent-to-reveal-identity, import of
 published rulings (Phase 30 must call the same publication operation), and any real grant.
 
+**The asker's list, narrowed and counted (My Minhaj Part 2, R2 — November 2026).** No table,
+column, index or migration. `FatwaOwnerPort.questions(asker, offset, status?)` narrows to one coarse
+owner status, and `questionCounts(asker)` counts the asker's questions at every owner status in one
+statement (`OwnQuestionCounts`; a status held by none is `0`). An owner status is the stored
+statuses it is derived from — `FATWA_OWNER_STATUS_SOURCES`: `received` ← `submitted`,
+`in_progress` ← `triaged`, `assigned`, `answered` ← `answered`, `declined`, `closed` — because review
+state never moves a question out of `in_progress`; a unit proof walks every stored status and review
+state through `fatwaOwnerStatus` to keep the two in agreement. The asker stays in every predicate;
+the ask service refuses a status that is not one of `FATWA_OWNER_STATUSES` as `invalid` before the
+port is reached; the adapter binds each source status as a parameter in a statement of fixed shape,
+and the page's total is the narrowed list's. Nothing new is disclosed: the asker still sees only the
+coarse status, never who handles a question or how far review has gone.
+
 ---
 
 ## 13. Learning
@@ -2410,6 +2423,15 @@ ever deleted, and no other participant's history is touched.
 **Not delivered, and not owed by Phase 23:** messaging of any kind, `/teacher/messages`, Google
 Calendar or Meet API provisioning, recording, certificates, assessments, grades, payments, teacher
 notes on learners, repeat-trial policy, and every policy OPEN_DECISIONS.md §2.1 reserves.
+
+**A learner's lists carry their totals (My Minhaj Part 2, R2 — November 2026).** No table, column,
+index or migration. `LearnerCoursePage` and `LearnerClassPage` add `total` — the account's
+Enrolments, and the past classes it took part in — each counted under the page's OWN predicate (the
+same `where` object, with the account in it), so "Showing 25–48 of 50" and the numbered pages of My
+learning and My classes are true; `hasMore` is kept for the pages that page by it (Course progress,
+the home page). `LEARNER_OFFSET_MAX` (25,000) names the bound both learner services already applied,
+so the pages stop where the service does. The upcoming classes stay one bounded read
+(`CLASS_PAGE`): a page counts them only while they fit it. Nothing else a learner reads changed.
 
 ---
 

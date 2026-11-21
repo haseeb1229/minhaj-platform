@@ -903,6 +903,47 @@ test.describe('My donations', () => {
     await expect(entry).toContainText(/USD\s25\.00/u);
     await expect(entry).toContainText(copy('donations.environment.fixture'));
 
+    // My Minhaj Part 2: the trail, the figures, "Showing n–m of N", and the
+    // list filtered by what happened to each gift — one address per view.
+    const mine = page.getByRole('main');
+    await expect(
+      mine
+        .getByRole('navigation', { name: copy('my.trail.label') })
+        .locator('[aria-current="page"]'),
+    ).toHaveText(copy('my.trail.giving'));
+    await expect(
+      mine
+        .getByRole('list', { name: copy('my.givingPage.figures') })
+        .getByRole('listitem'),
+    ).toHaveCount(3);
+    await expect(mine.locator('#my-list-status')).toHaveText(
+      /^Showing 1–1 of 1 donation$/u,
+    );
+    await page.goto('/my/donations?show=completed');
+    const views = mine.getByRole('navigation', { name: copy('my.givingPage.views') });
+    await expect(views.locator('[aria-current="page"]')).toContainText(
+      copy('my.givingPage.group.completed'),
+    );
+    await expect(history.getByRole('listitem')).toHaveCount(1);
+    await page.goto('/my/donations?show=pending');
+    await expect(mine).toContainText(copy('my.givingPage.noneOfGroup'));
+    await expect(history).toHaveCount(0);
+    for (const refused of [
+      '/my/donations?show=paid',
+      '/my/donations?show=pending&show=completed',
+    ]) {
+      expect((await page.goto(refused))?.status(), refused).toBe(200);
+      await expect(mine, refused).toContainText(copy('my.list.refusedTitle'));
+      await expect(history, refused).toHaveCount(0);
+    }
+    const tidy = await page
+      .context()
+      .request.get('/my/donations?page=1&show=', { maxRedirects: 0 });
+    expect([307, 308]).toContain(tidy.status());
+    expect(new URL(tidy.headers()['location'] ?? '', page.url()).pathname).toBe(
+      '/my/donations',
+    );
+
     // The account's home says so too.
     await page.goto('/my');
     await expect(page.getByRole('main')).toContainText(copy('myDonations.home.heading'));

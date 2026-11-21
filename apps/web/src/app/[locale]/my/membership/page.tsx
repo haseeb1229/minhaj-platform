@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
 import {
+  OWN_HISTORY,
   isOpenApplication,
   type ApplicationRecord,
   type MembershipRecord,
@@ -33,6 +34,8 @@ import { Alert, DetailRow, EmptyState, Panel, SectionHeading } from '@/component
 import { membershipRuntime } from '@/composition/membership';
 import { MyPage, OnwardLink } from '@/components/my/frame';
 import { myPageMetadata } from '@/components/my/metadata';
+import { myTrail } from '@/components/my/sections';
+import { MyFigures, MySteps } from '@/components/my/summary-parts';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
 import { requireActiveSession } from '../guard';
@@ -58,6 +61,13 @@ import { applyAction, closeOwnAction, withdrawAction } from './actions';
  *
  * BOUNDED: the service returns at most `OWN_HISTORY` applications and
  * Memberships, newest first. `noindex`, and rendered per request.
+ *
+ * MY MINHAJ PART 2: the trail; the person's standing at the head of the page
+ * — Memberships held now, applications in progress, earlier applications —
+ * counted from the one read the page makes (each figure says "or more" when
+ * its list reached the bound); and the same numbered steps every My Minhaj
+ * first-run page uses. The outcome of an act is the page's own status notice.
+ * Withdrawing and ending keep their server-required confirmation box.
  */
 export async function generateMetadata({
   params,
@@ -112,17 +122,24 @@ export default async function MyMembershipPage({
   );
 
   const my = await getTranslations({ locale, namespace: 'my' });
-  const about = <OnwardLink href={membershipPath(locale)}>{t('nav.public')}</OnwardLink>;
-  const description = (
-    <>
-      <p>{t('description')}</p>
-      <p className="text-sm">{t('decisionNotice')}</p>
-    </>
-  );
+  const frame = {
+    title: t('title'),
+    description: (
+      <>
+        <p>{t('description')}</p>
+        <p className="text-sm">{t('decisionNotice')}</p>
+      </>
+    ),
+    action: <OnwardLink href={membershipPath(locale)}>{t('nav.public')}</OnwardLink>,
+    trail: {
+      label: my('trail.label'),
+      crumbs: myTrail(locale, my('trail.home'), [{ text: my('trail.membership') }]),
+    },
+  };
 
   if (!read.ok)
     return (
-      <MyPage title={t('title')} description={description} action={about}>
+      <MyPage {...frame}>
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -136,10 +153,40 @@ export default async function MyMembershipPage({
   const earlier = applications.filter((entry) => !isOpenApplication(entry.status));
   const timeZone = session.account.timezone;
   const messages = formMessages(t);
+  const number = new Intl.NumberFormat(locale);
+  const active = memberships.filter((entry) => entry.status === 'active').length;
+  // A list that reached the service's bound may hold more than it shows.
+  const figure = (value: number, bounded: boolean) =>
+    bounded
+      ? my('membershipPage.orMore', { count: number.format(value) })
+      : number.format(value);
 
   return (
-    <MyPage title={t('title')} description={description} action={about}>
+    <MyPage {...frame}>
       {notice === null ? null : <Alert tone="success">{t(`done.${notice}`)}</Alert>}
+
+      {applications.length === 0 && memberships.length === 0 ? null : (
+        <MyFigures
+          label={my('membershipPage.figures')}
+          figures={[
+            {
+              key: 'active',
+              value: figure(active, memberships.length >= OWN_HISTORY),
+              label: my('membershipPage.active'),
+            },
+            {
+              key: 'open',
+              value: figure(open.length, applications.length >= OWN_HISTORY),
+              label: my('membershipPage.open'),
+            },
+            {
+              key: 'earlier',
+              value: figure(earlier.length, applications.length >= OWN_HISTORY),
+              label: my('membershipPage.earlier'),
+            },
+          ]}
+        />
+      )}
 
       {/* ---- Applications in progress ------------------------------------ */}
 
@@ -202,32 +249,14 @@ export default async function MyMembershipPage({
         </span>
         <p className="text-sm text-foreground-muted">{t('apply.help')}</p>
         {available.length === 0 ? null : (
-          <ol
-            aria-label={my('membership.stepsLabel')}
-            className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-3"
-          >
-            {(['apply', 'review', 'decision'] as const).map((step, index) => (
-              <li
-                key={step}
-                className="flex min-w-0 gap-3 rounded-panel bg-surface-sunken p-4 text-sm"
-              >
-                <span
-                  aria-hidden="true"
-                  className="flex size-7 shrink-0 items-center justify-center rounded-full bg-action font-semibold text-action-foreground tabular-nums"
-                >
-                  {index + 1}
-                </span>
-                <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="font-semibold">
-                    {my(`membership.steps.${step}.title`)}
-                  </span>
-                  <span className="text-foreground-muted">
-                    {my(`membership.steps.${step}.body`)}
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ol>
+          <MySteps
+            label={my('membership.stepsLabel')}
+            steps={(['apply', 'review', 'decision'] as const).map((step) => ({
+              key: step,
+              title: my(`membership.steps.${step}.title`),
+              body: my(`membership.steps.${step}.body`),
+            }))}
+          />
         )}
         {available.length === 0 ? (
           <EmptyState>{t('apply.empty')}</EmptyState>

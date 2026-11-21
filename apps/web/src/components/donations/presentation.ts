@@ -336,3 +336,33 @@ export function readStatusNotice(query: Query): StatusNotice | null {
 export function isTestEnvironment(environment: PaymentEnvironment): boolean {
   return environment !== 'production';
 }
+
+/**
+ * My Minhaj Part 2 — the four groups My donations is filtered by, in words a
+ * donor reads: the gift went through (in full or with part refunded), it is
+ * still with the provider, it never completed, or the money went back (a
+ * refund, a dispute or a bank reversal). Every state is in exactly one group.
+ */
+export const DONATION_GROUPS = [
+  'completed',
+  'pending',
+  'unfinished',
+  'reversed',
+] as const;
+export type DonationGroup = (typeof DONATION_GROUPS)[number];
+
+const GROUP_OF: Readonly<Record<DonationState, DonationGroup>> = {
+  pending: 'pending',
+  succeeded: 'completed',
+  partially_refunded: 'completed',
+  failed: 'unfinished',
+  cancelled: 'unfinished',
+  expired: 'unfinished',
+  refunded: 'reversed',
+  disputed: 'reversed',
+  charged_back: 'reversed',
+};
+
+export function donationGroup(state: DonationState): DonationGroup {
+  return GROUP_OF[state];
+}

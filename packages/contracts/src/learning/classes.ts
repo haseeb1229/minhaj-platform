@@ -371,6 +371,8 @@ export interface LearnerClassView {
 export interface LearnerClassPage {
   readonly items: readonly LearnerClassView[];
   readonly hasMore: boolean;
+  /** My Minhaj Part 2: every past class the account took part in — the page's own predicate. */
+  readonly total: number;
 }
 
 /** A teacher the learner genuinely has a relationship with — by account identifier. */

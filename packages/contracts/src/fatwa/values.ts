@@ -215,6 +215,32 @@ export function fatwaQuestionStage(
  */
 export type FatwaOwnerStatus =
   'received' | 'in_progress' | 'answered' | 'declined' | 'closed';
+export const FATWA_OWNER_STATUSES = Object.freeze([
+  'received',
+  'in_progress',
+  'answered',
+  'declined',
+  'closed',
+] as const) satisfies readonly FatwaOwnerStatus[];
+
+/**
+ * My Minhaj Part 2 — the stored statuses each owner status stands for, so a
+ * list narrowed to one owner status is the same predicate the owner status is
+ * derived from (`fatwaOwnerStatus`). Review state never moves a question out
+ * of `in_progress`, so the stored status alone decides.
+ */
+export const FATWA_OWNER_STATUS_SOURCES: Readonly<
+  Record<FatwaOwnerStatus, readonly FatwaQuestionStatus[]>
+> = Object.freeze({
+  received: ['submitted'],
+  in_progress: ['triaged', 'assigned'],
+  answered: ['answered'],
+  declined: ['declined'],
+  closed: ['closed'],
+});
+
+/** How many of the asker's own questions stand at each owner status. */
+export type OwnQuestionCounts = Readonly<Record<FatwaOwnerStatus, number>>;
 
 export function fatwaOwnerStatus(stage: FatwaQuestionStage): FatwaOwnerStatus {
   switch (stage) {

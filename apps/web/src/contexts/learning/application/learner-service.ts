@@ -3,6 +3,7 @@ import 'server-only';
 import { z } from 'zod';
 
 import {
+  LEARNER_OFFSET_MAX,
   learningAccountIdSchema,
   learningIdSchema,
   learningSlugSchema,
@@ -64,7 +65,7 @@ export function createLearnerService(deps: {
   }
 
   const offset = (value: number) =>
-    Number.isInteger(value) && value >= 0 && value <= 25_000 ? value : 0;
+    Number.isInteger(value) && value >= 0 && value <= LEARNER_OFFSET_MAX ? value : 0;
 
   return {
     /** Enrols on a Course published NOW. Idempotent. */

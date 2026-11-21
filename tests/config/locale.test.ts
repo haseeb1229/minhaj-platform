@@ -625,6 +625,8 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/my/time-zone-picker.tsx',
     'apps/web/src/components/my/time-zones.ts',
     'apps/web/src/components/my/time.ts',
+    // My Minhaj Part 2: the figures and first-run steps its pages share.
+    'apps/web/src/components/my/summary-parts.tsx',
     // The private workspaces' frame — My Minhaj, the Teacher area and the
     // administration: the shell, the page header and cards, the navigation
     // island and its pure current-entry rule.

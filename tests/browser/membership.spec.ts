@@ -1134,6 +1134,21 @@ test.describe('the Membership surfaces', () => {
     await expect(operator.page.getByRole('main')).toContainText(
       copy('membership.status.application.submitted'),
     );
+
+    // My Minhaj Part 2: the trail, and the person's standing counted from the
+    // one read — held now, in progress, earlier — with no Membership active.
+    await page.goto('/my/membership');
+    const main = page.getByRole('main');
+    await expect(
+      main
+        .getByRole('navigation', { name: copy('my.trail.label') })
+        .locator('[aria-current="page"]'),
+    ).toHaveText(copy('my.trail.membership'));
+    const figures = main.getByRole('list', { name: copy('my.membershipPage.figures') });
+    await expect(figures.getByRole('listitem')).toHaveCount(3);
+    await expect(
+      figures.getByRole('listitem').filter({ hasText: copy('my.membershipPage.active') }),
+    ).toContainText(/^0/u);
   });
 
   test('the apply button is reached by keyboard alone, with a visible focus', async () => {

@@ -3,12 +3,15 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 
 import {
+  FATWA_OWNER_STATUSES,
   fatwaIdSchema,
   questionSubmissionSchema,
   type FatwaActor,
+  type FatwaOwnerStatus,
   type FatwaOwnerPort,
   type FatwaPublicReaderPort,
   type OwnQuestion,
+  type OwnQuestionCounts,
   type OwnQuestionPage,
 } from '@minhaj/contracts/fatwa';
 import type { RateLimitRule, RateLimiterPort } from '@minhaj/contracts/platform';
@@ -75,10 +78,29 @@ export function createFatwaAskService(deps: {
       return { id };
     },
 
-    async questions(actor: FatwaActor, offset: number): Promise<OwnQuestionPage> {
+    /**
+     * The asker's questions — narrowed (My Minhaj Part 2) to one owner status.
+     * A status that is not one of the contract's is refused as `invalid`
+     * before the port is reached, never read as "every status".
+     */
+    async questions(
+      actor: FatwaActor,
+      offset: number,
+      status: FatwaOwnerStatus | null = null,
+    ): Promise<OwnQuestionPage> {
       const safe =
         Number.isInteger(offset) && offset >= 0 && offset <= OFFSET_MAX ? offset : 0;
-      return deps.owner.questions(actor.accountId, safe);
+      if (
+        status !== null &&
+        !(FATWA_OWNER_STATUSES as readonly unknown[]).includes(status)
+      )
+        throw new FatwaRefusal('invalid');
+      return deps.owner.questions(actor.accountId, safe, status);
+    },
+
+    /** My Minhaj Part 2 — the asker's own questions counted at each owner status. */
+    async questionCounts(actor: FatwaActor): Promise<OwnQuestionCounts> {
+      return deps.owner.questionCounts(actor.accountId);
     },
 
     async question(actor: FatwaActor, id: string): Promise<OwnQuestion | null> {

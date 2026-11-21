@@ -15,7 +15,9 @@ import { messagingRead } from '@/components/messaging/read';
 import { Alert, EmptyState, Panel, SectionHeading, TextLink } from '@/components/ui';
 import { messagingRuntime } from '@/composition/messaging';
 import { MyPage } from '@/components/my/frame';
+import { MyListStatus } from '@/components/my/list-parts';
 import { myPageMetadata } from '@/components/my/metadata';
+import { myTabs, myTrail } from '@/components/my/sections';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../(identity)/form-state';
 import { requireActiveSession } from '../../guard';
@@ -37,6 +39,10 @@ import { openSupportAction } from '../actions';
  *
  * This is distinct from the public `/contact` and `/feedback` forms, which are
  * Editorial correspondence and need no account.
+ *
+ * MY MINHAJ PART 2: Conversations and Support as tabs, the trail (My Minhaj /
+ * Messages / Support), and a line saying how many earlier conversations are
+ * shown (Messaging's bounded overview read, most recent first).
  */
 export async function generateMetadata({
   params,
@@ -60,11 +66,26 @@ export default async function MySupportPage({
     localizedPath(locale, '/my/messages/support'),
   );
   const t = await getTranslations({ locale, namespace: 'messages' });
-  const related = { label: t('nav.label'), links: messagingLinks(locale, t) };
+  const my = await getTranslations({ locale, namespace: 'my' });
   const actor = { accountId: session.account.id };
   const { service } = messagingRuntime();
   const timeZone = session.account.timezone;
-  const description = <p>{t('support.description')}</p>;
+  const frame = {
+    related: { label: t('nav.label'), links: messagingLinks(locale, t) },
+    title: t('support.title'),
+    description: <p>{t('support.description')}</p>,
+    tabs: {
+      label: my('tabs.label.messages'),
+      items: myTabs(locale, 'messages', 'support', (key) => my(`tabs.${key}`)),
+    },
+    trail: {
+      label: my('trail.label'),
+      crumbs: myTrail(locale, my('trail.home'), [
+        { path: '/messages', text: my('trail.messages') },
+        { text: t('support.title') },
+      ]),
+    },
+  };
 
   const read = await messagingRead('messaging-my-support', async () => {
     const capabilities = await service.capabilities();
@@ -75,7 +96,7 @@ export default async function MySupportPage({
 
   if (!read.ok || !read.value.active)
     return (
-      <MyPage related={related} title={t('support.title')} description={description}>
+      <MyPage {...frame}>
         {read.ok || read.failure === 'not-found' ? (
           <Alert tone="info">{t('support.notActivated')}</Alert>
         ) : (
@@ -93,7 +114,7 @@ export default async function MySupportPage({
   const { open, earlier } = read.value.overview;
 
   return (
-    <MyPage related={related} title={t('support.title')} description={description}>
+    <MyPage {...frame}>
       <Panel>
         <div className="flex min-w-0 flex-col gap-3">
           <SectionHeading>{t('support.openHeading')}</SectionHeading>
@@ -144,6 +165,11 @@ export default async function MySupportPage({
         {earlier.length === 0 ? (
           <EmptyState>{t('support.earlierEmpty')}</EmptyState>
         ) : (
+          <MyListStatus>
+            {my('supportPage.earlier', { count: earlier.length })}
+          </MyListStatus>
+        )}
+        {earlier.length === 0 ? null : (
           <ConversationList
             conversations={earlier}
             surface="my"

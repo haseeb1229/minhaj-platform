@@ -169,7 +169,8 @@ export function myNavigation(
  * Sibling views — tabs at the head of a page
  * ========================================================================= */
 
-export type MyTabSet = 'saved' | 'history' | 'learning' | 'settings';
+export type MyTabSet =
+  'saved' | 'history' | 'learning' | 'classes' | 'messages' | 'settings';
 
 export type MyTabKey =
   | 'saved'
@@ -180,6 +181,10 @@ export type MyTabKey =
   | 'watch'
   | 'courses'
   | 'progress'
+  | 'classes'
+  | 'teachers'
+  | 'conversations'
+  | 'support'
   | 'profile'
   | 'security'
   | 'language'
@@ -204,6 +209,16 @@ const TABS: Readonly<
   learning: [
     { key: 'courses', path: '/learning' },
     { key: 'progress', path: '/progress/courses' },
+  ],
+  // My Minhaj Part 2: the person's classes and the teachers who give them.
+  classes: [
+    { key: 'classes', path: '/classes' },
+    { key: 'teachers', path: '/teachers' },
+  ],
+  // My Minhaj Part 2: every conversation, and the one with Minhaj Support.
+  messages: [
+    { key: 'conversations', path: '/messages' },
+    { key: 'support', path: '/messages/support' },
   ],
   settings: [
     { key: 'profile', path: '/settings/profile' },

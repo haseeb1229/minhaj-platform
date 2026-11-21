@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
 import {
   LearningTitle,
@@ -9,6 +9,7 @@ import {
   learningMessages,
 } from '@/components/my-learning/parts';
 import {
+  lessonQueryIsTidy,
   lessonsInOrder,
   paragraphs,
   pickLabel,
@@ -18,8 +19,10 @@ import { learningRead } from '@/components/my-learning/read';
 import { ConfirmField } from '@/components/personal/parts';
 import { Alert, Panel, SectionHeading, TextLink } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
-import { MyPage } from '@/components/my/frame';
+import { lessonPercent } from '@/components/my/dashboard';
+import { MyPage, ProgressMeter } from '@/components/my/frame';
 import { myPageMetadata } from '@/components/my/metadata';
+import { myTrail } from '@/components/my/sections';
 import { learningLinks } from '@/components/my-learning/nav';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../../(identity)/form-state';
@@ -42,6 +45,13 @@ import { completeLessonAction, leaveCourseAction } from '../../actions';
  * read only while the Course is published: a Course that has left the
  * catalogue shows an honest notice and no syllabus — a draft's outline may be
  * mid-edit — and the person's progress on it is kept.
+ *
+ * MY MINHAJ PART 2: the trail, a meter of the whole Course, each module's own
+ * count, the previous and the next lesson, and ONE address per lesson — a
+ * `?lesson=` that is not one lesson of this syllabus is one redirect to the
+ * Course's own address (`lessonQueryIsTidy`), decided only AFTER the session
+ * and the person's own Enrolment, so somebody else's Course is still this
+ * page's 404 first and an address learns nothing more.
  */
 export async function generateMetadata({
   params,
@@ -53,13 +63,6 @@ export async function generateMetadata({
 
 /** PER REQUEST, always: this surface reads a session. */
 export const dynamic = 'force-dynamic';
-
-/** The first value of `?lesson=`, or `null`. */
-function requestedLesson(query: Record<string, string | string[] | undefined>) {
-  const raw = query['lesson'];
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  return typeof value === 'string' && value.length <= 64 ? value : null;
-}
 
 export default async function MyCoursePage({
   params,
@@ -73,27 +76,41 @@ export default async function MyCoursePage({
   const path = localizedPath(locale, `/my/learning/courses/${encodeURIComponent(slug)}`);
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myLearning' });
+  const my = await getTranslations({ locale, namespace: 'my' });
   const related = { label: t('nav.label'), links: learningLinks(locale, t) };
   const actor = { accountId: session.account.id };
+  const trail = (text: string) => ({
+    label: my('trail.label'),
+    crumbs: myTrail(locale, my('trail.home'), [
+      { path: '/learning', text: my('trail.learning') },
+      { text },
+    ]),
+  });
 
   const read = await learningRead('learning-my-course', () =>
     learningRuntime().learner.course(actor, slug),
   );
   if (!read.ok)
     return (
-      <MyPage related={related} title={t('course.fallbackTitle')}>
+      <MyPage
+        related={related}
+        title={t('course.fallbackTitle')}
+        trail={trail(t('course.fallbackTitle'))}
+      >
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
   if (read.value === null) notFound();
 
   const { course, available } = read.value;
+  const raw = (await searchParams)['lesson'];
+  if (!lessonQueryIsTidy(course.outline, raw, available)) redirect(path);
   const completed = new Set(read.value.completedLessonIds);
   const lessons = lessonsInOrder(course.outline);
   const done = lessons.filter((lesson) => completed.has(lesson.id)).length;
   const label = pickLabel(course.labels, locale, course.primaryLocale);
   const chosen = available
-    ? selectedLesson(course.outline, completed, requestedLesson(await searchParams))
+    ? selectedLesson(course.outline, completed, typeof raw === 'string' ? raw : null)
     : null;
   const lessonRead =
     chosen === null
@@ -107,10 +124,12 @@ export default async function MyCoursePage({
   const position =
     chosen === null ? -1 : lessons.findIndex((entry) => entry.id === chosen);
   const next = position === -1 ? undefined : lessons[position + 1];
+  const previous = position <= 0 ? undefined : lessons[position - 1];
 
   return (
     <MyPage
       related={related}
+      trail={trail(label?.title ?? t('course.fallbackTitle'))}
       title={
         <span lang={label?.locale} dir="auto" className="wrap-anywhere">
           {label?.title}
@@ -123,11 +142,15 @@ export default async function MyCoursePage({
               {label.summary}
             </p>
           )}
-          <p className="flex flex-wrap items-center gap-3">
-            {available ? (
-              <ProgressStatus completed={done} lessons={lessons.length} t={t} />
-            ) : null}
-            {available ? (
+          {available ? (
+            <div className="max-w-sm">
+              <ProgressMeter percent={lessonPercent(done, lessons.length)}>
+                <ProgressStatus completed={done} lessons={lessons.length} t={t} />
+              </ProgressMeter>
+            </div>
+          ) : null}
+          {available ? (
+            <p>
               <TextLink
                 href={localizedPath(
                   locale,
@@ -136,8 +159,8 @@ export default async function MyCoursePage({
               >
                 {t('course.publicPage')}
               </TextLink>
-            ) : null}
-          </p>
+            </p>
+          ) : null}
         </>
       }
     >
@@ -164,32 +187,31 @@ export default async function MyCoursePage({
                     locale={locale}
                   />
                 </h3>
+                <p className="text-caption text-foreground-muted tabular-nums">
+                  {my('coursePage.moduleDone', {
+                    done: part.lessons.filter((entry) => completed.has(entry.id)).length,
+                    total: part.lessons.length,
+                  })}
+                </p>
                 <ol className="flex flex-col gap-1">
                   {part.lessons.map((entry) => {
                     const finished = completed.has(entry.id);
-                    const title = (
-                      <LearningTitle
-                        labels={entry.labels}
-                        primaryLocale={course.primaryLocale}
-                        locale={locale}
-                      />
-                    );
                     return (
                       <li
                         key={entry.id}
                         className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1"
                       >
-                        {available ? (
-                          <a
-                            href={`${path}?lesson=${entry.id}`}
-                            aria-current={entry.id === chosen ? 'page' : undefined}
-                            className="min-w-0 font-medium text-action underline underline-offset-2 aria-[current=page]:no-underline"
-                          >
-                            {title}
-                          </a>
-                        ) : (
-                          <span className="min-w-0">{title}</span>
-                        )}
+                        <a
+                          href={`${path}?lesson=${entry.id}`}
+                          aria-current={entry.id === chosen ? 'page' : undefined}
+                          className="min-w-0 font-medium text-action underline underline-offset-2 aria-[current=page]:no-underline"
+                        >
+                          <LearningTitle
+                            labels={entry.labels}
+                            primaryLocale={course.primaryLocale}
+                            locale={locale}
+                          />
+                        </a>
                         <span className="text-xs text-foreground-muted">
                           {finished ? (
                             <>
@@ -261,10 +283,22 @@ export default async function MyCoursePage({
               </ActionForm>
             </div>
           )}
-          {next === undefined ? null : (
-            <p>
-              <TextLink href={`${path}?lesson=${next.id}`}>{t('lesson.next')}</TextLink>
-            </p>
+          {previous === undefined && next === undefined ? null : (
+            <nav
+              aria-label={my('coursePage.lessonNav')}
+              className="flex flex-wrap justify-between gap-x-6 gap-y-2 border-t border-border pt-4"
+            >
+              {previous === undefined ? (
+                <span />
+              ) : (
+                <TextLink href={`${path}?lesson=${previous.id}`}>
+                  {my('coursePage.previous')}
+                </TextLink>
+              )}
+              {next === undefined ? null : (
+                <TextLink href={`${path}?lesson=${next.id}`}>{t('lesson.next')}</TextLink>
+              )}
+            </nav>
           )}
         </section>
       )}

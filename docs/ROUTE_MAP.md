@@ -1477,7 +1477,25 @@ the parameters and Phase 21's `?offset=` (by the page of 20) are each **one redi
 address, issued only after the session is resolved; a filter value the list does not have, or a
 repeated parameter, is **refused in place** — the page says so and lists nothing — and never widened
 to the whole list. A filter narrows only the signed-in account's own list; no parameter names an
-owner. `/my/progress/courses` keeps Learning's `?offset=` paging (its read gives no total).
+owner. `/my/progress/courses` keeps Learning's `?offset=` paging (its read gave no total at Part 1
+exit; Part 2 adds one, and Course progress — a Part 1 page — is unchanged).
+
+**My Minhaj Part 2 (Rebaseline R2, November 2026).** No route is added or removed. The same rules
+(one address per view, each untidy spelling **one redirect after the session is resolved**, an
+unknown filter or a repeated parameter **refused in place** and never widened) reach five more
+lists, each paging by its owner's size: `/my/learning` takes `?page=` (Learning's page of 24, at most
+the page `LEARNER_OFFSET_MAX` reaches; Phase 22's `?offset=` is read by 24); `/my/classes` takes
+`?page=` for its past classes (24 a page; the upcoming ones are one bounded list above them);
+`/my/questions` takes `?status=` (`received`, `in_progress`, `answered`, `declined`, `closed`) and
+`?page=` (Fatwa's page of 20, at most the page `FATWA_MAX_OFFSET` reaches; Phase 20's `?offset=` is
+read by 20); `/my/donations` takes `?show=` (`completed`, `pending`, `unfinished`, `reversed`) and
+`?page=` (20 a page over its one bounded read). `/my/learning/courses/{slug}?lesson=` is kept only
+when it names, once, a lesson of that syllabus while the Course is published; anything else is one
+redirect to the Course's own address, decided after the session AND the person's own Enrolment, so
+a Course that is not theirs is still the 404 first. `/my/messages` keeps Messaging's opaque
+`?cursor=` (Messaging re-decides every conversation, so no stored total is the inbox's size).
+`/my/classes` and `/my/teachers`, and `/my/messages` and `/my/messages/support`, are tabs of one
+another; every page under `/my` named in this paragraph, and every conversation, carries its trail.
 
 **Donor return and status (Phase 27)**, outside the cache-safe public tree because they read the
 request: `/donate/return` is the provider's success and cancel URL — a constant page that ignores

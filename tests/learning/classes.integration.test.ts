@@ -1732,6 +1732,15 @@ live(
             v.booking?.state,
           ]),
         ).toEqual([['cancelled', 'cancelled']]);
+        // My Minhaj Part 2: the past total is the page's own predicate, and
+        // it counts nothing of another account's.
+        expect((await classes.past(alice, now, 0)).total).toBe(1);
+        expect((await classes.past(alice, now, 24)).total).toBe(1);
+        expect(await classes.past(bob, now, 0)).toEqual({
+          items: [],
+          hasMore: false,
+          total: 0,
+        });
         const owed = await intentsFor(db.admin, booked.session.session.id);
         expect(owed.filter((r) => r.state === 'pending').map((r) => r.purpose)).toEqual([
           'learning.session-cancelled',

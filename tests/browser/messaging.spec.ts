@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { AxeBuilder } from '@axe-core/playwright';
 import type { Browser, BrowserContext, Locator, Page, Request } from '@playwright/test';
 
 import { PLATFORM_ADMINISTRATOR_PERMISSIONS } from '../../packages/contracts/src/identity/permissions.ts';
@@ -1038,6 +1039,86 @@ test.describe('the Messaging surfaces', () => {
         /noindex/,
       );
     }
+  });
+
+  test('My Minhaj Part 2 — the inbox, Support and a thread carry their trail and tabs, the inbox counts itself while it is whole, and all three are axe-clean', async () => {
+    test.setTimeout(600_000);
+    const page = learner.page;
+    const main = page.getByRole('main');
+    const trail = main.getByRole('navigation', { name: copy('my.trail.label') });
+    const tabs = main.getByRole('navigation', { name: copy('my.tabs.label.messages') });
+
+    await page.goto('/my/messages');
+    await expect(trail.locator('[aria-current="page"]')).toHaveText(
+      copy('my.trail.messages'),
+    );
+    await expect(tabs.locator('[aria-current="page"]')).toHaveText(
+      copy('my.tabs.conversations'),
+    );
+    // Two conversations — the teacher's and Support — fit one page, so the
+    // inbox is whole and its figures are true.
+    const figures = main.getByRole('list', { name: copy('my.messagesPage.figures') });
+    await expect(
+      figures
+        .getByRole('listitem')
+        .filter({ hasText: copy('my.messagesPage.conversations') }),
+    ).toContainText('2');
+    await expect(main.locator('#my-list-status')).toHaveText(
+      /^2 conversations, most recent activity first$/u,
+    );
+
+    await tabs.getByRole('link', { name: copy('my.tabs.support') }).click();
+    await page.waitForURL('**/my/messages/support');
+    await expect(
+      trail.getByRole('link', { name: copy('my.trail.messages') }),
+    ).toHaveAttribute('href', '/my/messages');
+    await expect(tabs.locator('[aria-current="page"]')).toHaveText(
+      copy('my.tabs.support'),
+    );
+
+    await page.goto(`/my/messages/${conversationId}`);
+    await expect(
+      trail.getByRole('link', { name: copy('my.trail.messages') }),
+    ).toHaveAttribute('href', '/my/messages');
+    await expect(trail.locator('[aria-current="page"]')).toHaveText(TEXT.teacher);
+    await page.goto(`/my/messages/${supportId}`);
+    await expect(
+      trail.getByRole('link', { name: copy('messages.nav.support') }),
+    ).toHaveAttribute('href', '/my/messages/support');
+    // The Teacher area's own thread has no My Minhaj trail.
+    await teacher.page.goto(`/teacher/messages/${conversationId}`);
+    await expect(
+      teacher.page.getByRole('navigation', { name: copy('my.trail.label') }),
+    ).toHaveCount(0);
+
+    for (const locale of ['en', 'ur', 'ar'] as const)
+      for (const address of [
+        '/my/messages',
+        '/my/messages/support',
+        `/my/messages/${conversationId}`,
+      ]) {
+        const target = localizedPath(locale, address);
+        for (const width of [320, 1440]) {
+          await page.setViewportSize({ width, height: 900 });
+          const response = await page.goto(target);
+          expect(response?.status(), target).toBe(200);
+          await expect(mainHeading(page), target).toBeVisible();
+          expect(
+            await overflowOf(page),
+            `${String(width)}px ${target}`,
+          ).toBeLessThanOrEqual(0);
+        }
+        const results = await new AxeBuilder({ page })
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+          .analyze();
+        expect(
+          results.violations
+            .filter((v) => v.impact === 'serious' || v.impact === 'critical')
+            .map((v) => `${v.id}: ${v.nodes.length}`),
+          target,
+        ).toEqual([]);
+      }
+    await page.setViewportSize({ width: 1280, height: 800 });
   });
 
   test('a thread is right-to-left in Urdu and Arabic, and reflows at 320px and 640px around unbroken text', async () => {

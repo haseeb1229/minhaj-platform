@@ -13,7 +13,11 @@ import {
   STEP_UP_PURPOSES,
 } from '../../packages/contracts/src/identity/index.ts';
 import {
+  FATWA_OWNER_STATUSES,
+  FATWA_OWNER_STATUS_SOURCES,
   FATWA_PERMISSIONS,
+  FATWA_QUESTION_STATUSES,
+  FATWA_REVIEW_STATES,
   fatwaOwnerStatus,
   fatwaQuestionStage,
   type FatwaAuthorityPort,
@@ -530,15 +534,20 @@ describe('the one publication operation', () => {
 function askHarness(options: { readonly active: boolean; readonly allowed?: boolean }) {
   const submitted: unknown[] = [];
   const consumed: string[] = [];
+  const listed: unknown[][] = [];
+  const counted: string[] = [];
   const owner: FatwaOwnerPort = {
     submit: async (input) => {
       submitted.push(input);
     },
-    questions: async (askerId) => ({
-      items: [],
-      total: 0,
-      offset: askerId === actor.accountId ? 0 : -1,
-    }),
+    questions: async (askerId, offset, status) => {
+      listed.push([askerId, offset, status]);
+      return { items: [], total: 0, offset: askerId === actor.accountId ? 0 : -1 };
+    },
+    questionCounts: async (askerId) => {
+      counted.push(askerId);
+      return { received: 1, in_progress: 2, answered: 3, declined: 0, closed: 0 };
+    },
     question: async () => null,
   };
   const limiter: RateLimiterPort = {
@@ -560,7 +569,7 @@ function askHarness(options: { readonly active: boolean; readonly allowed?: bool
     key: (accountId) => `fatwa-question:${accountId}`,
     ids: () => ID(900),
   });
-  return { service, submitted, consumed };
+  return { service, submitted, consumed, listed, counted };
 }
 
 describe('asking a question', () => {
@@ -601,6 +610,76 @@ describe('asking a question', () => {
   it('never looks up a malformed question id', async () => {
     const h = askHarness({ active: true });
     expect(await h.service.question(actor, "1' OR '1'='1")).toBeNull();
+  });
+});
+
+describe('the asker’s own list, narrowed and counted (My Minhaj Part 2)', () => {
+  it('narrows by exactly the stored statuses each owner status is derived from', () => {
+    const reviews = [null, ...FATWA_REVIEW_STATES] as const;
+    for (const status of FATWA_QUESTION_STATUSES)
+      for (const review of reviews) {
+        const owner = fatwaOwnerStatus(fatwaQuestionStage(status, review));
+        expect(
+          FATWA_OWNER_STATUS_SOURCES[owner],
+          `${status}/${String(review)}`,
+        ).toContain(status);
+      }
+    // Every stored status belongs to exactly one owner status.
+    const sources = FATWA_OWNER_STATUSES.flatMap((owner) => [
+      ...FATWA_OWNER_STATUS_SOURCES[owner],
+    ]);
+    expect([...sources].sort()).toEqual([...FATWA_QUESTION_STATUSES].sort());
+  });
+
+  it('hands the port the asker, the offset and exactly the status asked for', async () => {
+    const h = askHarness({ active: false });
+    await h.service.questions(actor, 20);
+    await h.service.questions(actor, 0, 'in_progress');
+    await h.service.questions(actor, 40, 'answered');
+    expect(h.listed).toEqual([
+      [actor.accountId, 20, null],
+      [actor.accountId, 0, 'in_progress'],
+      [actor.accountId, 40, 'answered'],
+    ]);
+  });
+
+  it('refuses a status that is not the contract’s before any port — never "every status"', async () => {
+    const h = askHarness({ active: true });
+    for (const status of [
+      'all',
+      'Answered',
+      'answered ',
+      'submitted',
+      'triaged',
+      "answered' OR '1'='1",
+      '',
+      7,
+      {},
+    ])
+      expect(
+        await failure(h.service.questions(actor, 0, status as never)),
+        String(status),
+      ).toBe('invalid');
+    expect(h.listed).toEqual([]);
+  });
+
+  it('clamps a malformed offset to the first page', async () => {
+    const h = askHarness({ active: true });
+    for (const offset of [-1, 1.5, Number.NaN, 10_001])
+      await h.service.questions(actor, offset, 'received');
+    expect(h.listed.map((call) => call[1])).toEqual([0, 0, 0, 0]);
+  });
+
+  it('counts only the session’s own questions, at every owner status', async () => {
+    const h = askHarness({ active: false });
+    expect(await h.service.questionCounts(actor)).toEqual({
+      received: 1,
+      in_progress: 2,
+      answered: 3,
+      declined: 0,
+      closed: 0,
+    });
+    expect(h.counted).toEqual([actor.accountId]);
   });
 });
 

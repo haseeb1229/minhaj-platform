@@ -6,6 +6,7 @@ import type {
   FatwaAvailability,
   FatwaBrowseFilter,
   FatwaCategoryRecord,
+  FatwaOwnerStatus,
   FatwaRecord,
   FatwaSearchRecord,
   FatwaSitemapEntry,
@@ -13,6 +14,7 @@ import type {
   FatwaTarget,
   FatwaWithdrawalValue,
   OwnQuestion,
+  OwnQuestionCounts,
   OwnQuestionPage,
   PublicFatwa,
   PublicFatwaCategory,
@@ -119,7 +121,17 @@ export interface FatwaOwnerPort {
     readonly askerId: string;
     readonly value: QuestionSubmissionValue;
   }): Promise<void>;
-  questions(askerId: string, offset: number): Promise<OwnQuestionPage>;
+  /**
+   * The asker's questions, newest first — narrowed (My Minhaj Part 2) to one
+   * owner status when `status` is given, the total then the narrowed list's.
+   */
+  questions(
+    askerId: string,
+    offset: number,
+    status?: FatwaOwnerStatus | null,
+  ): Promise<OwnQuestionPage>;
+  /** My Minhaj Part 2 — the asker's questions counted at each owner status, in one statement. */
+  questionCounts(askerId: string): Promise<OwnQuestionCounts>;
   question(askerId: string, id: string): Promise<OwnQuestion | null>;
 }
 

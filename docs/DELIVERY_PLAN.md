@@ -5690,6 +5690,140 @@ the read-only handlers now thirty-four, each exporting no mutating verb);
 > sixteen addresses reflowing at 320 px in en, ur and ar and axe-clean (no serious or critical
 > finding) at 1440 px. *CI and staging evidence are recorded when they exist.*
 
+> **My Minhaj Part 2 — Learning, a Course, a path, Classes, a class, Teachers, Messages, a
+> conversation, Support, Questions, Ask, a question, Membership and Donations (owner direction:
+> every section built from A to Z; on `feature/rebaseline-r2-full-ecosystem-completion`).**
+> Delivered (ROUTE_MAP.md §5.1; INFORMATION_ARCHITECTURE.md §5; DOMAIN_MODEL.md §12.1, §13.5;
+> SECURITY_BASELINE.md §19.1.2). No route is added or removed, no table, column, index or migration,
+> no new dependency and **no Server Action added or changed**. Part 1's pages keep their behaviour;
+> the Teacher area and the administration are not touched (the shared conversation screen adds its
+> trail on `/my` only).
+>
+> - **The audit (before).** None of the fourteen pages had a trail. My learning listed its
+>   Courses behind Phase 22's `?offset=` Previous/Next with no figure, no range
+>   and no page numbers (Learning's enrolment read gave no total), a course card had no state and no
+>   way in, a path showed only "n of m enrolled", the first visit was one sentence, and withdrawing
+>   a trial request happened on one press. A Course page had no meter, no count per module and only
+>   "Next lesson"; any `?lesson=` that was not a lesson silently opened another one, so one view had
+>   unbounded addresses. A path page had no figures and no next step. My classes was two plain
+>   sections, the past behind `?offset=`, no figure, no day named, and its first visit did not say
+>   how a class comes to be listed; Classes and Teachers did not lead to each other. My teachers had
+>   no count and a one-line empty state. Messages had no figure and a one-line empty state, and
+>   Messages and Support did not lead to each other. My questions was Phase 20's offset list with no
+>   count, no status view, no range, a first visit of one line, and no word when the service was not
+>   taking questions; a question said its status as one badge; the ask page and the question page
+>   ended in a "back" link instead of a trail. My Membership and My donations had no summary, and
+>   My donations listed its bounded history in one undivided column.
+> - **One address per view (decision).** `components/my/list-view.ts` now pages by its owner's size
+>   (`MyListSpec.size`, `offsetMax`; Personalisation's 20 and 10,000 when absent, so Part 1 is
+>   unchanged): `/my/learning?page=` and `/my/classes?page=` by Learning's 24 up to
+>   `LEARNER_OFFSET_MAX`; `/my/questions?status=&page=` by Fatwa's 20 up to `FATWA_MAX_OFFSET`;
+>   `/my/donations?show=&page=` by 20 over its one bounded read. Each legacy `?offset=` is read by its
+>   own list's page; every untidy spelling is **one redirect after the session**; an unknown status,
+>   view or repeated parameter is **refused in place**. `/my/learning/courses/{slug}?lesson=` is kept
+>   only when it names, once, a lesson of that published syllabus (`lessonQueryIsTidy`); anything else
+>   is one redirect to the Course's address, decided after the person's own Enrolment — a Course that
+>   is not theirs is still the 404 first. `/my/messages` keeps Messaging's opaque cursor: Messaging
+>   re-decides every conversation on the request, so no stored count is the inbox's size.
+> - **Learning.** My learning: the trail, "Showing n–m of N courses", numbered pages, the courses
+>   counted by state (Courses, Completed, In progress, Not started) **only when the whole list is on
+>   the page**, each card's state badge, meter and Start/Continue link, each path's meter of Courses
+>   completed, a first-run page with three steps (find, enrol, learn at your pace), and withdrawing a
+>   trial request **asks first** (`ConfirmSpec`) and is said aloud with focus kept. A Course: the
+>   trail, a meter for the whole Course, "n of m lessons complete" per module, previous and next
+>   lesson. A path: the trail, its figures (Courses, Enrolled, Completed), "Next step" on the first
+>   Course not completed, each enrolled Course's meter and way in, and "every course completed" when
+>   it is.
+> - **Classes and Teachers.** Tabs of each other. My classes: the trail, the figures that are true
+>   (the upcoming classes while they fit the one bounded read, the past ones from Learning's total),
+>   each upcoming class naming its day ("Today", "Tomorrow", a date) in the person's zone, the past
+>   classes with "Showing n–m of N" and numbered pages, and a first visit that says how a class comes
+>   to be listed; the join link and cancelling a trial class are unchanged. A class: its trail. My
+>   teachers: the trail, how many teachers, and a first visit with three steps (enrol, take a class,
+>   write to them) and the way to find a teacher.
+> - **Messages.** Conversations and Support are tabs. The inbox: the trail, its figures
+>   (conversations, those with unread messages, unread messages) **only while the whole inbox is on
+>   the page**, otherwise a line naming which conversations it shows; a first visit with three steps
+>   (enrol, start a conversation, ask Minhaj Support). Support: its trail and how many earlier
+>   conversations it shows. A conversation on `/my`: its trail (My Minhaj / Messages / the name, or
+>   … / Support / Minhaj Support); the ended answer carries only its own title. Socket.IO, the
+>   composer, reporting and blocking are unchanged.
+> - **Questions (Fatwa's).** My questions: the trail, counted status tabs (All, Received, In
+>   progress, Answered, Declined, Closed — a status held by none not offered), "Showing n–m of N",
+>   numbered pages, each row's status note, a first visit with three steps (what asking does, that no
+>   response time is promised, that an answer is published as a separately written anonymised
+>   question) and the way to how it works, and the service's own "not taking questions" while it is
+>   inactive. Ask: its trail. A question: its trail and where it stands as three steps (received,
+>   being answered, answered — or the ending it had), saying nothing more than the coarse status.
+> - **Membership and Donations.** My Membership: the trail and the person's standing (held now, in
+>   progress, earlier — "or more" when a list reached `OWN_HISTORY`); the apply steps are the shared
+>   `MySteps`. My donations (built in Phase 27; nothing invented): the trail, figures (donations,
+>   payment received, waiting for the provider — "or more" at `OWN_DONATION_HISTORY`), the list
+>   filtered by what happened to each gift (`donationGroup`: Payment received, Waiting for the
+>   provider, Not completed, Refunded or reversed) as counted tabs, "Showing n–m of N" and numbered
+>   pages. The start form and the provider's checkout are unchanged.
+> - **Shared parts.** `components/my/summary-parts.tsx` (new): `MyFigures` (true figures at a page's
+>   head) and `MySteps` (numbered first-run steps). Part 1's `list-parts.tsx`, `change-announcer.tsx`,
+>   `MyPage`'s trail and `ConfirmSpec` are reused; `sections.ts` adds the `classes` and `messages`
+>   tab sets.
+> - **Reads (Model A).** Learning: `LearnerCoursePage.total` and `LearnerClassPage.total`, each the
+>   page's own predicate counted in the same adapter (`enrolment.count`, `classSession.count` with
+>   the same `where`); `LEARNER_OFFSET_MAX` names the bound both learner services already applied.
+>   Fatwa: `questions(asker, offset, status?)` and `questionCounts(asker)`; the ask service refuses
+>   a status outside `FATWA_OWNER_STATUSES` as `invalid` before any port; the adapter binds each of
+>   the status's sources (`FATWA_OWNER_STATUS_SOURCES`) as a parameter in a statement of fixed shape.
+>   The account or asker is in every predicate. Messaging, Membership and Donations gain no read.
+> - **Mutations.** None added and none changed. Withdrawing a trial request gains the shared
+>   `ConfirmSpec` dialog over the unchanged `withdrawTrialAction`; every other destructive act keeps
+>   its server-required confirmation box.
+> - **Messages.** New `my.{trail.{classes,teachers,messages,questions,membership,giving},
+>   tabs.{classes,teachers,conversations,support,label.{classes,messages}},
+>   count.{courses,pastClasses,questions,donations}, live.{trials,classes,messages}, confirm.trial.*,
+>   learningPage.*, coursePage.*, pathPage.*, classesPage.*, teachersPage.*, messagesPage.*,
+>   supportPage.*, questionsPage.*, questionPage.*, membershipPage.*, givingPage.*}` in en/ur/ar;
+>   removed as unused: `fatwa.my.account` (the trail replaces it) and `myClasses.list.beyond` (the
+>   shared `my.list.beyond` replaces it).
+>
+> **Data facts — what staging will show.** Nothing here is seeded or migrated. A fresh staging
+> account sees each first-run page: My learning's three steps, My classes' "how a class is listed",
+> My teachers' steps, Messages' steps, and My questions' steps with the service's "not taking
+> questions" (Fatwa publishes nothing on staging and holds no `fatwa.publish` grant); My Membership
+> its apply steps, and My donations its empty history. With the operator-run demo data
+> (`demo.sh`, R2), the demo student sees their courses counted and paged, their classes with days
+> named, their teacher, and an inbox whose two conversations are counted; the demo member sees
+> their standing and their fixture donation counted under "Payment received" with the TEST banner.
+> The local persistent database was not inspected.
+>
+> **Proof:** `tests/shell/my-list-view.test.ts` (new: a list paged by its owner — offsets, ranges,
+> page counts and the page bound by Learning's 24 and Fatwa's 20, Personalisation's unchanged; the
+> legacy offset read by the owner's page, past the owner's bound the first page; each owner status
+> admitted, five near-misses and a repeated status refused; the Classes and Messages tab sets; every
+> donation state in exactly one group); `tests/learning/my-presentation.test.ts` (new: one address per
+> lesson); `tests/fatwa/service.test.ts` (new: the status sources agree with `fatwaOwnerStatus` for
+> every stored status and review state; the port handed exactly the asker, offset and status; nine
+> malformed statuses refused as `invalid` with no port call; malformed offsets clamped; counts asked
+> of the session's own account); `tests/fatwa/persistence.integration.test.ts` (real SQL Server; new:
+> counts per owner status for two askers, one status's page and total, the other statuses empty, past
+> the end keeping the narrowed total, never another asker's question);
+> `tests/learning/persistence.integration.test.ts` and `tests/learning/classes.integration.test.ts`
+> (new: the enrolment total and the past-class total under the page's predicate, past the end keeping
+> it, another account's zero); `tests/config/locale.test.ts` (the new module). Browser — in the
+> projects that own the state: `learning.spec.ts` (My learning's trail, range, figures and Start
+> link; six untidy spellings each one redirect, signed-out sent to sign in first; past the end;
+> a repeated page refused; three untidy lesson addresses one redirect; a lesson's previous link; a
+> path's figures and next step; withdrawing a trial request Cancel-able, then confirmed, said aloud
+> with focus kept; Classes and Teachers tabs, trails and figures; and six My Minhaj Part 2 pages
+> axe-clean in en, ur and ar with no overflow at 320 and 1440 px), `messaging.spec.ts` (the inbox's
+> trail, tabs, figures and range; Support's tab; a conversation's trail, the Teacher area's thread
+> without one; three pages axe-clean and reflowing in en, ur and ar), `fatwa.spec.ts` (My questions'
+> trail and range, no status tabs while one status is held, a status view, five untidy spellings one
+> redirect, three refused views, a status none has, past the end, a question's steps),
+> `membership.spec.ts` (the trail and the standing's figures) and `donations.spec.ts` (the trail,
+> figures, range, a group view, an empty group, two refused views and a tidy redirect). Every
+> earlier assertion is kept except `learning.spec.ts`'s trial withdrawal, which now confirms in the
+> dialog (a genuine design change; it first proves Cancel leaves the request). *CI and staging
+> evidence are recorded when they exist.*
+
 ---
 
 ### Phase 31 — Search Completeness Validation

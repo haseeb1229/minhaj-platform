@@ -9,12 +9,15 @@ import { LearningTitle } from '@/components/my-learning/parts';
 import { pickLabel } from '@/components/my-learning/presentation';
 import { learningRead } from '@/components/my-learning/read';
 import { PersonalTime } from '@/components/personal/parts';
-import { Alert, EmptyState, Panel, TextLink } from '@/components/ui';
+import { Alert, EmptyState, Panel } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
 import { teacherProfilesFor } from '@/composition/learning-teachers';
 import { messagingRuntime } from '@/composition/messaging';
 import { MyPage } from '@/components/my/frame';
+import { MyListStatus } from '@/components/my/list-parts';
 import { myPageMetadata } from '@/components/my/metadata';
+import { myTabs, myTrail } from '@/components/my/sections';
+import { MySteps } from '@/components/my/summary-parts';
 import { classLinks } from '@/components/my-classes/parts';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
@@ -36,6 +39,10 @@ import { startTeachingAction } from '../messages/actions';
  * left, or messaging that is not switched on shows no button, and an outage
  * there never hides this list. Nothing here rates or otherwise contacts a
  * teacher.
+ *
+ * MY MINHAJ PART 2: Classes and Teachers as tabs, the trail, how many
+ * teachers there are (Learning's read is the whole bounded list), and a
+ * first-run page that says how a teacher comes to be listed here.
  */
 export async function generateMetadata({
   params,
@@ -57,8 +64,20 @@ export default async function MyTeachersPage({
   const path = localizedPath(locale, '/my/teachers');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myClasses' });
-  const related = { label: t('nav.label'), links: classLinks(locale, t) };
-  const description = <p>{t('teachers.description')}</p>;
+  const my = await getTranslations({ locale, namespace: 'my' });
+  const frame = {
+    related: { label: t('nav.label'), links: classLinks(locale, t) },
+    title: t('teachers.title'),
+    description: <p>{t('teachers.description')}</p>,
+    tabs: {
+      label: my('tabs.label.classes'),
+      items: myTabs(locale, 'classes', 'teachers', (key) => my(`tabs.${key}`)),
+    },
+    trail: {
+      label: my('trail.label'),
+      crumbs: myTrail(locale, my('trail.home'), [{ text: my('trail.teachers') }]),
+    },
+  };
 
   const read = await learningRead('learning-my-teachers', async () => {
     const teachers = await learningRuntime().myClasses.teachers({
@@ -83,7 +102,7 @@ export default async function MyTeachersPage({
 
   if (!read.ok)
     return (
-      <MyPage related={related} title={t('teachers.title')} description={description}>
+      <MyPage {...frame}>
         <Alert tone="error">{t('failure.load')}</Alert>
       </MyPage>
     );
@@ -92,94 +111,123 @@ export default async function MyTeachersPage({
   const timeZone = session.account.timezone;
 
   return (
-    <MyPage related={related} title={t('teachers.title')} description={description}>
+    <MyPage {...frame}>
       {startable.ok || startable.failure !== 'unavailable' ? null : (
         <Alert tone="error">{m('start.unavailable')}</Alert>
       )}
       {teachers.length === 0 ? (
-        <>
-          <EmptyState>{t('teachers.empty')}</EmptyState>
-          <p>
-            <TextLink href={localizedPath(locale, '/learn/teachers')}>
-              {t('teachers.find')}
-            </TextLink>
-          </p>
-        </>
+        <div className="flex flex-col gap-4">
+          <EmptyState
+            icon="user"
+            title={my('teachersPage.emptyTitle')}
+            action={{
+              href: localizedPath(locale, '/learn/teachers'),
+              text: t('teachers.find'),
+            }}
+          >
+            {t('teachers.empty')}
+          </EmptyState>
+          <MySteps
+            label={my('teachersPage.stepsLabel')}
+            steps={(['enrol', 'class', 'message'] as const).map((key) => ({
+              key,
+              title: my(`teachersPage.steps.${key}.title`),
+              body: my(`teachersPage.steps.${key}.body`),
+            }))}
+          />
+        </div>
       ) : (
-        <ul aria-label={t('teachers.title')} className="flex flex-col gap-3">
-          {teachers.map((teacher) => (
-            <Panel key={teacher.teacherAccountId} as="li">
-              <div className="flex min-w-0 flex-col gap-2">
-                <p className="text-lg font-semibold">
-                  <TeacherName
-                    profile={profiles.get(teacher.teacherAccountId)}
-                    locale={locale}
-                    fallback={t('teachers.unnamed')}
-                  />
-                </p>
-                {teacher.courses.length === 0 ? null : (
-                  <div className="flex flex-col gap-1 text-sm">
-                    <span className="text-foreground-muted">{t('teachers.courses')}</span>
-                    <ul className="flex flex-col gap-1 ps-4">
-                      {teacher.courses.map((course) => (
-                        <li key={course.id} className="list-disc">
-                          <div className="flex min-w-0 flex-col gap-2 wrap-anywhere">
-                            <LearningTitle
-                              labels={course.labels}
-                              primaryLocale={course.primaryLocale}
-                              locale={locale}
-                            />
-                            {current.has(`${teacher.teacherAccountId}:${course.id}`) ? (
-                              <ActionForm
-                                action={startTeachingAction}
-                                submitLabel={m('start.submit', {
-                                  name:
-                                    profiles.get(teacher.teacherAccountId)?.name ??
-                                    t('teachers.unnamed'),
-                                  course:
-                                    pickLabel(course.labels, locale, course.primaryLocale)
-                                      ?.title ?? m('start.someCourse'),
-                                })}
-                                pendingLabel={m('common.working')}
-                                tone="secondary"
-                                messages={messagingMessages(m)}
-                              >
-                                <input type="hidden" name="locale" value={locale} />
-                                <input
-                                  type="hidden"
-                                  name="counterpartAccountId"
-                                  value={teacher.teacherAccountId}
-                                />
-                                <input type="hidden" name="courseId" value={course.id} />
-                              </ActionForm>
-                            ) : null}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <p className="text-sm">
-                  {t('teachers.upcoming', { count: teacher.upcoming })}
-                </p>
-                <p className="text-sm text-foreground-muted">
-                  {teacher.lastClassAt === null ? (
-                    t('teachers.noLast')
-                  ) : (
-                    <>
-                      {t('teachers.last')}{' '}
-                      <PersonalTime
-                        value={teacher.lastClassAt.toISOString()}
-                        locale={locale}
-                        timeZone={timeZone}
-                      />
-                    </>
+        <>
+          <MyListStatus>
+            {my('teachersPage.count', { count: teachers.length })}
+          </MyListStatus>
+          <ul
+            aria-label={t('teachers.title')}
+            className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-[repeat(2,minmax(0,1fr))]"
+          >
+            {teachers.map((teacher) => (
+              <Panel key={teacher.teacherAccountId} as="li">
+                <div className="flex min-w-0 flex-col gap-2">
+                  <p className="text-lg font-semibold">
+                    <TeacherName
+                      profile={profiles.get(teacher.teacherAccountId)}
+                      locale={locale}
+                      fallback={t('teachers.unnamed')}
+                    />
+                  </p>
+                  {teacher.courses.length === 0 ? null : (
+                    <div className="flex flex-col gap-1 text-sm">
+                      <span className="text-foreground-muted">
+                        {t('teachers.courses')}
+                      </span>
+                      <ul className="flex flex-col gap-1 ps-4">
+                        {teacher.courses.map((course) => (
+                          <li key={course.id} className="list-disc">
+                            <div className="flex min-w-0 flex-col gap-2 wrap-anywhere">
+                              <LearningTitle
+                                labels={course.labels}
+                                primaryLocale={course.primaryLocale}
+                                locale={locale}
+                              />
+                              {current.has(`${teacher.teacherAccountId}:${course.id}`) ? (
+                                <ActionForm
+                                  action={startTeachingAction}
+                                  submitLabel={m('start.submit', {
+                                    name:
+                                      profiles.get(teacher.teacherAccountId)?.name ??
+                                      t('teachers.unnamed'),
+                                    course:
+                                      pickLabel(
+                                        course.labels,
+                                        locale,
+                                        course.primaryLocale,
+                                      )?.title ?? m('start.someCourse'),
+                                  })}
+                                  pendingLabel={m('common.working')}
+                                  tone="secondary"
+                                  messages={messagingMessages(m)}
+                                >
+                                  <input type="hidden" name="locale" value={locale} />
+                                  <input
+                                    type="hidden"
+                                    name="counterpartAccountId"
+                                    value={teacher.teacherAccountId}
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="courseId"
+                                    value={course.id}
+                                  />
+                                </ActionForm>
+                              ) : null}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
-                </p>
-              </div>
-            </Panel>
-          ))}
-        </ul>
+                  <p className="text-sm">
+                    {t('teachers.upcoming', { count: teacher.upcoming })}
+                  </p>
+                  <p className="text-sm text-foreground-muted">
+                    {teacher.lastClassAt === null ? (
+                      t('teachers.noLast')
+                    ) : (
+                      <>
+                        {t('teachers.last')}{' '}
+                        <PersonalTime
+                          value={teacher.lastClassAt.toISOString()}
+                          locale={locale}
+                          timeZone={timeZone}
+                        />
+                      </>
+                    )}
+                  </p>
+                </div>
+              </Panel>
+            ))}
+          </ul>
+        </>
       )}
     </MyPage>
   );

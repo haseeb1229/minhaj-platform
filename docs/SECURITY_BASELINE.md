@@ -2048,6 +2048,20 @@ made, and no cookie banner is added — there is no non-essential processing to 
   collection and history deletions keep their server-required confirmation box). The change
   announcer is presentation only: it reads nothing, holds no permission and is `aria-live` rather
   than a second `status`.
+- **My Minhaj Part 2 (R2, November 2026).** The new reads (DOMAIN_MODEL.md §12.1, §13.5) are of the
+  signed-in account's own rows only: Learning's totals carry the page's own predicate with the
+  account in it; Fatwa's `?status=` is parsed against the page's allowlist, re-validated by the ask
+  service (`invalid` before any port) and bound as parameters in a statement of fixed shape, and its
+  counts are keyed by the asker. A course's `?lesson=` tidy and every list's tidy redirect are
+  decided only after the session (and, for a course, the person's own Enrolment) is resolved, to a
+  same-site path the page builds itself, so an unknown and a forbidden Course, class, conversation
+  or question still answer the same 404 and an address learns nothing more. **No Server Action was
+  added or changed**: withdrawing a trial request now asks first through the shared `ConfirmSpec`
+  dialog over the unchanged action; leaving a course, cancelling a trial class, withdrawing an
+  application, ending a Membership, blocking and reporting keep their server-required confirmation
+  box. Messaging gains no read (its inbox is counted only from the page it already decided), and
+  the Teacher area's thread is unchanged. Logs name operations only — a failed My questions read
+  logs `fatwa-my-questions`, never an account or a question's words.
 - **Minimised by default.** History is off until the person turns it on and is one row per target
   (newest 500 kept); onboarding stores explicit choices of public areas only; nothing is inferred
   from behaviour and no third-party analytics, pixel or fingerprinting exists.

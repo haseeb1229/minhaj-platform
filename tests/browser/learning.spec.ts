@@ -1284,6 +1284,112 @@ test.describe('a learner', () => {
     );
   });
 
+  test('My Minhaj Part 2 — My Learning counts its Courses, keeps one address per view, and every page has its trail', async () => {
+    const main = learner.getByRole('main');
+    const trail = main.getByRole('navigation', { name: copy('my.trail.label') });
+    await learner.goto('/my/learning');
+    await expect(trail).toContainText(copy('my.trail.home'));
+    await expect(trail.locator('[aria-current="page"]')).toHaveText(
+      copy('my.trail.learning'),
+    );
+    await expect(main.locator('#my-list-status')).toHaveText(
+      /^Showing 1–1 of 1 course$/u,
+    );
+    const figures = main.getByRole('list', { name: copy('my.learningPage.figures') });
+    await expect(figures.getByRole('listitem')).toHaveCount(4);
+    await expect(figures).toContainText(copy('my.courses.state.new'));
+    const course = main
+      .getByRole('list', { name: copy('myLearning.courses.heading') })
+      .getByRole('listitem')
+      .first();
+    await expect(
+      course.getByRole('link', { name: copy('my.courses.start') }),
+    ).toHaveAttribute('href', `/my/learning/courses/${slug.paced}`);
+
+    // Tidied ONCE, after the session: the first page named, a malformed page,
+    // Phase 22's offset (by Learning's page of 24).
+    const origin = new URL(learner.url()).origin;
+    for (const [asked, final] of [
+      ['/my/learning?page=1', '/my/learning'],
+      ['/my/learning?page=x', '/my/learning'],
+      ['/my/learning?offset=0', '/my/learning'],
+      ['/my/learning?offset=24', '/my/learning?page=2'],
+      ['/ur/my/learning?offset=48', '/ur/my/learning?page=3'],
+      ['/my/classes?offset=0', '/my/classes'],
+    ] as const) {
+      const answer = await learner.context().request.get(asked, { maxRedirects: 0 });
+      expect([307, 308], asked).toContain(answer.status());
+      const location = new URL(answer.headers()['location'] ?? '', origin);
+      expect(location.pathname + location.search, asked).toBe(final);
+      expect(
+        (await learner.context().request.get(final, { maxRedirects: 0 })).status(),
+        final,
+      ).toBe(200);
+    }
+    // Signed out, the same untidy address is the sign-in page — never a redirect first.
+    const anonymous = await learner.context().browser()?.newContext();
+    if (anonymous !== undefined) {
+      const answer = await anonymous.request.get(`${origin}/my/learning?offset=24`, {
+        maxRedirects: 0,
+      });
+      expect(answer.headers()['location'] ?? '').toContain('/signin?returnTo=');
+      await anonymous.close();
+    }
+    // Past the end: said, with the way back, and no list.
+    await learner.goto('/my/learning?page=2');
+    await expect(main).toContainText(copy('my.list.beyond'));
+    await expect(
+      main.getByRole('link', { name: copy('my.list.first'), exact: true }),
+    ).toHaveAttribute('href', '/my/learning');
+    await expect(
+      main.getByRole('list', { name: copy('myLearning.courses.heading') }),
+    ).toHaveCount(0);
+    // A repeated page is refused where it was asked, never widened.
+    const refused = await learner.goto('/my/learning?page=1&page=2');
+    expect(refused?.status()).toBe(200);
+    await expect(main).toContainText(copy('my.list.refusedTitle'));
+    await expect(
+      main.getByRole('list', { name: copy('myLearning.courses.heading') }),
+    ).toHaveCount(0);
+
+    // A Course: its trail, its meter, and one address per lesson — anything
+    // that is not one lesson of this syllabus is one redirect to the Course.
+    const coursePath = `/my/learning/courses/${slug.paced}`;
+    for (const asked of [
+      `${coursePath}?lesson=not-a-lesson`,
+      `${coursePath}?lesson=${ids.pacedLessonOne}&lesson=${ids.pacedLessonTwo}`,
+      `${coursePath}?lesson=${ids.spareLesson}`,
+    ]) {
+      const answer = await learner.context().request.get(asked, { maxRedirects: 0 });
+      expect([307, 308], asked).toContain(answer.status());
+      expect(new URL(answer.headers()['location'] ?? '', origin).pathname, asked).toBe(
+        coursePath,
+      );
+    }
+    await learner.goto(`${coursePath}?lesson=${ids.pacedLessonTwo}`);
+    await expect(
+      trail.getByRole('link', { name: copy('my.trail.learning') }),
+    ).toHaveAttribute('href', '/my/learning');
+    await expect(trail.locator('[aria-current="page"]')).toHaveText(TEXT.paced);
+    const lessons = main.getByRole('navigation', {
+      name: copy('my.coursePage.lessonNav'),
+    });
+    await expect(
+      lessons.getByRole('link', { name: copy('my.coursePage.previous') }),
+    ).toHaveAttribute('href', `${coursePath}?lesson=${ids.pacedLessonOne}`);
+    await expect(
+      lessons.getByRole('link', { name: copy('myLearning.lesson.next') }),
+    ).toHaveCount(0);
+
+    // A path: its trail, its figures, and the next step named.
+    await learner.goto(`/my/learning/paths/${slug.path}`);
+    await expect(trail.locator('[aria-current="page"]')).toHaveText(TEXT.path);
+    await expect(
+      main.getByRole('list', { name: copy('my.pathPage.figures') }),
+    ).toBeVisible();
+    await expect(main).toContainText(copy('my.pathPage.next'));
+  });
+
   test('Learn Part 2 — the path page shows the learner their own progress, and a stranger none of it', async ({
     request,
   }) => {
@@ -1486,12 +1592,33 @@ test.describe('a learner', () => {
       main.getByRole('button', { name: /confirm|schedule|book|join|assign/i }),
     ).toHaveCount(0);
 
-    await request
-      .getByRole('button', {
-        name: copy('myLearning.trials.withdraw', { title: TEXT.live }),
-      })
+    // My Minhaj Part 2: withdrawing asks first — Cancel changes nothing.
+    const withdraw = request.getByRole('button', {
+      name: copy('myLearning.trials.withdraw', { title: TEXT.live }),
+    });
+    const dialog = learner.getByRole('dialog', { name: copy('my.confirm.trial.title') });
+    await withdraw.click();
+    await expect(dialog).toBeVisible();
+    await dialog
+      .getByRole('button', { name: copy('my.confirm.cancel') })
+      .first()
       .click();
+    await expect(dialog).toBeHidden();
+    expect(
+      await scalar(
+        `SELECT COUNT_BIG(*) AS [value] FROM [dbo].[TrialClassRequest] WHERE [userId]=N'${learnerId}';`,
+      ),
+    ).toBe(1);
+    await withdraw.click();
+    await dialog.getByRole('button', { name: copy('my.confirm.trial.confirm') }).click();
     await expect(main).toContainText(copy('myLearning.trials.empty'));
+    // Its row has gone; focus is not left on nothing, and the change is said.
+    await expect
+      .poll(() => learner.evaluate(() => document.activeElement?.tagName ?? 'BODY'))
+      .not.toBe('BODY');
+    await expect(main.locator('[aria-live="polite"]').first()).toContainText(
+      'Done. No trial request is left.',
+    );
     expect(
       await scalar(
         `SELECT COUNT_BIG(*) AS [value] FROM [dbo].[TrialClassRequest] WHERE [userId]=N'${learnerId}';`,
@@ -2950,6 +3077,46 @@ test.describe('Phase 23 — a class, from a request to a join link', () => {
     ).toHaveAttribute('href', `/my/classes/${trialSessionId}`);
     await expect(request.getByRole('button')).toHaveCount(0);
   });
+
+  test('My Minhaj Part 2 — Classes and Teachers are tabs of each other, each class names its day, and the figures are true', async () => {
+    const page = student.page;
+    const main = page.getByRole('main');
+    const trail = main.getByRole('navigation', { name: copy('my.trail.label') });
+    const tabs = main.getByRole('navigation', { name: copy('my.tabs.label.classes') });
+    await page.goto('/my/classes');
+    await expect(trail.locator('[aria-current="page"]')).toHaveText(
+      copy('my.trail.classes'),
+    );
+    await expect(tabs.locator('[aria-current="page"]')).toHaveText(
+      copy('my.tabs.classes'),
+    );
+    const figures = main.getByRole('list', { name: copy('my.classesPage.figures') });
+    await expect(
+      figures.getByRole('listitem').filter({ hasText: copy('my.classesPage.upcoming') }),
+    ).toContainText('2');
+    const upcoming = main.getByRole('list', { name: copy('myClasses.upcoming.heading') });
+    // Every upcoming class says which day it falls on, in words.
+    for (const item of await upcoming.getByRole('listitem').all())
+      await expect(item.locator('p').first()).not.toBeEmpty();
+    // The past is counted from Learning's own total, beside the upcoming.
+    await expect(
+      figures.getByRole('listitem').filter({ hasText: copy('my.classesPage.past') }),
+    ).toBeVisible();
+
+    await tabs.getByRole('link', { name: copy('my.tabs.teachers') }).click();
+    await page.waitForURL('**/my/teachers');
+    await expect(trail.locator('[aria-current="page"]')).toHaveText(
+      copy('my.trail.teachers'),
+    );
+    await expect(main.locator('#my-list-status')).toHaveText(/^\d+ teachers?$/u);
+
+    // A class's own page: My Minhaj / My classes / the Course.
+    await page.goto(`/my/classes/${regularSessionId}`);
+    await expect(
+      trail.getByRole('link', { name: copy('my.trail.classes') }),
+    ).toHaveAttribute('href', '/my/classes');
+    await expect(trail.locator('[aria-current="page"]')).toHaveText(TEXT.live);
+  });
 });
 
 test.describe('Phase 23 — nobody else reaches a class', () => {
@@ -3617,6 +3784,55 @@ test.describe('Phase 23 — every locale, every width, the keyboard', () => {
         }
     }
     for (const viewer of viewers)
+      await viewer.setViewportSize({ width: 1280, height: 800 });
+  });
+
+  test('My Minhaj Part 2 — My learning, a Course, a path, My classes, a class and My teachers are axe-clean in en, ur and ar, and fit 320 and 1440 pixels', async () => {
+    const testInfo = test.info();
+    test.setTimeout(900_000);
+    for (const locale of ['en', 'ur', 'ar'] as const)
+      for (const [viewer, address] of [
+        [learner, '/my/learning'],
+        [learner, `/my/learning/courses/${slug.paced}`],
+        [learner, `/my/learning/paths/${slug.path}`],
+        [student.page, '/my/classes'],
+        [student.page, `/my/classes/${regularSessionId}`],
+        [student.page, '/my/teachers'],
+      ] as const) {
+        const target = localizedPath(locale, address);
+        for (const width of [320, 1440]) {
+          await viewer.setViewportSize({ width, height: 900 });
+          const response = await viewer.goto(target);
+          expect(response?.status(), target).toBe(200);
+          await expect(mainHeading(viewer), target).toBeVisible();
+          await expect(viewer.locator('html'), target).toHaveAttribute(
+            'dir',
+            locale === 'en' ? 'ltr' : 'rtl',
+          );
+          expect(
+            await overflowOf(viewer),
+            `${String(width)}px ${target}`,
+          ).toBeLessThanOrEqual(0);
+        }
+        await expectHeadingsInOrder(viewer, target);
+        const results = await new AxeBuilder({ page: viewer })
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+          .analyze();
+        const blocking = results.violations.filter(
+          (violation) =>
+            violation.impact === 'serious' || violation.impact === 'critical',
+        );
+        for (const finding of results.violations.filter((v) => !blocking.includes(v)))
+          testInfo.annotations.push({
+            type: 'axe',
+            description: `${target}: ${finding.id} (${String(finding.impact)})`,
+          });
+        expect(
+          blocking.map((violation) => `${violation.id}: ${violation.nodes.length}`),
+          target,
+        ).toEqual([]);
+      }
+    for (const viewer of [learner, student.page])
       await viewer.setViewportSize({ width: 1280, height: 800 });
   });
 
