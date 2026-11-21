@@ -3324,6 +3324,12 @@ test.describe('a reader’s own reading position', () => {
       personal: { progress: Record<string, string> };
     }
   ).personal;
+  /** My Minhaj Part 1: the confirmation before the position is cleared. */
+  const CLEAR_CONFIRM = (
+    JSON.parse(readFileSync(path.join(MESSAGES, 'en.json'), 'utf8')) as {
+      my: { confirm: { quran: { title: string; confirm: string } } };
+    }
+  ).my.confirm.quran;
   /** R2: the My Minhaj home page's "Continue" module heading. */
   const CONTINUE = (
     JSON.parse(readFileSync(path.join(MESSAGES, 'en.json'), 'utf8')) as {
@@ -3451,6 +3457,10 @@ test.describe('a reader’s own reading position', () => {
 
     await reader.goto('/my/progress/quran');
     await reader.getByRole('button', { name: PROGRESS.progress['clear'] }).click();
+    // My Minhaj Part 1: clearing asks first, and only the dialog's button clears.
+    const confirm = reader.getByRole('dialog', { name: CLEAR_CONFIRM.title });
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole('button', { name: CLEAR_CONFIRM.confirm }).click();
     await expect(reader.getByRole('main')).toContainText(
       PROGRESS.progress['empty'] ?? '',
     );
